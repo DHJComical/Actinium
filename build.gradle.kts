@@ -7,24 +7,18 @@ plugins {
     java
     `java-library`
     `maven-publish`
-    kotlin("jvm") version "2.3.20"
-    id("com.gradleup.shadow") version "9.4.0"
     id("org.jetbrains.gradle.plugin.idea-ext") version "1.4.1"
     id("xyz.wagyourtail.unimined") version "1.4.16-kappa"
-    id("net.kyori.blossom") version "2.2.0"
 }
 
-// Early Assertions
 assertProperty("mod_version")
 assertProperty("root_package")
 assertProperty("mod_id")
 assertProperty("mod_name")
-
 assertSubProperties("use_access_transformer", "access_transformer_locations")
 assertSubProperties("is_coremod", "coremod_includes_mod", "coremod_plugin_class_name")
-assertSubProperties("use_asset_mover", "asset_mover_version")
 
-setDefaultProperty("generate_sources_jar", true, false)
+setDefaultProperty("generate_sources_jar", true, true)
 setDefaultProperty("generate_javadocs_jar", true, false)
 setDefaultProperty("minecraft_username", true, "Developer")
 setDefaultProperty("extra_jvm_args", false, "")
@@ -40,6 +34,8 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
     if (propertyBool("generate_sources_jar")) {
         withSourcesJar()
     }
@@ -48,20 +44,36 @@ java {
     }
 }
 
-kotlin {
-    jvmToolchain(25)
-}
-
 configurations {
     val contain by creating
-    implementation { extendsFrom(contain) }
+    implementation {
+        extendsFrom(contain)
+    }
     val modCompileOnly by creating
-    compileOnly { extendsFrom(modCompileOnly) }
+    compileOnly {
+        extendsFrom(modCompileOnly)
+    }
     val modRuntimeOnly by creating
-    runtimeOnly { extendsFrom(modRuntimeOnly) }
+    runtimeOnly {
+        extendsFrom(modRuntimeOnly)
+    }
 }
 
-val remapTaskName = if (propertyBool("enable_shadow")) "remapShadowJar" else "remapJar"
+sourceSets {
+    named("main") {
+        java.srcDir("src/lwjglCommon/java")
+        java.srcDir("src/lwjgl3/java")
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven("https://maven.cleanroommc.com")
+    maven("https://cursemaven.com")
+    maven("https://api.modrinth.com/maven")
+    maven("https://nexus.gtnewhorizons.com/repository/public/")
+    mavenLocal()
+}
 
 unimined.minecraft {
     version("1.12.2")
@@ -78,8 +90,8 @@ unimined.minecraft {
         runs.auth.username = property("minecraft_username").toString()
         runs.all {
             val extraArgs = propertyString("extra_jvm_args")
-            if (extraArgs.trim().isNotEmpty()) {
-                jvmArgs(extraArgs.split("\\s+"))
+            if (extraArgs.isNotBlank()) {
+                jvmArgs(extraArgs.split("\\s+".toRegex()))
             }
             if (propertyBool("enable_foundation_debug")) {
                 systemProperties.apply {
@@ -95,12 +107,9 @@ unimined.minecraft {
 
     defaultRemapJar = false
 
-    val jarTaskName = if (propertyBool("enable_shadow")) "shadowJar" else "jar"
-
-    remap(tasks.named(jarTaskName).get()) {
+    remap(tasks.named<Jar>("jar").get()) {
         mixinRemap {
             enableBaseMixin()
-            enableMixinExtra()
             disableRefmap()
         }
     }
@@ -113,50 +122,13 @@ unimined.minecraft {
     }
 }
 
-dependencies {
-    if (propertyBool("use_asset_mover")) {
-        implementation("com.cleanroommc:assetmover:${propertyString("asset_mover_version")}")
-    }
-    if (propertyBool("enable_junit_testing")) {
-        testImplementation("org.junit.jupiter:junit-jupiter:6.0.2")
-        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    }
-}
-
 apply(plugin = "dependencies")
 
 tasks.processResources {
-    rename("(.+_at.cfg)", "META-INF/$1")
-}
-
-sourceSets {
-    main {
-        blossom {
-            kotlinSources {
-                property("mod_id", propertyString("mod_id"))
-                property("mod_name", propertyString("mod_name"))
-                property("mod_version", propertyString("mod_version"))
-                val rootPackage = propertyString("root_package")
-                val modId = propertyString("mod_id")
-                property("package", "$rootPackage.$modId")
-            }
-            resources {
-                property("mod_id", propertyString("mod_id"))
-                property("mod_name", propertyString("mod_name"))
-                property("mod_version", propertyString("mod_version"))
-                property("mod_description", propertyString("mod_description"))
-                property("mod_authors", propertyStringList("mod_authors", ",").joinToString("\", \"") { it.trim() })
-                property("mod_credits", propertyString("mod_credits"))
-                property("mod_url", propertyString("mod_url"))
-                property("mod_update_json", propertyString("mod_update_json"))
-                property("mod_logo_path", propertyString("mod_logo_path"))
-            }
-        }
+    inputs.property("version", version)
+    filesMatching("mcmod.info") {
+        expand(mapOf("version" to project.version.toString()))
     }
-}
-
-if (!propertyBool("enable_shadow")) {
-    tasks.shadowJar { enabled = false }
 }
 
 idea {
@@ -187,41 +159,46 @@ idea {
 
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
     val contain by configurations.getting
     if (!contain.isEmpty) {
         into("/") {
             from(contain)
         }
     }
+
     doFirst {
         manifest {
-            val attributeMap = mutableMapOf<String, Any>()
-            attributeMap["ModType"] = "CRL"
+            val attributeMap = mutableMapOf<String, Any>(
+                "ModType" to "CRL"
+            )
             if (!contain.isEmpty) {
                 attributeMap["ContainedDeps"] = contain.joinToString(" ") { it.name }
                 attributeMap["NonModDeps"] = true
             }
             if (propertyBool("is_coremod")) {
                 attributeMap["FMLCorePlugin"] = propertyString("coremod_plugin_class_name")
+                attributeMap["ForceLoadAsMod"] = "true"
                 if (propertyBool("coremod_includes_mod")) {
                     attributeMap["FMLCorePluginContainsFMLMod"] = true
                 }
             }
             if (propertyBool("use_access_transformer")) {
-                attributeMap["FMLAT"] = propertyString("access_transformer_locations")
+                attributeMap["FMLAT"] = propertyString("access_transformer_locations").substringAfterLast('/')
             }
             attributes(attributeMap)
         }
     }
-    finalizedBy(tasks.named(remapTaskName).get())
+
+    finalizedBy(tasks.named("remapJar"))
 }
 
-tasks.shadowJar {
-    configurations.add(project.configurations.shadow)
-    archiveClassifier = "shadow"
+tasks.named<Jar>("sourcesJar") {
+    from("src/lwjglCommon/java")
+    from("src/lwjgl3/java")
 }
 
-tasks.named(remapTaskName) {
+tasks.named("remapJar") {
     doFirst {
         logging.captureStandardOutput(LogLevel.INFO)
     }
@@ -230,27 +207,26 @@ tasks.named(remapTaskName) {
     }
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
+tasks.withType<JavaCompile>().configureEach {
+    sourceCompatibility = "21"
+    targetCompatibility = "21"
+    options.encoding = "UTF-8"
+    options.release.set(21)
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
 }
 
 tasks.test {
     useJUnitPlatform()
-    javaLauncher =
-        javaToolchains.launcherFor {
-            languageVersion = JavaLanguageVersion.of(25)
-        }
-
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
     if (propertyBool("show_testing_output")) {
         testLogging {
             showStandardStreams = true
         }
     }
-}
-
-tasks.withType<JavaCompile> {
-    options.encoding = "UTF-8"
 }
 
 apply(plugin = "publishing")

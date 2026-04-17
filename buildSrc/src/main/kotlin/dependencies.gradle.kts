@@ -26,10 +26,37 @@ repositories {
     mavenLocal() // Must be last for caching to work
 }
 dependencies {
+    val lwjglVersion = "3.4.1"
+    val lombokVersion = "1.18.42"
+    val asmVersion = "9.9.1"
+
     compileOnly("com.cleanroommc:sponge-mixin:0.20.12+mixin.0.8.7")
-    implementation("io.github.chaosunity.forgelin:Forgelin-Continuous:2.3.10.0")
+    compileOnly("org.jetbrains:annotations:24.1.0")
+    compileOnly("org.projectlombok:lombok:$lombokVersion")
+    annotationProcessor("org.projectlombok:lombok:$lombokVersion")
+    compileOnly("org.apache.logging.log4j:log4j-api:2.0-beta9")
+
+    implementation("org.joml:joml:1.10.5")
+    "contain"("org.joml:joml:1.10.5")
+    implementation("it.unimi.dsi:fastutil:7.1.0")
+    "contain"("it.unimi.dsi:fastutil:7.1.0")
+    compileOnly("org.ow2.asm:asm:$asmVersion")
+    compileOnly("org.ow2.asm:asm-commons:$asmVersion")
+    compileOnly("org.ow2.asm:asm-tree:$asmVersion")
+    compileOnly("org.ow2.asm:asm-util:$asmVersion")
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    "modImplementation"("zone.rong:mixinbooter:10.5")
+    "modCompileOnly"("maven.modrinth:fluidlogged-api:3.0.6")
+
+    compileOnly("org.lwjgl:lwjgl:$lwjglVersion")
+    compileOnly("org.lwjgl:lwjgl-opengl:$lwjglVersion")
     if (propertyBool("enable_lwjglx")) {
         compileOnly("com.cleanroommc:lwjglx:1.0.0")
+    }
+    if (propertyBool("enable_junit_testing")) {
+        testImplementation("org.junit.jupiter:junit-jupiter:6.0.2")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     }
 
     // Example - Dependency descriptor:
