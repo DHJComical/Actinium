@@ -85,7 +85,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
         var dispatcher = Minecraft.getMinecraft().getBlockRendererDispatcher();
         ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
         Map<net.minecraft.block.Block, ActiniumBlockRenderLayer> blockTypeIds =
-                provider != null ? provider.getBlockTypeIds() : null;
+                provider != null && provider.isShadersEnabled() ? provider.getBlockTypeIds() : null;
 
         buildContext.setupTranslation(minX, minY, minZ);
 

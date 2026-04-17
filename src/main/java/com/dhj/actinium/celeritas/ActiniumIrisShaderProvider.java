@@ -87,6 +87,9 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
     @Override
     public @Nullable Map<Block, ActiniumBlockRenderLayer> getBlockTypeIds() {
         this.syncReloadState();
+        if (!this.isShadersEnabled()) {
+            return null;
+        }
         return ActiniumBlockRenderingSettings.INSTANCE.getBlockTypeIds();
     }
 

@@ -1,6 +1,9 @@
 package com.dhj.actinium.shader.pack;
 
+import com.dhj.actinium.block_rendering.ActiniumBlockRenderingSettings;
 import com.dhj.actinium.celeritas.ActiniumShaders;
+import com.dhj.actinium.celeritas.shader_overrides.ActiniumTerrainPass;
+import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.Desktop;
@@ -16,10 +19,15 @@ import java.util.stream.Stream;
 
 public final class ActiniumShaderPackManager {
     public static final String BUILTIN_PACK_NAME = "Actinium Shader";
+    private static final Path ROOT_SHADERPACKS_DIRECTORY = Paths.get("shaderpacks");
+    private static final Path DEV_CLIENT_DIRECTORY = Paths.get("run", "client");
+    private static final Path DEV_SHADERPACKS_DIRECTORY = DEV_CLIENT_DIRECTORY.resolve("shaderpacks");
 
     private static final ActiniumShaderPack BUILTIN_PACK = new ActiniumShaderPack(BUILTIN_PACK_NAME, null, true);
     private static ActiniumShaderConfig config;
     private static ActiniumShaderPackResources activePackResources;
+    private static ActiniumShaderProperties activeShaderProperties = ActiniumShaderProperties.EMPTY;
+    private static ActiniumIdMap activeIdMap = ActiniumIdMap.EMPTY;
     private static int reloadVersion;
 
     private ActiniumShaderPackManager() {
@@ -113,7 +121,11 @@ public final class ActiniumShaderPackManager {
     }
 
     public static Path getShaderPacksDirectory() {
-        return Paths.get("shaderpacks");
+        if (Files.isDirectory(DEV_SHADERPACKS_DIRECTORY) || Files.isDirectory(DEV_CLIENT_DIRECTORY)) {
+            return DEV_SHADERPACKS_DIRECTORY;
+        }
+
+        return ROOT_SHADERPACKS_DIRECTORY;
     }
 
     public static @Nullable ActiniumShaderPack findPackByName(@Nullable String packName) {
@@ -136,9 +148,11 @@ public final class ActiniumShaderPackManager {
 
     public static void reload() {
         closeActiveResources();
+        clearRuntimeState();
 
         if (!areShadersEnabled()) {
             reloadVersion++;
+            ActiniumBlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
             ActiniumShaders.logger().info("Actinium shaders disabled");
             return;
         }
@@ -148,13 +162,18 @@ public final class ActiniumShaderPackManager {
 
         if (selectedPack == null) {
             reloadVersion++;
+            ActiniumBlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
             ActiniumShaders.logger().warn("Selected shader pack '{}' could not be found; falling back to bundled shaders", selectedPackName);
             return;
         }
 
         try {
             activePackResources = ActiniumShaderPackResources.load(selectedPack);
+            activeShaderProperties = activePackResources.shaderProperties();
+            activeIdMap = activePackResources.idMap();
+            applyRuntimeState(activeShaderProperties, activeIdMap);
             reloadVersion++;
+            ActiniumBlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
 
             if (activePackResources.isBuiltin()) {
                 ActiniumShaders.logger().info("Using bundled Actinium shader resources");
@@ -163,6 +182,7 @@ public final class ActiniumShaderPackManager {
             }
         } catch (IOException e) {
             reloadVersion++;
+            ActiniumBlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
             ActiniumShaders.logger().error("Failed to load shader pack '{}'", selectedPack.name(), e);
         }
     }
@@ -175,12 +195,28 @@ public final class ActiniumShaderPackManager {
         return activePackResources.readShaderSource(name);
     }
 
+    public static @Nullable String getProgramSource(ActiniumTerrainPass pass, ShaderType type) {
+        if (activePackResources == null) {
+            return null;
+        }
+
+        return activePackResources.readProgramSource(pass, type);
+    }
+
     public static int getReloadVersion() {
         return reloadVersion;
     }
 
     public static @Nullable ActiniumShaderPackResources getActivePackResources() {
         return activePackResources;
+    }
+
+    public static ActiniumShaderProperties getActiveShaderProperties() {
+        return activeShaderProperties;
+    }
+
+    public static ActiniumIdMap getActiveIdMap() {
+        return activeIdMap;
     }
 
     private static boolean isShaderPackCandidate(Path path) {
@@ -222,5 +258,19 @@ public final class ActiniumShaderPackManager {
             activePackResources.close();
             activePackResources = null;
         }
+    }
+
+    private static void clearRuntimeState() {
+        activeShaderProperties = ActiniumShaderProperties.EMPTY;
+        activeIdMap = ActiniumIdMap.EMPTY;
+        ActiniumBlockRenderingSettings.INSTANCE.clearLocalOverrides();
+    }
+
+    private static void applyRuntimeState(ActiniumShaderProperties shaderProperties, ActiniumIdMap idMap) {
+        ActiniumBlockRenderingSettings settings = ActiniumBlockRenderingSettings.INSTANCE;
+        settings.setBlockMetaMatches(idMap.getBlockMetaMatches());
+        settings.setBlockTypeIds(idMap.getBlockTypeIds());
+        settings.setUseSeparateAo(shaderProperties.isSeparateAo());
+        settings.setUseExtendedVertexFormat(true);
     }
 }

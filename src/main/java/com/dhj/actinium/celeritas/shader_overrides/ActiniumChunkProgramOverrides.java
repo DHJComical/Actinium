@@ -29,6 +29,7 @@ public final class ActiniumChunkProgramOverrides {
     private static final Pattern VERSION_DIRECTIVE = Pattern.compile("^#version.*$", Pattern.MULTILINE);
     private static final Pattern IN_PARAM = Pattern.compile("^in ", Pattern.MULTILINE);
     private static final Pattern OUT_PARAM = Pattern.compile("^out ", Pattern.MULTILINE);
+    private static final Pattern LEGACY_PACK_MARKERS = Pattern.compile("gl_Vertex|gl_MultiTexCoord|gl_FragData|gl_ModelViewProjectionMatrix|gl_TextureMatrix");
     private static final String LEGACY_PREAMBLE = String.join("\n",
             "#version 120",
             "#extension GL_EXT_gpu_shader4 : require",
@@ -72,13 +73,26 @@ public final class ActiniumChunkProgramOverrides {
     }
 
     private GlProgram<ChunkShaderInterface> createShader(ActiniumTerrainPass pass, RenderPassConfiguration<?> configuration) {
+        try {
+            return this.createShader(pass, configuration, true);
+        } catch (RuntimeException e) {
+            if (ActiniumShaderPackManager.getProgramSource(pass, ShaderType.VERTEX) != null
+                    || ActiniumShaderPackManager.getProgramSource(pass, ShaderType.FRAGMENT) != null) {
+                ActiniumShaders.logger().warn("Failed to use external shader pack program '{}' for terrain override, falling back to bundled Actinium shaders", pass.getName(), e);
+            }
+
+            return this.createShader(pass, configuration, false);
+        }
+    }
+
+    private GlProgram<ChunkShaderInterface> createShader(ActiniumTerrainPass pass, RenderPassConfiguration<?> configuration, boolean preferPackProgram) {
         TerrainRenderPass renderPass = pass.toTerrainPass(configuration);
         ChunkShaderOptions options = new ChunkShaderOptions(COMPONENTS, renderPass);
         ShaderConstants constants = options.constants();
         List<GlShader> loadedShaders = new ArrayList<>(2);
 
-        loadedShaders.add(this.loadShader(ShaderType.VERTEX, "actinium:blocks/chunk_layer_override.vsh", constants));
-        loadedShaders.add(this.loadShader(ShaderType.FRAGMENT, "actinium:blocks/chunk_layer_override.fsh", constants));
+        loadedShaders.add(this.loadShader(ShaderType.VERTEX, "actinium:blocks/chunk_layer_override.vsh", constants, pass, preferPackProgram));
+        loadedShaders.add(this.loadShader(ShaderType.FRAGMENT, "actinium:blocks/chunk_layer_override.fsh", constants, pass, preferPackProgram));
 
         try {
             GlProgram.Builder builder = GlProgram.builder("actinium:chunk_shader_" + pass.name().toLowerCase(Locale.ROOT));
@@ -99,8 +113,28 @@ public final class ActiniumChunkProgramOverrides {
         }
     }
 
-    private GlShader loadShader(ShaderType type, String path, ShaderConstants constants) {
-        String shaderSource = ShaderParser.parseShader(this.resolveShaderSource(path), this::resolveShaderSource, constants);
+    private GlShader loadShader(ShaderType type, String path, ShaderConstants constants, @Nullable ActiniumTerrainPass pass, boolean preferPackProgram) {
+        String source = null;
+        String shaderId = path;
+
+        if (preferPackProgram && pass != null) {
+            source = ActiniumShaderPackManager.getProgramSource(pass, type);
+
+            if (source != null) {
+                shaderId = "actinium:external/" + pass.getName() + "." + type.fileExtension;
+
+                if (this.isLegacyPackProgram(source)) {
+                    source = ActiniumLegacyChunkShaderAdapter.translate(type, pass, source);
+                }
+            }
+        }
+
+        if (source == null) {
+            source = this.resolveShaderSource(path);
+            shaderId = path;
+        }
+
+        String shaderSource = ShaderParser.parseShader(source, this::resolveShaderSource, constants);
 
         if (this.enableLegacyGlPatches) {
             if (type != ShaderType.VERTEX && type != ShaderType.FRAGMENT) {
@@ -118,7 +152,11 @@ public final class ActiniumChunkProgramOverrides {
             shaderSource = OUT_PARAM.matcher(shaderSource).replaceAll("varying ");
         }
 
-        return new GlShader(type, path, shaderSource);
+        return new GlShader(type, shaderId, shaderSource);
+    }
+
+    private boolean isLegacyPackProgram(String source) {
+        return LEGACY_PACK_MARKERS.matcher(source).find();
     }
 
     private String resolveShaderSource(String path) {
