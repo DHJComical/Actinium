@@ -1,4 +1,4 @@
-package com.dhj.actinium.shader;
+package com.dhj.actinium.celeritas;
 
 import net.minecraft.block.Block;
 import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
@@ -26,4 +26,7 @@ public interface ActiniumShaderProvider {
 
     @Nullable
     Map<Block, ActiniumBlockRenderLayer> getBlockTypeIds();
+
+    default void deleteShaders() {
+    }
 }

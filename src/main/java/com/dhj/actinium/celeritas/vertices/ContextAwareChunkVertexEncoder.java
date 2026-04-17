@@ -1,4 +1,4 @@
-package com.dhj.actinium.shader;
+package com.dhj.actinium.celeritas.vertices;
 
 import net.minecraft.block.Block;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;

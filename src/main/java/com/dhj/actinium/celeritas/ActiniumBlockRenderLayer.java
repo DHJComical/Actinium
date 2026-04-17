@@ -1,4 +1,4 @@
-package com.dhj.actinium.shader;
+package com.dhj.actinium.celeritas;
 
 public enum ActiniumBlockRenderLayer {
     SOLID,

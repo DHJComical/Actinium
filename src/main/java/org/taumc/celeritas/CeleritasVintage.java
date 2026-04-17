@@ -20,6 +20,7 @@ import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import com.dhj.actinium.shader.ActiniumShaderEntrypoint;
 import org.embeddedt.embeddium.impl.common.util.MathUtil;
 import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
@@ -37,6 +38,7 @@ public class CeleritasVintage {
     @EventHandler
     public void onConstruct(FMLConstructionEvent event) {
         GLRenderDevice.VANILLA_STATE_RESETTER = () -> OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0);
+        ActiniumShaderEntrypoint.initialize();
         VERSION = Loader.instance().getIndexedModList().get(MODID).getVersion();
         MinecraftForge.EVENT_BUS.register(this);
     }

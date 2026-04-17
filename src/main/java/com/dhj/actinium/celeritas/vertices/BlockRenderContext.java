@@ -1,4 +1,4 @@
-package com.dhj.actinium.shader;
+package com.dhj.actinium.celeritas.vertices;
 
 public class BlockRenderContext {
     public int localPosX;

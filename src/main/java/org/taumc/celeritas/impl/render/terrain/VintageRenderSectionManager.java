@@ -25,8 +25,8 @@ import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
-import com.dhj.actinium.shader.ActiniumShaderProvider;
-import com.dhj.actinium.shader.ActiniumShaderProviderHolder;
+import com.dhj.actinium.celeritas.ActiniumShaderProvider;
+import com.dhj.actinium.celeritas.ActiniumShaderProviderHolder;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.task.ChunkBuilderMeshingTask;
@@ -166,8 +166,8 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     }
 
     private static class ChunkRenderer extends DefaultChunkRenderer {
-        private GlProgram<? extends ChunkShaderInterface> irisProgram;
-        private boolean usingIrisProgram;
+        private GlProgram<? extends ChunkShaderInterface> actiniumProgram;
+        private boolean usingActiniumProgram;
 
         public ChunkRenderer(RenderDevice device, RenderPassConfiguration<?> renderPassConfiguration) {
             super(device, renderPassConfiguration);
@@ -189,24 +189,24 @@ public class VintageRenderSectionManager extends RenderSectionManager {
                     override.bind();
                     override.getInterface().setupState(pass);
                     this.activeProgram = (GlProgram<ChunkShaderInterface>) override;
-                    this.irisProgram = override;
-                    this.usingIrisProgram = true;
+                    this.actiniumProgram = override;
+                    this.usingActiniumProgram = true;
                     return;
                 }
             }
 
-            this.usingIrisProgram = false;
-            this.irisProgram = null;
+            this.usingActiniumProgram = false;
+            this.actiniumProgram = null;
             super.begin(pass);
         }
 
         @Override
         protected void end(TerrainRenderPass pass) {
-            if (this.usingIrisProgram && this.irisProgram != null) {
-                this.irisProgram.getInterface().restoreState();
-                this.irisProgram.unbind();
-                this.irisProgram = null;
-                this.usingIrisProgram = false;
+            if (this.usingActiniumProgram && this.actiniumProgram != null) {
+                this.actiniumProgram.getInterface().restoreState();
+                this.actiniumProgram.unbind();
+                this.actiniumProgram = null;
+                this.usingActiniumProgram = false;
                 this.activeProgram = null;
                 pass.endDrawing();
                 return;
@@ -222,7 +222,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
         @Override
         protected void configureShaderInterface(ChunkShaderInterface shader) {
-            if (!this.usingIrisProgram) {
+            if (!this.usingActiniumProgram) {
                 shader.setTextureSlot(ChunkShaderTextureSlot.BLOCK, 0);
                 shader.setTextureSlot(ChunkShaderTextureSlot.LIGHT, 1);
             }

@@ -1,4 +1,4 @@
-package com.dhj.actinium.shader;
+package com.dhj.actinium.celeritas;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -9,6 +9,14 @@ public final class ActiniumShaderProviderHolder {
     }
 
     public static void setProvider(@Nullable ActiniumShaderProvider provider) {
+        if (ActiniumShaderProviderHolder.provider == provider) {
+            return;
+        }
+
+        if (ActiniumShaderProviderHolder.provider != null) {
+            ActiniumShaderProviderHolder.provider.deleteShaders();
+        }
+
         ActiniumShaderProviderHolder.provider = provider;
     }
 

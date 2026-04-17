@@ -33,8 +33,8 @@ import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectio
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.util.ModelQuadUtil;
-import com.dhj.actinium.shader.BlockRenderContext;
-import com.dhj.actinium.shader.ContextAwareChunkVertexEncoder;
+import com.dhj.actinium.celeritas.vertices.BlockRenderContext;
+import com.dhj.actinium.celeritas.vertices.ContextAwareChunkVertexEncoder;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.light.LightDataCache;

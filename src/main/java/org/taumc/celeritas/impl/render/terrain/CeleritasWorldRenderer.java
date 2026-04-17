@@ -16,8 +16,8 @@ import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
-import com.dhj.actinium.shader.ActiniumShaderProvider;
-import com.dhj.actinium.shader.ActiniumShaderProviderHolder;
+import com.dhj.actinium.celeritas.ActiniumShaderProvider;
+import com.dhj.actinium.celeritas.ActiniumShaderProviderHolder;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.mixin.core.terrain.ActiveRenderInfoAccessor;
 
