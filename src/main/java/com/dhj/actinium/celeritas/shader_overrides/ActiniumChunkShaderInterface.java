@@ -2,10 +2,14 @@ package com.dhj.actinium.celeritas.shader_overrides;
 
 import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
+import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat4v;
+import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix3f;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix4f;
+import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderOptions;
 import org.embeddedt.embeddium.impl.render.chunk.shader.DefaultChunkShaderInterface;
+import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -21,6 +25,12 @@ final class ActiniumChunkShaderInterface extends DefaultChunkShaderInterface {
     private final @Nullable GlUniformMatrix3f irisNormalMatrix;
     private final @Nullable GlUniformMatrix3f irisNormalMat;
     private final @Nullable GlUniformFloat3v irisRegionOffset;
+    private final @Nullable GlUniformFloat4v irisFogColor;
+    private final @Nullable GlUniformFloat irisFogDensity;
+    private final @Nullable GlUniformFloat irisFogStart;
+    private final @Nullable GlUniformFloat irisFogEnd;
+    private final @Nullable GlUniformFloat irisCurrentAlphaTest;
+    private final float defaultAlphaTest;
 
     private final Matrix4f scratchModelViewInverse = new Matrix4f();
     private final Matrix4f scratchProjectionInverse = new Matrix4f();
@@ -37,6 +47,37 @@ final class ActiniumChunkShaderInterface extends DefaultChunkShaderInterface {
         this.irisNormalMatrix = context.bindUniformIfPresent("iris_NormalMatrix", GlUniformMatrix3f::new);
         this.irisNormalMat = context.bindUniformIfPresent("iris_NormalMat", GlUniformMatrix3f::new);
         this.irisRegionOffset = context.bindUniformIfPresent("iris_RegionOffset", GlUniformFloat3v::new);
+        this.irisFogColor = context.bindUniformIfPresent("iris_FogColor", GlUniformFloat4v::new);
+        this.irisFogDensity = context.bindUniformIfPresent("iris_FogDensity", GlUniformFloat::new);
+        this.irisFogStart = context.bindUniformIfPresent("iris_FogStart", GlUniformFloat::new);
+        this.irisFogEnd = context.bindUniformIfPresent("iris_FogEnd", GlUniformFloat::new);
+        this.irisCurrentAlphaTest = context.bindUniformIfPresent("iris_currentAlphaTest", GlUniformFloat::new);
+        this.defaultAlphaTest = options.pass().supportsFragmentDiscard() ? 0.1f : 0.0f;
+    }
+
+    @Override
+    public void setupState(TerrainRenderPass pass) {
+        super.setupState(pass);
+
+        if (this.irisFogColor != null) {
+            this.irisFogColor.set(ChunkShaderFogComponent.FOG_SERVICE.getFogColor());
+        }
+
+        if (this.irisFogDensity != null) {
+            this.irisFogDensity.set(ChunkShaderFogComponent.FOG_SERVICE.getFogDensity());
+        }
+
+        if (this.irisFogStart != null) {
+            this.irisFogStart.set(ChunkShaderFogComponent.FOG_SERVICE.getFogStart());
+        }
+
+        if (this.irisFogEnd != null) {
+            this.irisFogEnd.set(ChunkShaderFogComponent.FOG_SERVICE.getFogEnd());
+        }
+
+        if (this.irisCurrentAlphaTest != null) {
+            this.irisCurrentAlphaTest.set(this.defaultAlphaTest);
+        }
     }
 
     @Override

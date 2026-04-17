@@ -1,5 +1,6 @@
 package org.taumc.celeritas.impl.gui;
 
+import com.dhj.actinium.shader.gui.screen.ActiniumShaderPackScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import org.taumc.celeritas.api.options.OptionIdentifier;
@@ -8,7 +9,6 @@ import org.embeddedt.embeddium.impl.gui.CeleritasVideoOptionsController;
 import org.embeddedt.embeddium.impl.gui.frame.tab.Tab;
 import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.embeddedt.embeddium.impl.gui.options.CommonOptionPages;
-import org.embeddedt.embeddium.impl.render.ShaderModBridge;
 import org.lwjgl.input.Mouse;
 import org.taumc.celeritas.CeleritasVintage;
 
@@ -32,18 +32,14 @@ public class CeleritasVideoOptionsScreen extends GuiScreen {
         ), new VintageDrawContext()) {
             @Override
             protected void createExtraTabs(Map<String, List<Tab<?>>> tabs) {
-                if(ShaderModBridge.isShaderModPresent()) {
-                    tabs.computeIfAbsent(CeleritasVintage.MODID, $ -> new ArrayList<>()).add(Tab.createBuilder()
-                            .setTitle(TextComponent.translatable("options.iris.shaderPackSelection"))
-                            .setId(OptionIdentifier.create(CeleritasVintage.MODID, "shader_packs"))
-                            .setOnSelectFunction(() -> {
-                                if(ShaderModBridge.openShaderScreen(this) instanceof GuiScreen screen) {
-                                    Minecraft.getMinecraft().displayGuiScreen(screen);
-                                }
-                                return false;
-                            })
-                            .build());
-                }
+                tabs.computeIfAbsent(CeleritasVintage.MODID, $ -> new ArrayList<>()).add(Tab.createBuilder()
+                        .setTitle(TextComponent.translatable("options.actinium.shaderPackSelection"))
+                        .setId(OptionIdentifier.create(CeleritasVintage.MODID, "shader_packs"))
+                        .setOnSelectFunction(() -> {
+                            Minecraft.getMinecraft().displayGuiScreen(new ActiniumShaderPackScreen(CeleritasVideoOptionsScreen.this));
+                            return false;
+                        })
+                        .build());
             }
 
             @Override

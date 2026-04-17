@@ -1,6 +1,7 @@
 package com.dhj.actinium.celeritas.shader_overrides;
 
 import com.dhj.actinium.celeritas.ActiniumShaders;
+import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
 import org.embeddedt.embeddium.impl.gl.shader.GlShader;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderConstants;
@@ -99,7 +100,7 @@ public final class ActiniumChunkProgramOverrides {
     }
 
     private GlShader loadShader(ShaderType type, String path, ShaderConstants constants) {
-        String shaderSource = ShaderParser.parseShader(ShaderLoader.getShaderSource(path), ShaderLoader::getShaderSource, constants);
+        String shaderSource = ShaderParser.parseShader(this.resolveShaderSource(path), this::resolveShaderSource, constants);
 
         if (this.enableLegacyGlPatches) {
             if (type != ShaderType.VERTEX && type != ShaderType.FRAGMENT) {
@@ -118,5 +119,15 @@ public final class ActiniumChunkProgramOverrides {
         }
 
         return new GlShader(type, path, shaderSource);
+    }
+
+    private String resolveShaderSource(String path) {
+        String activeShaderSource = ActiniumShaderPackManager.getShaderSource(path);
+
+        if (activeShaderSource != null) {
+            return activeShaderSource;
+        }
+
+        return ShaderLoader.getShaderSource(path);
     }
 }

@@ -2,11 +2,11 @@ package com.dhj.actinium.celeritas;
 
 import com.dhj.actinium.block_rendering.ActiniumBlockRenderingSettings;
 import net.minecraft.block.Block;
+import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.celeritas.shader_overrides.ActiniumChunkProgramOverrides;
 import com.dhj.actinium.celeritas.vertices.ActiniumExtendedChunkVertexType;
 import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
 import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
-import org.embeddedt.embeddium.impl.render.ShaderModBridge;
 import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
@@ -21,10 +21,12 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
     private final ActiniumChunkProgramOverrides localOverrides = new ActiniumChunkProgramOverrides();
     private RenderPassConfiguration<?> renderPassConfiguration;
     private boolean loggedLocalOverridePath;
+    private int observedReloadVersion = -1;
 
     @Override
     public boolean isShadersEnabled() {
-        return ShaderModBridge.areShadersEnabled();
+        this.syncReloadState();
+        return ActiniumShaderPackManager.areShadersEnabled();
     }
 
     @Override
@@ -39,6 +41,8 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
 
     @Override
     public @Nullable GlProgram<? extends ChunkShaderInterface> getShaderOverride(TerrainRenderPass pass) {
+        this.syncReloadState();
+
         if (!this.isShadersEnabled() || this.renderPassConfiguration == null) {
             return null;
         }
@@ -59,6 +63,8 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
 
     @Override
     public ChunkVertexType getVertexType(ChunkVertexType defaultType) {
+        this.syncReloadState();
+
         if (this.isShadersEnabled() && ActiniumBlockRenderingSettings.INSTANCE.shouldUseExtendedVertexFormat()) {
             return EXTENDED_VERTEX_TYPE;
         }
@@ -68,6 +74,8 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
 
     @Override
     public void setRenderPassConfiguration(RenderPassConfiguration<?> configuration) {
+        this.syncReloadState();
+
         if (this.renderPassConfiguration != configuration) {
             this.localOverrides.deleteShaders();
             this.loggedLocalOverridePath = false;
@@ -78,6 +86,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
 
     @Override
     public @Nullable Map<Block, ActiniumBlockRenderLayer> getBlockTypeIds() {
+        this.syncReloadState();
         return ActiniumBlockRenderingSettings.INSTANCE.getBlockTypeIds();
     }
 
@@ -86,5 +95,17 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
         this.localOverrides.deleteShaders();
         this.renderPassConfiguration = null;
         this.loggedLocalOverridePath = false;
+        this.observedReloadVersion = ActiniumShaderPackManager.getReloadVersion();
+    }
+
+    private void syncReloadState() {
+        int reloadVersion = ActiniumShaderPackManager.getReloadVersion();
+
+        if (this.observedReloadVersion != reloadVersion) {
+            this.localOverrides.deleteShaders();
+            this.renderPassConfiguration = null;
+            this.loggedLocalOverridePath = false;
+            this.observedReloadVersion = reloadVersion;
+        }
     }
 }
