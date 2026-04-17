@@ -145,14 +145,22 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         }
 
         for (String candidate : getProgramCandidates(pass)) {
-            Path path = this.findProgramPath(candidate + "." + type.fileExtension);
-
-            if (path != null) {
-                return readShaderText(path);
+            String source = this.readProgramSource(candidate, type);
+            if (source != null) {
+                return source;
             }
         }
 
         return null;
+    }
+
+    public @Nullable String readProgramSource(String programName, ShaderType type) {
+        if (this.shadersRoot == null) {
+            return null;
+        }
+
+        Path path = this.findProgramPath(programName + "." + type.fileExtension);
+        return path != null ? readShaderText(path) : null;
     }
 
     @Override

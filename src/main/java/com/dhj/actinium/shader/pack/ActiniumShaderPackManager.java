@@ -203,6 +203,14 @@ public final class ActiniumShaderPackManager {
         return activePackResources.readProgramSource(pass, type);
     }
 
+    public static @Nullable String getProgramSource(String programName, ShaderType type) {
+        if (activePackResources == null) {
+            return null;
+        }
+
+        return activePackResources.readProgramSource(programName, type);
+    }
+
     public static int getReloadVersion() {
         return reloadVersion;
     }
