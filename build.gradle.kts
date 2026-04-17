@@ -193,11 +193,6 @@ tasks.jar {
     finalizedBy(tasks.named("remapJar"))
 }
 
-tasks.named<Jar>("sourcesJar") {
-    from("src/lwjglCommon/java")
-    from("src/lwjgl3/java")
-}
-
 tasks.named("remapJar") {
     doFirst {
         logging.captureStandardOutput(LogLevel.INFO)
