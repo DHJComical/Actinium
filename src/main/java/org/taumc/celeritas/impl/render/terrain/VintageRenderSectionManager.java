@@ -222,10 +222,8 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
         @Override
         protected void configureShaderInterface(ChunkShaderInterface shader) {
-            if (!this.usingActiniumProgram) {
-                shader.setTextureSlot(ChunkShaderTextureSlot.BLOCK, 0);
-                shader.setTextureSlot(ChunkShaderTextureSlot.LIGHT, 1);
-            }
+            shader.setTextureSlot(ChunkShaderTextureSlot.BLOCK, 0);
+            shader.setTextureSlot(ChunkShaderTextureSlot.LIGHT, 1);
         }
     }
 }

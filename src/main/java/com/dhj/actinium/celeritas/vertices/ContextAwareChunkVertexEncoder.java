@@ -8,5 +8,7 @@ public interface ContextAwareChunkVertexEncoder extends ChunkVertexEncoder {
 
     void prepareToRenderFluid(BlockRenderContext ctx, Block block, byte lightValue);
 
+    void prepareToRenderVanilla(BlockRenderContext ctx);
+
     void finishRenderingBlock();
 }

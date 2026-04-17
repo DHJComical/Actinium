@@ -31,17 +31,22 @@ public class ActiniumExtendedChunkVertexEncoder implements ContextAwareChunkVert
     @Override
     public void prepareToRenderBlock(BlockRenderContext ctx, Block block, int metadata, short renderType, byte lightValue) {
         this.context = ctx;
-        ctx.blockId = (short) ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(block, metadata);
-        ctx.renderType = renderType;
+        ctx.blockId = ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(block, metadata);
+        ctx.renderType = ActiniumExtendedDataHelper.BLOCK_RENDER_TYPE;
         ctx.lightValue = lightValue;
     }
 
     @Override
     public void prepareToRenderFluid(BlockRenderContext ctx, Block block, byte lightValue) {
         this.context = ctx;
-        ctx.blockId = (short) ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(block, 0);
+        ctx.blockId = ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(block, 0);
         ctx.renderType = ActiniumExtendedDataHelper.FLUID_RENDER_TYPE;
         ctx.lightValue = lightValue;
+    }
+
+    @Override
+    public void prepareToRenderVanilla(BlockRenderContext ctx) {
+        this.context = ctx;
     }
 
     @Override

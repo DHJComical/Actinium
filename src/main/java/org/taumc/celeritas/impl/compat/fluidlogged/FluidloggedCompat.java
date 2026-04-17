@@ -32,7 +32,12 @@ public class FluidloggedCompat {
                 if (block.canRenderInLayer(renderState, layer)) {
                     ForgeHooksClient.setRenderLayer(layer);
                     var buffer = context.getBufferForLayer(layer);
-                    dispatcher.renderBlock(renderState, pos, blockAccess, buffer);
+                    context.beginVanillaFluidRender(buffer, pos, renderState);
+                    try {
+                        dispatcher.renderBlock(renderState, pos, blockAccess, buffer);
+                    } finally {
+                        context.endVanillaRender(buffer);
+                    }
                 }
             }
         }

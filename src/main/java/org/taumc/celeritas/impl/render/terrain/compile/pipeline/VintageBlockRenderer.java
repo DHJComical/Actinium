@@ -35,6 +35,7 @@ import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncode
 import org.embeddedt.embeddium.impl.util.ModelQuadUtil;
 import com.dhj.actinium.celeritas.vertices.BlockRenderContext;
 import com.dhj.actinium.celeritas.vertices.ContextAwareChunkVertexEncoder;
+import com.dhj.actinium.vertices.ActiniumExtendedDataHelper;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.light.LightDataCache;
@@ -217,8 +218,8 @@ public class VintageBlockRenderer {
 
         Block block = this.currentState.getBlock();
         byte lightValue = (byte) this.currentState.getLightValue(this.currentBlockAccess, pos);
-        short blockId = (short) Block.getIdFromBlock(block);
-        short renderType = (short) this.currentState.getRenderType().ordinal();
+        int blockId = Block.getIdFromBlock(block);
+        short renderType = ActiniumExtendedDataHelper.BLOCK_RENDER_TYPE;
 
         this.blockRenderContext.set(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, blockId, renderType, lightValue);
         encoder.prepareToRenderBlock(this.blockRenderContext, block, this.currentMetadata, renderType, lightValue);

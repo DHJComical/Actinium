@@ -1,15 +1,26 @@
 package org.taumc.celeritas.impl.render.terrain.compile;
+
+import com.dhj.actinium.block_rendering.ActiniumBlockRenderingSettings;
+import com.dhj.actinium.celeritas.buffer.ActiniumBufferBuilderExtension;
+import com.dhj.actinium.celeritas.buffer.ActiniumVanillaQuadContext;
+import com.dhj.actinium.celeritas.vertices.BlockRenderContext;
+import com.dhj.actinium.celeritas.vertices.ContextAwareChunkVertexEncoder;
+import com.dhj.actinium.vertices.ActiniumExtendedDataHelper;
 import lombok.Getter;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
+import net.minecraft.util.math.BlockPos;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
 import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
 import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildContext;
+import org.embeddedt.embeddium.impl.render.chunk.compile.buffers.ChunkModelBuilder;
 import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
 import org.embeddedt.embeddium.impl.render.chunk.sprite.SpriteTransparencyLevel;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
@@ -23,6 +34,8 @@ import org.taumc.celeritas.impl.render.terrain.compile.pipeline.VintageBlockRend
 import org.taumc.celeritas.impl.world.WorldSlice;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
@@ -41,6 +54,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     private final RenderPassConfiguration<?> renderPassConfiguration;
     private final LightDataCache lightDataCache;
     private final boolean useRenderPassOptimization;
+    private final BlockRenderContext vanillaBlockRenderContext = new BlockRenderContext();
 
     public VintageChunkBuildContext(WorldClient world, RenderPassConfiguration renderPassConfiguration) {
         super(renderPassConfiguration);
@@ -85,8 +99,48 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             bufferBuilder.finishDrawing();
             used[i] = false;
             ByteBuffer rawBuffer = bufferBuilder.getByteBuffer();
+            List<ActiniumVanillaQuadContext> quadContexts = bufferBuilder instanceof ActiniumBufferBuilderExtension extension
+                    ? extension.actinium$consumeQuadContexts()
+                    : Collections.emptyList();
             var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(LAYERS[i]);
-            copyBlockData(rawBuffer, buffers, material);
+            copyBlockData(rawBuffer, buffers, material, quadContexts);
+        }
+    }
+
+    public void beginVanillaBlockRender(BufferBuilder buffer, BlockPos pos, IBlockState state) {
+        if (!(buffer instanceof ActiniumBufferBuilderExtension extension)) {
+            return;
+        }
+
+        int metadata = state.getBlock().getMetaFromState(state);
+        extension.actinium$setActiveQuadContext(new ActiniumVanillaQuadContext(
+                pos.getX() & 15,
+                pos.getY() & 15,
+                pos.getZ() & 15,
+                ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(state.getBlock(), metadata),
+                ActiniumExtendedDataHelper.BLOCK_RENDER_TYPE,
+                (byte) state.getLightValue(this.worldSlice, pos)
+        ));
+    }
+
+    public void beginVanillaFluidRender(BufferBuilder buffer, BlockPos pos, IBlockState state) {
+        if (!(buffer instanceof ActiniumBufferBuilderExtension extension)) {
+            return;
+        }
+
+        extension.actinium$setActiveQuadContext(new ActiniumVanillaQuadContext(
+                pos.getX() & 15,
+                pos.getY() & 15,
+                pos.getZ() & 15,
+                ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(state.getBlock(), state.getBlock().getMetaFromState(state)),
+                ActiniumExtendedDataHelper.FLUID_RENDER_TYPE,
+                (byte) state.getLightValue(this.worldSlice, pos)
+        ));
+    }
+
+    public void endVanillaRender(BufferBuilder buffer) {
+        if (buffer instanceof ActiniumBufferBuilderExtension extension) {
+            extension.actinium$setActiveQuadContext(null);
         }
     }
 
@@ -97,6 +151,9 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         for (int i = 0; i < LAYERS.length; i++) {
             if (this.usedWorldRenderers[i]) {
                 this.worldRenderers[i].finishDrawing();
+                if (this.worldRenderers[i] instanceof ActiniumBufferBuilderExtension extension) {
+                    extension.actinium$consumeQuadContexts();
+                }
                 this.usedWorldRenderers[i] = false;
             }
         }
@@ -127,7 +184,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         BLOCK_VERTEX_FORMAT_SIZE = size;
     }
 
-    private void copyBlockData(ByteBuffer source, ChunkBuildBuffers buffers, Material material) {
+    private void copyBlockData(ByteBuffer source, ChunkBuildBuffers buffers, Material material, List<ActiniumVanillaQuadContext> quadContexts) {
         int vsize = BLOCK_VERTEX_FORMAT_SIZE;
         int numQuads = source.limit() / (vsize * 4);
         long ptr = LWJGL.memAddress(source);
@@ -160,7 +217,29 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             }
             ModelQuadFacing facing = QuadUtil.findNormalFace(trueNormal);
             Material correctMaterial = selectMaterial(material, sprite);
-            buffers.get(correctMaterial).getVertexBuffer(facing).push(quad, correctMaterial);
+            ChunkModelBuilder builder = buffers.get(correctMaterial);
+            ContextAwareChunkVertexEncoder encoder = this.prepareVanillaEncoder(builder, q < quadContexts.size() ? quadContexts.get(q) : null);
+            builder.getVertexBuffer(facing).push(quad, correctMaterial);
+            if (encoder != null) {
+                encoder.finishRenderingBlock();
+            }
         }
+    }
+
+    private ContextAwareChunkVertexEncoder prepareVanillaEncoder(ChunkModelBuilder builder, ActiniumVanillaQuadContext quadContext) {
+        if (!(builder.getEncoder() instanceof ContextAwareChunkVertexEncoder encoder) || quadContext == null) {
+            return null;
+        }
+
+        this.vanillaBlockRenderContext.set(
+                quadContext.localPosX(),
+                quadContext.localPosY(),
+                quadContext.localPosZ(),
+                quadContext.blockStateId(),
+                quadContext.renderType(),
+                quadContext.lightValue()
+        );
+        encoder.prepareToRenderVanilla(this.vanillaBlockRenderContext);
+        return encoder;
     }
 }

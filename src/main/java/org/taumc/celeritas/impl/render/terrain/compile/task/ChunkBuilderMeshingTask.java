@@ -129,7 +129,12 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                                 buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer, false);
                             } else {
                                 var buffer = buildContext.getBufferForLayer(layer);
-                                dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                buildContext.beginVanillaBlockRender(buffer, blockPos, blockState);
+                                try {
+                                    dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                } finally {
+                                    buildContext.endVanillaRender(buffer);
+                                }
                             }
                         } else {
                             for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
@@ -139,7 +144,12 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                                         buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer);
                                     } else {
                                         var buffer = buildContext.getBufferForLayer(layer);
-                                        dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                        buildContext.beginVanillaBlockRender(buffer, blockPos, blockState);
+                                        try {
+                                            dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                        } finally {
+                                            buildContext.endVanillaRender(buffer);
+                                        }
                                     }
                                 }
                             }
