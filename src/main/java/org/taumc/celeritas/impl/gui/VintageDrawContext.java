@@ -23,6 +23,7 @@ import org.embeddedt.embeddium.impl.gui.framework.TextFormattingStyle;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
+import org.taumc.celeritas.CeleritasVintage;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -182,6 +183,10 @@ public class VintageDrawContext implements DrawContext {
 
     @Override
     public TextComponent getFriendlyModName(String modId) {
+        if (CeleritasVintage.MODID.equals(modId)) {
+            return TextComponent.literal("Actinium");
+        }
+
         var container = Loader.instance().getIndexedModList().get(modId);
         if (container == null) {
             return DrawContext.super.getFriendlyModName(modId);

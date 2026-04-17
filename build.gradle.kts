@@ -125,9 +125,28 @@ unimined.minecraft {
 apply(plugin = "dependencies")
 
 tasks.processResources {
-    inputs.property("version", version)
-    filesMatching("mcmod.info") {
-        expand(mapOf("version" to project.version.toString()))
+    val resourceProperties = mapOf(
+        "mod_id" to propertyString("mod_id"),
+        "mod_name" to propertyString("mod_name"),
+        "mod_version" to propertyString("mod_version"),
+        "mod_description" to propertyString("mod_description"),
+        "mod_authors" to propertyString("mod_authors"),
+        "mod_credits" to propertyString("mod_credits"),
+        "mod_url" to propertyString("mod_url"),
+        "mod_update_json" to propertyString("mod_update_json"),
+        "mod_logo_path" to propertyString("mod_logo_path")
+    )
+
+    inputs.properties(resourceProperties)
+    filteringCharset = "UTF-8"
+
+    filesMatching(listOf("mcmod.info", "pack.mcmeta")) {
+        expand(resourceProperties)
+        filter { line ->
+            resourceProperties.entries.fold(line) { acc, (key, value) ->
+                acc.replace("{{ $key }}", value).replace("{{${key}}}", value)
+            }
+        }
     }
 }
 
