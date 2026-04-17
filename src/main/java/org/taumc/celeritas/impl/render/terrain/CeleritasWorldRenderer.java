@@ -16,6 +16,8 @@ import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
+import com.dhj.actinium.shader.ActiniumShaderProvider;
+import com.dhj.actinium.shader.ActiniumShaderProviderHolder;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.mixin.core.terrain.ActiveRenderInfoAccessor;
 
@@ -143,6 +145,14 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
     }
 
     private ChunkVertexType chooseVertexType() {
+        ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
+        if (provider != null && provider.isShadersEnabled()) {
+            ChunkVertexType shaderVertexType = provider.getVertexType(ChunkMeshFormats.VANILLA_LIKE);
+            if (shaderVertexType != null && shaderVertexType != ChunkMeshFormats.VANILLA_LIKE) {
+                return shaderVertexType;
+            }
+        }
+
         if (!CeleritasVintage.options().performance.useCompactVertexFormat) {
             return ChunkMeshFormats.VANILLA_LIKE;
         }

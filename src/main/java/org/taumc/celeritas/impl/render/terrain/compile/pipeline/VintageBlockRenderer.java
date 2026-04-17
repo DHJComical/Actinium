@@ -33,6 +33,8 @@ import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectio
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.util.ModelQuadUtil;
+import com.dhj.actinium.shader.BlockRenderContext;
+import com.dhj.actinium.shader.ContextAwareChunkVertexEncoder;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.light.LightDataCache;
@@ -41,6 +43,7 @@ import org.taumc.celeritas.impl.world.cloned.CeleritasBlockAccess;
 import org.taumc.celeritas.mixin.core.terrain.BlockColorsAccessor;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -56,10 +59,13 @@ public class VintageBlockRenderer {
     private final int[] quadColors = new int[4];
     private final ChunkVertexEncoder.Vertex[] vertices = ChunkVertexEncoder.Vertex.uninitializedQuad();
     private final ModelQuadOrientation[] currentOrientations = new ModelQuadOrientation[EnumFacing.VALUES.length];
+    private final ArrayList<ContextAwareChunkVertexEncoder> usedContextEncoders = new ArrayList<>(4);
+    private final BlockRenderContext blockRenderContext = new BlockRenderContext();
     private final boolean useRenderPassOptimization;
 
     private IBlockState currentState;
     private CeleritasBlockAccess currentBlockAccess;
+    private int currentMetadata;
 
     private final BakedQuadGroupAnalyzer analyzer = new BakedQuadGroupAnalyzer();
 
@@ -80,16 +86,22 @@ public class VintageBlockRenderer {
     }
 
     public void renderBlock(IBlockState state, BlockPos pos, CeleritasBlockAccess blockAccess, BlockRenderLayer layer) {
+        this.renderBlock(state, pos, blockAccess, layer, true);
+    }
+
+    public void renderBlock(IBlockState state, BlockPos pos, CeleritasBlockAccess blockAccess, BlockRenderLayer layer, boolean allowRenderPassOptimization) {
         int defaultFlags = BakedQuadGroupAnalyzer.USE_ALL_THINGS;
-        if (!useRenderPassOptimization) {
+        if (!this.useRenderPassOptimization || !allowRenderPassOptimization) {
             defaultFlags &= ~BakedQuadGroupAnalyzer.USE_RENDER_PASS_OPTIMIZATION;
         }
         this.analyzer.setDefaultRenderingFlags(defaultFlags);
+        this.usedContextEncoders.clear();
 
         if (blockAccess.getWorldType() != WorldType.DEBUG_ALL_BLOCK_STATES) {
             state = state.getActualState(blockAccess, pos);
         }
         var model = this.shapes.getModelForState(state);
+        this.currentMetadata = state.getBlock().getMetaFromState(state);
         state = state.getBlock().getExtendedState(state, blockAccess, pos);
         this.currentState = state;
         this.currentBlockAccess = blockAccess;
@@ -126,6 +138,10 @@ public class VintageBlockRenderer {
             renderQuadList(buffer, buffers, material, pos, null, lighter, colorProvider, offset, quads);
         }
 
+        this.usedContextEncoders.forEach(ContextAwareChunkVertexEncoder::finishRenderingBlock);
+        this.usedContextEncoders.clear();
+        this.blockRenderContext.reset();
+        this.currentState = null;
         this.currentBlockAccess = null;
     }
 
@@ -176,6 +192,7 @@ public class VintageBlockRenderer {
 
             var quadMaterial = BakedQuadGroupAnalyzer.chooseOptimalMaterial(this.currentQuadRenderingFlags, material, config, BakedQuadView.of(quad));
             ChunkModelBuilder buffer = (quadMaterial == material) ? defaultBuffer : buffers.get(quadMaterial);
+            this.prepareEncoder(buffer, pos);
 
             this.writeGeometry(localX, localY, localZ, buffer, offset, quadMaterial,
                     quadView, colors, light, orientation);
@@ -187,6 +204,25 @@ public class VintageBlockRenderer {
                 ((Collection<TextureAtlasSprite>)mcData.animatedSprites).add(sprite);
             }
         }
+    }
+
+    private void prepareEncoder(ChunkModelBuilder builder, BlockPos pos) {
+        if (!(builder.getEncoder() instanceof ContextAwareChunkVertexEncoder encoder)) {
+            return;
+        }
+
+        if (this.usedContextEncoders.contains(encoder)) {
+            return;
+        }
+
+        Block block = this.currentState.getBlock();
+        byte lightValue = (byte) this.currentState.getLightValue(this.currentBlockAccess, pos);
+        short blockId = (short) Block.getIdFromBlock(block);
+        short renderType = (short) this.currentState.getRenderType().ordinal();
+
+        this.blockRenderContext.set(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, blockId, renderType, lightValue);
+        encoder.prepareToRenderBlock(this.blockRenderContext, block, this.currentMetadata, renderType, lightValue);
+        this.usedContextEncoders.add(encoder);
     }
 
     private void writeGeometry(int localX, int localY, int localZ, ChunkModelBuilder builder,

@@ -32,6 +32,9 @@ import org.embeddedt.embeddium.impl.render.chunk.occlusion.VisibilityEncoding;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.util.task.CancellationToken;
 import org.joml.Vector3d;
+import com.dhj.actinium.shader.ActiniumBlockRenderLayer;
+import com.dhj.actinium.shader.ActiniumShaderProvider;
+import com.dhj.actinium.shader.ActiniumShaderProviderHolder;
 import org.taumc.celeritas.impl.compat.fluidlogged.FluidloggedCompat;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.world.WorldSlice;
@@ -80,6 +83,9 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
         var slice = WORLD_SLICE_LOCAL_GENERATOR.generateWrapper(buildContext.getWorldSlice());
 
         var dispatcher = Minecraft.getMinecraft().getBlockRendererDispatcher();
+        ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
+        Map<net.minecraft.block.Block, ActiniumBlockRenderLayer> blockTypeIds =
+                provider != null ? provider.getBlockTypeIds() : null;
 
         buildContext.setupTranslation(minX, minY, minZ);
 
@@ -113,14 +119,28 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
 
                         buildContext.getBlockRenderer().resetSharedState();
 
-                        for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
-                            if (block.canRenderInLayer(blockState, layer)) {
-                                ForgeHooksClient.setRenderLayer(layer);
-                                if (blockState.getRenderType() == EnumBlockRenderType.MODEL && USE_NEW_BLOCK_RENDERER) {
-                                    buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer);
-                                } else {
-                                    var buffer = buildContext.getBufferForLayer(layer);
-                                    dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                        ActiniumBlockRenderLayer shaderLayerOverride = blockTypeIds != null ? blockTypeIds.get(block) : null;
+
+                        if (shaderLayerOverride != null) {
+                            BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
+                            ForgeHooksClient.setRenderLayer(layer);
+                            block.canRenderInLayer(blockState, layer);
+                            if (blockState.getRenderType() == EnumBlockRenderType.MODEL && USE_NEW_BLOCK_RENDERER) {
+                                buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer, false);
+                            } else {
+                                var buffer = buildContext.getBufferForLayer(layer);
+                                dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                            }
+                        } else {
+                            for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
+                                if (block.canRenderInLayer(blockState, layer)) {
+                                    ForgeHooksClient.setRenderLayer(layer);
+                                    if (blockState.getRenderType() == EnumBlockRenderType.MODEL && USE_NEW_BLOCK_RENDERER) {
+                                        buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer);
+                                    } else {
+                                        var buffer = buildContext.getBufferForLayer(layer);
+                                        dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                    }
                                 }
                             }
                         }

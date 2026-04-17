@@ -8,6 +8,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.Chunk;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
+import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
 import org.embeddedt.embeddium.impl.render.chunk.*;
 import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildOutput;
 import org.embeddedt.embeddium.impl.render.chunk.compile.tasks.ChunkBuilderTask;
@@ -18,10 +19,14 @@ import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderTextureSlot;
 import org.embeddedt.embeddium.impl.render.chunk.sprite.GenericSectionSpriteTicker;
+import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
+import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
+import com.dhj.actinium.shader.ActiniumShaderProvider;
+import com.dhj.actinium.shader.ActiniumShaderProviderHolder;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.task.ChunkBuilderMeshingTask;
@@ -38,7 +43,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     private final ClonedChunkSectionCache sectionCache;
 
     public VintageRenderSectionManager(RenderPassConfiguration<?> configuration, WorldClient world, int renderDistance, CommandList commandList, int minSection, int maxSection) {
-        super(configuration, () -> new VintageChunkBuildContext(world, configuration), ChunkRenderer::new, renderDistance, commandList, minSection, maxSection, CeleritasVintage.options().performance.chunkBuilderThreads);
+        super(configuration, () -> new VintageChunkBuildContext(world, configuration), ChunkRenderer::new, renderDistance, commandList, minSection, maxSection, CeleritasVintage.options().performance.chunkBuilderThreads, true);
         this.world = world;
         this.sectionCache = new ClonedChunkSectionCache(world);
     }
@@ -59,7 +64,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
     @Override
     protected boolean useFogOcclusion() {
-        return CeleritasVintage.options().performance.useFogOcclusion;
+        return CeleritasVintage.options().performance.useFogOcclusion && !ActiniumShaderProviderHolder.isActive();
     }
 
     @Override
@@ -147,21 +152,80 @@ public class VintageRenderSectionManager extends RenderSectionManager {
         return new GenericSectionSpriteTicker<>(SpriteUtil::markSpriteActive);
     }
 
+    @Override
+    public boolean isInShadowPass() {
+        return ActiniumShaderProviderHolder.isShadowPass();
+    }
+
+    @Override
+    public void renderLayer(ChunkRenderMatrices matrices, TerrainRenderPass pass, CameraTransform occlusionCamera, CameraTransform camera) {
+        if (ActiniumShaderProviderHolder.isShadowPass()) {
+            finishAllGraphUpdates();
+        }
+        super.renderLayer(matrices, pass, occlusionCamera, camera);
+    }
+
     private static class ChunkRenderer extends DefaultChunkRenderer {
+        private GlProgram<? extends ChunkShaderInterface> irisProgram;
+        private boolean usingIrisProgram;
 
         public ChunkRenderer(RenderDevice device, RenderPassConfiguration<?> renderPassConfiguration) {
             super(device, renderPassConfiguration);
+
+            ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
+            if (provider != null) {
+                provider.setRenderPassConfiguration(renderPassConfiguration);
+            }
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        protected void begin(TerrainRenderPass pass) {
+            ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
+            if (provider != null && provider.isShadersEnabled()) {
+                GlProgram<? extends ChunkShaderInterface> override = provider.getShaderOverride(pass);
+                if (override != null) {
+                    pass.startDrawing();
+                    override.bind();
+                    override.getInterface().setupState(pass);
+                    this.activeProgram = (GlProgram<ChunkShaderInterface>) override;
+                    this.irisProgram = override;
+                    this.usingIrisProgram = true;
+                    return;
+                }
+            }
+
+            this.usingIrisProgram = false;
+            this.irisProgram = null;
+            super.begin(pass);
+        }
+
+        @Override
+        protected void end(TerrainRenderPass pass) {
+            if (this.usingIrisProgram && this.irisProgram != null) {
+                this.irisProgram.getInterface().restoreState();
+                this.irisProgram.unbind();
+                this.irisProgram = null;
+                this.usingIrisProgram = false;
+                this.activeProgram = null;
+                pass.endDrawing();
+                return;
+            }
+
+            super.end(pass);
         }
 
         @Override
         public boolean useBlockFaceCulling(){
-            return CeleritasVintage.options().performance.useBlockFaceCulling;
+            return CeleritasVintage.options().performance.useBlockFaceCulling && ActiniumShaderProviderHolder.shouldUseFaceCulling();
         }
 
         @Override
         protected void configureShaderInterface(ChunkShaderInterface shader) {
-            shader.setTextureSlot(ChunkShaderTextureSlot.BLOCK, 0);
-            shader.setTextureSlot(ChunkShaderTextureSlot.LIGHT, 1);
+            if (!this.usingIrisProgram) {
+                shader.setTextureSlot(ChunkShaderTextureSlot.BLOCK, 0);
+                shader.setTextureSlot(ChunkShaderTextureSlot.LIGHT, 1);
+            }
         }
     }
 }
