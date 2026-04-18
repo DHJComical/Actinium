@@ -33,6 +33,7 @@ public final class ActiniumShaderProperties {
     private boolean shadowEnabled = true;
     private boolean prepareBeforeShadow;
     private final Map<String, String> conditionallyEnabledPrograms = new LinkedHashMap<>();
+    private final Map<String, Map<String, String>> stageTexturePaths = new LinkedHashMap<>();
     private float sunPathRotation = DEFAULT_SUN_PATH_ROTATION;
     private float shadowIntervalSize = DEFAULT_SHADOW_INTERVAL_SIZE;
     private int shadowMapResolution = DEFAULT_SHADOW_MAP_RESOLUTION;
@@ -67,6 +68,8 @@ public final class ActiniumShaderProperties {
                 case "weather" -> parsed.parseWeather(value);
                 default -> parsed.tryParseProgramDirective(key, value);
             }
+
+            parsed.tryParseTextureDirective(key, value);
         });
 
         DirectiveSourceParser.parseInto(parsed, shaderSources);
@@ -157,6 +160,17 @@ public final class ActiniumShaderProperties {
         return Collections.unmodifiableMap(this.conditionallyEnabledPrograms);
     }
 
+    public @Nullable String getStageTexturePath(String stageName, String samplerName) {
+        Map<String, String> stageTextures = this.stageTexturePaths.get(stageName);
+        return stageTextures != null ? stageTextures.get(samplerName) : null;
+    }
+
+    public Map<String, Map<String, String>> getStageTexturePaths() {
+        Map<String, Map<String, String>> copy = new LinkedHashMap<>();
+        this.stageTexturePaths.forEach((stage, samplers) -> copy.put(stage, Collections.unmodifiableMap(new LinkedHashMap<>(samplers))));
+        return Collections.unmodifiableMap(copy);
+    }
+
     private void parseWeather(String value) {
         String[] parts = value.toLowerCase(Locale.ROOT).split("\\s+");
 
@@ -180,6 +194,30 @@ public final class ActiniumShaderProperties {
         if (!programName.isEmpty()) {
             this.conditionallyEnabledPrograms.put(programName, value);
         }
+    }
+
+    private void tryParseTextureDirective(String key, String value) {
+        if (!key.startsWith("texture.")) {
+            return;
+        }
+
+        String remainder = key.substring("texture.".length());
+        int separator = remainder.indexOf('.');
+
+        if (separator <= 0 || separator >= remainder.length() - 1) {
+            return;
+        }
+
+        String stageName = remainder.substring(0, separator).trim();
+        String samplerName = remainder.substring(separator + 1).trim();
+
+        if (stageName.isEmpty() || samplerName.isEmpty()) {
+            return;
+        }
+
+        this.stageTexturePaths
+                .computeIfAbsent(stageName, ignored -> new LinkedHashMap<>())
+                .put(samplerName, value);
     }
 
     private static boolean parseBoolean(String value, boolean fallback) {

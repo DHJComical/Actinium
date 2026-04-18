@@ -24,6 +24,7 @@ final class ActiniumPostTargets {
     public static final int TARGET_GAUX4 = 7;
     public static final int TARGET_COUNT = 8;
 
+    private final ColorFormat[] formats;
     private final TargetSlot[] targets = new TargetSlot[TARGET_COUNT];
     private final int framebufferId;
     private final int[] depthTextures = new int[2];
@@ -33,7 +34,8 @@ final class ActiniumPostTargets {
     private int width;
     private int height;
 
-    ActiniumPostTargets() {
+    ActiniumPostTargets(ColorFormat[] formats) {
+        this.formats = formats.clone();
         this.framebufferId = GL30.glGenFramebuffers();
 
         for (int i = 0; i < TARGET_COUNT; i++) {
@@ -51,8 +53,13 @@ final class ActiniumPostTargets {
 
         for (TargetSlot slot : this.targets) {
             slot.delete();
-            slot.mainTexture = createColorTexture(width, height);
-            slot.altTexture = createColorTexture(width, height);
+        }
+
+        for (int i = 0; i < TARGET_COUNT; i++) {
+            TargetSlot slot = this.targets[i];
+            ColorFormat format = this.formats[Math.max(0, Math.min(i, this.formats.length - 1))];
+            slot.mainTexture = createColorTexture(width, height, format);
+            slot.altTexture = createColorTexture(width, height, format);
             slot.sourceIsAlt = false;
             clearColorTexture(slot.mainTexture, width, height);
             clearColorTexture(slot.altTexture, width, height);
@@ -228,14 +235,14 @@ final class ActiniumPostTargets {
         }
     }
 
-    private static int createColorTexture(int width, int height) {
+    private static int createColorTexture(int width, int height, ColorFormat format) {
         int texture = GL11.glGenTextures();
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, 0L);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, format.internalFormat, width, height, 0, format.pixelFormat, format.pixelType, 0L);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
         return texture;
     }
@@ -286,6 +293,36 @@ final class ActiniumPostTargets {
             }
 
             this.sourceIsAlt = false;
+        }
+    }
+
+    enum ColorFormat {
+        R8(GL30.GL_R8, GL30.GL_RED, GL11.GL_UNSIGNED_BYTE),
+        RG8(GL30.GL_RG8, GL30.GL_RG, GL11.GL_UNSIGNED_BYTE),
+        RGBA8(GL11.GL_RGBA8, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE),
+        RGBA16F(GL30.GL_RGBA16F, GL11.GL_RGBA, GL11.GL_FLOAT),
+        R16F(GL30.GL_R16F, GL30.GL_RED, GL11.GL_FLOAT);
+
+        private final int internalFormat;
+        private final int pixelFormat;
+        private final int pixelType;
+
+        ColorFormat(int internalFormat, int pixelFormat, int pixelType) {
+            this.internalFormat = internalFormat;
+            this.pixelFormat = pixelFormat;
+            this.pixelType = pixelType;
+        }
+
+        int internalFormat() {
+            return this.internalFormat;
+        }
+
+        int pixelFormat() {
+            return this.pixelFormat;
+        }
+
+        int pixelType() {
+            return this.pixelType;
         }
     }
 }

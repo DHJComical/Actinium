@@ -43,8 +43,10 @@ final class ActiniumWorldShaderInterface {
     private final @Nullable GlUniformFloat blindness;
     private final @Nullable GlUniformFloat darknessFactor;
     private final @Nullable GlUniformFloat darknessLightFactor;
+    private final @Nullable GlUniformFloat ditherShift;
 
     private final @Nullable GlUniformInt frameCounter;
+    private final @Nullable GlUniformInt frameMod;
     private final @Nullable GlUniformInt worldTime;
     private final @Nullable GlUniformInt moonPhase;
     private final @Nullable GlUniformInt isEyeInWater;
@@ -90,8 +92,10 @@ final class ActiniumWorldShaderInterface {
         this.blindness = context.bindUniformIfPresent("blindness", GlUniformFloat::new);
         this.darknessFactor = context.bindUniformIfPresent("darknessFactor", GlUniformFloat::new);
         this.darknessLightFactor = context.bindUniformIfPresent("darknessLightFactor", GlUniformFloat::new);
+        this.ditherShift = context.bindUniformIfPresent("ditherShift", GlUniformFloat::new);
 
         this.frameCounter = context.bindUniformIfPresent("frameCounter", GlUniformInt::new);
+        this.frameMod = context.bindUniformIfPresent("frameMod", GlUniformInt::new);
         this.worldTime = context.bindUniformIfPresent("worldTime", GlUniformInt::new);
         this.moonPhase = context.bindUniformIfPresent("moonPhase", GlUniformInt::new);
         this.isEyeInWater = context.bindUniformIfPresent("isEyeInWater", GlUniformInt::new);
@@ -156,10 +160,16 @@ final class ActiniumWorldShaderInterface {
         setFloat(this.frameTimeCounter, pipeline.getFrameTimeCounterSeconds());
         setFloat(this.darknessFactor, 0.0f);
         setFloat(this.darknessLightFactor, 0.0f);
+        setFloat(this.ditherShift, pipeline.getDitherShift());
 
         if (this.frameCounter != null) {
             this.frameCounter.setInt(pipeline.getFrameCounter());
         }
+
+        if (this.frameMod != null) {
+            this.frameMod.setInt(pipeline.getFrameMod());
+        }
+
 
         Entity entity = minecraft.getRenderViewEntity();
         Vec3d currentWorldSkyColor = null;

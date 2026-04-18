@@ -3,12 +3,15 @@ package com.dhj.actinium.shader.pipeline;
 import com.dhj.actinium.celeritas.ActiniumShaders;
 import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.pack.ActiniumShaderProperties;
+import com.dhj.actinium.shader.pack.ActiniumShaderPackResources;
 import com.dhj.actinium.shadows.ActiniumInternalShadowRenderingState;
+import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
 import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderHelper;
+import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.BlockRenderLayer;
@@ -20,6 +23,7 @@ import org.embeddedt.embeddium.impl.gl.shader.ShaderConstants;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderParser;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
+import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.shader.ShaderLoader;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
@@ -41,12 +45,17 @@ import org.lwjgl.opengl.GL30;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -77,9 +86,11 @@ public final class ActiniumRenderPipeline {
     private static final String[] WEATHER_PROGRAMS = {
             "gbuffers_weather"
     };
-    private static final String[] SCENE_POST_PROGRAMS = {
+    private static final String[] PRE_SCENE_POST_PROGRAMS = {
             "prepare",
-            "deferred",
+            "deferred"
+    };
+    private static final String[] SCENE_POST_PROGRAMS = {
             "composite",
             "composite1",
             "composite2",
@@ -102,6 +113,16 @@ public final class ActiniumRenderPipeline {
             "composite7",
             "final"
     };
+    private static final String[] LEGACY_RENDER_TARGET_NAMES = {
+            "gcolor",
+            "gdepth",
+            "gnormal",
+            "composite",
+            "gaux1",
+            "gaux2",
+            "gaux3",
+            "gaux4"
+    };
 
     private int observedReloadVersion = -1;
     @Getter
@@ -112,6 +133,7 @@ public final class ActiniumRenderPipeline {
     private boolean postProgramAvailable;
     private boolean loggedCapabilities;
     private boolean sceneProgramsResolved;
+    private boolean preSceneProgramsResolved;
     private boolean finalProgramResolved;
     private boolean loggedPostProgramUse;
     private boolean loggedFinalProgramUse;
@@ -138,9 +160,13 @@ public final class ActiniumRenderPipeline {
     private final Matrix4f shadowProjectionMatrix = new Matrix4f();
     private final Matrix4f shadowModelViewInverseMatrix = new Matrix4f();
     private final Matrix4f shadowProjectionInverseMatrix = new Matrix4f();
+    private final Matrix4f previousGbufferModelViewMatrix = new Matrix4f();
+    private final Matrix4f previousGbufferProjectionMatrix = new Matrix4f();
     private final Vector3f scratchVector = new Vector3f();
+    private final Vector3f scratchTaaOffset = new Vector3f();
     private final Vector3d shadowCameraPosition = new Vector3d();
     private final Vector3d worldCameraPosition = new Vector3d();
+    private final Vector3d previousWorldCameraPosition = new Vector3d();
     @Getter
     private final float[] fogColor = new float[]{1.0f, 1.0f, 1.0f, 1.0f};
 
@@ -155,19 +181,31 @@ public final class ActiniumRenderPipeline {
     private @Nullable ActiniumWorldProgram activeWorldProgram;
     private @Nullable WorldStageGlState worldStageGlState;
     private @Nullable GlProgram<ActiniumPostShaderInterface> finalProgram;
+    private int[] finalProgramMipmappedBuffers = new int[0];
     private @Nullable GlProgram<ActiniumPostShaderInterface> blitProgram;
     private @Nullable Integer whiteTexture;
     private @Nullable Integer noiseTexture;
+    private @Nullable Integer terrainGaux2Texture;
     private @Nullable Integer terrainGaux1Texture;
     private @Nullable Integer terrainDepthTexture0;
     private @Nullable Integer terrainDepthTexture1;
+    private final Map<String, Integer> packTextureCache = new HashMap<>();
+    private @Nullable String activePostTextureStage;
+    private List<ActiniumPostProgram> preScenePrograms = Collections.emptyList();
     private List<ActiniumPostProgram> scenePrograms = Collections.emptyList();
     private boolean worldTargetsPrepared;
+    @Getter
+    private float centerDepthSmooth;
     private ActiniumRenderPipeline() {
     }
 
     public void beginWorld() {
         this.syncReloadState();
+        if (this.frameCounter > 0) {
+            this.previousGbufferModelViewMatrix.set(this.gbufferModelViewMatrix);
+            this.previousGbufferProjectionMatrix.set(this.gbufferProjectionMatrix);
+            this.previousWorldCameraPosition.set(this.worldCameraPosition);
+        }
         this.frameCounter = nextFrameId(this.frameCounter);
         this.worldTargetsPrepared = false;
         this.currentStage = ActiniumRenderStage.WORLD;
@@ -233,6 +271,11 @@ public final class ActiniumRenderPipeline {
         this.gbufferModelViewInverseMatrix.set(this.gbufferModelViewMatrix).invert();
         this.gbufferProjectionInverseMatrix.set(this.gbufferProjectionMatrix).invert();
         System.arraycopy(ChunkShaderFogComponent.FOG_SERVICE.getFogColor(), 0, this.fogColor, 0, this.fogColor.length);
+
+        Entity entity = Minecraft.getMinecraft().getRenderViewEntity();
+        if (entity != null) {
+            this.worldCameraPosition.set(entity.posX, entity.posY, entity.posZ);
+        }
     }
 
     public void captureSkyStageState() {
@@ -260,10 +303,11 @@ public final class ActiniumRenderPipeline {
         this.width = Math.max(1, mainFramebuffer.framebufferWidth);
         this.height = Math.max(1, mainFramebuffer.framebufferHeight);
 
+        List<ActiniumPostProgram> preScenePrograms = this.getPreScenePrograms();
         List<ActiniumPostProgram> scenePrograms = this.getScenePrograms();
         GlProgram<ActiniumPostShaderInterface> finalProgram = this.getFinalProgram();
 
-        if (scenePrograms.isEmpty() && finalProgram == null) {
+        if (preScenePrograms.isEmpty() && scenePrograms.isEmpty() && finalProgram == null) {
             return;
         }
 
@@ -277,13 +321,26 @@ public final class ActiniumRenderPipeline {
                 Integer worldColorTexture = null;
                 Integer worldGaux4Texture = null;
 
-                if (this.worldTargets != null && this.worldTargets.hasSourceColorTexture()) {
-                    worldColorTexture = this.worldTargets.getSourceColorTexture();
-                    worldGaux4Texture = this.worldTargets.getSourceGaux4Texture();
-                }
+        if (this.worldTargets != null && this.worldTargets.hasSourceColorTexture()) {
+            worldColorTexture = this.worldTargets.getSourceColorTexture();
+            worldGaux4Texture = this.worldTargets.getSourceGaux4Texture();
+        }
 
-                this.postTargets.copySceneTextures(mainFramebuffer, worldColorTexture, worldGaux4Texture);
-            }
+        this.debugLogTextureCenter("pre-copy.mainFramebuffer", mainFramebuffer.framebufferTexture);
+        if (worldColorTexture != null && worldColorTexture > 0) {
+            this.debugLogTextureCenter("pre-copy.worldColorTexture", worldColorTexture);
+        }
+        if (worldGaux4Texture != null && worldGaux4Texture > 0) {
+            this.debugLogTextureCenter("pre-copy.worldGaux4Texture", worldGaux4Texture);
+        }
+
+        this.postTargets.copySceneTextures(mainFramebuffer, worldColorTexture, worldGaux4Texture);
+        this.updateCenterDepthSmooth();
+        this.debugLogTextureCenter("post-copy.colortex0", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
+        this.debugLogTextureCenter("post-copy.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+        this.debugLogTextureCenter("post-copy.gaux4", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
+    }
+            this.executePostPrograms(preScenePrograms, partialTicks);
             this.executeScenePrograms(scenePrograms, partialTicks);
             this.renderFinalPass(mainFramebuffer, finalProgram, partialTicks);
         } catch (RuntimeException e) {
@@ -330,6 +387,18 @@ public final class ActiniumRenderPipeline {
         return this.gbufferProjectionInverseMatrix;
     }
 
+    public Matrix4fc getPreviousGbufferModelViewMatrix() {
+        return this.previousGbufferModelViewMatrix;
+    }
+
+    public Matrix4fc getPreviousGbufferProjectionMatrix() {
+        return this.previousGbufferProjectionMatrix;
+    }
+
+    public Vector3d getPreviousWorldCameraPosition() {
+        return this.previousWorldCameraPosition;
+    }
+
     public Matrix4fc getShadowModelViewMatrix() {
         return this.shadowModelViewMatrix;
     }
@@ -352,6 +421,36 @@ public final class ActiniumRenderPipeline {
 
     public Matrix4fc getSkyStageProjectionInverseMatrix() {
         return this.skyStageProjectionInverseMatrix;
+    }
+
+    public int getFrameMod() {
+        return Math.floorMod(this.frameCounter, 16);
+    }
+
+    public float getDitherShift() {
+        final float[] sequence = {
+                0.0625f, 0.4375f, 0.875f, 0.625f,
+                0.25f, 0.8125f, 0.125f, 0.9375f,
+                0.3125f, 0.5f, 0.375f, 0.5625f,
+                0.75f, 0.6875f, 0.1875f, 0.0f
+        };
+        return sequence[this.getFrameMod()];
+    }
+
+    public float getSoftLod() {
+        float softLodScale = Math.max(1.0f, this.height / 128.0f);
+        return Math.max(0.0f, (float) (Math.log(softLodScale) / Math.log(2.0)));
+    }
+
+    public float getTaaOffsetX() {
+        return ((this.getFrameMod() & 1) == 0 ? 0.5f : -0.5f) / Math.max(1, this.width);
+    }
+
+    public float getTaaOffsetY() {
+        return switch (this.getFrameMod()) {
+            case 0, 2, 4, 6, 8, 10, 12, 14 -> 0.5f / Math.max(1, this.height);
+            default -> -0.5f / Math.max(1, this.height);
+        };
     }
 
     public void renderShadowPass(float partialTicks) {
@@ -435,10 +534,10 @@ public final class ActiniumRenderPipeline {
 
     public void bindTerrainInputTextures() {
         int gaux1Texture = this.terrainGaux1Texture != null ? this.terrainGaux1Texture : 0;
-        int gaux2Texture = this.noiseTexture != null ? this.noiseTexture : 0;
+        int gaux2Texture = this.getGbuffersTextureOverride("gaux2", this.terrainGaux2Texture);
         int depthtex0Texture = this.terrainDepthTexture0 != null ? this.terrainDepthTexture0 : 0;
         int depthtex1Texture = this.terrainDepthTexture1 != null ? this.terrainDepthTexture1 : 0;
-        int noiseTextureId = this.noiseTexture != null ? this.noiseTexture : 0;
+        int noiseTextureId = this.getGbuffersTextureOverride("noisetex", this.noiseTexture);
 
         bindTexture(TERRAIN_GAUX1_UNIT, gaux1Texture);
         bindTexture(TERRAIN_GAUX2_UNIT, gaux2Texture);
@@ -460,6 +559,50 @@ public final class ActiniumRenderPipeline {
         unbindTexture(TERRAIN_SHADOW_COLOR0_UNIT);
         unbindTexture(TERRAIN_SHADOW_TEX1_UNIT);
         unbindTexture(TERRAIN_SHADOW_TEX0_UNIT);
+    }
+
+    public void bindTerrainPassFramebuffer(TerrainRenderPass pass) {
+        this.syncReloadState();
+
+        if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasPostProgram() || ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer framebuffer = minecraft.getFramebuffer();
+
+        if (framebuffer == null || framebuffer.framebufferTexture <= 0) {
+            return;
+        }
+
+        this.width = Math.max(1, framebuffer.framebufferWidth);
+        this.height = Math.max(1, framebuffer.framebufferHeight);
+        this.ensureRuntimeResources();
+        this.prepareWorldTargets(framebuffer);
+
+        if (this.worldTargets != null) {
+            this.worldTargets.bindWriteFramebuffer(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1}, false);
+            debugCheckGlErrors("terrain.bindFramebuffer:" + pass.name());
+        }
+    }
+
+    public void unbindTerrainPassFramebuffer(TerrainRenderPass pass) {
+        this.syncReloadState();
+
+        if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasPostProgram() || ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer framebuffer = minecraft.getFramebuffer();
+
+        if (framebuffer == null || framebuffer.framebufferTexture <= 0 || this.worldTargets == null) {
+            return;
+        }
+
+        this.worldTargets.endWrite(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1}, false);
+        this.presentWorldStageResult(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1});
+        debugCheckGlErrors("terrain.unbindFramebuffer:" + pass.name());
     }
 
     public void bindWorldGaux4Texture() {
@@ -567,22 +710,30 @@ public final class ActiniumRenderPipeline {
         }
     }
 
-    private void executeScenePrograms(List<ActiniumPostProgram> scenePrograms, float partialTicks) {
-        for (ActiniumPostProgram sceneProgram : scenePrograms) {
+    private void executePostPrograms(List<ActiniumPostProgram> programs, float partialTicks) {
+        for (ActiniumPostProgram program : programs) {
+            this.preparePostMipmappedInputs(program.mipmappedBuffers());
             if (this.postTargets != null) {
-                this.postTargets.bindWriteFramebuffer(sceneProgram.drawBuffers());
+                this.postTargets.bindWriteFramebuffer(program.drawBuffers());
             }
             GL11.glViewport(0, 0, this.width, this.height);
-            this.renderFullscreenProgram(sceneProgram.program(), partialTicks);
-            this.postTargets.flipWrittenTargets(sceneProgram.drawBuffers());
+            this.renderFullscreenProgram(program.program(), partialTicks, program.name());
+            this.postTargets.flipWrittenTargets(program.drawBuffers());
+            this.debugLogPostStage(program.name());
         }
+    }
+
+    private void executeScenePrograms(List<ActiniumPostProgram> scenePrograms, float partialTicks) {
+        this.executePostPrograms(scenePrograms, partialTicks);
     }
 
     private void renderFinalPass(Framebuffer mainFramebuffer, @Nullable GlProgram<ActiniumPostShaderInterface> program, float partialTicks) {
         if (program != null) {
+            this.preparePostMipmappedInputs(this.finalProgramMipmappedBuffers);
             mainFramebuffer.bindFramebuffer(true);
             GL11.glViewport(0, 0, this.width, this.height);
-            this.renderFullscreenProgram(program, partialTicks);
+            this.renderFullscreenProgram(program, partialTicks, "final");
+            this.debugLogFramebufferCenter("final.mainFramebuffer", mainFramebuffer.framebufferObject, GL30.GL_COLOR_ATTACHMENT0);
             return;
         }
 
@@ -593,10 +744,10 @@ public final class ActiniumRenderPipeline {
         GlProgram<ActiniumPostShaderInterface> program = this.getBlitProgram();
         mainFramebuffer.bindFramebuffer(true);
         GL11.glViewport(0, 0, this.width, this.height);
-        this.renderFullscreenProgram(program, partialTicks);
+        this.renderFullscreenProgram(program, partialTicks, null);
     }
 
-    private void renderFullscreenProgram(GlProgram<ActiniumPostShaderInterface> program, float partialTicks) {
+    private void renderFullscreenProgram(GlProgram<ActiniumPostShaderInterface> program, float partialTicks, @Nullable String textureStage) {
         long now = System.nanoTime();
         float frameDeltaSeconds = this.lastFrameNanos == 0L ? 0.0f : Math.max(0.0f, (now - this.lastFrameNanos) / 1_000_000_000.0f);
         this.lastFrameNanos = now;
@@ -614,6 +765,7 @@ public final class ActiniumRenderPipeline {
 
         program.bind();
         program.getInterface().setupState(this, this.postTargets, partialTicks, frameDeltaSeconds, this.frameTimeCounterSeconds, this.frameCounter);
+        this.activePostTextureStage = textureStage;
         this.bindPipelineTextures();
 
         if (this.fullscreenVertexArray != null) {
@@ -623,6 +775,7 @@ public final class ActiniumRenderPipeline {
         GL30.glBindVertexArray(0);
 
         this.unbindPipelineTextures();
+        this.activePostTextureStage = null;
         program.unbind();
 
         GlStateManager.depthMask(true);
@@ -635,15 +788,15 @@ public final class ActiniumRenderPipeline {
         if (this.postTargets != null) {
             bindTexture(0, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
             bindTexture(1, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
-            bindTexture(2, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX2));
+            bindTexture(2, this.getPostTextureOverride("colortex2", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX2)));
             bindTexture(3, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX3));
             bindTexture(4, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX1));
-            bindTexture(5, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX2));
+            bindTexture(5, this.getPostTextureOverride("gaux2", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX2)));
             bindTexture(6, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX3));
             bindTexture(7, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
             bindTexture(8, this.postTargets.getDepthTexture(0));
             bindTexture(9, this.postTargets.getDepthTexture(1));
-            bindTexture(10, this.noiseTexture);
+            bindTexture(10, this.getPostTextureOverride("noisetex", this.noiseTexture));
             bindTexture(TERRAIN_SHADOW_TEX0_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(0) : this.whiteTexture);
             bindTexture(TERRAIN_SHADOW_TEX1_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(1) : this.whiteTexture);
             bindTexture(TERRAIN_SHADOW_COLOR0_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture() : this.whiteTexture);
@@ -664,9 +817,237 @@ public final class ActiniumRenderPipeline {
         }
     }
 
+    private void preparePostMipmappedInputs(int[] mipmappedBuffers) {
+        if (this.postTargets == null) {
+            return;
+        }
+
+        for (int targetIndex : mipmappedBuffers) {
+            this.generateTextureMipmaps(this.postTargets.getSourceTexture(targetIndex), false);
+        }
+    }
+
+    private void generateTextureMipmaps(int textureId, boolean integerTexture) {
+        if (textureId <= 0) {
+            return;
+        }
+
+        int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int previousBinding = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, integerTexture ? GL11.GL_NEAREST_MIPMAP_NEAREST : GL11.GL_LINEAR_MIPMAP_LINEAR);
+        GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousBinding);
+        GL13.glActiveTexture(previousActiveTexture);
+    }
+
+    private void debugLogPostStage(String programName) {
+        if (!ActiniumShaderPackManager.isDebugEnabled() || this.postTargets == null) {
+            return;
+        }
+
+        int colortex1 = this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1);
+        int gaux3 = this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX3);
+        this.debugLogTextureCenter(programName + ".colortex1", colortex1);
+        this.debugLogTextureCenter(programName + ".gaux3", gaux3);
+    }
+
+    private void debugLogTextureCenter(String label, int textureId) {
+        if (!ActiniumShaderPackManager.isDebugEnabled() || textureId <= 0) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int framebuffer = GL30.glGenFramebuffers();
+        ByteBuffer pixel = BufferUtils.createByteBuffer(4);
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, textureId, 0);
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            GL11.glReadPixels(Math.max(0, this.width / 2), Math.max(0, this.height / 2), 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, pixel);
+            int r = pixel.get(0) & 0xFF;
+            int g = pixel.get(1) & 0xFF;
+            int b = pixel.get(2) & 0xFF;
+            int a = pixel.get(3) & 0xFF;
+            this.debugLog("Post debug '{}' center pixel rgba=[{}, {}, {}, {}]", label, r, g, b, a);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+            GL30.glDeleteFramebuffers(framebuffer);
+        }
+    }
+
+    private int getGbuffersTextureOverride(String samplerName, @Nullable Integer fallbackTexture) {
+        return this.getDeclaredStageTexture("gbuffers", samplerName, fallbackTexture);
+    }
+
+    private int getPostTextureOverride(String samplerName, @Nullable Integer fallbackTexture) {
+        if (this.activePostTextureStage == null) {
+            return fallbackTexture != null ? fallbackTexture : 0;
+        }
+
+        return this.getDeclaredStageTexture(this.resolvePostTextureStageName(this.activePostTextureStage), samplerName, fallbackTexture);
+    }
+
+    private String resolvePostTextureStageName(String programName) {
+        String lowerName = programName.toLowerCase(Locale.ROOT);
+        if (lowerName.startsWith("prepare")) {
+            return "prepare";
+        }
+        if (lowerName.startsWith("deferred")) {
+            return "deferred";
+        }
+        if (lowerName.startsWith("composite") || lowerName.startsWith("final")) {
+            return "composite";
+        }
+        return lowerName;
+    }
+
+    private int getDeclaredStageTexture(String stageName, String samplerName, @Nullable Integer fallbackTexture) {
+        ActiniumShaderProperties properties = ActiniumShaderPackManager.getActiveShaderProperties();
+        String relativePath = properties.getStageTexturePath(stageName, samplerName);
+
+        if (relativePath == null && "composite".equals(stageName)) {
+            relativePath = properties.getStageTexturePath("final", samplerName);
+        }
+
+        if (relativePath == null) {
+            return fallbackTexture != null ? fallbackTexture : 0;
+        }
+
+        final String resolvedPath = relativePath;
+        Integer textureId = this.packTextureCache.computeIfAbsent(stageName + ":" + samplerName, key -> this.loadPackTexture(resolvedPath));
+        return textureId != null && textureId > 0 ? textureId : fallbackTexture != null ? fallbackTexture : 0;
+    }
+
+    private int loadPackTexture(String relativePath) {
+        ActiniumShaderPackResources resources = ActiniumShaderPackManager.getActivePackResources();
+        if (resources == null) {
+            return 0;
+        }
+
+        try (InputStream stream = resources.openResource(relativePath)) {
+            if (stream == null) {
+                this.debugLog("Shader pack texture '{}' is missing", relativePath);
+                return 0;
+            }
+
+            return uploadPackTexture(TextureUtil.readBufferedImage(stream));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to load shader pack texture " + relativePath, e);
+        }
+    }
+
+    private static int uploadPackTexture(java.awt.image.BufferedImage image) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int[] pixels = new int[width * height];
+        ByteBuffer buffer = BufferUtils.createByteBuffer(width * height * 4);
+        image.getRGB(0, 0, width, height, pixels, 0, width);
+
+        for (int pixel : pixels) {
+            buffer.put((byte) ((pixel >> 16) & 0xFF));
+            buffer.put((byte) ((pixel >> 8) & 0xFF));
+            buffer.put((byte) (pixel & 0xFF));
+            buffer.put((byte) ((pixel >> 24) & 0xFF));
+        }
+        buffer.flip();
+
+        int texture = GL11.glGenTextures();
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        return texture;
+    }
+
+    private void updateCenterDepthSmooth() {
+        if (this.postTargets == null) {
+            return;
+        }
+
+        int depthTexture = this.postTargets.getDepthTexture(0);
+        if (depthTexture <= 0) {
+            return;
+        }
+
+        float currentDepth = this.readDepthTextureCenter(depthTexture);
+        if (this.centerDepthSmooth == 0.0f) {
+            this.centerDepthSmooth = currentDepth;
+            return;
+        }
+
+        float blend = 0.15f;
+        this.centerDepthSmooth += (currentDepth - this.centerDepthSmooth) * blend;
+    }
+
+    private float readDepthTextureCenter(int depthTexture) {
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int framebuffer = GL30.glGenFramebuffers();
+        FloatBuffer pixel = BufferUtils.createFloatBuffer(1);
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, depthTexture, 0);
+            GL11.glReadBuffer(GL11.GL_NONE);
+            GL11.glReadPixels(Math.max(0, this.width / 2), Math.max(0, this.height / 2), 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, pixel);
+            return pixel.get(0);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+            GL30.glDeleteFramebuffers(framebuffer);
+        }
+    }
+
+    private void debugLogFramebufferCenter(String label, int framebufferId, int readBufferAttachment) {
+        if (!ActiniumShaderPackManager.isDebugEnabled() || framebufferId <= 0) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        ByteBuffer pixel = BufferUtils.createByteBuffer(4);
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebufferId);
+            GL11.glReadBuffer(readBufferAttachment);
+            GL11.glReadPixels(Math.max(0, this.width / 2), Math.max(0, this.height / 2), 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, pixel);
+            int r = pixel.get(0) & 0xFF;
+            int g = pixel.get(1) & 0xFF;
+            int b = pixel.get(2) & 0xFF;
+            int a = pixel.get(3) & 0xFF;
+            this.debugLog("Post debug '{}' center pixel rgba=[{}, {}, {}, {}]", label, r, g, b, a);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+        }
+    }
+
     private void unbindWorldStageTextures() {
         unbindTexture(WORLD_GAUX4_UNIT);
         this.unbindTerrainShadowTextures();
+    }
+
+    private List<ActiniumPostProgram> getPreScenePrograms() {
+        if (!this.shouldUseExternalScenePrograms()) {
+            return Collections.emptyList();
+        }
+
+        if (this.preSceneProgramsResolved) {
+            return this.preScenePrograms;
+        }
+
+        this.preSceneProgramsResolved = true;
+        this.preScenePrograms = this.resolvePostPrograms(PRE_SCENE_POST_PROGRAMS, "pre-scene");
+        return this.preScenePrograms;
     }
 
     private List<ActiniumPostProgram> getScenePrograms() {
@@ -679,9 +1060,14 @@ public final class ActiniumRenderPipeline {
         }
 
         this.sceneProgramsResolved = true;
+        this.scenePrograms = this.resolvePostPrograms(SCENE_POST_PROGRAMS, "scene");
+        return this.scenePrograms;
+    }
+
+    private List<ActiniumPostProgram> resolvePostPrograms(String[] programNames, String logCategory) {
         List<ActiniumPostProgram> resolved = new ArrayList<>();
 
-        for (String programName : SCENE_POST_PROGRAMS) {
+        for (String programName : programNames) {
             String fragmentSource = ActiniumShaderPackManager.getProgramSource(programName, ShaderType.FRAGMENT);
 
             if (fragmentSource == null) {
@@ -689,12 +1075,19 @@ public final class ActiniumRenderPipeline {
             }
 
             String vertexSource = ActiniumShaderPackManager.getProgramSource(programName, ShaderType.VERTEX);
-            int[] drawBuffers = parseDrawBuffers(fragmentSource);
+            ProgramMetadata metadata = ProgramMetadata.parse(fragmentSource);
+            int[] drawBuffers = metadata.drawBuffers();
+            this.debugLog(
+                    "Resolved post program '{}' metadata: drawBuffers={}, mipmappedBuffers={}",
+                    programName,
+                    Arrays.toString(drawBuffers),
+                    Arrays.toString(metadata.mipmappedBuffers())
+            );
 
             try {
-                resolved.add(new ActiniumPostProgram(programName, this.createProgram(programName, vertexSource, fragmentSource, drawBuffers), drawBuffers));
+                resolved.add(new ActiniumPostProgram(programName, this.createProgram(programName, vertexSource, fragmentSource, drawBuffers), drawBuffers, metadata.mipmappedBuffers()));
             } catch (RuntimeException e) {
-                ActiniumShaders.logger().warn("Failed to compile external shader pack post program '{}'", programName, e);
+                ActiniumShaders.logger().warn("Failed to compile external shader pack {} post program '{}'", logCategory, programName, e);
             }
         }
 
@@ -702,9 +1095,7 @@ public final class ActiniumRenderPipeline {
             this.loggedPostProgramUse = true;
             ActiniumShaders.logger().info("Using external shader pack scene post programs: {}", resolved.stream().map(ActiniumPostProgram::name).reduce((a, b) -> a + ", " + b).orElse("unknown"));
         }
-
-        this.scenePrograms = resolved;
-        return this.scenePrograms;
+        return resolved;
     }
 
     private @Nullable GlProgram<ActiniumPostShaderInterface> getFinalProgram() {
@@ -725,6 +1116,14 @@ public final class ActiniumRenderPipeline {
         }
 
         String vertexSource = ActiniumShaderPackManager.getProgramSource("final", ShaderType.VERTEX);
+        ProgramMetadata metadata = ProgramMetadata.parse(fragmentSource);
+        this.finalProgramMipmappedBuffers = metadata.mipmappedBuffers();
+        this.debugLog(
+                "Resolved post program '{}' metadata: drawBuffers={}, mipmappedBuffers={}",
+                "final",
+                "[0]",
+                Arrays.toString(this.finalProgramMipmappedBuffers)
+        );
 
         try {
             this.finalProgram = this.createProgram("final", vertexSource, fragmentSource, new int[]{0});
@@ -812,7 +1211,8 @@ public final class ActiniumRenderPipeline {
     }
 
     private boolean shouldUseExternalScenePrograms() {
-        return false;
+        return ActiniumShaderPackManager.areShadersEnabled()
+                && ActiniumShaderPackManager.getActivePackResources() != null;
     }
 
     private boolean shouldUseExternalFinalProgram() {
@@ -835,7 +1235,7 @@ public final class ActiniumRenderPipeline {
         }
 
         if (this.postTargets == null) {
-            this.postTargets = new ActiniumPostTargets();
+            this.postTargets = new ActiniumPostTargets(createDefaultPostTargetFormats());
         }
 
         if (this.shadowTargets == null) {
@@ -843,7 +1243,10 @@ public final class ActiniumRenderPipeline {
         }
 
         if (this.worldTargets == null) {
-            this.worldTargets = new ActiniumWorldTargets();
+            this.worldTargets = new ActiniumWorldTargets(
+                    ActiniumPostTargets.ColorFormat.RGBA16F,
+                    ActiniumPostTargets.ColorFormat.RGBA16F
+            );
         }
 
         if (this.whiteTexture == null) {
@@ -855,6 +1258,19 @@ public final class ActiniumRenderPipeline {
         }
 
         this.ensureTerrainInputTextures();
+    }
+
+    private static ActiniumPostTargets.ColorFormat[] createDefaultPostTargetFormats() {
+        return new ActiniumPostTargets.ColorFormat[]{
+                ActiniumPostTargets.ColorFormat.R8,
+                ActiniumPostTargets.ColorFormat.RGBA16F,
+                ActiniumPostTargets.ColorFormat.R8,
+                ActiniumPostTargets.ColorFormat.RGBA16F,
+                ActiniumPostTargets.ColorFormat.RGBA16F,
+                ActiniumPostTargets.ColorFormat.R8,
+                ActiniumPostTargets.ColorFormat.R16F,
+                ActiniumPostTargets.ColorFormat.RGBA16F
+        };
     }
 
     private void syncReloadState() {
@@ -926,6 +1342,12 @@ public final class ActiniumRenderPipeline {
             sceneProgram.program().delete();
         }
 
+        for (ActiniumPostProgram sceneProgram : this.preScenePrograms) {
+            sceneProgram.program().delete();
+        }
+
+        this.preScenePrograms = Collections.emptyList();
+        this.preSceneProgramsResolved = false;
         this.scenePrograms = Collections.emptyList();
         this.sceneProgramsResolved = false;
 
@@ -979,6 +1401,11 @@ public final class ActiniumRenderPipeline {
             this.noiseTexture = null;
         }
 
+        if (this.terrainGaux2Texture != null) {
+            GL11.glDeleteTextures(this.terrainGaux2Texture);
+            this.terrainGaux2Texture = null;
+        }
+
         if (this.terrainGaux1Texture != null) {
             GL11.glDeleteTextures(this.terrainGaux1Texture);
             this.terrainGaux1Texture = null;
@@ -994,6 +1421,13 @@ public final class ActiniumRenderPipeline {
             this.terrainDepthTexture1 = null;
         }
 
+        for (Integer textureId : this.packTextureCache.values()) {
+            if (textureId != null && textureId > 0) {
+                GL11.glDeleteTextures(textureId);
+            }
+        }
+        this.packTextureCache.clear();
+
         this.worldTargetsPrepared = false;
         ActiniumInternalShadowRenderingState.clear();
     }
@@ -1005,6 +1439,12 @@ public final class ActiniumRenderPipeline {
             sceneProgram.program().delete();
         }
 
+        for (ActiniumPostProgram sceneProgram : this.preScenePrograms) {
+            sceneProgram.program().delete();
+        }
+
+        this.preScenePrograms = Collections.emptyList();
+        this.preSceneProgramsResolved = true;
         this.scenePrograms = Collections.emptyList();
         this.sceneProgramsResolved = true;
 
@@ -1014,6 +1454,7 @@ public final class ActiniumRenderPipeline {
         }
 
         this.finalProgramResolved = true;
+        this.postProgramAvailable = false;
     }
 
     private void deleteWorldPrograms() {
@@ -1155,6 +1596,11 @@ public final class ActiniumRenderPipeline {
             this.debugLog("Allocated terrain gaux1 texture {} with size {}x{}", this.terrainGaux1Texture, this.width, this.height);
         }
 
+        if (this.terrainGaux2Texture == null) {
+            this.terrainGaux2Texture = createColorTexture(this.width, this.height);
+            this.debugLog("Allocated terrain gaux2 texture {} with size {}x{}", this.terrainGaux2Texture, this.width, this.height);
+        }
+
         if (this.terrainDepthTexture0 == null) {
             this.terrainDepthTexture0 = createDepthTexture(this.width, this.height);
             this.debugLog("Allocated terrain depthtex0 texture {} with size {}x{}", this.terrainDepthTexture0, this.width, this.height);
@@ -1176,10 +1622,14 @@ public final class ActiniumRenderPipeline {
         debugCheckGlErrors("pipeline.prepareWorldTargets.ensureSize");
 
         if (!this.worldTargetsPrepared) {
-            this.worldTargets.beginFrame(framebuffer);
+            float[] fogClearColor = ChunkShaderFogComponent.FOG_SERVICE.getFogColor();
+            float clearRed = fogClearColor.length > 0 ? fogClearColor[0] : 0.0f;
+            float clearGreen = fogClearColor.length > 1 ? fogClearColor[1] : clearRed;
+            float clearBlue = fogClearColor.length > 2 ? fogClearColor[2] : clearGreen;
+            this.worldTargets.beginFrame(framebuffer, clearRed, clearGreen, clearBlue, 1.0f);
             debugCheckGlErrors("pipeline.prepareWorldTargets.beginFrame");
             this.worldTargetsPrepared = true;
-            this.debugLog("Prepared world-stage MRT targets for {}x{}", this.width, this.height);
+            this.debugLog("Prepared world-stage MRT targets for {}x{} with fog clear color [{}, {}, {}]", this.width, this.height, clearRed, clearGreen, clearBlue);
         }
     }
 
@@ -1537,11 +1987,26 @@ public final class ActiniumRenderPipeline {
     }
 
     private static int[] parseDrawBuffers(String fragmentSource) {
+        return parseDrawBuffers(fragmentSource, false);
+    }
+
+    private static int[] parseDrawBuffers(String fragmentSource, boolean preferWidestMatch) {
         Matcher matcher = DRAW_BUFFERS_PATTERN.matcher(fragmentSource);
         String value = null;
+        int maxLength = -1;
 
         while (matcher.find()) {
-            value = matcher.group(1);
+            String candidate = matcher.group(1);
+
+            if (!preferWidestMatch) {
+                value = candidate;
+                continue;
+            }
+
+            if (candidate.length() >= maxLength) {
+                value = candidate;
+                maxLength = candidate.length();
+            }
         }
 
         if (value == null || value.isEmpty()) {
@@ -1918,6 +2383,435 @@ public final class ActiniumRenderPipeline {
             GL13.glActiveTexture(this.activeTexture);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureBinding2d);
             GL11.glViewport(this.viewport[0], this.viewport[1], this.viewport[2], this.viewport[3]);
+        }
+    }
+
+    private static final class ActiniumPostProgram {
+        private final String name;
+        private final GlProgram<ActiniumPostShaderInterface> program;
+        private final int[] drawBuffers;
+        private final int[] mipmappedBuffers;
+
+        private ActiniumPostProgram(String name, GlProgram<ActiniumPostShaderInterface> program, int[] drawBuffers, int[] mipmappedBuffers) {
+            this.name = name;
+            this.program = program;
+            this.drawBuffers = drawBuffers;
+            this.mipmappedBuffers = mipmappedBuffers;
+        }
+
+        public String name() {
+            return this.name;
+        }
+
+        public GlProgram<ActiniumPostShaderInterface> program() {
+            return this.program;
+        }
+
+        public int[] drawBuffers() {
+            return this.drawBuffers;
+        }
+
+        public int[] mipmappedBuffers() {
+            return this.mipmappedBuffers;
+        }
+    }
+
+    private static final class ProgramMetadata {
+        private final int[] drawBuffers;
+        private final int[] mipmappedBuffers;
+
+        private ProgramMetadata(int[] drawBuffers, int[] mipmappedBuffers) {
+            this.drawBuffers = drawBuffers;
+            this.mipmappedBuffers = mipmappedBuffers;
+        }
+
+        public static ProgramMetadata parse(String shaderSource) {
+            java.util.Map<String, String> defines = new java.util.HashMap<>();
+            java.util.ArrayList<ConditionalFrame> stack = new java.util.ArrayList<>();
+            java.util.LinkedHashSet<Integer> mipmappedTargets = new java.util.LinkedHashSet<>();
+            String drawBufferDirective = null;
+            String renderTargetsDirective = null;
+            int drawBufferLocation = -1;
+            int renderTargetsLocation = -1;
+            boolean active = true;
+            int location = 0;
+
+            for (String rawLine : shaderSource.split("\\R")) {
+                String line = stripLineComment(rawLine);
+                String trimmed = line.trim();
+
+                if (trimmed.isEmpty()) {
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (trimmed.startsWith("#ifdef ")) {
+                    String name = trimmed.substring("#ifdef ".length()).trim();
+                    boolean condition = defines.containsKey(name);
+                    stack.add(new ConditionalFrame(active, condition, active && condition));
+                    active = active && condition;
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (trimmed.startsWith("#ifndef ")) {
+                    String name = trimmed.substring("#ifndef ".length()).trim();
+                    boolean condition = !defines.containsKey(name);
+                    stack.add(new ConditionalFrame(active, condition, active && condition));
+                    active = active && condition;
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (trimmed.startsWith("#if ")) {
+                    boolean condition = evaluateExpression(trimmed.substring("#if ".length()).trim(), defines);
+                    stack.add(new ConditionalFrame(active, condition, active && condition));
+                    active = active && condition;
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (trimmed.startsWith("#elif ")) {
+                    if (!stack.isEmpty()) {
+                        ConditionalFrame frame = stack.get(stack.size() - 1);
+                        boolean condition = !frame.branchTaken && evaluateExpression(trimmed.substring("#elif ".length()).trim(), defines);
+                        frame.branchTaken |= condition;
+                        frame.active = frame.parentActive && condition;
+                        active = frame.active;
+                    }
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (trimmed.startsWith("#else")) {
+                    if (!stack.isEmpty()) {
+                        ConditionalFrame frame = stack.get(stack.size() - 1);
+                        boolean condition = !frame.branchTaken;
+                        frame.branchTaken = true;
+                        frame.active = frame.parentActive && condition;
+                        active = frame.active;
+                    }
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (trimmed.startsWith("#endif")) {
+                    if (!stack.isEmpty()) {
+                        ConditionalFrame frame = stack.remove(stack.size() - 1);
+                        active = frame.parentActive;
+                    }
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (!active) {
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (trimmed.startsWith("#define ")) {
+                    int valueStart = trimmed.indexOf(' ', "#define ".length());
+                    String name;
+                    String value;
+
+                    if (valueStart >= 0) {
+                        name = trimmed.substring("#define ".length(), valueStart).trim();
+                        value = trimmed.substring(valueStart + 1).trim();
+                    } else {
+                        name = trimmed.substring("#define ".length()).trim();
+                        value = "1";
+                    }
+
+                    if (!name.isEmpty() && !name.contains("(")) {
+                        defines.put(name, value.isEmpty() ? "1" : value);
+                    }
+
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                if (trimmed.startsWith("#undef ")) {
+                    defines.remove(trimmed.substring("#undef ".length()).trim());
+                    location += rawLine.length() + 1;
+                    continue;
+                }
+
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("/\\*\\s*(DRAWBUFFERS|RENDERTARGETS)\\s*:\\s*([^*]*?)\\s*\\*/").matcher(line);
+                while (matcher.find()) {
+                    String type = matcher.group(1);
+                    String directive = matcher.group(2).trim();
+                    int directiveLocation = location + matcher.start();
+
+                    if ("DRAWBUFFERS".equals(type) && directiveLocation >= drawBufferLocation) {
+                        drawBufferDirective = directive;
+                        drawBufferLocation = directiveLocation;
+                    } else if ("RENDERTARGETS".equals(type) && directiveLocation >= renderTargetsLocation) {
+                        renderTargetsDirective = directive;
+                        renderTargetsLocation = directiveLocation;
+                    }
+                }
+
+                parseMipmapDirective(trimmed, mipmappedTargets);
+                location += rawLine.length() + 1;
+            }
+
+            String appliedDirective;
+            if (drawBufferLocation > renderTargetsLocation) {
+                appliedDirective = drawBufferDirective;
+            } else if (renderTargetsLocation >= 0) {
+                appliedDirective = renderTargetsDirective;
+            } else {
+                appliedDirective = drawBufferDirective;
+            }
+
+            int[] drawBuffers = parseDrawBufferDirective(appliedDirective);
+            int[] mipmappedBuffers = mipmappedTargets.stream().mapToInt(Integer::intValue).toArray();
+            return new ProgramMetadata(drawBuffers, mipmappedBuffers);
+        }
+
+        public int[] drawBuffers() {
+            return this.drawBuffers;
+        }
+
+        public int[] mipmappedBuffers() {
+            return this.mipmappedBuffers;
+        }
+
+        private static void parseMipmapDirective(String trimmedLine, java.util.Set<Integer> mipmappedTargets) {
+            if (!trimmedLine.startsWith("const bool ")) {
+                return;
+            }
+
+            int equalsIndex = trimmedLine.indexOf('=');
+            if (equalsIndex < 0) {
+                return;
+            }
+
+            String name = trimmedLine.substring("const bool ".length(), equalsIndex).trim();
+            String value = trimDirectiveValue(trimmedLine.substring(equalsIndex + 1));
+
+            if (!name.endsWith("MipmapEnabled")) {
+                return;
+            }
+
+            String bufferName = name.substring(0, name.length() - "MipmapEnabled".length());
+            int targetIndex = resolveTargetIndex(bufferName);
+
+            if (targetIndex < 0) {
+                return;
+            }
+
+            if (parseBoolean(value)) {
+                mipmappedTargets.add(targetIndex);
+            } else {
+                mipmappedTargets.remove(targetIndex);
+            }
+        }
+
+        private static int resolveTargetIndex(String bufferName) {
+            if (bufferName.startsWith("colortex")) {
+                try {
+                    return Integer.parseInt(bufferName.substring("colortex".length()));
+                } catch (NumberFormatException ignored) {
+                    return -1;
+                }
+            }
+
+            for (int i = 0; i < LEGACY_RENDER_TARGET_NAMES.length; i++) {
+                if (LEGACY_RENDER_TARGET_NAMES[i].equals(bufferName)) {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static int[] parseDrawBufferDirective(@Nullable String directive) {
+            if (directive == null || directive.isEmpty()) {
+                return new int[]{ActiniumPostTargets.TARGET_COLORTEX1};
+            }
+
+            if (directive.indexOf(',') >= 0) {
+                return Arrays.stream(directive.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .mapToInt(Integer::parseInt)
+                        .toArray();
+            }
+
+            int[] drawBuffers = new int[directive.length()];
+            for (int i = 0; i < directive.length(); i++) {
+                drawBuffers[i] = Character.digit(directive.charAt(i), 10);
+            }
+            return drawBuffers;
+        }
+
+        private static boolean parseBoolean(String value) {
+            return switch (value.toLowerCase()) {
+                case "true", "on", "yes", "1" -> true;
+                default -> false;
+            };
+        }
+
+        private static String trimDirectiveValue(String value) {
+            String trimmed = value.trim();
+            if (trimmed.endsWith(";")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 1).trim();
+            }
+            return trimOuterParentheses(trimmed);
+        }
+
+        private static String stripLineComment(String line) {
+            int commentStart = line.indexOf("//");
+            return commentStart >= 0 ? line.substring(0, commentStart) : line;
+        }
+
+        private static boolean evaluateExpression(String expression, java.util.Map<String, String> defines) {
+            String trimmed = trimOuterParentheses(expression.trim());
+
+            int operatorIndex = findTopLevelOperator(trimmed, "||");
+            if (operatorIndex >= 0) {
+                return evaluateExpression(trimmed.substring(0, operatorIndex), defines)
+                        || evaluateExpression(trimmed.substring(operatorIndex + 2), defines);
+            }
+
+            operatorIndex = findTopLevelOperator(trimmed, "&&");
+            if (operatorIndex >= 0) {
+                return evaluateExpression(trimmed.substring(0, operatorIndex), defines)
+                        && evaluateExpression(trimmed.substring(operatorIndex + 2), defines);
+            }
+
+            if (trimmed.startsWith("!")) {
+                return !evaluateExpression(trimmed.substring(1), defines);
+            }
+
+            if (trimmed.startsWith("defined(") && trimmed.endsWith(")")) {
+                return defines.containsKey(trimmed.substring("defined(".length(), trimmed.length() - 1).trim());
+            }
+
+            for (String operator : new String[]{"==", "!=", ">=", "<=", ">", "<"}) {
+                operatorIndex = findTopLevelOperator(trimmed, operator);
+                if (operatorIndex >= 0) {
+                    double left = resolveNumeric(trimmed.substring(0, operatorIndex), defines);
+                    double right = resolveNumeric(trimmed.substring(operatorIndex + operator.length()), defines);
+                    return switch (operator) {
+                        case "==" -> left == right;
+                        case "!=" -> left != right;
+                        case ">=" -> left >= right;
+                        case "<=" -> left <= right;
+                        case ">" -> left > right;
+                        case "<" -> left < right;
+                        default -> false;
+                    };
+                }
+            }
+
+            return resolveTruthy(trimmed, defines);
+        }
+
+        private static int findTopLevelOperator(String expression, String operator) {
+            int depth = 0;
+
+            for (int i = 0; i <= expression.length() - operator.length(); i++) {
+                char c = expression.charAt(i);
+                if (c == '(') {
+                    depth++;
+                } else if (c == ')') {
+                    depth--;
+                }
+
+                if (depth == 0 && expression.startsWith(operator, i)) {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static boolean resolveTruthy(String token, java.util.Map<String, String> defines) {
+            String resolved = resolveToken(token.trim(), defines);
+
+            if (resolved.isEmpty()) {
+                return false;
+            }
+
+            if ("true".equalsIgnoreCase(resolved)) {
+                return true;
+            }
+
+            if ("false".equalsIgnoreCase(resolved)) {
+                return false;
+            }
+
+            try {
+                return Float.parseFloat(resolved) != 0.0f;
+            } catch (NumberFormatException ignored) {
+                return false;
+            }
+        }
+
+        private static double resolveNumeric(String token, java.util.Map<String, String> defines) {
+            String resolved = resolveToken(token.trim(), defines);
+
+            if ("true".equalsIgnoreCase(resolved)) {
+                return 1.0;
+            }
+
+            if ("false".equalsIgnoreCase(resolved)) {
+                return 0.0;
+            }
+
+            try {
+                return Double.parseDouble(resolved);
+            } catch (NumberFormatException ignored) {
+                return 0.0;
+            }
+        }
+
+        private static String resolveToken(String token, java.util.Map<String, String> defines) {
+            String trimmed = trimOuterParentheses(token.trim());
+            String resolved = defines.get(trimmed);
+            return resolved != null ? resolved.trim() : trimmed;
+        }
+
+        private static String trimOuterParentheses(String value) {
+            String trimmed = value.trim();
+
+            while (trimmed.startsWith("(") && trimmed.endsWith(")") && hasBalancedOuterParentheses(trimmed)) {
+                trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+            }
+
+            return trimmed;
+        }
+
+        private static boolean hasBalancedOuterParentheses(String value) {
+            int depth = 0;
+
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if (c == '(') {
+                    depth++;
+                } else if (c == ')') {
+                    depth--;
+                    if (depth == 0 && i < value.length() - 1) {
+                        return false;
+                    }
+                }
+            }
+
+            return depth == 0;
+        }
+    }
+
+    private static final class ConditionalFrame {
+        private final boolean parentActive;
+        private boolean branchTaken;
+        private boolean active;
+
+        private ConditionalFrame(boolean parentActive, boolean branchTaken, boolean active) {
+            this.parentActive = parentActive;
+            this.branchTaken = branchTaken;
+            this.active = active;
         }
     }
 }

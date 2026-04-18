@@ -29,6 +29,14 @@ public final class ActiniumCommonUniforms {
         return clamp(-(moment * moment) * 50.0f + 3.125f, 0.0f, 1.0f);
     }
 
+    public static float getVolumetricDayMixer(float dayMoment) {
+        float daySample = dayMoment * 4.0f - 1.0f;
+        float nightSample = dayMoment * 4.0f - 3.0f;
+        float dayMixer = clamp((-(pow4(daySample)) + 1.0f) * 7.0f + 1.0f, 1.0f, 8.0f);
+        float nightMixer = clamp((-(pow4(nightSample)) + 1.0f) * 7.0f + 1.0f, 1.0f, 8.0f);
+        return Math.max(dayMixer, nightMixer);
+    }
+
     public static float getDayNightMix(int worldTime) {
         float a = ((worldTime >= 0 && worldTime < 12485) || worldTime >= 23515) ? 1.0f : 0.0f;
         float b = worldTime >= 12485 && worldTime < 13085 ? 1.0f - ((worldTime - 12485) / 600.0f) : 0.0f;
@@ -42,5 +50,10 @@ public final class ActiniumCommonUniforms {
 
     private static float clamp(float value, float min, float max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static float pow4(float value) {
+        float squared = value * value;
+        return squared * squared;
     }
 }

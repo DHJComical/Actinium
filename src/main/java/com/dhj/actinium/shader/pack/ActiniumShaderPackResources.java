@@ -7,6 +7,7 @@ import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -92,11 +93,12 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
                 ActiniumShaderProperties.EMPTY,
                 ActiniumIdMap.EMPTY
         );
+        List<String> directiveSources = parserResources.collectDirectiveSources();
         ActiniumShaderProperties shaderProperties = ActiniumShaderProperties.parse(
-                readPropertiesFile(shadersRoot.resolve("shaders.properties"), "shaders.properties"),
-                parserResources.collectDirectiveSources()
+                readPropertiesFile(shadersRoot.resolve("shaders.properties"), "shaders.properties", directiveSources),
+                directiveSources
         );
-        ActiniumIdMap idMap = ActiniumIdMap.parse(readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties"));
+        ActiniumIdMap idMap = ActiniumIdMap.parse(readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties", directiveSources));
 
         return new ActiniumShaderPackResources(pack.name(), packPath, fileSystem, shadersRoot, configProperties, shaderProperties, idMap);
     }
@@ -175,6 +177,38 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         return path != null ? readShaderText(path) : null;
     }
 
+    public @Nullable byte[] readResourceBytes(String relativePath) {
+        if (this.shadersRoot == null) {
+            return null;
+        }
+
+        Path resourcePath = this.shadersRoot.resolve(relativePath).normalize();
+
+        if (!resourcePath.startsWith(this.shadersRoot) || !Files.isRegularFile(resourcePath)) {
+            return null;
+        }
+
+        try {
+            return Files.readAllBytes(resourcePath);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read shader pack resource " + resourcePath, e);
+        }
+    }
+
+    public @Nullable InputStream openResource(String relativePath) throws IOException {
+        if (this.shadersRoot == null) {
+            return null;
+        }
+
+        Path resourcePath = this.shadersRoot.resolve(relativePath).normalize();
+
+        if (!resourcePath.startsWith(this.shadersRoot) || !Files.isRegularFile(resourcePath)) {
+            return null;
+        }
+
+        return Files.newInputStream(resourcePath);
+    }
+
     @Override
     public void close() {
         if (this.fileSystem != null) {
@@ -200,19 +234,11 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
     }
 
     private static Properties readPropertiesFile(Path path, String logicalName) {
-        Properties properties = new Properties();
+        return readPropertiesFile(path, logicalName, List.of());
+    }
 
-        if (!Files.isRegularFile(path)) {
-            return properties;
-        }
-
-        try (var stream = Files.newInputStream(path)) {
-            properties.load(stream);
-        } catch (IOException e) {
-            ActiniumShaders.logger().warn("Failed to read shader pack file {} ({})", logicalName, path, e);
-        }
-
-        return properties;
+    private static Properties readPropertiesFile(Path path, String logicalName, Iterable<String> directiveSources) {
+        return ActiniumDirectiveProcessor.loadPropertiesFile(path, logicalName, directiveSources);
     }
 
     private @Nullable Path findProgramPath(String relativePath) {

@@ -14,15 +14,7 @@ final class ActiniumLegacyChunkShaderAdapter {
     private static final Pattern TEX_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+tex\\s*;\\s*$");
     private static final Pattern LIGHTMAP_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+lightmap\\s*;\\s*$");
     private static final Pattern SHADOW_CASTING_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+SHADOW_CASTING\\b.*$");
-    private static final Pattern FOG_ACTIVE_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+FOG_ACTIVE\\b.*$");
     private static final Pattern GL_FRAG_DATA = Pattern.compile("gl_FragData\\s*\\[\\s*\\d+\\s*\\]");
-    private static final String LEGACY_LIGHTMAP_TEXTURE_MATRIX = "mat4("
-            + "0.00390625, 0.0, 0.0, 0.0,"
-            + "0.0, 0.00390625, 0.0, 0.0,"
-            + "0.0, 0.0, 0.00390625, 0.0,"
-            + "0.03125, 0.03125, 0.03125, 1.0"
-            + ")";
-
     private ActiniumLegacyChunkShaderAdapter() {
     }
 
@@ -35,7 +27,6 @@ final class ActiniumLegacyChunkShaderAdapter {
 
         if (!shadowPass) {
             translated = SHADOW_CASTING_DEFINE.matcher(translated).replaceAll("// Actinium legacy compat: SHADOW_CASTING disabled");
-            translated = FOG_ACTIVE_DEFINE.matcher(translated).replaceAll("// Actinium legacy compat: FOG_ACTIVE disabled");
         }
 
         translated = MAIN_DECLARATION.matcher(translated).replaceFirst("void actinium_pack_main()");
@@ -67,6 +58,8 @@ final class ActiniumLegacyChunkShaderAdapter {
         return String.join("\n",
                 "#version 330 core",
                 "#define MC_VERSION 11202",
+                "#define MC_GLSL_VERSION 120",
+                "#define IS_IRIS 1",
                 "#import <sodium:include/chunk_vertex.glsl>",
                 "#import <actinium:include/chunk_vertex_extended.glsl>",
                 "",
@@ -86,7 +79,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "mat4 actinium_gl_ProjectionMatrix;",
                 "mat4 actinium_gl_ModelViewMatrix;",
                 "mat4 actinium_gl_ModelViewProjectionMatrix;",
-                "mat4 actinium_gl_TextureMatrix[2] = mat4[2](mat4(1.0), " + LEGACY_LIGHTMAP_TEXTURE_MATRIX + ");",
+                "mat4 actinium_gl_TextureMatrix[2] = mat4[2](mat4(1.0), mat4(1.0));",
                 "vec4 actinium_mc_Entity;",
                 "vec2 actinium_mc_midTexCoord;",
                 "",
@@ -144,6 +137,8 @@ final class ActiniumLegacyChunkShaderAdapter {
         return String.join("\n",
                 "#version 330 core",
                 "#define MC_VERSION 11202",
+                "#define MC_GLSL_VERSION 120",
+                "#define IS_IRIS 1",
                 "uniform sampler2D u_BlockTex;",
                 "uniform sampler2D u_LightTex;",
                 "",

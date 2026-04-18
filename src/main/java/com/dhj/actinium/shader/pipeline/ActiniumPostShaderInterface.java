@@ -47,13 +47,18 @@ final class ActiniumPostShaderInterface {
     private final @Nullable GlUniformFloat dayMoment;
     private final @Nullable GlUniformFloat dayMixer;
     private final @Nullable GlUniformFloat nightMixer;
+    private final @Nullable GlUniformFloat volumetricDayMixer;
     private final @Nullable GlUniformFloat nearPlane;
     private final @Nullable GlUniformFloat farPlane;
     private final @Nullable GlUniformFloat blindness;
     private final @Nullable GlUniformFloat nightVision;
     private final @Nullable GlUniformFloat fovYInverse;
+    private final @Nullable GlUniformFloat centerDepthSmooth;
+    private final @Nullable GlUniformFloat ditherShift;
+    private final @Nullable GlUniformFloat softLod;
 
     private final @Nullable GlUniformInt frameCounter;
+    private final @Nullable GlUniformInt frameMod;
     private final @Nullable GlUniformInt worldTime;
     private final @Nullable GlUniformInt moonPhase;
     private final @Nullable GlUniformInt isEyeInWater;
@@ -65,11 +70,14 @@ final class ActiniumPostShaderInterface {
     private final @Nullable GlUniformFloat3v shadowLightPosition;
     private final @Nullable GlUniformFloat3v fogColor;
     private final @Nullable GlUniformFloat3v skyColor;
+    private final @Nullable GlUniformFloat3v previousCameraPosition;
 
     private final @Nullable GlUniformMatrix4f gbufferModelView;
     private final @Nullable GlUniformMatrix4f gbufferModelViewInverse;
     private final @Nullable GlUniformMatrix4f gbufferProjection;
     private final @Nullable GlUniformMatrix4f gbufferProjectionInverse;
+    private final @Nullable GlUniformMatrix4f gbufferPreviousModelView;
+    private final @Nullable GlUniformMatrix4f gbufferPreviousProjection;
     private final @Nullable GlUniformMatrix4f shadowModelView;
     private final @Nullable GlUniformMatrix4f shadowModelViewInverse;
     private final @Nullable GlUniformMatrix4f shadowProjection;
@@ -103,13 +111,18 @@ final class ActiniumPostShaderInterface {
         this.dayMoment = context.bindUniformIfPresent("dayMoment", GlUniformFloat::new);
         this.dayMixer = context.bindUniformIfPresent("dayMixer", GlUniformFloat::new);
         this.nightMixer = context.bindUniformIfPresent("nightMixer", GlUniformFloat::new);
+        this.volumetricDayMixer = context.bindUniformIfPresent("volumetricDayMixer", GlUniformFloat::new);
         this.nearPlane = context.bindUniformIfPresent("near", GlUniformFloat::new);
         this.farPlane = context.bindUniformIfPresent("far", GlUniformFloat::new);
         this.blindness = context.bindUniformIfPresent("blindness", GlUniformFloat::new);
         this.nightVision = context.bindUniformIfPresent("nightVision", GlUniformFloat::new);
         this.fovYInverse = context.bindUniformIfPresent("fovYInverse", GlUniformFloat::new);
+        this.centerDepthSmooth = context.bindUniformIfPresent("centerDepthSmooth", GlUniformFloat::new);
+        this.ditherShift = context.bindUniformIfPresent("ditherShift", GlUniformFloat::new);
+        this.softLod = context.bindUniformIfPresent("softLod", GlUniformFloat::new);
 
         this.frameCounter = context.bindUniformIfPresent("frameCounter", GlUniformInt::new);
+        this.frameMod = context.bindUniformIfPresent("frameMod", GlUniformInt::new);
         this.worldTime = context.bindUniformIfPresent("worldTime", GlUniformInt::new);
         this.moonPhase = context.bindUniformIfPresent("moonPhase", GlUniformInt::new);
         this.isEyeInWater = context.bindUniformIfPresent("isEyeInWater", GlUniformInt::new);
@@ -121,11 +134,14 @@ final class ActiniumPostShaderInterface {
         this.shadowLightPosition = context.bindUniformIfPresent("shadowLightPosition", GlUniformFloat3v::new);
         this.fogColor = context.bindUniformIfPresent("fogColor", GlUniformFloat3v::new);
         this.skyColor = context.bindUniformIfPresent("skyColor", GlUniformFloat3v::new);
+        this.previousCameraPosition = context.bindUniformIfPresent("previousCameraPosition", GlUniformFloat3v::new);
 
         this.gbufferModelView = context.bindUniformIfPresent("gbufferModelView", GlUniformMatrix4f::new);
         this.gbufferModelViewInverse = context.bindUniformIfPresent("gbufferModelViewInverse", GlUniformMatrix4f::new);
         this.gbufferProjection = context.bindUniformIfPresent("gbufferProjection", GlUniformMatrix4f::new);
         this.gbufferProjectionInverse = context.bindUniformIfPresent("gbufferProjectionInverse", GlUniformMatrix4f::new);
+        this.gbufferPreviousModelView = context.bindUniformIfPresent("gbufferPreviousModelView", GlUniformMatrix4f::new);
+        this.gbufferPreviousProjection = context.bindUniformIfPresent("gbufferPreviousProjection", GlUniformMatrix4f::new);
         this.shadowModelView = context.bindUniformIfPresent("shadowModelView", GlUniformMatrix4f::new);
         this.shadowModelViewInverse = context.bindUniformIfPresent("shadowModelViewInverse", GlUniformMatrix4f::new);
         this.shadowProjection = context.bindUniformIfPresent("shadowProjection", GlUniformMatrix4f::new);
@@ -161,9 +177,16 @@ final class ActiniumPostShaderInterface {
         setFloat(this.nearPlane, 0.05f);
         setFloat(this.farPlane, Math.max(16.0f, Minecraft.getMinecraft().gameSettings.renderDistanceChunks * 16.0f));
         setFloat(this.fovYInverse, (float) (1.0d / Math.tan(Math.toRadians(Minecraft.getMinecraft().gameSettings.fovSetting * 0.5d))));
+        setFloat(this.centerDepthSmooth, pipeline.getCenterDepthSmooth());
+        setFloat(this.ditherShift, pipeline.getDitherShift());
+        setFloat(this.softLod, pipeline.getSoftLod());
 
         if (this.frameCounter != null) {
             this.frameCounter.setInt(frameIndex);
+        }
+
+        if (this.frameMod != null) {
+            this.frameMod.setInt(pipeline.getFrameMod());
         }
 
         Minecraft minecraft = Minecraft.getMinecraft();
@@ -172,6 +195,14 @@ final class ActiniumPostShaderInterface {
         if (entity != null) {
             if (this.cameraPosition != null) {
                 this.cameraPosition.set((float) entity.posX, (float) entity.posY, (float) entity.posZ);
+            }
+
+            if (this.previousCameraPosition != null) {
+                this.previousCameraPosition.set(
+                        (float) pipeline.getPreviousWorldCameraPosition().x,
+                        (float) pipeline.getPreviousWorldCameraPosition().y,
+                        (float) pipeline.getPreviousWorldCameraPosition().z
+                );
             }
 
             if (this.isEyeInWater != null) {
@@ -234,12 +265,15 @@ final class ActiniumPostShaderInterface {
             setFloat(this.dayMoment, currentDayMoment);
             setFloat(this.dayMixer, ActiniumCommonUniforms.getDayMixer(currentDayMoment));
             setFloat(this.nightMixer, ActiniumCommonUniforms.getNightMixer(currentDayMoment));
+            setFloat(this.volumetricDayMixer, ActiniumCommonUniforms.getVolumetricDayMixer(currentDayMoment));
         }
 
         setMatrix(this.gbufferModelView, pipeline.getGbufferModelViewMatrix());
         setMatrix(this.gbufferModelViewInverse, pipeline.getGbufferModelViewInverseMatrix());
         setMatrix(this.gbufferProjection, pipeline.getGbufferProjectionMatrix());
         setMatrix(this.gbufferProjectionInverse, pipeline.getGbufferProjectionInverseMatrix());
+        setMatrix(this.gbufferPreviousModelView, pipeline.getPreviousGbufferModelViewMatrix());
+        setMatrix(this.gbufferPreviousProjection, pipeline.getPreviousGbufferProjectionMatrix());
         setMatrix(this.shadowModelView, pipeline.getShadowModelViewMatrix());
         setMatrix(this.shadowModelViewInverse, pipeline.getShadowModelViewInverseMatrix());
         setMatrix(this.shadowProjection, pipeline.getShadowProjectionMatrix());

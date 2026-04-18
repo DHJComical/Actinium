@@ -15,6 +15,8 @@ import java.util.Arrays;
 final class ActiniumWorldTargets {
     private static final int[] SUPPORTED_TARGETS = {0, 1, 7};
 
+    private final ActiniumPostTargets.ColorFormat colorTexture1Format;
+    private final ActiniumPostTargets.ColorFormat gaux4Format;
     private final int framebufferId;
     private final IntBuffer drawBufferBuffer = BufferUtils.createIntBuffer(SUPPORTED_TARGETS.length);
     private final TargetSlot colorTexture1 = new TargetSlot();
@@ -22,7 +24,9 @@ final class ActiniumWorldTargets {
     private int width;
     private int height;
 
-    ActiniumWorldTargets() {
+    ActiniumWorldTargets(ActiniumPostTargets.ColorFormat colorTexture1Format, ActiniumPostTargets.ColorFormat gaux4Format) {
+        this.colorTexture1Format = colorTexture1Format;
+        this.gaux4Format = gaux4Format;
         this.framebufferId = GL30.glGenFramebuffers();
     }
 
@@ -34,18 +38,18 @@ final class ActiniumWorldTargets {
         this.deleteTextures();
         this.width = width;
         this.height = height;
-        this.colorTexture1.allocate(width, height);
-        this.gaux4Texture.allocate(width, height);
+        this.colorTexture1.allocate(width, height, this.colorTexture1Format);
+        this.gaux4Texture.allocate(width, height, this.gaux4Format);
         ActiniumRenderPipeline.debugCheckGlErrors("world-targets.ensureSize");
     }
 
-    public void beginFrame(Framebuffer mainFramebuffer) {
+    public void beginFrame(Framebuffer mainFramebuffer, float red, float green, float blue, float alpha) {
         if (this.width <= 0 || this.height <= 0) {
             return;
         }
 
-        this.colorTexture1.reset(this.width, this.height);
-        this.gaux4Texture.reset(this.width, this.height);
+        this.colorTexture1.reset(this.width, this.height, red, green, blue, alpha);
+        this.gaux4Texture.reset(this.width, this.height, red, green, blue, alpha);
         ActiniumRenderPipeline.debugCheckGlErrors("world-targets.beginFrame");
     }
 
@@ -158,7 +162,7 @@ final class ActiniumWorldTargets {
         this.gaux4Texture.delete();
     }
 
-    private static void clearColorTexture(int textureId, int width, int height) {
+    private static void clearColorTexture(int textureId, int width, int height, float red, float green, float blue, float alpha) {
         ActiniumRenderPipeline.clearGlErrorsSilently();
         int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
         int previousDrawBuffer = GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
@@ -175,7 +179,7 @@ final class ActiniumWorldTargets {
             }
 
             FloatBuffer clearColor = BufferUtils.createFloatBuffer(4);
-            clearColor.put(0.0F).put(0.0F).put(0.0F).put(0.0F);
+            clearColor.put(red).put(green).put(blue).put(alpha);
             clearColor.flip();
             GL30.glClearBufferfv(GL11.GL_COLOR, 0, clearColor);
             ActiniumRenderPipeline.debugCheckGlErrors("world-targets.clearColorTexture.clear");
@@ -188,14 +192,14 @@ final class ActiniumWorldTargets {
         }
     }
 
-    private static int createColorTexture(int width, int height) {
+    private static int createColorTexture(int width, int height, ActiniumPostTargets.ColorFormat format) {
         int texture = GL11.glGenTextures();
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, 0L);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, format.internalFormat(), width, height, 0, format.pixelFormat(), format.pixelType(), 0L);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
         return texture;
     }
@@ -206,17 +210,17 @@ final class ActiniumWorldTargets {
         private boolean sourceIsAlt;
         private boolean wroteThisFrame;
 
-        private void allocate(int width, int height) {
-            this.mainTexture = createColorTexture(width, height);
-            this.altTexture = createColorTexture(width, height);
-            this.reset(width, height);
+        private void allocate(int width, int height, ActiniumPostTargets.ColorFormat format) {
+            this.mainTexture = createColorTexture(width, height, format);
+            this.altTexture = createColorTexture(width, height, format);
+            this.reset(width, height, 0.0F, 0.0F, 0.0F, 1.0F);
         }
 
-        private void reset(int width, int height) {
+        private void reset(int width, int height, float red, float green, float blue, float alpha) {
             this.sourceIsAlt = false;
             this.wroteThisFrame = false;
-            clearColorTexture(this.mainTexture, width, height);
-            clearColorTexture(this.altTexture, width, height);
+            clearColorTexture(this.mainTexture, width, height, red, green, blue, alpha);
+            clearColorTexture(this.altTexture, width, height, red, green, blue, alpha);
         }
 
         private int getSourceTexture() {

@@ -92,7 +92,9 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformFloat far;
     private final @Nullable GlUniformFloat rainStrength;
     private final @Nullable GlUniformFloat frameTimeCounter;
+    private final @Nullable GlUniformFloat ditherShift;
     private final @Nullable GlUniformInt frameCounter;
+    private final @Nullable GlUniformInt frameMod;
     private final @Nullable GlUniformInt worldTime;
     private final @Nullable GlUniformFloat dayNightMix;
     private final @Nullable GlUniformFloat dayMoment;
@@ -134,6 +136,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final Vector3f scratchMoonPosition = new Vector3f();
 
     private boolean shadowPassActive;
+    private @Nullable TerrainRenderPass currentPass;
     private int legacyFrameCounter;
 
     public ActiniumChunkShaderInterface(ShaderBindingContext context, ChunkShaderOptions options) {
@@ -185,7 +188,9 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.far = context.bindUniformIfPresent("far", GlUniformFloat::new);
         this.rainStrength = context.bindUniformIfPresent("rainStrength", GlUniformFloat::new);
         this.frameTimeCounter = context.bindUniformIfPresent("frameTimeCounter", GlUniformFloat::new);
+        this.ditherShift = context.bindUniformIfPresent("ditherShift", GlUniformFloat::new);
         this.frameCounter = context.bindUniformIfPresent("frameCounter", GlUniformInt::new);
+        this.frameMod = context.bindUniformIfPresent("frameMod", GlUniformInt::new);
         this.worldTime = context.bindUniformIfPresent("worldTime", GlUniformInt::new);
         this.dayNightMix = context.bindUniformIfPresent("dayNightMix", GlUniformFloat::new);
         this.dayMoment = context.bindUniformIfPresent("dayMoment", GlUniformFloat::new);
@@ -216,6 +221,8 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
     @Override
     public void setupState(TerrainRenderPass pass) {
+        this.currentPass = pass;
+
         if (pass.primitiveType() == QuadPrimitiveType.DIRECT) {
             this.primitiveType = GlPrimitiveType.QUADS;
         } else if (pass.primitiveType() == QuadPrimitiveType.TRIANGULATED) {
@@ -295,9 +302,18 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.frameTimeCounter.set((System.nanoTime() - START_TIME_NANOS) / 1_000_000_000.0f);
         }
 
+        if (this.ditherShift != null) {
+            this.ditherShift.set(ActiniumRenderPipeline.INSTANCE.getDitherShift());
+        }
+
         if (this.frameCounter != null) {
             this.frameCounter.setInt(this.legacyFrameCounter);
         }
+
+        if (this.frameMod != null) {
+            this.frameMod.setInt(ActiniumRenderPipeline.INSTANCE.getFrameMod());
+        }
+
 
         if (this.darknessFactor != null) {
             this.darknessFactor.set(0.0f);
@@ -357,12 +373,17 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
         ActiniumRenderPipeline.INSTANCE.bindWorldGaux4Texture();
         ActiniumRenderPipeline.INSTANCE.bindTerrainShadowTextures();
+        ActiniumRenderPipeline.INSTANCE.bindTerrainPassFramebuffer(pass);
         this.pushLegacyRuntimeState(minecraft);
         this.pushLegacyMatrices();
     }
 
     @Override
     public void restoreState() {
+        if (this.currentPass != null) {
+            ActiniumRenderPipeline.INSTANCE.unbindTerrainPassFramebuffer(this.currentPass);
+            this.currentPass = null;
+        }
         if (this.usesTerrainInputs) {
             ActiniumRenderPipeline.INSTANCE.unbindTerrainInputTextures();
         }
