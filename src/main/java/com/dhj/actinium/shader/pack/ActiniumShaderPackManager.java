@@ -55,6 +55,17 @@ public final class ActiniumShaderPackManager {
         return getConfig().shadersEnabled;
     }
 
+    public static boolean isDebugEnabled() {
+        return getConfig().isDebugEnabled();
+    }
+
+    public static void setDebugEnabled(boolean debugEnabled) {
+        ActiniumShaderConfig config = getConfig();
+        config.setDebugEnabled(debugEnabled);
+        config.save();
+        reload();
+    }
+
     public static void applySelection(@Nullable String packName, boolean shadersEnabled) {
         ActiniumShaderConfig config = getConfig();
         config.setSelectedPack(packName);
@@ -179,6 +190,19 @@ public final class ActiniumShaderPackManager {
                 ActiniumShaders.logger().info("Using bundled Actinium shader resources");
             } else {
                 ActiniumShaders.logger().info("Loaded Actinium shader pack '{}' from {}", activePackResources.packName(), activePackResources.packPath());
+                if (isDebugEnabled()) {
+                    ActiniumShaders.logger().info(
+                            "[DEBUG] Parsed shader directives: sunPathRotation={}, shadowDistance={}, shadowResolution={}, shadowIntervalSize={}, shadowNear={}, shadowFar={}, shadowDistanceRenderMul={}, hardwareFiltering={}",
+                            activeShaderProperties.getSunPathRotation(),
+                            activeShaderProperties.getShadowDistance(),
+                            activeShaderProperties.getShadowMapResolution(),
+                            activeShaderProperties.getShadowIntervalSize(),
+                            activeShaderProperties.getShadowNearPlane(),
+                            activeShaderProperties.getShadowFarPlane(),
+                            activeShaderProperties.getShadowDistanceRenderMul(),
+                            activeShaderProperties.isShadowHardwareFiltering()
+                    );
+                }
             }
         } catch (IOException e) {
             reloadVersion++;

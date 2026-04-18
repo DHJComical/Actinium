@@ -55,7 +55,8 @@ void main() {
     vec4 diffuseColor = texture(u_BlockTex, v_TexCoord, v_MaterialMipBias);
 
 #ifdef USE_FRAGMENT_DISCARD
-    if (diffuseColor.a < v_MaterialAlphaCutoff) {
+    float alphaCutoff = v_MaterialAlphaCutoff > 0.0 ? v_MaterialAlphaCutoff : 0.1;
+    if (diffuseColor.a < alphaCutoff) {
         discard;
     }
 #endif

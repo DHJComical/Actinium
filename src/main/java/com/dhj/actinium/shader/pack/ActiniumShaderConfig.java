@@ -5,6 +5,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.dhj.actinium.celeritas.ActiniumShaders;
+import lombok.Getter;
+import lombok.Setter;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.FileReader;
@@ -25,7 +27,11 @@ public final class ActiniumShaderConfig {
 
     @Nullable
     public String selectedPack;
+    @Setter
     public boolean shadersEnabled;
+    @Setter
+    @Getter
+    public boolean debugEnabled;
 
     private transient Path configPath;
     private transient boolean readOnly;
@@ -95,10 +101,6 @@ public final class ActiniumShaderConfig {
 
     public boolean areShadersEnabled() {
         return this.shadersEnabled && this.getSelectedPack() != null;
-    }
-
-    public void setShadersEnabled(boolean shadersEnabled) {
-        this.shadersEnabled = shadersEnabled;
     }
 
     public boolean isShaderPackEnabled() {

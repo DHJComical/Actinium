@@ -156,7 +156,7 @@ public final class ActiniumIdMap {
             } else if (character == '"') {
                 inQuotes = !inQuotes;
             } else if (Character.isWhitespace(character) && !inQuotes) {
-                if (current.length() > 0) {
+                if (!current.isEmpty()) {
                     result.add(current.toString());
                     current.setLength(0);
                 }
@@ -165,7 +165,7 @@ public final class ActiniumIdMap {
             }
         }
 
-        if (current.length() > 0) {
+        if (!current.isEmpty()) {
             result.add(current.toString());
         }
 

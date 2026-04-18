@@ -21,6 +21,10 @@ public final class ActiniumShadowMatrixAccess {
     }
 
     public static boolean fillShadowMatrices(Matrix4f modelView, Matrix4f projection) {
+        if (ActiniumInternalShadowRenderingState.fillShadowMatrices(modelView, projection)) {
+            return true;
+        }
+
         boolean hasModelView = fill(modelView, MODELVIEW_FIELD);
         boolean hasProjection = fill(projection, PROJECTION_FIELD);
         return hasModelView && hasProjection;

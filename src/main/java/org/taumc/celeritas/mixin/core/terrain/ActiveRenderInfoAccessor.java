@@ -17,4 +17,14 @@ public interface ActiveRenderInfoAccessor {
     static FloatBuffer getModelViewMatrix() {
         throw new AssertionError();
     }
+
+    @Accessor("PROJECTION")
+    static void setProjectionMatrix(FloatBuffer matrix) {
+        throw new AssertionError();
+    }
+
+    @Accessor("MODELVIEW")
+    static void setModelViewMatrix(FloatBuffer matrix) {
+        throw new AssertionError();
+    }
 }

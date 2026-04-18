@@ -16,6 +16,12 @@ final class ActiniumLegacyChunkShaderAdapter {
     private static final Pattern SHADOW_CASTING_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+SHADOW_CASTING\\b.*$");
     private static final Pattern FOG_ACTIVE_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+FOG_ACTIVE\\b.*$");
     private static final Pattern GL_FRAG_DATA = Pattern.compile("gl_FragData\\s*\\[\\s*\\d+\\s*\\]");
+    private static final String LEGACY_LIGHTMAP_TEXTURE_MATRIX = "mat4("
+            + "0.00390625, 0.0, 0.0, 0.0,"
+            + "0.0, 0.00390625, 0.0, 0.0,"
+            + "0.0, 0.0, 0.00390625, 0.0,"
+            + "0.03125, 0.03125, 0.03125, 1.0"
+            + ")";
 
     private ActiniumLegacyChunkShaderAdapter() {
     }
@@ -23,6 +29,7 @@ final class ActiniumLegacyChunkShaderAdapter {
     public static String translate(ShaderType type, ActiniumTerrainPass pass, String source) {
         boolean fragmentShader = type == ShaderType.FRAGMENT;
         boolean shadowPass = pass == ActiniumTerrainPass.SHADOW || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
+        boolean alphaTestPass = pass == ActiniumTerrainPass.GBUFFER_CUTOUT || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
 
         String translated = stripLeadingDirectives(source);
 
@@ -48,7 +55,7 @@ final class ActiniumLegacyChunkShaderAdapter {
         translated = replaceIdentifier(translated, "tex", "u_BlockTex");
         translated = replaceIdentifier(translated, "lightmap", "u_LightTex");
 
-        return (fragmentShader ? fragmentPreamble() : vertexPreamble()) + translated;
+        return (fragmentShader ? fragmentPreamble(alphaTestPass) : vertexPreamble()) + translated;
     }
 
     private static String stripLeadingDirectives(String source) {
@@ -79,7 +86,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "mat4 actinium_gl_ProjectionMatrix;",
                 "mat4 actinium_gl_ModelViewMatrix;",
                 "mat4 actinium_gl_ModelViewProjectionMatrix;",
-                "mat4 actinium_gl_TextureMatrix[2] = mat4[2](mat4(1.0), mat4(1.0));",
+                "mat4 actinium_gl_TextureMatrix[2] = mat4[2](mat4(1.0), " + LEGACY_LIGHTMAP_TEXTURE_MATRIX + ");",
                 "vec4 actinium_mc_Entity;",
                 "vec2 actinium_mc_midTexCoord;",
                 "",
@@ -107,7 +114,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "    actinium_gl_Color = _vert_color;",
                 "    actinium_gl_Normal = normalize(actinium_Normal);",
                 "    actinium_gl_MultiTexCoord0 = vec4(_vert_tex_diffuse_coord, 0.0, 1.0);",
-                "    actinium_gl_MultiTexCoord1 = vec4(vec2(_vert_tex_light_coord) / 256.0, 0.0, 1.0);",
+                "    actinium_gl_MultiTexCoord1 = vec4(vec2(_vert_tex_light_coord), 0.0, 1.0);",
                 "    actinium_gl_NormalMatrix = iris_NormalMatrix;",
                 "    actinium_gl_ProjectionMatrix = u_ProjectionMatrix;",
                 "    actinium_gl_ModelViewMatrix = u_ModelViewMatrix;",
@@ -120,7 +127,20 @@ final class ActiniumLegacyChunkShaderAdapter {
         );
     }
 
-    private static String fragmentPreamble() {
+    private static String fragmentPreamble(boolean alphaTestPass) {
+        String alphaTestBlock = alphaTestPass
+                ? String.join("\n",
+                "void actinium_apply_legacy_alpha_test() {",
+                "    if (fragColor.a < 0.1) {",
+                "        discard;",
+                "    }",
+                "}",
+                "")
+                : String.join("\n",
+                "void actinium_apply_legacy_alpha_test() {",
+                "}",
+                "");
+
         return String.join("\n",
                 "#version 330 core",
                 "#define MC_VERSION 11202",
@@ -134,6 +154,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "#define gl_FogFragCoord actinium_FogFragCoord",
                 "",
                 "void actinium_pack_main();",
+                alphaTestBlock,
                 "",
                 "vec4 actinium_shadow2D(sampler2DShadow samplerState, vec3 coord) {",
                 "    return vec4(texture(samplerState, coord), 0.0, 0.0, 1.0);",
@@ -141,6 +162,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "",
                 "void main() {",
                 "    actinium_pack_main();",
+                "    actinium_apply_legacy_alpha_test();",
                 "}",
                 ""
         );

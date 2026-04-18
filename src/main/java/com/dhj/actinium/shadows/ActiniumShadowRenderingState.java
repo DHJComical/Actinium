@@ -16,6 +16,10 @@ public final class ActiniumShadowRenderingState {
     }
 
     public static boolean areShadowsCurrentlyBeingRendered() {
+        if (ActiniumInternalShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+            return true;
+        }
+
         Object shadowPass = invoke(IRIS_API_SHADOW_ACCESS != null ? IRIS_API_SHADOW_ACCESS.method() : null, IRIS_API_SHADOW_ACCESS != null ? IRIS_API_SHADOW_ACCESS.instance() : null);
         if (shadowPass instanceof Boolean value) {
             return value;

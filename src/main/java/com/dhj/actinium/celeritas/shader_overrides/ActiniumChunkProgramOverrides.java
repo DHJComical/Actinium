@@ -89,6 +89,18 @@ public final class ActiniumChunkProgramOverrides {
         TerrainRenderPass renderPass = pass.toTerrainPass(configuration);
         ChunkShaderOptions options = new ChunkShaderOptions(COMPONENTS, renderPass);
         ShaderConstants constants = options.constants();
+        if (ActiniumShaderPackManager.isDebugEnabled()) {
+            ActiniumShaders.logger().info(
+                    "Actinium terrain override {} -> renderPass='{}', discard={}, reverseOrder={}, lightmap={}, preferPack={}, defines={}",
+                    pass.name(),
+                    renderPass.name(),
+                    renderPass.supportsFragmentDiscard(),
+                    renderPass.isReverseOrder(),
+                    !renderPass.hasNoLightmap(),
+                    preferPackProgram,
+                    constants.getDefineStrings()
+            );
+        }
         List<GlShader> loadedShaders = new ArrayList<>(2);
 
         loadedShaders.add(this.loadShader(ShaderType.VERTEX, "actinium:blocks/chunk_layer_override.vsh", constants, pass, preferPackProgram));

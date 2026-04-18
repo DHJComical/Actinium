@@ -5,6 +5,7 @@ import com.dhj.actinium.shader.ActiniumShaderEntrypoint;
 import com.dhj.actinium.shader.gui.element.ActiniumShaderPackSelectionList;
 import com.dhj.actinium.shader.pack.ActiniumShaderPack;
 import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
+import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
@@ -18,6 +19,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
     private static final int BUTTON_APPLY = 2;
     private static final int BUTTON_OPEN_FOLDER = 3;
     private static final int BUTTON_REFRESH = 4;
+    private static final int BUTTON_DEBUG = 5;
 
     private final GuiScreen parent;
 
@@ -27,6 +29,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
     private @Nullable String appliedPackName;
     private boolean pendingShadersEnabled;
     private boolean appliedShadersEnabled;
+    private boolean debugEnabled;
 
     public ActiniumShaderPackScreen(GuiScreen parent) {
         this.parent = parent;
@@ -38,6 +41,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         this.availablePacks = ActiniumShaderPackManager.discoverPacks();
         this.appliedPackName = ActiniumShaderPackManager.getSelectedPackName();
         this.appliedShadersEnabled = ActiniumShaderPackManager.isShaderToggleEnabled();
+        this.debugEnabled = ActiniumShaderPackManager.isDebugEnabled();
         this.pendingPackName = this.appliedPackName;
         this.pendingShadersEnabled = this.appliedShadersEnabled;
         this.packList = new ActiniumShaderPackSelectionList(this, this.mc, this.width, this.height, 32, this.height - 58);
@@ -53,6 +57,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         this.buttonList.add(new GuiButton(BUTTON_CANCEL, bottomCenter - 104, this.height - 27, 100, 20, I18n.format("gui.cancel")));
         this.buttonList.add(new GuiButton(BUTTON_OPEN_FOLDER, topCenter - 78, this.height - 51, 152, 20, I18n.format("options.actinium.shaderPack.openFolder")));
         this.buttonList.add(new GuiButton(BUTTON_REFRESH, topCenter + 78, this.height - 51, 152, 20, I18n.format("options.actinium.shaderPack.refresh")));
+        this.buttonList.add(new GuiButton(BUTTON_DEBUG, this.width - 74, 6, 68, 20, this.getDebugButtonLabel()));
         this.updateButtonState();
     }
 
@@ -68,6 +73,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
                 this.packList.refresh(this.availablePacks, this.pendingPackName, this.appliedPackName, this.pendingShadersEnabled);
                 this.packList.refreshToggleAvailability();
             }
+            case BUTTON_DEBUG -> this.toggleDebug(button);
             default -> {
             }
         }
@@ -92,6 +98,8 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         if (provider != null) {
             provider.deleteShaders();
         }
+
+        ActiniumRenderPipeline.INSTANCE.resetVanillaRenderState();
 
         if (this.mc.world != null) {
             this.mc.renderGlobal.loadRenderers();
@@ -176,6 +184,27 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         }
 
         return packChanged || this.pendingShadersEnabled != this.appliedShadersEnabled;
+    }
+
+    private void toggleDebug(GuiButton button) {
+        this.debugEnabled = !this.debugEnabled;
+        ActiniumShaderPackManager.setDebugEnabled(this.debugEnabled);
+        button.displayString = this.getDebugButtonLabel();
+
+        ActiniumShaderProvider provider = ActiniumShaderEntrypoint.getProvider();
+        if (provider != null) {
+            provider.deleteShaders();
+        }
+
+        ActiniumRenderPipeline.INSTANCE.resetVanillaRenderState();
+
+        if (this.mc.world != null) {
+            this.mc.renderGlobal.loadRenderers();
+        }
+    }
+
+    private String getDebugButtonLabel() {
+        return I18n.format(this.debugEnabled ? "options.actinium.shaderPack.debugOn" : "options.actinium.shaderPack.debugOff");
     }
 
     private void updateButtonState() {

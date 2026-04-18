@@ -2,6 +2,8 @@ package com.dhj.actinium.celeritas.shader_overrides;
 
 import com.dhj.actinium.shadows.ActiniumShadowMatrixAccess;
 import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
+import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
+import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
@@ -9,6 +11,7 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.init.MobEffects;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
@@ -76,6 +79,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformMatrix4f shadowProjection;
     private final @Nullable GlUniformMatrix4f shadowProjectionInverse;
     private final @Nullable GlUniformFloat3v legacyFogColor;
+    private final @Nullable GlUniformFloat3v legacySkyColor;
     private final @Nullable GlUniformFloat3v cameraPosition;
     private final @Nullable GlUniformFloat3v sunPosition;
     private final @Nullable GlUniformFloat3v moonPosition;
@@ -84,12 +88,17 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformFloat viewHeight;
     private final @Nullable GlUniformFloat pixelSizeX;
     private final @Nullable GlUniformFloat pixelSizeY;
+    private final @Nullable GlUniformFloat nearPlane;
     private final @Nullable GlUniformFloat far;
     private final @Nullable GlUniformFloat rainStrength;
     private final @Nullable GlUniformFloat frameTimeCounter;
     private final @Nullable GlUniformInt frameCounter;
     private final @Nullable GlUniformInt worldTime;
     private final @Nullable GlUniformFloat dayNightMix;
+    private final @Nullable GlUniformFloat dayMoment;
+    private final @Nullable GlUniformFloat dayMixer;
+    private final @Nullable GlUniformFloat nightMixer;
+    private final @Nullable GlUniformInt moonPhase;
     private final @Nullable GlUniformInt isEyeInWater;
     private final @Nullable GlUniformFloat nightVision;
     private final @Nullable GlUniformFloat blindness;
@@ -98,12 +107,18 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformInt2v eyeBrightnessSmooth;
     private final @Nullable GlUniformInt texSampler;
     private final @Nullable GlUniformInt lightmapSampler;
+    private final @Nullable GlUniformInt gaux1Sampler;
+    private final @Nullable GlUniformInt gaux2Sampler;
     private final @Nullable GlUniformInt gaux4Sampler;
+    private final @Nullable GlUniformInt depthtex0Sampler;
+    private final @Nullable GlUniformInt depthtex1Sampler;
+    private final @Nullable GlUniformInt noisetexSampler;
     private final @Nullable GlUniformInt shadowtex0Sampler;
     private final @Nullable GlUniformInt shadowtex1Sampler;
     private final @Nullable GlUniformInt shadowcolor0Sampler;
 
     private final float defaultAlphaTest;
+    private final boolean usesTerrainInputs;
     private GlPrimitiveType primitiveType;
 
     private final Matrix4f currentModelView = new Matrix4f();
@@ -157,6 +172,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.shadowProjection = context.bindUniformIfPresent("shadowProjection", GlUniformMatrix4f::new);
         this.shadowProjectionInverse = context.bindUniformIfPresent("shadowProjectionInverse", GlUniformMatrix4f::new);
         this.legacyFogColor = context.bindUniformIfPresent("fogColor", GlUniformFloat3v::new);
+        this.legacySkyColor = context.bindUniformIfPresent("skyColor", GlUniformFloat3v::new);
         this.cameraPosition = context.bindUniformIfPresent("cameraPosition", GlUniformFloat3v::new);
         this.sunPosition = context.bindUniformIfPresent("sunPosition", GlUniformFloat3v::new);
         this.moonPosition = context.bindUniformIfPresent("moonPosition", GlUniformFloat3v::new);
@@ -165,12 +181,17 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.viewHeight = context.bindUniformIfPresent("viewHeight", GlUniformFloat::new);
         this.pixelSizeX = context.bindUniformIfPresent("pixelSizeX", GlUniformFloat::new);
         this.pixelSizeY = context.bindUniformIfPresent("pixelSizeY", GlUniformFloat::new);
+        this.nearPlane = context.bindUniformIfPresent("near", GlUniformFloat::new);
         this.far = context.bindUniformIfPresent("far", GlUniformFloat::new);
         this.rainStrength = context.bindUniformIfPresent("rainStrength", GlUniformFloat::new);
         this.frameTimeCounter = context.bindUniformIfPresent("frameTimeCounter", GlUniformFloat::new);
         this.frameCounter = context.bindUniformIfPresent("frameCounter", GlUniformInt::new);
         this.worldTime = context.bindUniformIfPresent("worldTime", GlUniformInt::new);
         this.dayNightMix = context.bindUniformIfPresent("dayNightMix", GlUniformFloat::new);
+        this.dayMoment = context.bindUniformIfPresent("dayMoment", GlUniformFloat::new);
+        this.dayMixer = context.bindUniformIfPresent("dayMixer", GlUniformFloat::new);
+        this.nightMixer = context.bindUniformIfPresent("nightMixer", GlUniformFloat::new);
+        this.moonPhase = context.bindUniformIfPresent("moonPhase", GlUniformInt::new);
         this.isEyeInWater = context.bindUniformIfPresent("isEyeInWater", GlUniformInt::new);
         this.nightVision = context.bindUniformIfPresent("nightVision", GlUniformFloat::new);
         this.blindness = context.bindUniformIfPresent("blindness", GlUniformFloat::new);
@@ -179,12 +200,18 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.eyeBrightnessSmooth = context.bindUniformIfPresent("eyeBrightnessSmooth", GlUniformInt2v::new);
         this.texSampler = context.bindUniformIfPresent("tex", GlUniformInt::new);
         this.lightmapSampler = context.bindUniformIfPresent("lightmap", GlUniformInt::new);
+        this.gaux1Sampler = context.bindUniformIfPresent("gaux1", GlUniformInt::new);
+        this.gaux2Sampler = context.bindUniformIfPresent("gaux2", GlUniformInt::new);
         this.gaux4Sampler = context.bindUniformIfPresent("gaux4", GlUniformInt::new);
+        this.depthtex0Sampler = context.bindUniformIfPresent("depthtex0", GlUniformInt::new);
+        this.depthtex1Sampler = context.bindUniformIfPresent("depthtex1", GlUniformInt::new);
+        this.noisetexSampler = context.bindUniformIfPresent("noisetex", GlUniformInt::new);
         this.shadowtex0Sampler = context.bindUniformIfPresent("shadowtex0", GlUniformInt::new);
         this.shadowtex1Sampler = context.bindUniformIfPresent("shadowtex1", GlUniformInt::new);
         this.shadowcolor0Sampler = context.bindUniformIfPresent("shadowcolor0", GlUniformInt::new);
 
         this.defaultAlphaTest = options.pass().supportsFragmentDiscard() ? 0.1f : 0.0f;
+        this.usesTerrainInputs = options.pass().isReverseOrder();
     }
 
     @Override
@@ -231,6 +258,12 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         Minecraft minecraft = Minecraft.getMinecraft();
+
+        if (this.legacySkyColor != null && minecraft.world != null && minecraft.getRenderViewEntity() != null) {
+            Vec3d currentSkyColor = minecraft.world.getSkyColor(minecraft.getRenderViewEntity(), minecraft.getRenderPartialTicks());
+            this.legacySkyColor.set((float) currentSkyColor.x, (float) currentSkyColor.y, (float) currentSkyColor.z);
+        }
+
         int width = Math.max(1, minecraft.displayWidth);
         int height = Math.max(1, minecraft.displayHeight);
 
@@ -248,6 +281,10 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
         if (this.pixelSizeY != null) {
             this.pixelSizeY.set(1.0f / height);
+        }
+
+        if (this.nearPlane != null) {
+            this.nearPlane.set(0.05f);
         }
 
         if (this.far != null) {
@@ -278,24 +315,59 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.lightmapSampler.setInt(1);
         }
 
+        if (this.gaux1Sampler != null) {
+            this.gaux1Sampler.setInt(ActiniumRenderPipeline.TERRAIN_GAUX1_UNIT);
+        }
+
+        if (this.gaux2Sampler != null) {
+            this.gaux2Sampler.setInt(ActiniumRenderPipeline.TERRAIN_GAUX2_UNIT);
+        }
+
         if (this.gaux4Sampler != null) {
-            this.gaux4Sampler.setInt(0);
+            this.gaux4Sampler.setInt(ActiniumRenderPipeline.WORLD_GAUX4_UNIT);
+        }
+
+        if (this.depthtex0Sampler != null) {
+            this.depthtex0Sampler.setInt(ActiniumRenderPipeline.TERRAIN_DEPTHTEX0_UNIT);
+        }
+
+        if (this.depthtex1Sampler != null) {
+            this.depthtex1Sampler.setInt(ActiniumRenderPipeline.TERRAIN_DEPTHTEX1_UNIT);
+        }
+
+        if (this.noisetexSampler != null) {
+            this.noisetexSampler.setInt(ActiniumRenderPipeline.TERRAIN_NOISETEX_UNIT);
         }
 
         if (this.shadowtex0Sampler != null) {
-            this.shadowtex0Sampler.setInt(0);
+            this.shadowtex0Sampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_TEX0_UNIT);
         }
 
         if (this.shadowtex1Sampler != null) {
-            this.shadowtex1Sampler.setInt(0);
+            this.shadowtex1Sampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_TEX1_UNIT);
         }
 
         if (this.shadowcolor0Sampler != null) {
-            this.shadowcolor0Sampler.setInt(0);
+            this.shadowcolor0Sampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_COLOR0_UNIT);
         }
 
+        if (this.usesTerrainInputs) {
+            ActiniumRenderPipeline.INSTANCE.prepareTerrainInputs();
+            ActiniumRenderPipeline.INSTANCE.bindTerrainInputTextures();
+        }
+        ActiniumRenderPipeline.INSTANCE.bindWorldGaux4Texture();
+        ActiniumRenderPipeline.INSTANCE.bindTerrainShadowTextures();
         this.pushLegacyRuntimeState(minecraft);
         this.pushLegacyMatrices();
+    }
+
+    @Override
+    public void restoreState() {
+        if (this.usesTerrainInputs) {
+            ActiniumRenderPipeline.INSTANCE.unbindTerrainInputTextures();
+        }
+        ActiniumRenderPipeline.INSTANCE.unbindWorldGaux4Texture();
+        ActiniumRenderPipeline.INSTANCE.unbindTerrainShadowTextures();
     }
 
     @Override
@@ -485,15 +557,33 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
         if (minecraft.world != null) {
             float celestialAngle = minecraft.world.getCelestialAngle(0.0f) * ((float) Math.PI * 2.0f);
-            float rawDayNightMix = minecraft.world.isDaytime() ? 1.0f : 0.0f;
+            int currentWorldTime = ActiniumCommonUniforms.getWorldTime(minecraft.world);
+            float currentDayMoment = ActiniumCommonUniforms.getDayMoment(currentWorldTime);
+            float rawDayNightMix = ActiniumCommonUniforms.getDayNightMix(currentWorldTime);
             float rain = minecraft.world.getRainStrength(0.0f);
 
             if (this.worldTime != null) {
-                this.worldTime.setInt((int) (minecraft.world.getWorldTime() % 24000L));
+                this.worldTime.setInt(currentWorldTime);
             }
 
             if (this.dayNightMix != null) {
                 this.dayNightMix.set(rawDayNightMix);
+            }
+
+            if (this.dayMoment != null) {
+                this.dayMoment.set(currentDayMoment);
+            }
+
+            if (this.dayMixer != null) {
+                this.dayMixer.set(ActiniumCommonUniforms.getDayMixer(currentDayMoment));
+            }
+
+            if (this.nightMixer != null) {
+                this.nightMixer.set(ActiniumCommonUniforms.getNightMixer(currentDayMoment));
+            }
+
+            if (this.moonPhase != null) {
+                this.moonPhase.setInt(ActiniumCommonUniforms.getMoonPhase(minecraft.world));
             }
 
             if (this.rainStrength != null) {

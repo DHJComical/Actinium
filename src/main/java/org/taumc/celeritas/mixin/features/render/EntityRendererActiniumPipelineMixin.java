@@ -16,41 +16,33 @@ public class EntityRendererActiniumPipelineMixin {
 
     @Inject(method = "renderWorldPass", at = @At("RETURN"))
     private void actinium$endWorldPass(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        if (ActiniumRenderPipeline.INSTANCE.hasPostProgram()) {
-            ActiniumRenderPipeline.INSTANCE.beginPost();
-            ActiniumRenderPipeline.INSTANCE.endPost();
-        }
-
+        ActiniumRenderPipeline.INSTANCE.captureWorldState();
         ActiniumRenderPipeline.INSTANCE.endWorld();
     }
 
-    @Inject(method = "renderSky", at = @At("HEAD"))
-    private void actinium$beginSky(float partialTicks, int pass, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.beginSky();
+    @Inject(method = "renderWorld", at = @At("HEAD"))
+    private void actinium$runShadowPipeline(float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (ActiniumRenderPipeline.INSTANCE.hasShadowProgram()) {
+            ActiniumRenderPipeline.INSTANCE.renderShadowPass(partialTicks);
+        }
     }
 
-    @Inject(method = "renderSky", at = @At("RETURN"))
-    private void actinium$endSky(float partialTicks, int pass, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.endSky();
-    }
-
-    @Inject(method = "renderCloudsCheck", at = @At("HEAD"))
-    private void actinium$beginClouds(float partialTicks, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.beginClouds();
-    }
-
-    @Inject(method = "renderCloudsCheck", at = @At("RETURN"))
-    private void actinium$endClouds(float partialTicks, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.endClouds();
+    @Inject(method = "renderWorld", at = @At("RETURN"))
+    private void actinium$runPostPipeline(float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (ActiniumRenderPipeline.INSTANCE.hasPostProgram()) {
+            ActiniumRenderPipeline.INSTANCE.renderPostPipeline(partialTicks);
+        }
     }
 
     @Inject(method = "renderRainSnow", at = @At("HEAD"))
     private void actinium$beginWeather(float partialTicks, CallbackInfo ci) {
         ActiniumRenderPipeline.INSTANCE.beginWeather();
+        ActiniumRenderPipeline.INSTANCE.bindWorldStageProgram(partialTicks);
     }
 
     @Inject(method = "renderRainSnow", at = @At("RETURN"))
     private void actinium$endWeather(float partialTicks, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.unbindWorldStageProgram();
         ActiniumRenderPipeline.INSTANCE.endWeather();
     }
 }

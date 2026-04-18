@@ -83,7 +83,19 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         }
 
         Properties configProperties = readPropertiesFile(shadersRoot.resolve("config.txt"), "config.txt");
-        ActiniumShaderProperties shaderProperties = ActiniumShaderProperties.parse(readPropertiesFile(shadersRoot.resolve("shaders.properties"), "shaders.properties"));
+        ActiniumShaderPackResources parserResources = new ActiniumShaderPackResources(
+                pack.name(),
+                packPath,
+                fileSystem,
+                shadersRoot,
+                configProperties,
+                ActiniumShaderProperties.EMPTY,
+                ActiniumIdMap.EMPTY
+        );
+        ActiniumShaderProperties shaderProperties = ActiniumShaderProperties.parse(
+                readPropertiesFile(shadersRoot.resolve("shaders.properties"), "shaders.properties"),
+                parserResources.collectDirectiveSources()
+        );
         ActiniumIdMap idMap = ActiniumIdMap.parse(readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties"));
 
         return new ActiniumShaderPackResources(pack.name(), packPath, fileSystem, shadersRoot, configProperties, shaderProperties, idMap);
@@ -205,14 +217,20 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
 
     private @Nullable Path findProgramPath(String relativePath) {
         for (String prefix : getDimensionPrefixes()) {
-            Path candidate = this.shadersRoot.resolve(prefix).resolve(relativePath);
+            Path candidate = null;
+            if (this.shadersRoot != null) {
+                candidate = this.shadersRoot.resolve(prefix).resolve(relativePath);
+            }
 
-            if (Files.isRegularFile(candidate)) {
+            if (candidate != null && Files.isRegularFile(candidate)) {
                 return candidate;
             }
         }
 
-        Path fallback = this.shadersRoot.resolve(relativePath);
+        Path fallback = null;
+        if (this.shadersRoot != null) {
+            fallback = this.shadersRoot.resolve(relativePath);
+        }
         return Files.isRegularFile(fallback) ? fallback : null;
     }
 
@@ -223,7 +241,7 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
     private String flattenIncludes(Path path, Map<Path, Boolean> includeStack) {
         Path normalizedPath = path.normalize();
 
-        if (!normalizedPath.startsWith(this.shadersRoot)) {
+        if (this.shadersRoot != null && !normalizedPath.startsWith(this.shadersRoot)) {
             throw new RuntimeException("Shader include escapes pack root: " + path);
         }
 
@@ -336,6 +354,29 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         }
 
         return prefixes;
+    }
+
+    private List<String> collectDirectiveSources() {
+        LinkedHashSet<String> sources = new LinkedHashSet<>();
+
+        collectProgramSource(sources, "shadow", ShaderType.VERTEX);
+        collectProgramSource(sources, "shadow", ShaderType.FRAGMENT);
+        collectProgramSource(sources, "gbuffers_terrain", ShaderType.VERTEX);
+        collectProgramSource(sources, "gbuffers_terrain", ShaderType.FRAGMENT);
+        collectProgramSource(sources, "gbuffers_terrain_cutout", ShaderType.VERTEX);
+        collectProgramSource(sources, "gbuffers_terrain_cutout", ShaderType.FRAGMENT);
+        collectProgramSource(sources, "gbuffers_water", ShaderType.VERTEX);
+        collectProgramSource(sources, "gbuffers_water", ShaderType.FRAGMENT);
+
+        return new ArrayList<>(sources);
+    }
+
+    private void collectProgramSource(LinkedHashSet<String> sources, String programName, ShaderType type) {
+        String source = this.readProgramSource(programName, type);
+
+        if (source != null && !source.isBlank()) {
+            sources.add(source);
+        }
     }
 
     private static int getCurrentDimensionId() {
