@@ -107,7 +107,6 @@ public class RenderGlobalActiniumPipelineMixin {
     @Unique
     private boolean actinium$shouldSuppressVanillaSkyGeometry() {
         return ActiniumShaderPackManager.areShadersEnabled()
-                && ActiniumRenderPipeline.INSTANCE.hasSkyProgram()
-                && ActiniumRenderPipeline.INSTANCE.hasPostProgram();
+                && ActiniumRenderPipeline.INSTANCE.shouldSuppressVanillaSkyGeometry();
     }
 }

@@ -2,9 +2,11 @@ package com.dhj.actinium.shader.pack;
 
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -34,6 +36,13 @@ public final class ActiniumShaderProperties {
     private boolean prepareBeforeShadow;
     private final Map<String, String> conditionallyEnabledPrograms = new LinkedHashMap<>();
     private final Map<String, Map<String, String>> stageTexturePaths = new LinkedHashMap<>();
+    private final List<String> sliderOptions = new ArrayList<>();
+    private final Map<String, List<String>> profiles = new LinkedHashMap<>();
+    private final Map<String, List<String>> profiles2 = new LinkedHashMap<>();
+    private @Nullable List<String> mainScreenOptions;
+    private final Map<String, List<String>> subScreenOptions = new LinkedHashMap<>();
+    private @Nullable Integer mainScreenColumnCount;
+    private final Map<String, Integer> subScreenColumnCount = new LinkedHashMap<>();
     private float sunPathRotation = DEFAULT_SUN_PATH_ROTATION;
     private float shadowIntervalSize = DEFAULT_SHADOW_INTERVAL_SIZE;
     private int shadowMapResolution = DEFAULT_SHADOW_MAP_RESOLUTION;
@@ -44,10 +53,14 @@ public final class ActiniumShaderProperties {
     private boolean shadowHardwareFiltering = DEFAULT_SHADOW_HARDWARE_FILTERING;
 
     public static ActiniumShaderProperties parse(Properties properties) {
-        return parse(properties, Collections.emptyList());
+        return parse(properties, Collections.emptyMap(), Collections.emptyList());
     }
 
     public static ActiniumShaderProperties parse(Properties properties, Iterable<String> shaderSources) {
+        return parse(properties, Collections.emptyMap(), shaderSources);
+    }
+
+    public static ActiniumShaderProperties parse(Properties properties, Map<String, String> rawProperties, Iterable<String> shaderSources) {
         ActiniumShaderProperties parsed = new ActiniumShaderProperties();
 
         properties.forEach((keyObject, valueObject) -> {
@@ -73,6 +86,7 @@ public final class ActiniumShaderProperties {
         });
 
         DirectiveSourceParser.parseInto(parsed, shaderSources);
+        parsed.parseMenuMetadata(rawProperties);
         return parsed;
     }
 
@@ -171,6 +185,34 @@ public final class ActiniumShaderProperties {
         return Collections.unmodifiableMap(copy);
     }
 
+    public List<String> getSliderOptions() {
+        return Collections.unmodifiableList(this.sliderOptions);
+    }
+
+    public Map<String, List<String>> getProfiles() {
+        return immutableListMap(this.profiles);
+    }
+
+    public Map<String, List<String>> getProfiles2() {
+        return immutableListMap(this.profiles2);
+    }
+
+    public @Nullable List<String> getMainScreenOptions() {
+        return this.mainScreenOptions != null ? Collections.unmodifiableList(this.mainScreenOptions) : null;
+    }
+
+    public Map<String, List<String>> getSubScreenOptions() {
+        return immutableListMap(this.subScreenOptions);
+    }
+
+    public @Nullable Integer getMainScreenColumnCount() {
+        return this.mainScreenColumnCount;
+    }
+
+    public Map<String, Integer> getSubScreenColumnCount() {
+        return Collections.unmodifiableMap(this.subScreenColumnCount);
+    }
+
     private void parseWeather(String value) {
         String[] parts = value.toLowerCase(Locale.ROOT).split("\\s+");
 
@@ -220,12 +262,100 @@ public final class ActiniumShaderProperties {
                 .put(samplerName, value);
     }
 
+    private void parseMenuMetadata(Map<String, String> rawProperties) {
+        rawProperties.forEach((key, value) -> {
+            String trimmedValue = value.trim();
+
+            if ("sliders".equals(key)) {
+                this.sliderOptions.clear();
+                this.sliderOptions.addAll(splitWhitespaceList(trimmedValue));
+                return;
+            }
+
+            if (key.startsWith("profile2.")) {
+                String profileName = key.substring("profile2.".length()).trim();
+
+                if (!profileName.isEmpty()) {
+                    this.profiles2.put(profileName, splitWhitespaceList(trimmedValue));
+                }
+                return;
+            }
+
+            if (key.startsWith("profile.")) {
+                String profileName = key.substring("profile.".length()).trim();
+
+                if (!profileName.isEmpty()) {
+                    this.profiles.put(profileName, splitWhitespaceList(trimmedValue));
+                }
+                return;
+            }
+
+            if ("screen.columns".equals(key)) {
+                this.mainScreenColumnCount = parseInteger(trimmedValue, this.mainScreenColumnCount);
+                return;
+            }
+
+            if ("screen".equals(key)) {
+                this.mainScreenOptions = splitWhitespaceList(trimmedValue);
+                return;
+            }
+
+            if (key.startsWith("screen.") && key.endsWith(".columns")) {
+                String screenName = key.substring("screen.".length(), key.length() - ".columns".length()).trim();
+
+                if (!screenName.isEmpty()) {
+                    this.subScreenColumnCount.put(screenName, parseInteger(trimmedValue, this.subScreenColumnCount.get(screenName)));
+                }
+                return;
+            }
+
+            if (key.startsWith("screen.")) {
+                String screenName = key.substring("screen.".length()).trim();
+
+                if (!screenName.isEmpty()) {
+                    this.subScreenOptions.put(screenName, splitWhitespaceList(trimmedValue));
+                }
+            }
+        });
+    }
+
     private static boolean parseBoolean(String value, boolean fallback) {
         return switch (value.toLowerCase(Locale.ROOT)) {
             case "true", "on", "yes" -> true;
             case "false", "off", "no" -> false;
             default -> fallback;
         };
+    }
+
+    private static Integer parseInteger(String value, @Nullable Integer fallback) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static List<String> splitWhitespaceList(String value) {
+        if (value.isBlank()) {
+            return List.of();
+        }
+
+        String[] split = value.trim().split("\\s+");
+        List<String> values = new ArrayList<>(split.length);
+
+        for (String entry : split) {
+            if (!entry.isBlank()) {
+                values.add(entry);
+            }
+        }
+
+        return values;
+    }
+
+    private static Map<String, List<String>> immutableListMap(Map<String, List<String>> source) {
+        Map<String, List<String>> copy = new LinkedHashMap<>();
+        source.forEach((key, value) -> copy.put(key, Collections.unmodifiableList(new ArrayList<>(value))));
+        return Collections.unmodifiableMap(copy);
     }
 
     private static final class DirectiveSourceParser {

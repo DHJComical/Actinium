@@ -3,6 +3,7 @@ package com.dhj.actinium.shader.gui.screen;
 import com.dhj.actinium.celeritas.ActiniumShaderProvider;
 import com.dhj.actinium.shader.ActiniumShaderEntrypoint;
 import com.dhj.actinium.shader.gui.element.ActiniumShaderPackSelectionList;
+import com.dhj.actinium.shader.gui.screen.ActiniumShaderOptionScreen;
 import com.dhj.actinium.shader.pack.ActiniumShaderPack;
 import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
@@ -20,6 +21,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
     private static final int BUTTON_OPEN_FOLDER = 3;
     private static final int BUTTON_REFRESH = 4;
     private static final int BUTTON_DEBUG = 5;
+    private static final int BUTTON_OPTIONS = 6;
 
     private final GuiScreen parent;
 
@@ -49,14 +51,15 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         this.packList.refreshToggleAvailability();
 
         int bottomCenter = this.width / 2 - 50;
-        int topCenter = this.width / 2 - 76;
+        int optionRowStart = this.width / 2 - 152;
 
         this.buttonList.clear();
         this.buttonList.add(new GuiButton(BUTTON_DONE, bottomCenter + 104, this.height - 27, 100, 20, I18n.format("gui.done")));
         this.buttonList.add(new GuiButton(BUTTON_APPLY, bottomCenter, this.height - 27, 100, 20, I18n.format("options.actinium.shaderPack.apply")));
         this.buttonList.add(new GuiButton(BUTTON_CANCEL, bottomCenter - 104, this.height - 27, 100, 20, I18n.format("gui.cancel")));
-        this.buttonList.add(new GuiButton(BUTTON_OPEN_FOLDER, topCenter - 78, this.height - 51, 152, 20, I18n.format("options.actinium.shaderPack.openFolder")));
-        this.buttonList.add(new GuiButton(BUTTON_REFRESH, topCenter + 78, this.height - 51, 152, 20, I18n.format("options.actinium.shaderPack.refresh")));
+        this.buttonList.add(new GuiButton(BUTTON_OPEN_FOLDER, optionRowStart, this.height - 51, 100, 20, I18n.format("options.actinium.shaderPack.openFolder")));
+        this.buttonList.add(new GuiButton(BUTTON_OPTIONS, optionRowStart + 104, this.height - 51, 100, 20, I18n.format("options.actinium.shaderPack.options")));
+        this.buttonList.add(new GuiButton(BUTTON_REFRESH, optionRowStart + 208, this.height - 51, 100, 20, I18n.format("options.actinium.shaderPack.refresh")));
         this.buttonList.add(new GuiButton(BUTTON_DEBUG, this.width - 74, 6, 68, 20, this.getDebugButtonLabel()));
         this.updateButtonState();
     }
@@ -68,6 +71,11 @@ public class ActiniumShaderPackScreen extends GuiScreen {
             case BUTTON_CANCEL -> this.mc.displayGuiScreen(this.parent);
             case BUTTON_APPLY -> this.applyChanges(false);
             case BUTTON_OPEN_FOLDER -> ActiniumShaderPackManager.openShaderPacksDirectory();
+            case BUTTON_OPTIONS -> {
+                if (this.canOpenShaderOptions()) {
+                    this.mc.displayGuiScreen(new ActiniumShaderOptionScreen(this, this.pendingPackName));
+                }
+            }
             case BUTTON_REFRESH -> {
                 this.availablePacks = ActiniumShaderPackManager.discoverPacks();
                 this.packList.refresh(this.availablePacks, this.pendingPackName, this.appliedPackName, this.pendingShadersEnabled);
@@ -209,16 +217,26 @@ public class ActiniumShaderPackScreen extends GuiScreen {
 
     private void updateButtonState() {
         GuiButton applyButton = null;
+        GuiButton optionsButton = null;
 
         for (GuiButton button : this.buttonList) {
             if (button.id == BUTTON_APPLY) {
                 applyButton = button;
-                break;
+            } else if (button.id == BUTTON_OPTIONS) {
+                optionsButton = button;
             }
         }
 
         if (applyButton != null) {
             applyButton.enabled = this.hasPendingChanges();
         }
+
+        if (optionsButton != null) {
+            optionsButton.enabled = this.canOpenShaderOptions();
+        }
+    }
+
+    private boolean canOpenShaderOptions() {
+        return this.pendingPackName != null && !ActiniumShaderPackManager.isBuiltinPack(this.pendingPackName);
     }
 }

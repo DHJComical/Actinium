@@ -2,6 +2,7 @@ package com.dhj.actinium.shader.pack;
 
 import com.dhj.actinium.celeritas.shader_overrides.ActiniumTerrainPass;
 import com.dhj.actinium.celeritas.ActiniumShaders;
+import com.dhj.actinium.shader.options.ActiniumShaderOptionParser;
 import net.minecraft.client.Minecraft;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.jetbrains.annotations.Nullable;
@@ -18,9 +19,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Stream;
 
 public final class ActiniumShaderPackResources implements AutoCloseable {
@@ -31,8 +34,11 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
     private final Properties configProperties;
     private final ActiniumShaderProperties shaderProperties;
     private final ActiniumIdMap idMap;
+    private final Map<String, String> optionOverrides;
 
-    private ActiniumShaderPackResources(String packName, Path packPath, @Nullable FileSystem fileSystem, @Nullable Path shadersRoot, Properties configProperties, ActiniumShaderProperties shaderProperties, ActiniumIdMap idMap) {
+    private ActiniumShaderPackResources(String packName, Path packPath, @Nullable FileSystem fileSystem, @Nullable Path shadersRoot,
+                                        Properties configProperties, ActiniumShaderProperties shaderProperties,
+                                        ActiniumIdMap idMap, Map<String, String> optionOverrides) {
         this.packName = packName;
         this.packPath = packPath;
         this.fileSystem = fileSystem;
@@ -40,6 +46,7 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         this.configProperties = configProperties;
         this.shaderProperties = shaderProperties;
         this.idMap = idMap;
+        this.optionOverrides = new LinkedHashMap<>(optionOverrides);
     }
 
     public static ActiniumShaderPackResources builtin() {
@@ -50,11 +57,16 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
                 null,
                 new Properties(),
                 ActiniumShaderProperties.EMPTY,
-                ActiniumIdMap.EMPTY
+                ActiniumIdMap.EMPTY,
+                Map.of()
         );
     }
 
     public static ActiniumShaderPackResources load(ActiniumShaderPack pack) throws IOException {
+        return load(pack, Map.of());
+    }
+
+    public static ActiniumShaderPackResources load(ActiniumShaderPack pack, Map<String, String> optionOverrides) throws IOException {
         if (pack.builtin()) {
             return builtin();
         }
@@ -67,7 +79,7 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         FileSystem fileSystem = null;
         Path shadersRoot;
 
-        if (packPath.toString().toLowerCase().endsWith(".zip")) {
+        if (packPath.toString().toLowerCase(Locale.ROOT).endsWith(".zip")) {
             fileSystem = FileSystems.newFileSystem(packPath, ActiniumShaderPackResources.class.getClassLoader());
             Path zipRoot = fileSystem.getRootDirectories().iterator().next();
             shadersRoot = findShadersRoot(zipRoot).orElse(null);
@@ -91,16 +103,19 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
                 shadersRoot,
                 configProperties,
                 ActiniumShaderProperties.EMPTY,
-                ActiniumIdMap.EMPTY
+                ActiniumIdMap.EMPTY,
+                optionOverrides
         );
         List<String> directiveSources = parserResources.collectDirectiveSources();
+        Map<String, String> rawShaderProperties = readRawPropertiesEntries(shadersRoot.resolve("shaders.properties"));
         ActiniumShaderProperties shaderProperties = ActiniumShaderProperties.parse(
                 readPropertiesFile(shadersRoot.resolve("shaders.properties"), "shaders.properties", directiveSources),
+                rawShaderProperties,
                 directiveSources
         );
         ActiniumIdMap idMap = ActiniumIdMap.parse(readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties", directiveSources));
 
-        return new ActiniumShaderPackResources(pack.name(), packPath, fileSystem, shadersRoot, configProperties, shaderProperties, idMap);
+        return new ActiniumShaderPackResources(pack.name(), packPath, fileSystem, shadersRoot, configProperties, shaderProperties, idMap, optionOverrides);
     }
 
     public boolean isBuiltin() {
@@ -195,6 +210,28 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         }
     }
 
+    public List<String> findShaderOptionFiles() {
+        if (this.shadersRoot == null) {
+            return List.of();
+        }
+
+        Set<String> supportedFileNames = Set.of("config.glsl", "settings.glsl", "options.glsl");
+        List<String> results = new ArrayList<>();
+
+        try (Stream<Path> stream = Files.walk(this.shadersRoot)) {
+            stream.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName() != null)
+                    .filter(path -> supportedFileNames.contains(path.getFileName().toString().toLowerCase(Locale.ROOT)))
+                    .map(path -> this.shadersRoot.relativize(path).toString().replace('\\', '/'))
+                    .sorted()
+                    .forEach(results::add);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to enumerate shader option files for " + this.packName, e);
+        }
+
+        return results;
+    }
+
     public @Nullable InputStream openResource(String relativePath) throws IOException {
         if (this.shadersRoot == null) {
             return null;
@@ -241,6 +278,41 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         return ActiniumDirectiveProcessor.loadPropertiesFile(path, logicalName, directiveSources);
     }
 
+    private static Map<String, String> readRawPropertiesEntries(Path path) {
+        LinkedHashMap<String, String> entries = new LinkedHashMap<>();
+
+        if (!Files.isRegularFile(path)) {
+            return entries;
+        }
+
+        try {
+            StringBuilder current = new StringBuilder();
+
+            for (String rawLine : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+                String line = rawLine;
+
+                if (continuesLine(line)) {
+                    current.append(line, 0, line.length() - 1);
+                    continue;
+                }
+
+                current.append(line);
+                String logicalLine = current.toString();
+                current.setLength(0);
+
+                parseRawPropertyLine(logicalLine, entries);
+            }
+
+            if (!current.isEmpty()) {
+                parseRawPropertyLine(current.toString(), entries);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read raw shader properties from " + path, e);
+        }
+
+        return entries;
+    }
+
     private @Nullable Path findProgramPath(String relativePath) {
         for (String prefix : getDimensionPrefixes()) {
             Path candidate = null;
@@ -279,13 +351,15 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
 
         try {
             List<String> output = new ArrayList<>();
+            String relativePath = this.shadersRoot != null ? this.shadersRoot.relativize(normalizedPath).toString().replace('\\', '/') : normalizedPath.toString();
 
             for (String line : Files.readAllLines(normalizedPath, StandardCharsets.UTF_8)) {
-                String trimmed = line.trim();
+                String effectiveLine = ActiniumShaderOptionParser.applyOverride(relativePath, line, this.optionOverrides);
+                String trimmed = effectiveLine.trim();
                 String includeTarget = parseIncludeTarget(trimmed);
 
                 if (includeTarget == null) {
-                    output.add(line);
+                    output.add(effectiveLine);
                     continue;
                 }
 
@@ -339,6 +413,70 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         }
 
         return null;
+    }
+
+    private static boolean continuesLine(String line) {
+        int backslashCount = 0;
+
+        for (int index = line.length() - 1; index >= 0 && line.charAt(index) == '\\'; index--) {
+            backslashCount++;
+        }
+
+        return (backslashCount % 2) == 1;
+    }
+
+    private static void parseRawPropertyLine(String line, Map<String, String> entries) {
+        String trimmed = line.trim();
+
+        if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!")) {
+            return;
+        }
+
+        int separator = findPropertySeparator(line);
+
+        if (separator < 0) {
+            String key = unescapeProperty(line.trim());
+
+            if (!key.isEmpty()) {
+                entries.put(key, "");
+            }
+            return;
+        }
+
+        String key = unescapeProperty(line.substring(0, separator).trim());
+        String value = unescapeProperty(line.substring(separator + 1).trim());
+
+        if (!key.isEmpty()) {
+            entries.put(key, value);
+        }
+    }
+
+    private static int findPropertySeparator(String line) {
+        boolean escaped = false;
+
+        for (int index = 0; index < line.length(); index++) {
+            char c = line.charAt(index);
+
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+
+            if (c == '=' || c == ':') {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static String unescapeProperty(String value) {
+        return value.replace("\\:", ":").replace("\\=", "=").replace("\\\\", "\\");
     }
 
     private static LinkedHashSet<String> getProgramCandidates(ActiniumTerrainPass pass) {

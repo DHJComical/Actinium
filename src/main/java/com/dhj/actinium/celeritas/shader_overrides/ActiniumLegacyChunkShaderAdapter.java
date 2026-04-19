@@ -14,6 +14,7 @@ final class ActiniumLegacyChunkShaderAdapter {
     private static final Pattern TEX_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+tex\\s*;\\s*$");
     private static final Pattern LIGHTMAP_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+lightmap\\s*;\\s*$");
     private static final Pattern SHADOW_CASTING_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+SHADOW_CASTING\\b.*$");
+    private static final Pattern FOG_ACTIVE_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+FOG_ACTIVE\\b.*$");
     private static final Pattern GL_FRAG_DATA = Pattern.compile("gl_FragData\\s*\\[\\s*\\d+\\s*\\]");
     private ActiniumLegacyChunkShaderAdapter() {
     }
@@ -27,6 +28,7 @@ final class ActiniumLegacyChunkShaderAdapter {
 
         if (!shadowPass) {
             translated = SHADOW_CASTING_DEFINE.matcher(translated).replaceAll("// Actinium legacy compat: SHADOW_CASTING disabled");
+            translated = FOG_ACTIVE_DEFINE.matcher(translated).replaceAll("// Actinium legacy compat: FOG_ACTIVE disabled");
         }
 
         translated = MAIN_DECLARATION.matcher(translated).replaceFirst("void actinium_pack_main()");

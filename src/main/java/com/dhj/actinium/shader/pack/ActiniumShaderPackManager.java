@@ -3,6 +3,8 @@ package com.dhj.actinium.shader.pack;
 import com.dhj.actinium.block_rendering.ActiniumBlockRenderingSettings;
 import com.dhj.actinium.celeritas.ActiniumShaders;
 import com.dhj.actinium.celeritas.shader_overrides.ActiniumTerrainPass;
+import com.dhj.actinium.shader.options.ActiniumShaderOptionMenu;
+import com.dhj.actinium.shader.options.ActiniumShaderOptionMenuLoader;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.jetbrains.annotations.Nullable;
 
@@ -13,8 +15,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Stream;
 
 public final class ActiniumShaderPackManager {
@@ -179,7 +183,7 @@ public final class ActiniumShaderPackManager {
         }
 
         try {
-            activePackResources = ActiniumShaderPackResources.load(selectedPack);
+            activePackResources = ActiniumShaderPackResources.load(selectedPack, getPackOptionOverrides(selectedPack.name()));
             activeShaderProperties = activePackResources.shaderProperties();
             activeIdMap = activePackResources.idMap();
             applyRuntimeState(activeShaderProperties, activeIdMap);
@@ -241,6 +245,35 @@ public final class ActiniumShaderPackManager {
 
     public static @Nullable ActiniumShaderPackResources getActivePackResources() {
         return activePackResources;
+    }
+
+    public static Map<String, String> getPackOptionOverrides(@Nullable String packName) {
+        return new LinkedHashMap<>(getConfig().getPackOptionOverrides(packName));
+    }
+
+    public static void savePackOptionOverrides(@Nullable String packName, Map<String, String> overrides) {
+        ActiniumShaderConfig config = getConfig();
+        config.setPackOptionOverrides(packName, overrides);
+        config.save();
+    }
+
+    public static @Nullable ActiniumShaderOptionMenu loadShaderOptionMenu(@Nullable String packName) {
+        return loadShaderOptionMenu(packName, getPackOptionOverrides(packName));
+    }
+
+    public static @Nullable ActiniumShaderOptionMenu loadShaderOptionMenu(@Nullable String packName, Map<String, String> overrides) {
+        ActiniumShaderPack pack = findPackByName(packName);
+
+        if (pack == null || pack.builtin()) {
+            return null;
+        }
+
+        try (ActiniumShaderPackResources resources = ActiniumShaderPackResources.load(pack, overrides)) {
+            return ActiniumShaderOptionMenuLoader.load(resources);
+        } catch (IOException e) {
+            ActiniumShaders.logger().warn("Failed to load shader option menu for '{}'", pack.name(), e);
+            return null;
+        }
     }
 
     public static ActiniumShaderProperties getActiveShaderProperties() {

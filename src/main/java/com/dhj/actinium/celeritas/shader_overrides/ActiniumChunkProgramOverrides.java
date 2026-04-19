@@ -73,6 +73,13 @@ public final class ActiniumChunkProgramOverrides {
     }
 
     private GlProgram<ChunkShaderInterface> createShader(ActiniumTerrainPass pass, RenderPassConfiguration<?> configuration) {
+        if (shouldForceBundledTerrain(pass)) {
+            if (ActiniumShaderPackManager.isDebugEnabled()) {
+                ActiniumShaders.logger().info("Forcing bundled Actinium terrain override for {} while external legacy terrain compatibility is disabled", pass.name());
+            }
+            return this.createShader(pass, configuration, false);
+        }
+
         try {
             return this.createShader(pass, configuration, true);
         } catch (RuntimeException e) {
@@ -83,6 +90,13 @@ public final class ActiniumChunkProgramOverrides {
 
             return this.createShader(pass, configuration, false);
         }
+    }
+
+    private static boolean shouldForceBundledTerrain(ActiniumTerrainPass pass) {
+        return switch (pass) {
+            case GBUFFER_SOLID, GBUFFER_CUTOUT, GBUFFER_TRANSLUCENT -> true;
+            default -> false;
+        };
     }
 
     private GlProgram<ChunkShaderInterface> createShader(ActiniumTerrainPass pass, RenderPassConfiguration<?> configuration, boolean preferPackProgram) {
@@ -128,15 +142,19 @@ public final class ActiniumChunkProgramOverrides {
     private GlShader loadShader(ShaderType type, String path, ShaderConstants constants, @Nullable ActiniumTerrainPass pass, boolean preferPackProgram) {
         String source = null;
         String shaderId = path;
+        boolean usingExternalPackProgram = false;
+        boolean usingLegacyTranslation = false;
 
         if (preferPackProgram && pass != null) {
             source = ActiniumShaderPackManager.getProgramSource(pass, type);
 
             if (source != null) {
                 shaderId = "actinium:external/" + pass.getName() + "." + type.fileExtension;
+                usingExternalPackProgram = true;
 
                 if (this.isLegacyPackProgram(source)) {
                     source = ActiniumLegacyChunkShaderAdapter.translate(type, pass, source);
+                    usingLegacyTranslation = true;
                 }
             }
         }
@@ -144,6 +162,17 @@ public final class ActiniumChunkProgramOverrides {
         if (source == null) {
             source = this.resolveShaderSource(path);
             shaderId = path;
+        }
+
+        if (ActiniumShaderPackManager.isDebugEnabled() && pass != null) {
+            ActiniumShaders.logger().info(
+                    "Terrain shader source {} {} -> external={}, legacyTranslated={}, shaderId='{}'",
+                    pass.name(),
+                    type.name(),
+                    usingExternalPackProgram,
+                    usingLegacyTranslation,
+                    shaderId
+            );
         }
 
         String shaderSource = ShaderParser.parseShader(source, this::resolveShaderSource, constants);

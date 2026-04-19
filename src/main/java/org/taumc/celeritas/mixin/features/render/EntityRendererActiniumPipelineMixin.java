@@ -14,23 +14,27 @@ public class EntityRendererActiniumPipelineMixin {
         ActiniumRenderPipeline.INSTANCE.beginWorld();
     }
 
-    @Inject(method = "renderWorldPass", at = @At("RETURN"))
-    private void actinium$endWorldPass(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+    @Inject(
+            method = "renderWorldPass",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/GlStateManager;clear(I)V",
+                    ordinal = 1,
+                    shift = At.Shift.BEFORE
+            )
+    )
+    private void actinium$finalizeWorldPassBeforeHand(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         ActiniumRenderPipeline.INSTANCE.captureWorldState();
         ActiniumRenderPipeline.INSTANCE.endWorld();
+        if (ActiniumRenderPipeline.INSTANCE.hasPostProgram()) {
+            ActiniumRenderPipeline.INSTANCE.renderPostPipeline(partialTicks);
+        }
     }
 
     @Inject(method = "renderWorld", at = @At("HEAD"))
     private void actinium$runShadowPipeline(float partialTicks, long finishTimeNano, CallbackInfo ci) {
         if (ActiniumRenderPipeline.INSTANCE.hasShadowProgram()) {
             ActiniumRenderPipeline.INSTANCE.renderShadowPass(partialTicks);
-        }
-    }
-
-    @Inject(method = "renderWorld", at = @At("RETURN"))
-    private void actinium$runPostPipeline(float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        if (ActiniumRenderPipeline.INSTANCE.hasPostProgram()) {
-            ActiniumRenderPipeline.INSTANCE.renderPostPipeline(partialTicks);
         }
     }
 

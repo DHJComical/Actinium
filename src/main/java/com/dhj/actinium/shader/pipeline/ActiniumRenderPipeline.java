@@ -39,6 +39,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
@@ -76,6 +77,10 @@ public final class ActiniumRenderPipeline {
 
     private static final Pattern LEGACY_PACK_MARKERS = Pattern.compile("gl_Vertex|gl_MultiTexCoord|gl_FragData|gl_FragColor|gl_ModelViewProjectionMatrix|gl_TextureMatrix|\\bvarying\\b");
     private static final Pattern DRAW_BUFFERS_PATTERN = Pattern.compile("DRAWBUFFERS:([0-7]+)");
+    private static final Pattern DECLARED_TARGET_FORMAT_PATTERN = Pattern.compile("const\\s+int\\s+([A-Za-z0-9_]+)Format\\s*=\\s*([A-Z0-9_]+)\\s*;");
+    private static final Pattern CONDITIONAL_SOFT_LOD_UNIFORM_PATTERN = Pattern.compile("(?ms)^\\s*#ifdef\\s+BLOOM\\s*\\R\\s*uniform\\s+float\\s+softLod\\s*;\\s*\\R\\s*#endif\\s*");
+    private static final Pattern SOFT_LOD_UNIFORM_PATTERN = Pattern.compile("(?m)^\\s*uniform\\s+float\\s+softLod\\s*;");
+    private static final Pattern VERSION_LINE_PATTERN = Pattern.compile("(?m)^\\s*#version\\s+.+$");
     private static final @Nullable Method GL_GET_FLOAT_BUFFER_METHOD = findGlGetFloatBufferMethod();
     private static final @Nullable Method GL_GET_INTEGER_BUFFER_METHOD = findGlGetIntegerBufferMethod();
     private static final String[] SKY_PROGRAMS = {
@@ -123,6 +128,11 @@ public final class ActiniumRenderPipeline {
             "gaux3",
             "gaux4"
     };
+    private static final int TRACKED_TEXTURE_UNITS = 16;
+    private static final boolean ENABLE_PRE_SCENE_PIPELINES = false;
+    private static final boolean ENABLE_EXTERNAL_SCENE_PIPELINE = true;
+    private static final boolean ENABLE_EXTERNAL_FINAL_PIPELINE = true;
+    private static final boolean ENABLE_EXTERNAL_TERRAIN_REDIRECT = false;
 
     private int observedReloadVersion = -1;
     @Getter
@@ -171,6 +181,7 @@ public final class ActiniumRenderPipeline {
     private final float[] fogColor = new float[]{1.0f, 1.0f, 1.0f, 1.0f};
 
     private @Nullable GlVertexArray fullscreenVertexArray;
+    private int fullscreenQuadBuffer;
     private @Nullable ActiniumPostTargets postTargets;
     private @Nullable ActiniumShadowTargets shadowTargets;
     private @Nullable ActiniumWorldTargets worldTargets;
@@ -194,6 +205,8 @@ public final class ActiniumRenderPipeline {
     private List<ActiniumPostProgram> preScenePrograms = Collections.emptyList();
     private List<ActiniumPostProgram> scenePrograms = Collections.emptyList();
     private boolean worldTargetsPrepared;
+    private boolean prepareProgramsExecutedThisFrame;
+    private boolean deferredProgramsExecutedThisFrame;
     @Getter
     private float centerDepthSmooth;
     private ActiniumRenderPipeline() {
@@ -208,6 +221,8 @@ public final class ActiniumRenderPipeline {
         }
         this.frameCounter = nextFrameId(this.frameCounter);
         this.worldTargetsPrepared = false;
+        this.prepareProgramsExecutedThisFrame = false;
+        this.deferredProgramsExecutedThisFrame = false;
         this.currentStage = ActiniumRenderStage.WORLD;
     }
 
@@ -289,6 +304,10 @@ public final class ActiniumRenderPipeline {
     public void renderPostPipeline(float partialTicks) {
         this.syncReloadState();
 
+        if (!ENABLE_EXTERNAL_SCENE_PIPELINE && !ENABLE_EXTERNAL_FINAL_PIPELINE) {
+            return;
+        }
+
         if (!ActiniumShaderPackManager.areShadersEnabled()) {
             return;
         }
@@ -303,52 +322,167 @@ public final class ActiniumRenderPipeline {
         this.width = Math.max(1, mainFramebuffer.framebufferWidth);
         this.height = Math.max(1, mainFramebuffer.framebufferHeight);
 
-        List<ActiniumPostProgram> preScenePrograms = this.getPreScenePrograms();
         List<ActiniumPostProgram> scenePrograms = this.getScenePrograms();
         GlProgram<ActiniumPostShaderInterface> finalProgram = this.getFinalProgram();
 
-        if (preScenePrograms.isEmpty() && scenePrograms.isEmpty() && finalProgram == null) {
+        if (scenePrograms.isEmpty() && finalProgram == null) {
             return;
         }
 
         this.ensureRuntimeResources();
+        ShadowPassGlState previousState = ShadowPassGlState.capture();
         this.beginPost();
 
         try {
             if (this.postTargets != null) {
-                this.postTargets.ensureSize(this.width, this.height);
-                this.postTargets.resetSources();
-                Integer worldColorTexture = null;
                 Integer worldGaux4Texture = null;
 
-        if (this.worldTargets != null && this.worldTargets.hasSourceColorTexture()) {
-            worldColorTexture = this.worldTargets.getSourceColorTexture();
-            worldGaux4Texture = this.worldTargets.getSourceGaux4Texture();
-        }
+                if (this.worldTargets != null && this.worldTargets.hasSourceColorTexture()) {
+                    worldGaux4Texture = this.worldTargets.getSourceGaux4Texture();
+                }
 
-        this.debugLogTextureCenter("pre-copy.mainFramebuffer", mainFramebuffer.framebufferTexture);
-        if (worldColorTexture != null && worldColorTexture > 0) {
-            this.debugLogTextureCenter("pre-copy.worldColorTexture", worldColorTexture);
-        }
-        if (worldGaux4Texture != null && worldGaux4Texture > 0) {
-            this.debugLogTextureCenter("pre-copy.worldGaux4Texture", worldGaux4Texture);
-        }
+                this.debugLogTextureCenter("pre-copy.mainFramebuffer", mainFramebuffer.framebufferTexture);
+                if (worldGaux4Texture != null && worldGaux4Texture > 0) {
+                    this.debugLogTextureCenter("pre-copy.worldGaux4Texture", worldGaux4Texture);
+                }
 
-        this.postTargets.copySceneTextures(mainFramebuffer, worldColorTexture, worldGaux4Texture);
-        this.updateCenterDepthSmooth();
-        this.debugLogTextureCenter("post-copy.colortex0", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
-        this.debugLogTextureCenter("post-copy.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
-        this.debugLogTextureCenter("post-copy.gaux4", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
-    }
-            this.executePostPrograms(preScenePrograms, partialTicks);
+                this.postTargets.ensureSize(this.width, this.height);
+                this.postTargets.resetSources();
+                this.postTargets.copySceneTextures(mainFramebuffer, null, worldGaux4Texture);
+                this.updateCenterDepthSmooth();
+                this.debugLogTextureCenter("post-copy.colortex0", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
+                this.debugLogTextureCenter("post-copy.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+                this.debugLogTextureCenter("post-copy.gaux4", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
+            }
             this.executeScenePrograms(scenePrograms, partialTicks);
             this.renderFinalPass(mainFramebuffer, finalProgram, partialTicks);
         } catch (RuntimeException e) {
             ActiniumShaders.logger().warn("Failed to execute Actinium shader pack post pipeline; disabling external post programs until the next shader reload", e);
             this.disableExternalProgramsUntilReload();
         } finally {
+            previousState.restore(mainFramebuffer, this.width, this.height);
+            this.restoreScreenRenderState(mainFramebuffer, this.width, this.height);
             this.endPost();
         }
+    }
+
+    public void renderPreparePipeline(float partialTicks) {
+        if (!ENABLE_PRE_SCENE_PIPELINES) {
+            return;
+        }
+
+        if (this.prepareProgramsExecutedThisFrame) {
+            return;
+        }
+
+        this.renderPreCompositePipeline(partialTicks, this.getPreparePrograms(), true, "prepare");
+        this.prepareProgramsExecutedThisFrame = true;
+    }
+
+    public void renderDeferredPipeline(float partialTicks) {
+        if (!ENABLE_PRE_SCENE_PIPELINES) {
+            return;
+        }
+
+        if (this.deferredProgramsExecutedThisFrame) {
+            return;
+        }
+
+        this.renderPreCompositePipeline(partialTicks, this.getDeferredPrograms(), !this.prepareProgramsExecutedThisFrame, "deferred");
+        this.deferredProgramsExecutedThisFrame = true;
+    }
+
+    private void renderPreCompositePipeline(float partialTicks, List<ActiniumPostProgram> programs, boolean initializeTargets, String stageName) {
+        this.syncReloadState();
+
+        if (!ActiniumShaderPackManager.areShadersEnabled() || programs.isEmpty()) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer mainFramebuffer = minecraft.getFramebuffer();
+
+        if (mainFramebuffer == null || mainFramebuffer.framebufferTexture <= 0) {
+            return;
+        }
+
+        this.width = Math.max(1, mainFramebuffer.framebufferWidth);
+        this.height = Math.max(1, mainFramebuffer.framebufferHeight);
+        this.ensureRuntimeResources();
+        ShadowPassGlState previousState = ShadowPassGlState.capture();
+        this.beginPost();
+
+        try {
+            if (this.postTargets != null) {
+                this.postTargets.ensureSize(this.width, this.height);
+
+                if (initializeTargets) {
+                    this.postTargets.resetSources();
+                    this.postTargets.copySceneTextures(mainFramebuffer, null, null);
+                } else {
+                    this.postTargets.copySceneInputs(mainFramebuffer);
+                }
+
+                this.updateCenterDepthSmooth();
+                this.debugLogTextureCenter(stageName + ".entry.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+                this.debugLogTextureCenter(stageName + ".entry.gaux4", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
+            }
+
+            this.executePostPrograms(programs, partialTicks);
+        } catch (RuntimeException e) {
+            ActiniumShaders.logger().warn("Failed to execute Actinium shader pack {} pipeline; disabling external post programs until the next shader reload", stageName, e);
+            this.disableExternalProgramsUntilReload();
+        } finally {
+            previousState.restore(mainFramebuffer, this.width, this.height);
+            this.restoreMainFramebufferState(mainFramebuffer);
+            this.endPost();
+        }
+    }
+
+    private void restoreMainFramebufferState(Framebuffer mainFramebuffer) {
+        if (mainFramebuffer != null) {
+            mainFramebuffer.bindFramebuffer(true);
+            GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+        } else {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+            GL11.glDrawBuffer(GL11.GL_BACK);
+            GL11.glReadBuffer(GL11.GL_BACK);
+        }
+
+        GL20.glUseProgram(0);
+
+        for (int unit = TRACKED_TEXTURE_UNITS - 1; unit >= 0; unit--) {
+            GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        }
+
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableAlpha();
+        GlStateManager.enableBlend();
+        GlStateManager.enableDepth();
+        GlStateManager.depthMask(true);
+    }
+
+    private void restoreScreenRenderState(@Nullable Framebuffer framebuffer, int width, int height) {
+        this.restoreMainFramebufferState(framebuffer);
+        GL11.glViewport(0, 0, Math.max(1, width), Math.max(1, height));
+        GL30.glBindVertexArray(0);
+        GL11.glColorMask(true, true, true, true);
+        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
+        GlStateManager.disableLighting();
+        GlStateManager.disableFog();
+        GlStateManager.disableCull();
+        GlStateManager.disableDepth();
+        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1f);
+        GlStateManager.tryBlendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA,
+                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                GlStateManager.SourceFactor.ONE,
+                GlStateManager.DestFactor.ZERO
+        );
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
     }
 
     public boolean hasShadowProgram() {
@@ -369,6 +503,14 @@ public final class ActiniumRenderPipeline {
     public boolean hasPostProgram() {
         this.syncReloadState();
         return this.postProgramAvailable;
+    }
+
+    public boolean shouldSuppressVanillaSkyGeometry() {
+        this.syncReloadState();
+        return ActiniumShaderPackManager.areShadersEnabled()
+                && this.shouldUseExternalWorldPrograms()
+                && this.skyProgramAvailable
+                && this.postProgramAvailable;
     }
 
     public Matrix4fc getGbufferModelViewMatrix() {
@@ -521,8 +663,10 @@ public final class ActiniumRenderPipeline {
         this.height = Math.max(1, framebuffer.framebufferHeight);
         this.ensureRuntimeResources();
         debugCheckGlErrors("pipeline.prepareTerrainInputs.ensureRuntimeResources");
-        this.prepareWorldTargets(framebuffer);
-        debugCheckGlErrors("pipeline.prepareTerrainInputs.prepareWorldTargets");
+        if (ENABLE_EXTERNAL_TERRAIN_REDIRECT && this.hasPostProgram()) {
+            this.prepareWorldTargets(framebuffer);
+            debugCheckGlErrors("pipeline.prepareTerrainInputs.prepareWorldTargets");
+        }
         this.ensureTerrainInputTextures();
         debugCheckGlErrors("pipeline.prepareTerrainInputs.ensureTerrainInputTextures");
 
@@ -564,6 +708,14 @@ public final class ActiniumRenderPipeline {
     public void bindTerrainPassFramebuffer(TerrainRenderPass pass) {
         this.syncReloadState();
 
+        if (!ENABLE_EXTERNAL_TERRAIN_REDIRECT) {
+            return;
+        }
+
+        if (!pass.isReverseOrder()) {
+            return;
+        }
+
         if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasPostProgram() || ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             return;
         }
@@ -589,6 +741,14 @@ public final class ActiniumRenderPipeline {
     public void unbindTerrainPassFramebuffer(TerrainRenderPass pass) {
         this.syncReloadState();
 
+        if (!ENABLE_EXTERNAL_TERRAIN_REDIRECT) {
+            return;
+        }
+
+        if (!pass.isReverseOrder()) {
+            return;
+        }
+
         if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasPostProgram() || ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             return;
         }
@@ -601,7 +761,9 @@ public final class ActiniumRenderPipeline {
         }
 
         this.worldTargets.endWrite(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1}, false);
-        this.presentWorldStageResult(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1});
+        this.debugLogTerrainPassState("after-endWrite", pass, framebuffer);
+        this.presentTerrainPassResult(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1});
+        this.debugLogTerrainPassState("after-present", pass, framebuffer);
         debugCheckGlErrors("terrain.unbindFramebuffer:" + pass.name());
     }
 
@@ -728,23 +890,54 @@ public final class ActiniumRenderPipeline {
     }
 
     private void renderFinalPass(Framebuffer mainFramebuffer, @Nullable GlProgram<ActiniumPostShaderInterface> program, float partialTicks) {
+        this.debugLogRenderState("final.prep.before");
+        if (this.postTargets != null) {
+            this.debugLogTextureSamples("final.input.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+        }
+
+        this.prepareMainFramebufferForFinalPass(mainFramebuffer);
+        this.debugLogRenderState("final.prep.after");
+
         if (program != null) {
             this.preparePostMipmappedInputs(this.finalProgramMipmappedBuffers);
-            mainFramebuffer.bindFramebuffer(true);
-            GL11.glViewport(0, 0, this.width, this.height);
             this.renderFullscreenProgram(program, partialTicks, "final");
             this.debugLogFramebufferCenter("final.mainFramebuffer", mainFramebuffer.framebufferObject, GL30.GL_COLOR_ATTACHMENT0);
+            this.debugLogFramebufferSamples("final.mainFramebuffer", mainFramebuffer.framebufferObject, GL30.GL_COLOR_ATTACHMENT0);
+            this.finishMainFramebufferFinalPass();
             return;
         }
 
         this.renderBlitFallback(mainFramebuffer, partialTicks);
+        this.finishMainFramebufferFinalPass();
     }
 
     private void renderBlitFallback(Framebuffer mainFramebuffer, float partialTicks) {
         GlProgram<ActiniumPostShaderInterface> program = this.getBlitProgram();
-        mainFramebuffer.bindFramebuffer(true);
-        GL11.glViewport(0, 0, this.width, this.height);
         this.renderFullscreenProgram(program, partialTicks, null);
+    }
+
+    private void prepareMainFramebufferForFinalPass(Framebuffer mainFramebuffer) {
+        mainFramebuffer.bindFramebuffer(true);
+        GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+        GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+        GL11.glViewport(0, 0, this.width, this.height);
+        GL11.glColorMask(true, true, true, true);
+        GlStateManager.clearColor(this.fogColor[0], this.fogColor[1], this.fogColor[2], 1.0f);
+        GlStateManager.clear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+        GlStateManager.disableAlpha();
+        GlStateManager.disableBlend();
+        GlStateManager.disableCull();
+        GlStateManager.disableFog();
+        GlStateManager.disableLighting();
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableDepth();
+        GlStateManager.depthFunc(GL11.GL_ALWAYS);
+        GlStateManager.depthMask(false);
+    }
+
+    private void finishMainFramebufferFinalPass() {
+        GlStateManager.depthMask(true);
+        GlStateManager.depthFunc(GL11.GL_LEQUAL);
     }
 
     private void renderFullscreenProgram(GlProgram<ActiniumPostShaderInterface> program, float partialTicks, @Nullable String textureStage) {
@@ -761,12 +954,16 @@ public final class ActiniumRenderPipeline {
         GlStateManager.disableFog();
         GlStateManager.disableLighting();
         GlStateManager.disableDepth();
+        GlStateManager.disableCull();
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
         GlStateManager.depthMask(false);
+        GL11.glColorMask(true, true, true, true);
 
         program.bind();
         program.getInterface().setupState(this, this.postTargets, partialTicks, frameDeltaSeconds, this.frameTimeCounterSeconds, this.frameCounter);
         this.activePostTextureStage = textureStage;
         this.bindPipelineTextures();
+        this.debugLogRenderState("fullscreen." + (textureStage != null ? textureStage : "blit") + ".beforeDraw");
 
         if (this.fullscreenVertexArray != null) {
             GL30.glBindVertexArray(this.fullscreenVertexArray.handle());
@@ -786,21 +983,25 @@ public final class ActiniumRenderPipeline {
 
     private void bindPipelineTextures() {
         if (this.postTargets != null) {
-            bindTexture(0, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
-            bindTexture(1, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
-            bindTexture(2, this.getPostTextureOverride("colortex2", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX2)));
-            bindTexture(3, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX3));
-            bindTexture(4, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX1));
-            bindTexture(5, this.getPostTextureOverride("gaux2", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX2)));
-            bindTexture(6, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX3));
-            bindTexture(7, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
+            this.bindPipelineTexture("colortex0", 0, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
+            this.bindPipelineTexture("colortex1", 1, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+            this.bindPipelineTexture("colortex2", 2, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX2));
+            this.bindPipelineTexture("colortex3", 3, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX3));
+            this.bindPipelineTexture("gaux1", 4, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX1));
+            this.bindPipelineTexture("gaux2", 5, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX2));
+            this.bindPipelineTexture("gaux3", 6, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX3));
+            this.bindPipelineTexture("gaux4", 7, this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
             bindTexture(8, this.postTargets.getDepthTexture(0));
             bindTexture(9, this.postTargets.getDepthTexture(1));
-            bindTexture(10, this.getPostTextureOverride("noisetex", this.noiseTexture));
-            bindTexture(TERRAIN_SHADOW_TEX0_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(0) : this.whiteTexture);
-            bindTexture(TERRAIN_SHADOW_TEX1_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(1) : this.whiteTexture);
-            bindTexture(TERRAIN_SHADOW_COLOR0_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture() : this.whiteTexture);
+            this.bindPipelineTexture("noisetex", 10, this.noiseTexture);
+            this.bindPipelineTexture("shadowtex0", TERRAIN_SHADOW_TEX0_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(0) : this.whiteTexture);
+            this.bindPipelineTexture("shadowtex1", TERRAIN_SHADOW_TEX1_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(1) : this.whiteTexture);
+            this.bindPipelineTexture("shadowcolor0", TERRAIN_SHADOW_COLOR0_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture() : this.whiteTexture);
         }
+    }
+
+    private void bindPipelineTexture(String samplerName, int unit, @Nullable Integer fallbackTexture) {
+        bindTexture(unit, this.getPostTextureOverride(samplerName, fallbackTexture));
     }
 
     private void bindWorldStageTextures() {
@@ -852,6 +1053,7 @@ public final class ActiniumRenderPipeline {
         int gaux3 = this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX3);
         this.debugLogTextureCenter(programName + ".colortex1", colortex1);
         this.debugLogTextureCenter(programName + ".gaux3", gaux3);
+        this.debugLogTextureSamples(programName + ".colortex1", colortex1);
     }
 
     private void debugLogTextureCenter(String label, int textureId) {
@@ -1031,6 +1233,109 @@ public final class ActiniumRenderPipeline {
         }
     }
 
+    private void debugLogTextureSamples(String label, int textureId) {
+        if (!this.shouldEmitVerboseDebugFrame() || textureId <= 0) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int framebuffer = GL30.glGenFramebuffers();
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, textureId, 0);
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            this.debugReadSamplePoints(label, this.width, this.height);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+            GL30.glDeleteFramebuffers(framebuffer);
+        }
+    }
+
+    private void debugLogFramebufferSamples(String label, int framebufferId, int readBufferAttachment) {
+        if (!this.shouldEmitVerboseDebugFrame() || framebufferId <= 0) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebufferId);
+            GL11.glReadBuffer(readBufferAttachment);
+            this.debugReadSamplePoints(label, this.width, this.height);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+        }
+    }
+
+    private void debugReadSamplePoints(String label, int width, int height) {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
+        String[] names = {"tl", "tr", "bl", "br", "center"};
+        int[][] points = {
+                {Math.max(0, width / 4), Math.max(0, (height * 3) / 4)},
+                {Math.max(0, (width * 3) / 4), Math.max(0, (height * 3) / 4)},
+                {Math.max(0, width / 4), Math.max(0, height / 4)},
+                {Math.max(0, (width * 3) / 4), Math.max(0, height / 4)},
+                {Math.max(0, width / 2), Math.max(0, height / 2)}
+        };
+        StringBuilder builder = new StringBuilder();
+
+        for (int i = 0; i < points.length; i++) {
+            ByteBuffer pixel = BufferUtils.createByteBuffer(4);
+            GL11.glReadPixels(points[i][0], points[i][1], 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, pixel);
+            if (i > 0) {
+                builder.append(", ");
+            }
+            builder.append(names[i])
+                    .append("=[")
+                    .append(pixel.get(0) & 0xFF).append('/')
+                    .append(pixel.get(1) & 0xFF).append('/')
+                    .append(pixel.get(2) & 0xFF).append('/')
+                    .append(pixel.get(3) & 0xFF).append(']');
+        }
+
+        this.debugLog("Post debug '{}' samples {}", label, builder);
+    }
+
+    private void debugLogRenderState(String label) {
+        if (!this.shouldEmitVerboseDebugFrame()) {
+            return;
+        }
+
+        IntBuffer viewport = BufferUtils.createIntBuffer(16);
+        invokeGlGetInteger(GL11.GL_VIEWPORT, viewport);
+        IntBuffer scissor = BufferUtils.createIntBuffer(16);
+        invokeGlGetInteger(GL11.GL_SCISSOR_BOX, scissor);
+
+        this.debugLog(
+                "Render state '{}' fb={}, draw={}, read={}, program={}, vao={}, viewport=[{}, {}, {}, {}], scissorEnabled={}, scissor=[{}, {}, {}, {}], blend={}, depth={}, alpha={}, cull={}",
+                label,
+                GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+                GL11.glGetInteger(GL11.GL_DRAW_BUFFER),
+                GL11.glGetInteger(GL11.GL_READ_BUFFER),
+                GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+                GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING),
+                viewport.get(0), viewport.get(1), viewport.get(2), viewport.get(3),
+                GL11.glIsEnabled(GL11.GL_SCISSOR_TEST),
+                scissor.get(0), scissor.get(1), scissor.get(2), scissor.get(3),
+                GL11.glIsEnabled(GL11.GL_BLEND),
+                GL11.glIsEnabled(GL11.GL_DEPTH_TEST),
+                GL11.glIsEnabled(GL11.GL_ALPHA_TEST),
+                GL11.glIsEnabled(GL11.GL_CULL_FACE)
+        );
+    }
+
+    private boolean shouldEmitVerboseDebugFrame() {
+        return ActiniumShaderPackManager.isDebugEnabled() && this.frameCounter % 60 == 0;
+    }
+
     private void unbindWorldStageTextures() {
         unbindTexture(WORLD_GAUX4_UNIT);
         this.unbindTerrainShadowTextures();
@@ -1048,6 +1353,38 @@ public final class ActiniumRenderPipeline {
         this.preSceneProgramsResolved = true;
         this.preScenePrograms = this.resolvePostPrograms(PRE_SCENE_POST_PROGRAMS, "pre-scene");
         return this.preScenePrograms;
+    }
+
+    private List<ActiniumPostProgram> getPreparePrograms() {
+        List<ActiniumPostProgram> programs = this.getPreScenePrograms();
+
+        if (programs.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<ActiniumPostProgram> filtered = new ArrayList<>();
+        for (ActiniumPostProgram program : programs) {
+            if ("prepare".equals(program.name())) {
+                filtered.add(program);
+            }
+        }
+        return filtered;
+    }
+
+    private List<ActiniumPostProgram> getDeferredPrograms() {
+        List<ActiniumPostProgram> programs = this.getPreScenePrograms();
+
+        if (programs.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<ActiniumPostProgram> filtered = new ArrayList<>();
+        for (ActiniumPostProgram program : programs) {
+            if (program.name().startsWith("deferred")) {
+                filtered.add(program);
+            }
+        }
+        return filtered;
     }
 
     private List<ActiniumPostProgram> getScenePrograms() {
@@ -1146,11 +1483,12 @@ public final class ActiniumRenderPipeline {
 
         String vertexSource = String.join("\n",
                 "#version 330 core",
+                "layout(location = 0) in vec3 a_Position;",
+                "layout(location = 2) in vec2 a_TexCoord;",
                 "out vec2 texcoord;",
                 "void main() {",
-                "    vec2 pos = vec2((gl_VertexID & 1) * 2 - 1, ((gl_VertexID >> 1) & 1) * 2 - 1);",
-                "    texcoord = pos * 0.5 + 0.5;",
-                "    gl_Position = vec4(pos, 0.0, 1.0);",
+                "    texcoord = a_TexCoord;",
+                "    gl_Position = vec4(a_Position.xy * 2.0 - 1.0, a_Position.z, 1.0);",
                 "}",
                 ""
         );
@@ -1197,13 +1535,48 @@ public final class ActiniumRenderPipeline {
             shaderSource = type == ShaderType.VERTEX ? defaultVertexSource() : defaultFragmentSource();
         }
 
+        shaderSource = ShaderParser.parseShader(shaderSource, this::resolveShaderSource, ShaderConstants.EMPTY);
+
         if (this.isLegacyPackProgram(shaderSource)) {
+            this.debugLog("Applying legacy fullscreen shader adapter to '{}' {}", programName, type);
             shaderSource = ActiniumLegacyFullscreenShaderAdapter.translate(type, shaderSource);
         }
 
-        shaderSource = ShaderParser.parseShader(shaderSource, this::resolveShaderSource, ShaderConstants.EMPTY);
+        shaderSource = this.applyPostShaderCompatibilityFixes(type, shaderSource);
 
         return new GlShader(type, "actinium:external/" + programName + "." + type.fileExtension, shaderSource);
+    }
+
+    private String applyPostShaderCompatibilityFixes(ShaderType type, String shaderSource) {
+        if (type == ShaderType.FRAGMENT && shaderSource.contains("softLod")) {
+            shaderSource = CONDITIONAL_SOFT_LOD_UNIFORM_PATTERN.matcher(shaderSource)
+                    .replaceAll("uniform float softLod;\n");
+        }
+
+        if (type == ShaderType.FRAGMENT
+                && shaderSource.contains("softLod")
+                && !SOFT_LOD_UNIFORM_PATTERN.matcher(shaderSource).find()) {
+            Matcher versionMatcher = VERSION_LINE_PATTERN.matcher(shaderSource);
+            String injectedUniform = "\n#ifndef ACTINIUM_INJECT_SOFTLOD_UNIFORM\n"
+                    + "#define ACTINIUM_INJECT_SOFTLOD_UNIFORM\n"
+                    + "uniform float softLod;\n"
+                    + "#endif\n";
+
+            if (versionMatcher.find()) {
+                int insertIndex = versionMatcher.end();
+                return shaderSource.substring(0, insertIndex)
+                        + injectedUniform
+                        + shaderSource.substring(insertIndex);
+            }
+
+            return "#ifndef ACTINIUM_INJECT_SOFTLOD_UNIFORM\n"
+                    + "#define ACTINIUM_INJECT_SOFTLOD_UNIFORM\n"
+                    + "uniform float softLod;\n"
+                    + "#endif\n"
+                    + shaderSource;
+        }
+
+        return shaderSource;
     }
 
     private boolean isLegacyPackProgram(String source) {
@@ -1211,12 +1584,17 @@ public final class ActiniumRenderPipeline {
     }
 
     private boolean shouldUseExternalScenePrograms() {
-        return ActiniumShaderPackManager.areShadersEnabled()
+        return ENABLE_EXTERNAL_SCENE_PIPELINE
+                && ActiniumShaderPackManager.areShadersEnabled()
                 && ActiniumShaderPackManager.getActivePackResources() != null;
     }
 
+    private boolean shouldUseExternalWorldPrograms() {
+        return false;
+    }
+
     private boolean shouldUseExternalFinalProgram() {
-        return this.shouldUseExternalScenePrograms();
+        return ENABLE_EXTERNAL_FINAL_PIPELINE && this.shouldUseExternalScenePrograms();
     }
 
     private String resolveShaderSource(String path) {
@@ -1232,10 +1610,29 @@ public final class ActiniumRenderPipeline {
     private void ensureRuntimeResources() {
         if (this.fullscreenVertexArray == null) {
             this.fullscreenVertexArray = new GlVertexArray();
+            this.fullscreenQuadBuffer = GL15.glGenBuffers();
+            FloatBuffer fullscreenQuad = BufferUtils.createFloatBuffer(20);
+            fullscreenQuad.put(new float[]{
+                    0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                    1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+                    0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                    1.0f, 1.0f, 0.0f, 1.0f, 1.0f
+            });
+            fullscreenQuad.flip();
+
+            GL30.glBindVertexArray(this.fullscreenVertexArray.handle());
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.fullscreenQuadBuffer);
+            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, fullscreenQuad, GL15.GL_STATIC_DRAW);
+            GL20.glEnableVertexAttribArray(0);
+            GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, 5 * Float.BYTES, 0L);
+            GL20.glEnableVertexAttribArray(2);
+            GL20.glVertexAttribPointer(2, 2, GL11.GL_FLOAT, false, 5 * Float.BYTES, 3L * Float.BYTES);
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
+            GL30.glBindVertexArray(0);
         }
 
         if (this.postTargets == null) {
-            this.postTargets = new ActiniumPostTargets(createDefaultPostTargetFormats());
+            this.postTargets = new ActiniumPostTargets(this.createConfiguredPostTargetFormats());
         }
 
         if (this.shadowTargets == null) {
@@ -1270,6 +1667,81 @@ public final class ActiniumRenderPipeline {
                 ActiniumPostTargets.ColorFormat.R8,
                 ActiniumPostTargets.ColorFormat.R16F,
                 ActiniumPostTargets.ColorFormat.RGBA16F
+        };
+    }
+
+    private ActiniumPostTargets.ColorFormat[] createConfiguredPostTargetFormats() {
+        ActiniumPostTargets.ColorFormat[] formats = createDefaultPostTargetFormats();
+
+        if (!ActiniumShaderPackManager.areShadersEnabled()) {
+            return formats;
+        }
+
+        for (String programName : POST_PROGRAMS) {
+            String fragmentSource = ActiniumShaderPackManager.getProgramSource(programName, ShaderType.FRAGMENT);
+
+            if (fragmentSource != null) {
+                this.applyDeclaredPostTargetFormats(fragmentSource, formats);
+            }
+        }
+
+        return formats;
+    }
+
+    private void applyDeclaredPostTargetFormats(String shaderSource, ActiniumPostTargets.ColorFormat[] formats) {
+        Matcher matcher = DECLARED_TARGET_FORMAT_PATTERN.matcher(shaderSource);
+
+        while (matcher.find()) {
+            int targetIndex = resolvePostTargetIndex(matcher.group(1));
+
+            if (targetIndex < 0 || targetIndex >= formats.length) {
+                continue;
+            }
+
+            ActiniumPostTargets.ColorFormat colorFormat = resolveDeclaredColorFormat(matcher.group(2));
+
+            if (colorFormat == null) {
+                continue;
+            }
+
+            formats[targetIndex] = colorFormat;
+        }
+    }
+
+    private static int resolvePostTargetIndex(String bufferName) {
+        if (bufferName.startsWith("colortex")) {
+            try {
+                return Integer.parseInt(bufferName.substring("colortex".length()));
+            } catch (NumberFormatException ignored) {
+                return -1;
+            }
+        }
+
+        for (int i = 0; i < LEGACY_RENDER_TARGET_NAMES.length; i++) {
+            if (LEGACY_RENDER_TARGET_NAMES[i].equals(bufferName)) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static @Nullable ActiniumPostTargets.ColorFormat resolveDeclaredColorFormat(String formatName) {
+        return switch (formatName) {
+            case "R8" -> ActiniumPostTargets.ColorFormat.R8;
+            case "RG8" -> ActiniumPostTargets.ColorFormat.RG8;
+            case "RGB8" -> ActiniumPostTargets.ColorFormat.RGB8;
+            case "RGBA8" -> ActiniumPostTargets.ColorFormat.RGBA8;
+            case "RGB10_A2" -> ActiniumPostTargets.ColorFormat.RGB10_A2;
+            case "RG16F" -> ActiniumPostTargets.ColorFormat.RG16F;
+            case "RGB16F" -> ActiniumPostTargets.ColorFormat.RGB16F;
+            case "RGBA16F" -> ActiniumPostTargets.ColorFormat.RGBA16F;
+            case "R16F" -> ActiniumPostTargets.ColorFormat.R16F;
+            case "R32F" -> ActiniumPostTargets.ColorFormat.R32F;
+            case "RG32F" -> ActiniumPostTargets.ColorFormat.RG32F;
+            case "RGBA32F" -> ActiniumPostTargets.ColorFormat.RGBA32F;
+            case "R11F_G11F_B10F" -> ActiniumPostTargets.ColorFormat.R11F_G11F_B10F;
+            default -> null;
         };
     }
 
@@ -1370,10 +1842,17 @@ public final class ActiniumRenderPipeline {
         this.frameTimeCounterSeconds = 0.0f;
         this.width = 0;
         this.height = 0;
+        this.prepareProgramsExecutedThisFrame = false;
+        this.deferredProgramsExecutedThisFrame = false;
 
         if (this.fullscreenVertexArray != null) {
             this.fullscreenVertexArray.delete();
             this.fullscreenVertexArray = null;
+        }
+
+        if (this.fullscreenQuadBuffer != 0) {
+            GL15.glDeleteBuffers(this.fullscreenQuadBuffer);
+            this.fullscreenQuadBuffer = 0;
         }
 
         if (this.postTargets != null) {
@@ -1455,6 +1934,8 @@ public final class ActiniumRenderPipeline {
 
         this.finalProgramResolved = true;
         this.postProgramAvailable = false;
+        this.prepareProgramsExecutedThisFrame = false;
+        this.deferredProgramsExecutedThisFrame = false;
     }
 
     private void deleteWorldPrograms() {
@@ -1490,16 +1971,9 @@ public final class ActiniumRenderPipeline {
 
         Minecraft minecraft = Minecraft.getMinecraft();
         Framebuffer framebuffer = minecraft.getFramebuffer();
-
-        if (framebuffer != null) {
-            framebuffer.bindFramebuffer(true);
-        } else {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
-        }
-
-        GL20.glUseProgram(0);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        int framebufferWidth = framebuffer != null ? Math.max(1, framebuffer.framebufferWidth) : Math.max(1, this.width);
+        int framebufferHeight = framebuffer != null ? Math.max(1, framebuffer.framebufferHeight) : Math.max(1, this.height);
+        this.restoreScreenRenderState(framebuffer, framebufferWidth, framebufferHeight);
         debugCheckGlErrors("pipeline.resetVanillaRenderState");
     }
 
@@ -1519,6 +1993,10 @@ public final class ActiniumRenderPipeline {
     }
 
     private @Nullable ActiniumWorldProgram getCurrentWorldStageProgram() {
+        if (!this.shouldUseExternalWorldPrograms()) {
+            return null;
+        }
+
         return switch (this.currentStage) {
             case SKY -> this.getWorldStageProgram(ActiniumWorldStage.SKY);
             case SKY_TEXTURED -> this.getWorldStageProgram(ActiniumWorldStage.SKY_TEXTURED);
@@ -1693,6 +2171,29 @@ public final class ActiniumRenderPipeline {
                 return;
             }
         }
+    }
+
+    private void presentTerrainPassResult(Framebuffer mainFramebuffer, int[] drawBuffers) {
+        if (this.worldTargets == null || mainFramebuffer.framebufferTexture <= 0) {
+            return;
+        }
+
+        for (int drawBuffer : drawBuffers) {
+            if (drawBuffer == ActiniumPostTargets.TARGET_COLORTEX1 && this.worldTargets.hasSourceColorTexture()) {
+                this.copyTexture(this.worldTargets.getSourceColorTexture(), mainFramebuffer.framebufferTexture);
+                debugCheckGlErrors("terrain.presentMainFramebuffer");
+                return;
+            }
+        }
+    }
+
+    private void debugLogTerrainPassState(String stage, TerrainRenderPass pass, Framebuffer framebuffer) {
+        if (!ActiniumShaderPackManager.isDebugEnabled() || this.worldTargets == null) {
+            return;
+        }
+
+        this.debugLogTextureCenter("terrain." + pass.name() + "." + stage + ".worldColor", this.worldTargets.getSourceColorTexture());
+        this.debugLogTextureCenter("terrain." + pass.name() + "." + stage + ".mainFramebuffer", framebuffer.framebufferTexture);
     }
 
     private @Nullable String getActivePackShaderSource() {
@@ -1958,13 +2459,13 @@ public final class ActiniumRenderPipeline {
         }
     }
 
-    private static void invokeGlGetInteger(IntBuffer buffer) {
+    private static void invokeGlGetInteger(int parameter, IntBuffer buffer) {
         if (GL_GET_INTEGER_BUFFER_METHOD == null) {
             throw new IllegalStateException("LWJGL GL11.glGetInteger(int, IntBuffer) is unavailable");
         }
 
         try {
-            GL_GET_INTEGER_BUFFER_METHOD.invoke(null, GL11.GL_VIEWPORT, buffer);
+            GL_GET_INTEGER_BUFFER_METHOD.invoke(null, parameter, buffer);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to capture OpenGL integer state", e);
         }
@@ -2025,11 +2526,12 @@ public final class ActiniumRenderPipeline {
     private static String defaultVertexSource() {
         return String.join("\n",
                 "#version 330 core",
+                "layout(location = 0) in vec3 a_Position;",
+                "layout(location = 2) in vec2 a_TexCoord;",
                 "out vec2 texcoord;",
                 "void main() {",
-                "    vec2 pos = vec2((gl_VertexID & 1) * 2 - 1, ((gl_VertexID >> 1) & 1) * 2 - 1);",
-                "    texcoord = pos * 0.5 + 0.5;",
-                "    gl_Position = vec4(pos, 0.0, 1.0);",
+                "    texcoord = a_TexCoord;",
+                "    gl_Position = vec4(a_Position.xy * 2.0 - 1.0, a_Position.z, 1.0);",
                 "}",
                 ""
         );
@@ -2309,14 +2811,18 @@ public final class ActiniumRenderPipeline {
 
             if (this.framebufferBinding != 0) {
                 GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.framebufferBinding);
+                GL11.glDrawBuffer(this.drawBuffer);
+                GL11.glReadBuffer(this.readBuffer);
             } else if (mainFramebuffer != null) {
                 mainFramebuffer.bindFramebuffer(true);
+                GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+                GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
             } else {
                 GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+                GL11.glDrawBuffer(this.drawBuffer);
+                GL11.glReadBuffer(this.readBuffer);
             }
 
-            GL11.glDrawBuffer(this.drawBuffer);
-            GL11.glReadBuffer(this.readBuffer);
             GL11.glViewport(0, 0, Math.max(1, fallbackWidth), Math.max(1, fallbackHeight));
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
         }
@@ -2335,37 +2841,74 @@ public final class ActiniumRenderPipeline {
         private final int drawBuffer;
         private final int readBuffer;
         private final int activeTexture;
-        private final int textureBinding2d;
+        private final int[] textureBindings2d;
         private final int currentProgram;
+        private final boolean blendEnabled;
+        private final boolean cullEnabled;
+        private final boolean depthEnabled;
+        private final boolean alphaEnabled;
+        private final boolean fogEnabled;
+        private final boolean texture2dEnabled;
+        private final boolean depthMask;
         private final int[] viewport;
 
         private WorldStageGlState(int framebufferBinding,
                                   int drawBuffer,
                                   int readBuffer,
                                   int activeTexture,
-                                  int textureBinding2d,
+                                  int[] textureBindings2d,
                                   int currentProgram,
+                                  boolean blendEnabled,
+                                  boolean cullEnabled,
+                                  boolean depthEnabled,
+                                  boolean alphaEnabled,
+                                  boolean fogEnabled,
+                                  boolean texture2dEnabled,
+                                  boolean depthMask,
                                   int[] viewport) {
             this.framebufferBinding = framebufferBinding;
             this.drawBuffer = drawBuffer;
             this.readBuffer = readBuffer;
             this.activeTexture = activeTexture;
-            this.textureBinding2d = textureBinding2d;
+            this.textureBindings2d = textureBindings2d;
             this.currentProgram = currentProgram;
+            this.blendEnabled = blendEnabled;
+            this.cullEnabled = cullEnabled;
+            this.depthEnabled = depthEnabled;
+            this.alphaEnabled = alphaEnabled;
+            this.fogEnabled = fogEnabled;
+            this.texture2dEnabled = texture2dEnabled;
+            this.depthMask = depthMask;
             this.viewport = viewport;
         }
 
         public static WorldStageGlState capture() {
             IntBuffer viewportBuffer = BufferUtils.createIntBuffer(16);
-            invokeGlGetInteger(viewportBuffer);
+            invokeGlGetInteger(GL11.GL_VIEWPORT, viewportBuffer);
+            int activeTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+            int[] textureBindings2d = new int[TRACKED_TEXTURE_UNITS];
+
+            for (int unit = 0; unit < TRACKED_TEXTURE_UNITS; unit++) {
+                GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
+                textureBindings2d[unit] = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+            }
+
+            GL13.glActiveTexture(activeTexture);
 
             return new WorldStageGlState(
                     GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
                     GL11.glGetInteger(GL11.GL_DRAW_BUFFER),
                     GL11.glGetInteger(GL11.GL_READ_BUFFER),
-                    GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE),
-                    GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D),
+                    activeTexture,
+                    textureBindings2d,
                     GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+                    GL11.glIsEnabled(GL11.GL_BLEND),
+                    GL11.glIsEnabled(GL11.GL_CULL_FACE),
+                    GL11.glIsEnabled(GL11.GL_DEPTH_TEST),
+                    GL11.glIsEnabled(GL11.GL_ALPHA_TEST),
+                    GL11.glIsEnabled(GL11.GL_FOG),
+                    GL11.glIsEnabled(GL11.GL_TEXTURE_2D),
+                    GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
                     new int[]{
                             viewportBuffer.get(0),
                             viewportBuffer.get(1),
@@ -2377,12 +2920,34 @@ public final class ActiniumRenderPipeline {
 
         public void restore() {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.framebufferBinding);
-            GL11.glDrawBuffer(this.drawBuffer);
-            GL11.glReadBuffer(this.readBuffer);
+            if (this.framebufferBinding != 0) {
+                GL11.glDrawBuffer(this.drawBuffer);
+                GL11.glReadBuffer(this.readBuffer);
+            }
             GL20.glUseProgram(this.currentProgram);
+
+            for (int unit = 0; unit < this.textureBindings2d.length; unit++) {
+                GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureBindings2d[unit]);
+            }
+
             GL13.glActiveTexture(this.activeTexture);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureBinding2d);
+            setEnabled(GL11.GL_BLEND, this.blendEnabled);
+            setEnabled(GL11.GL_CULL_FACE, this.cullEnabled);
+            setEnabled(GL11.GL_DEPTH_TEST, this.depthEnabled);
+            setEnabled(GL11.GL_ALPHA_TEST, this.alphaEnabled);
+            setEnabled(GL11.GL_FOG, this.fogEnabled);
+            setEnabled(GL11.GL_TEXTURE_2D, this.texture2dEnabled);
+            GL11.glDepthMask(this.depthMask);
             GL11.glViewport(this.viewport[0], this.viewport[1], this.viewport[2], this.viewport[3]);
+        }
+
+        private static void setEnabled(int capability, boolean enabled) {
+            if (enabled) {
+                GL11.glEnable(capability);
+            } else {
+                GL11.glDisable(capability);
+            }
         }
     }
 

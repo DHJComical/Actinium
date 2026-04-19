@@ -1,6 +1,7 @@
 package org.taumc.celeritas.mixin.core.terrain;
 
 import com.llamalad7.mixinextras.sugar.Local;
+import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.multiplayer.WorldClient;

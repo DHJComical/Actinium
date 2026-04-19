@@ -76,6 +76,39 @@ final class ActiniumPostTargets {
         }
     }
 
+    public void copySceneInputs(Framebuffer mainFramebuffer) {
+        if (this.width <= 0 || this.height <= 0) {
+            return;
+        }
+
+        int sceneTexture = mainFramebuffer.framebufferTexture;
+        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
+        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].getSourceTexture(), this.width, this.height);
+        copyDepthTexture(mainFramebuffer);
+    }
+
+    public void copySceneInputs(Framebuffer mainFramebuffer, @Nullable Integer gaux4Texture) {
+        this.copySceneInputs(mainFramebuffer);
+
+        if (gaux4Texture != null && gaux4Texture > 0) {
+            copyTexture(gaux4Texture, this.targets[TARGET_GAUX4].getSourceTexture(), this.width, this.height);
+        }
+    }
+
+    public void copyPostSceneInputs(Framebuffer mainFramebuffer, @Nullable Integer gaux4Texture) {
+        if (this.width <= 0 || this.height <= 0) {
+            return;
+        }
+
+        int sceneTexture = mainFramebuffer.framebufferTexture;
+        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
+        copyDepthTexture(mainFramebuffer);
+
+        if (gaux4Texture != null && gaux4Texture > 0) {
+            copyTexture(gaux4Texture, this.targets[TARGET_GAUX4].getSourceTexture(), this.width, this.height);
+        }
+    }
+
     public void copySceneTextures(Framebuffer mainFramebuffer, @Nullable Integer worldColorTexture, @Nullable Integer worldGaux4Texture) {
         if (this.width <= 0 || this.height <= 0) {
             return;
@@ -83,12 +116,9 @@ final class ActiniumPostTargets {
 
         int sceneTexture = mainFramebuffer.framebufferTexture;
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].mainTexture, this.width, this.height);
-
-        if (worldColorTexture != null && worldColorTexture > 0) {
-            copyTexture(worldColorTexture, this.targets[TARGET_COLORTEX1].mainTexture, this.width, this.height);
-        } else {
-            copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].mainTexture, this.width, this.height);
-        }
+        // Post programs expect colortex1 to contain the current fully rendered scene.
+        // World-stage color targets may only contain sky/translucent intermediates.
+        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].mainTexture, this.width, this.height);
 
         clearColorTexture(this.targets[TARGET_COLORTEX2].mainTexture, this.width, this.height);
         clearColorTexture(this.targets[TARGET_COLORTEX3].mainTexture, this.width, this.height);
@@ -299,9 +329,17 @@ final class ActiniumPostTargets {
     enum ColorFormat {
         R8(GL30.GL_R8, GL30.GL_RED, GL11.GL_UNSIGNED_BYTE),
         RG8(GL30.GL_RG8, GL30.GL_RG, GL11.GL_UNSIGNED_BYTE),
+        RGB8(GL11.GL_RGB8, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE),
         RGBA8(GL11.GL_RGBA8, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE),
+        RGB10_A2(GL11.GL_RGB10_A2, GL11.GL_RGBA, GL12.GL_UNSIGNED_INT_10_10_10_2),
+        RG16F(GL30.GL_RG16F, GL30.GL_RG, GL11.GL_FLOAT),
+        RGB16F(GL30.GL_RGB16F, GL11.GL_RGB, GL11.GL_FLOAT),
         RGBA16F(GL30.GL_RGBA16F, GL11.GL_RGBA, GL11.GL_FLOAT),
-        R16F(GL30.GL_R16F, GL30.GL_RED, GL11.GL_FLOAT);
+        R16F(GL30.GL_R16F, GL30.GL_RED, GL11.GL_FLOAT),
+        R32F(GL30.GL_R32F, GL30.GL_RED, GL11.GL_FLOAT),
+        RG32F(GL30.GL_RG32F, GL30.GL_RG, GL11.GL_FLOAT),
+        RGBA32F(GL30.GL_RGBA32F, GL11.GL_RGBA, GL11.GL_FLOAT),
+        R11F_G11F_B10F(GL30.GL_R11F_G11F_B10F, GL11.GL_RGB, GL11.GL_FLOAT);
 
         private final int internalFormat;
         private final int pixelFormat;

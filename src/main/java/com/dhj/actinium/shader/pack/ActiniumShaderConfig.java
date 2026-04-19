@@ -16,6 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public final class ActiniumShaderConfig {
     private static final Gson GSON = new GsonBuilder()
@@ -32,6 +35,7 @@ public final class ActiniumShaderConfig {
     @Setter
     @Getter
     public boolean debugEnabled;
+    public Map<String, Map<String, String>> packOptionOverrides = new LinkedHashMap<>();
 
     private transient Path configPath;
     private transient boolean readOnly;
@@ -58,6 +62,9 @@ public final class ActiniumShaderConfig {
         }
 
         config.configPath = path;
+        if (config.packOptionOverrides == null) {
+            config.packOptionOverrides = new LinkedHashMap<>();
+        }
         config.selectedPack = normalizePackName(config.selectedPack);
         if (config.selectedPack == null) {
             config.shadersEnabled = false;
@@ -105,6 +112,32 @@ public final class ActiniumShaderConfig {
 
     public boolean isShaderPackEnabled() {
         return this.areShadersEnabled();
+    }
+
+    public Map<String, String> getPackOptionOverrides(@Nullable String packName) {
+        String normalizedPackName = normalizePackName(packName);
+
+        if (normalizedPackName == null) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, String> overrides = this.packOptionOverrides.get(normalizedPackName);
+        return overrides != null ? Collections.unmodifiableMap(overrides) : Collections.emptyMap();
+    }
+
+    public void setPackOptionOverrides(@Nullable String packName, Map<String, String> overrides) {
+        String normalizedPackName = normalizePackName(packName);
+
+        if (normalizedPackName == null) {
+            return;
+        }
+
+        if (overrides.isEmpty()) {
+            this.packOptionOverrides.remove(normalizedPackName);
+            return;
+        }
+
+        this.packOptionOverrides.put(normalizedPackName, new LinkedHashMap<>(overrides));
     }
 
     private static @Nullable String normalizePackName(@Nullable String packName) {

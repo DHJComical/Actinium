@@ -47,6 +47,13 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
             return null;
         }
 
+        if (!this.isShadowPass()) {
+            if (ActiniumShaderPackManager.isDebugEnabled()) {
+                ActiniumShaders.logger().info("Skipping Actinium chunk shader override for world pass '{}' and using Celeritas default terrain shader", pass.name());
+            }
+            return null;
+        }
+
         GlProgram<? extends ChunkShaderInterface> localOverride = this.localOverrides.getProgramOverride(pass, this.renderPassConfiguration, this.isShadowPass());
 
         if (localOverride != null) {
