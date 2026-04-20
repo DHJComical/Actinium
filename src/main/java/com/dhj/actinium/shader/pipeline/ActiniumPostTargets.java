@@ -23,18 +23,9 @@ final class ActiniumPostTargets {
     public static final int TARGET_GAUX3 = 6;
     public static final int TARGET_GAUX4 = 7;
     public static final int TARGET_COUNT = 8;
-    private static final boolean[] FRAME_PERSISTENT_TARGETS = {
-            false, // colortex0
-            false, // colortex1
-            false, // colortex2
-            true,  // colortex3 (TAA history)
-            false, // gaux1
-            false, // gaux2
-            true,  // gaux3 (exposure history)
-            false  // gaux4
-    };
 
     private final ColorFormat[] formats;
+    private final TargetSettings[] settings;
     private final TargetSlot[] targets = new TargetSlot[TARGET_COUNT];
     private final int framebufferId;
     private final int[] depthTextures = new int[2];
@@ -44,8 +35,9 @@ final class ActiniumPostTargets {
     private int width;
     private int height;
 
-    ActiniumPostTargets(ColorFormat[] formats) {
+    ActiniumPostTargets(ColorFormat[] formats, TargetSettings[] settings) {
         this.formats = formats.clone();
+        this.settings = settings.clone();
         this.framebufferId = GL30.glGenFramebuffers();
 
         for (int i = 0; i < TARGET_COUNT; i++) {
@@ -71,8 +63,8 @@ final class ActiniumPostTargets {
             slot.mainTexture = createColorTexture(width, height, format);
             slot.altTexture = createColorTexture(width, height, format);
             slot.sourceIsAlt = false;
-            clearColorTexture(slot.mainTexture, width, height);
-            clearColorTexture(slot.altTexture, width, height);
+            clearTargetTexture(slot.mainTexture, width, height, this.resolveSettings(i));
+            clearTargetTexture(slot.altTexture, width, height, this.resolveSettings(i));
         }
 
         deleteTextures(this.depthTextures);
@@ -134,23 +126,23 @@ final class ActiniumPostTargets {
         this.targets[TARGET_COLORTEX0].sourceIsAlt = false;
         this.targets[TARGET_COLORTEX1].sourceIsAlt = false;
 
-        clearColorTexture(this.targets[TARGET_COLORTEX2].mainTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_GAUX1].mainTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_GAUX2].mainTexture, this.width, this.height);
+        clearTargetIfRequested(TARGET_COLORTEX2);
+        clearTargetIfRequested(TARGET_GAUX1);
+        clearTargetIfRequested(TARGET_GAUX2);
 
         if (worldGaux4Texture != null && worldGaux4Texture > 0) {
             copyTexture(worldGaux4Texture, this.targets[TARGET_GAUX4].mainTexture, this.width, this.height);
-        } else {
-            clearColorTexture(this.targets[TARGET_GAUX4].mainTexture, this.width, this.height);
+        } else if (this.resolveSettings(TARGET_GAUX4).clear()) {
+            clearTargetTexture(this.targets[TARGET_GAUX4].mainTexture, this.width, this.height, this.resolveSettings(TARGET_GAUX4));
         }
         this.targets[TARGET_GAUX4].sourceIsAlt = false;
 
-        clearColorTexture(this.targets[TARGET_COLORTEX0].altTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_COLORTEX1].altTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_COLORTEX2].altTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_GAUX1].altTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_GAUX2].altTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_GAUX4].altTexture, this.width, this.height);
+        clearTargetAltIfRequested(TARGET_COLORTEX0);
+        clearTargetAltIfRequested(TARGET_COLORTEX1);
+        clearTargetAltIfRequested(TARGET_COLORTEX2);
+        clearTargetAltIfRequested(TARGET_GAUX1);
+        clearTargetAltIfRequested(TARGET_GAUX2);
+        clearTargetAltIfRequested(TARGET_GAUX4);
 
         this.copyDepthTexture(mainFramebuffer, 0);
     }
@@ -176,7 +168,9 @@ final class ActiniumPostTargets {
         for (int targetIndex = 0; targetIndex < TARGET_COUNT; targetIndex++) {
             TargetSlot slot = this.targets[targetIndex];
 
-            if (FRAME_PERSISTENT_TARGETS[targetIndex]) {
+            TargetSettings settings = this.resolveSettings(targetIndex);
+
+            if (!settings.clear()) {
                 int previousSource = slot.getSourceTexture();
 
                 if (previousSource != 0 && previousSource != slot.mainTexture) {
@@ -184,28 +178,35 @@ final class ActiniumPostTargets {
                 }
 
                 slot.sourceIsAlt = false;
-                clearColorTexture(slot.altTexture, this.width, this.height, getDefaultClearRed(targetIndex), getDefaultClearGreen(targetIndex), getDefaultClearBlue(targetIndex), getDefaultClearAlpha(targetIndex));
                 continue;
             }
 
             slot.sourceIsAlt = false;
+            clearTargetTexture(slot.mainTexture, this.width, this.height, settings);
+            clearTargetTexture(slot.altTexture, this.width, this.height, settings);
         }
     }
 
-    private static float getDefaultClearRed(int targetIndex) {
-        return targetIndex == TARGET_GAUX3 ? 1.0f : 0.0f;
+    private void clearTargetIfRequested(int targetIndex) {
+        TargetSettings settings = this.resolveSettings(targetIndex);
+        if (settings.clear()) {
+            clearTargetTexture(this.targets[targetIndex].mainTexture, this.width, this.height, settings);
+        }
     }
 
-    private static float getDefaultClearGreen(int targetIndex) {
-        return targetIndex == TARGET_GAUX3 ? 1.0f : 0.0f;
+    private void clearTargetAltIfRequested(int targetIndex) {
+        TargetSettings settings = this.resolveSettings(targetIndex);
+        if (settings.clear()) {
+            clearTargetTexture(this.targets[targetIndex].altTexture, this.width, this.height, settings);
+        }
     }
 
-    private static float getDefaultClearBlue(int targetIndex) {
-        return targetIndex == TARGET_GAUX3 ? 1.0f : 0.0f;
+    private TargetSettings resolveSettings(int targetIndex) {
+        return this.settings[Math.max(0, Math.min(targetIndex, this.settings.length - 1))];
     }
 
-    private static float getDefaultClearAlpha(int targetIndex) {
-        return targetIndex == TARGET_GAUX3 ? 1.0f : 0.0f;
+    private static void clearTargetTexture(int textureId, int width, int height, TargetSettings settings) {
+        clearColorTexture(textureId, width, height, settings.clearRed(), settings.clearGreen(), settings.clearBlue(), settings.clearAlpha());
     }
 
     public void bindWriteFramebuffer(int[] drawBuffers) {
@@ -423,5 +424,8 @@ final class ActiniumPostTargets {
         int pixelType() {
             return this.pixelType;
         }
+    }
+
+    record TargetSettings(boolean clear, float clearRed, float clearGreen, float clearBlue, float clearAlpha) {
     }
 }

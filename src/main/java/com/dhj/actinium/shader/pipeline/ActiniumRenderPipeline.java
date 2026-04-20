@@ -91,6 +91,8 @@ public final class ActiniumRenderPipeline {
     private static final Pattern LEGACY_PACK_MARKERS = Pattern.compile("gl_Vertex|gl_MultiTexCoord|gl_FragData|gl_FragColor|gl_ModelViewProjectionMatrix|gl_TextureMatrix|\\bvarying\\b");
     private static final Pattern DRAW_BUFFERS_PATTERN = Pattern.compile("DRAWBUFFERS:([0-7]+)");
     private static final Pattern DECLARED_TARGET_FORMAT_PATTERN = Pattern.compile("const\\s+int\\s+([A-Za-z0-9_]+)Format\\s*=\\s*([A-Z0-9_]+)\\s*;");
+    private static final Pattern DECLARED_TARGET_CLEAR_PATTERN = Pattern.compile("const\\s+bool\\s+([A-Za-z0-9_]+)Clear\\s*=\\s*(true|false)\\s*;", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DECLARED_TARGET_CLEAR_COLOR_PATTERN = Pattern.compile("const\\s+vec4\\s+([A-Za-z0-9_]+)ClearColor\\s*=\\s*vec4\\s*\\(([^)]*)\\)\\s*;");
     private static final Pattern CONDITIONAL_SOFT_LOD_UNIFORM_PATTERN = Pattern.compile("(?ms)^\\s*#ifdef\\s+BLOOM\\s*\\R\\s*uniform\\s+float\\s+softLod\\s*;\\s*\\R\\s*#endif\\s*");
     private static final Pattern SOFT_LOD_UNIFORM_PATTERN = Pattern.compile("(?m)^\\s*uniform\\s+float\\s+softLod\\s*;");
     private static final Pattern VERSION_LINE_PATTERN = Pattern.compile("(?m)^\\s*#version\\s+.+$");
@@ -1775,7 +1777,7 @@ public final class ActiniumRenderPipeline {
         }
 
         if (this.postTargets == null) {
-            this.postTargets = new ActiniumPostTargets(this.createConfiguredPostTargetFormats());
+            this.postTargets = new ActiniumPostTargets(this.createConfiguredPostTargetFormats(), this.createConfiguredPostTargetSettings());
         }
 
         if (this.shadowTargets == null) {
@@ -1824,11 +1826,46 @@ public final class ActiniumRenderPipeline {
             String fragmentSource = ActiniumShaderPackManager.getProgramSource(programName, ShaderType.FRAGMENT);
 
             if (fragmentSource != null) {
-                this.applyDeclaredPostTargetFormats(fragmentSource, formats);
+                this.applyDeclaredPostTargetFormats(this.resolvePostDirectiveSource(fragmentSource), formats);
             }
         }
 
         return formats;
+    }
+
+    private static ActiniumPostTargets.TargetSettings[] createDefaultPostTargetSettings() {
+        return new ActiniumPostTargets.TargetSettings[]{
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 1.0f),
+                new ActiniumPostTargets.TargetSettings(true, 1.0f, 1.0f, 1.0f, 1.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f)
+        };
+    }
+
+    private ActiniumPostTargets.TargetSettings[] createConfiguredPostTargetSettings() {
+        ActiniumPostTargets.TargetSettings[] settings = createDefaultPostTargetSettings();
+
+        if (!ActiniumShaderPackManager.areShadersEnabled()) {
+            return settings;
+        }
+
+        for (String programName : POST_PROGRAMS) {
+            String fragmentSource = ActiniumShaderPackManager.getProgramSource(programName, ShaderType.FRAGMENT);
+
+            if (fragmentSource != null) {
+                this.applyDeclaredPostTargetSettings(this.resolvePostDirectiveSource(fragmentSource), settings);
+            }
+        }
+
+        return settings;
+    }
+
+    private String resolvePostDirectiveSource(String fragmentSource) {
+        return ShaderParser.parseShader(fragmentSource, this::resolveShaderSource, ShaderConstants.EMPTY);
     }
 
     private void applyDeclaredPostTargetFormats(String shaderSource, ActiniumPostTargets.ColorFormat[] formats) {
@@ -1849,6 +1886,72 @@ public final class ActiniumRenderPipeline {
 
             formats[targetIndex] = colorFormat;
         }
+    }
+
+    private void applyDeclaredPostTargetSettings(String shaderSource, ActiniumPostTargets.TargetSettings[] settings) {
+        Matcher clearMatcher = DECLARED_TARGET_CLEAR_PATTERN.matcher(shaderSource);
+
+        while (clearMatcher.find()) {
+            int targetIndex = resolvePostTargetIndex(clearMatcher.group(1));
+
+            if (targetIndex < 0 || targetIndex >= settings.length) {
+                continue;
+            }
+
+            ActiniumPostTargets.TargetSettings current = settings[targetIndex];
+            settings[targetIndex] = new ActiniumPostTargets.TargetSettings(
+                    Boolean.parseBoolean(clearMatcher.group(2)),
+                    current.clearRed(),
+                    current.clearGreen(),
+                    current.clearBlue(),
+                    current.clearAlpha()
+            );
+        }
+
+        Matcher clearColorMatcher = DECLARED_TARGET_CLEAR_COLOR_PATTERN.matcher(shaderSource);
+
+        while (clearColorMatcher.find()) {
+            int targetIndex = resolvePostTargetIndex(clearColorMatcher.group(1));
+
+            if (targetIndex < 0 || targetIndex >= settings.length) {
+                continue;
+            }
+
+            float[] color = parseVec4(clearColorMatcher.group(2));
+
+            if (color == null) {
+                continue;
+            }
+
+            ActiniumPostTargets.TargetSettings current = settings[targetIndex];
+            settings[targetIndex] = new ActiniumPostTargets.TargetSettings(
+                    current.clear(),
+                    color[0],
+                    color[1],
+                    color[2],
+                    color[3]
+            );
+        }
+    }
+
+    private static @Nullable float[] parseVec4(String value) {
+        String[] parts = value.split(",");
+
+        if (parts.length != 4) {
+            return null;
+        }
+
+        float[] result = new float[4];
+
+        for (int i = 0; i < parts.length; i++) {
+            try {
+                result[i] = Float.parseFloat(parts[i].trim().replace("f", "").replace("F", ""));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        return result;
     }
 
     private static int resolvePostTargetIndex(String bufferName) {
