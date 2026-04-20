@@ -177,7 +177,11 @@ final class ActiniumWorldShaderInterface {
 
         if (entity != null) {
             if (this.cameraPosition != null) {
-                this.cameraPosition.set((float) entity.posX, (float) entity.posY, (float) entity.posZ);
+                this.cameraPosition.set(
+                        (float) pipeline.getWorldCameraPosition().x,
+                        (float) pipeline.getWorldCameraPosition().y,
+                        (float) pipeline.getWorldCameraPosition().z
+                );
             }
 
             if (this.isEyeInWater != null) {

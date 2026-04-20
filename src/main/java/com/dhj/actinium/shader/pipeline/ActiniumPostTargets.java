@@ -23,6 +23,16 @@ final class ActiniumPostTargets {
     public static final int TARGET_GAUX3 = 6;
     public static final int TARGET_GAUX4 = 7;
     public static final int TARGET_COUNT = 8;
+    private static final boolean[] FRAME_PERSISTENT_TARGETS = {
+            false, // colortex0
+            false, // colortex1
+            false, // colortex2
+            true,  // colortex3 (TAA history)
+            false, // gaux1
+            false, // gaux2
+            true,  // gaux3 (exposure history)
+            false  // gaux4
+    };
 
     private final ColorFormat[] formats;
     private final TargetSlot[] targets = new TargetSlot[TARGET_COUNT];
@@ -84,7 +94,7 @@ final class ActiniumPostTargets {
         int sceneTexture = mainFramebuffer.framebufferTexture;
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].getSourceTexture(), this.width, this.height);
-        copyDepthTexture(mainFramebuffer);
+        this.copyDepthTexture(mainFramebuffer, 0);
     }
 
     public void copySceneInputs(Framebuffer mainFramebuffer, @Nullable Integer gaux4Texture) {
@@ -102,7 +112,7 @@ final class ActiniumPostTargets {
 
         int sceneTexture = mainFramebuffer.framebufferTexture;
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
-        copyDepthTexture(mainFramebuffer);
+        this.copyDepthTexture(mainFramebuffer, 0);
 
         if (gaux4Texture != null && gaux4Texture > 0) {
             copyTexture(gaux4Texture, this.targets[TARGET_GAUX4].getSourceTexture(), this.width, this.height);
@@ -115,33 +125,87 @@ final class ActiniumPostTargets {
         }
 
         int sceneTexture = mainFramebuffer.framebufferTexture;
+        this.prepareFramePersistentTargets();
+
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].mainTexture, this.width, this.height);
         // Post programs expect colortex1 to contain the current fully rendered scene.
         // World-stage color targets may only contain sky/translucent intermediates.
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].mainTexture, this.width, this.height);
+        this.targets[TARGET_COLORTEX0].sourceIsAlt = false;
+        this.targets[TARGET_COLORTEX1].sourceIsAlt = false;
 
         clearColorTexture(this.targets[TARGET_COLORTEX2].mainTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_COLORTEX3].mainTexture, this.width, this.height);
         clearColorTexture(this.targets[TARGET_GAUX1].mainTexture, this.width, this.height);
         clearColorTexture(this.targets[TARGET_GAUX2].mainTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_GAUX3].mainTexture, this.width, this.height, 1.0f, 1.0f, 1.0f, 1.0f);
 
         if (worldGaux4Texture != null && worldGaux4Texture > 0) {
             copyTexture(worldGaux4Texture, this.targets[TARGET_GAUX4].mainTexture, this.width, this.height);
         } else {
             clearColorTexture(this.targets[TARGET_GAUX4].mainTexture, this.width, this.height);
         }
+        this.targets[TARGET_GAUX4].sourceIsAlt = false;
 
         clearColorTexture(this.targets[TARGET_COLORTEX0].altTexture, this.width, this.height);
         clearColorTexture(this.targets[TARGET_COLORTEX1].altTexture, this.width, this.height);
         clearColorTexture(this.targets[TARGET_COLORTEX2].altTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_COLORTEX3].altTexture, this.width, this.height);
         clearColorTexture(this.targets[TARGET_GAUX1].altTexture, this.width, this.height);
         clearColorTexture(this.targets[TARGET_GAUX2].altTexture, this.width, this.height);
-        clearColorTexture(this.targets[TARGET_GAUX3].altTexture, this.width, this.height, 1.0f, 1.0f, 1.0f, 1.0f);
         clearColorTexture(this.targets[TARGET_GAUX4].altTexture, this.width, this.height);
 
-        copyDepthTexture(mainFramebuffer);
+        this.copyDepthTexture(mainFramebuffer, 0);
+    }
+
+    public void copyPreTranslucentDepth(Framebuffer mainFramebuffer) {
+        if (this.width <= 0 || this.height <= 0) {
+            return;
+        }
+
+        this.copyDepthTexture(mainFramebuffer, 1);
+    }
+
+    public void copyCurrentDepthToAll(Framebuffer mainFramebuffer) {
+        if (this.width <= 0 || this.height <= 0) {
+            return;
+        }
+
+        this.copyDepthTexture(mainFramebuffer, 0);
+        this.copyDepthTexture(mainFramebuffer, 1);
+    }
+
+    private void prepareFramePersistentTargets() {
+        for (int targetIndex = 0; targetIndex < TARGET_COUNT; targetIndex++) {
+            TargetSlot slot = this.targets[targetIndex];
+
+            if (FRAME_PERSISTENT_TARGETS[targetIndex]) {
+                int previousSource = slot.getSourceTexture();
+
+                if (previousSource != 0 && previousSource != slot.mainTexture) {
+                    copyTexture(previousSource, slot.mainTexture, this.width, this.height);
+                }
+
+                slot.sourceIsAlt = false;
+                clearColorTexture(slot.altTexture, this.width, this.height, getDefaultClearRed(targetIndex), getDefaultClearGreen(targetIndex), getDefaultClearBlue(targetIndex), getDefaultClearAlpha(targetIndex));
+                continue;
+            }
+
+            slot.sourceIsAlt = false;
+        }
+    }
+
+    private static float getDefaultClearRed(int targetIndex) {
+        return targetIndex == TARGET_GAUX3 ? 1.0f : 0.0f;
+    }
+
+    private static float getDefaultClearGreen(int targetIndex) {
+        return targetIndex == TARGET_GAUX3 ? 1.0f : 0.0f;
+    }
+
+    private static float getDefaultClearBlue(int targetIndex) {
+        return targetIndex == TARGET_GAUX3 ? 1.0f : 0.0f;
+    }
+
+    private static float getDefaultClearAlpha(int targetIndex) {
+        return targetIndex == TARGET_GAUX3 ? 1.0f : 0.0f;
     }
 
     public void bindWriteFramebuffer(int[] drawBuffers) {
@@ -202,14 +266,11 @@ final class ActiniumPostTargets {
         }
     }
 
-    private void copyDepthTexture(Framebuffer mainFramebuffer) {
+    private void copyDepthTexture(Framebuffer mainFramebuffer, int index) {
+        int resolvedIndex = Math.max(0, Math.min(index, this.depthTextures.length - 1));
         mainFramebuffer.bindFramebuffer(true);
-
-        for (int depthTexture : this.depthTextures) {
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTexture);
-            GL11.glCopyTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, 0, 0, this.width, this.height, 0);
-        }
-
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.depthTextures[resolvedIndex]);
+        GL11.glCopyTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, 0, 0, this.width, this.height, 0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
     }
 

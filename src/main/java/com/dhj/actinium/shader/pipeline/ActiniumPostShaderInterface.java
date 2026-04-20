@@ -209,14 +209,18 @@ final class ActiniumPostShaderInterface {
 
         if (entity != null) {
             if (this.cameraPosition != null) {
-                this.cameraPosition.set((float) entity.posX, (float) entity.posY, (float) entity.posZ);
+                this.cameraPosition.set(
+                        (float) pipeline.getWorldCameraPosition().x,
+                        (float) pipeline.getWorldCameraPosition().y,
+                        (float) pipeline.getWorldCameraPosition().z
+                );
             }
 
             if (this.previousCameraPosition != null) {
                 this.previousCameraPosition.set(
-                        (float) pipeline.getPreviousWorldCameraPosition().x,
-                        (float) pipeline.getPreviousWorldCameraPosition().y,
-                        (float) pipeline.getPreviousWorldCameraPosition().z
+                        (float) pipeline.getServedPreviousWorldCameraPosition().x,
+                        (float) pipeline.getServedPreviousWorldCameraPosition().y,
+                        (float) pipeline.getServedPreviousWorldCameraPosition().z
                 );
             }
 

@@ -128,6 +128,9 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
         try {
+            if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
+                ActiniumRenderPipeline.INSTANCE.capturePreTranslucentDepth();
+            }
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
         } finally {
             RenderDevice.exitManagedCode();

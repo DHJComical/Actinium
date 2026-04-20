@@ -3,6 +3,7 @@ package com.dhj.actinium.shader.pack;
 import com.dhj.actinium.block_rendering.ActiniumBlockRenderingSettings;
 import com.dhj.actinium.celeritas.ActiniumShaders;
 import com.dhj.actinium.celeritas.shader_overrides.ActiniumTerrainPass;
+import com.dhj.actinium.shader.options.ActiniumShaderOption;
 import com.dhj.actinium.shader.options.ActiniumShaderOptionMenu;
 import com.dhj.actinium.shader.options.ActiniumShaderOptionMenuLoader;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
@@ -32,6 +33,7 @@ public final class ActiniumShaderPackManager {
     private static ActiniumShaderPackResources activePackResources;
     private static ActiniumShaderProperties activeShaderProperties = ActiniumShaderProperties.EMPTY;
     private static ActiniumIdMap activeIdMap = ActiniumIdMap.EMPTY;
+    private static @Nullable ActiniumShaderOptionMenu activeOptionMenu;
     private static int reloadVersion;
 
     private ActiniumShaderPackManager() {
@@ -186,6 +188,7 @@ public final class ActiniumShaderPackManager {
             activePackResources = ActiniumShaderPackResources.load(selectedPack, getPackOptionOverrides(selectedPack.name()));
             activeShaderProperties = activePackResources.shaderProperties();
             activeIdMap = activePackResources.idMap();
+            activeOptionMenu = activePackResources.isBuiltin() ? null : ActiniumShaderOptionMenuLoader.load(activePackResources);
             applyRuntimeState(activeShaderProperties, activeIdMap);
             reloadVersion++;
             ActiniumBlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
@@ -245,6 +248,27 @@ public final class ActiniumShaderPackManager {
 
     public static @Nullable ActiniumShaderPackResources getActivePackResources() {
         return activePackResources;
+    }
+
+    public static @Nullable String getEffectiveOptionValue(String optionName) {
+        if (activeOptionMenu == null || optionName == null || optionName.isBlank()) {
+            return null;
+        }
+
+        ActiniumShaderOption option = activeOptionMenu.getOption(optionName);
+
+        if (option == null) {
+            return null;
+        }
+
+        Map<String, String> normalizedOverrides = activeOptionMenu.normalizeOverrides(getPackOptionOverrides(getSelectedPackName()));
+        String overrideValue = normalizedOverrides.get(option.name());
+
+        if (overrideValue != null && option.acceptsValue(overrideValue)) {
+            return overrideValue;
+        }
+
+        return option.getDefaultSerializedValue();
     }
 
     public static Map<String, String> getPackOptionOverrides(@Nullable String packName) {
@@ -328,6 +352,7 @@ public final class ActiniumShaderPackManager {
     private static void clearRuntimeState() {
         activeShaderProperties = ActiniumShaderProperties.EMPTY;
         activeIdMap = ActiniumIdMap.EMPTY;
+        activeOptionMenu = null;
         ActiniumBlockRenderingSettings.INSTANCE.clearLocalOverrides();
     }
 

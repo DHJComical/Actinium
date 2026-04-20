@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class EntityRendererActiniumPipelineMixin {
     @Inject(method = "renderWorldPass", at = @At("HEAD"))
     private void actinium$beginWorldPass(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.beginWorld();
+        ActiniumRenderPipeline.INSTANCE.beginWorld(partialTicks);
     }
 
     @Inject(

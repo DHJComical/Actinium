@@ -40,13 +40,10 @@ import java.nio.FloatBuffer;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
 import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
 
 final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
-    private static final long START_TIME_NANOS = System.nanoTime();
-    private static final long MAX_CHUNK_AGE = TimeUnit.SECONDS.toMillis(30);
+    private static final long MAX_CHUNK_AGE = 30_000L;
 
     private final GlUniformMatrix4f uniformModelViewMatrix;
     private final GlUniformMatrix4f uniformProjectionMatrix;
@@ -127,6 +124,8 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final Matrix4f currentProjection = new Matrix4f();
     private final Matrix4f scratchModelViewInverse = new Matrix4f();
     private final Matrix4f scratchProjectionInverse = new Matrix4f();
+    private final Matrix4f scratchGbufferProjection = new Matrix4f();
+    private final Matrix4f scratchGbufferProjectionInverse = new Matrix4f();
     private final Matrix4f scratchShadowModelView = new Matrix4f();
     private final Matrix4f scratchShadowProjection = new Matrix4f();
     private final Matrix4f scratchShadowModelViewInverse = new Matrix4f();
@@ -137,7 +136,6 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
     private boolean shadowPassActive;
     private @Nullable TerrainRenderPass currentPass;
-    private int legacyFrameCounter;
 
     public ActiniumChunkShaderInterface(ShaderBindingContext context, ChunkShaderOptions options) {
         this.uniformModelViewMatrix = context.bindUniform("u_ModelViewMatrix", GlUniformMatrix4f::new);
@@ -236,7 +234,6 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         this.shadowPassActive = ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered();
-        this.legacyFrameCounter++;
 
         float[] fogColor = ChunkShaderFogComponent.FOG_SERVICE.getFogColor();
 
@@ -299,7 +296,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         if (this.frameTimeCounter != null) {
-            this.frameTimeCounter.set((System.nanoTime() - START_TIME_NANOS) / 1_000_000_000.0f);
+            this.frameTimeCounter.set(ActiniumRenderPipeline.INSTANCE.getFrameTimeCounterSeconds());
         }
 
         if (this.ditherShift != null) {
@@ -307,7 +304,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         if (this.frameCounter != null) {
-            this.frameCounter.setInt(this.legacyFrameCounter);
+            this.frameCounter.setInt(ActiniumRenderPipeline.INSTANCE.getFrameCounter());
         }
 
         if (this.frameMod != null) {
@@ -411,6 +408,11 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             if (this.irisProjectionMatrixInv != null) {
                 this.irisProjectionMatrixInv.set(this.scratchProjectionInverse);
             }
+        }
+
+        if (this.gbufferProjection != null || this.gbufferProjectionInverse != null) {
+            ActiniumRenderPipeline.INSTANCE.getTemporalJitteredProjection(matrix, this.scratchGbufferProjection);
+            this.scratchGbufferProjectionInverse.set(this.scratchGbufferProjection).invert();
         }
 
         this.pushLegacyMatrices();
@@ -526,7 +528,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         if (this.gbufferProjection != null) {
-            this.gbufferProjection.set(this.currentProjection);
+            this.gbufferProjection.set(this.scratchGbufferProjection);
         }
 
         if (this.gbufferModelViewInverse != null) {
@@ -534,7 +536,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         if (this.gbufferProjectionInverse != null) {
-            this.gbufferProjectionInverse.set(this.scratchProjectionInverse);
+            this.gbufferProjectionInverse.set(this.scratchGbufferProjectionInverse);
         }
 
         if (this.shadowModelView != null) {
@@ -564,7 +566,11 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         if (this.cameraPosition != null) {
-            this.cameraPosition.set((float) entity.posX, (float) entity.posY, (float) entity.posZ);
+            this.cameraPosition.set(
+                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().x,
+                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().y,
+                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().z
+            );
         }
 
         if (this.isEyeInWater != null) {

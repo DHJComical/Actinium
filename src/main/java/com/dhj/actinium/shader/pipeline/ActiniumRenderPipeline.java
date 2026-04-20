@@ -74,6 +74,19 @@ public final class ActiniumRenderPipeline {
     public static final int TERRAIN_SHADOW_TEX0_UNIT = 11;
     public static final int TERRAIN_SHADOW_TEX1_UNIT = 12;
     public static final int TERRAIN_SHADOW_COLOR0_UNIT = 13;
+    private static final float TAA_JITTER_SCALE = 0.35f;
+    private static final float[] TAA_OFFSET_SEQUENCE_X = {
+            0.5f, -0.5f, -0.5f, 0.5f,
+            0.5f, -0.5f, -0.5f, 0.5f,
+            0.5f, -0.5f, -0.5f, 0.5f,
+            0.5f, -0.5f, -0.5f, 0.5f
+    };
+    private static final float[] TAA_OFFSET_SEQUENCE_Y = {
+            0.5f, -0.5f, 0.5f, -0.5f,
+            0.5f, -0.5f, 0.5f, -0.5f,
+            0.5f, -0.5f, 0.5f, -0.5f,
+            0.5f, -0.5f, 0.5f, -0.5f
+    };
 
     private static final Pattern LEGACY_PACK_MARKERS = Pattern.compile("gl_Vertex|gl_MultiTexCoord|gl_FragData|gl_FragColor|gl_ModelViewProjectionMatrix|gl_TextureMatrix|\\bvarying\\b");
     private static final Pattern DRAW_BUFFERS_PATTERN = Pattern.compile("DRAWBUFFERS:([0-7]+)");
@@ -153,6 +166,7 @@ public final class ActiniumRenderPipeline {
     private long lastFrameNanos;
     @Getter
     private float frameTimeCounterSeconds;
+    private float currentFrameDeltaSeconds;
     @Getter
     private int width;
     @Getter
@@ -172,11 +186,15 @@ public final class ActiniumRenderPipeline {
     private final Matrix4f shadowProjectionInverseMatrix = new Matrix4f();
     private final Matrix4f previousGbufferModelViewMatrix = new Matrix4f();
     private final Matrix4f previousGbufferProjectionMatrix = new Matrix4f();
+    private final Matrix4f servedPreviousGbufferModelViewMatrix = new Matrix4f();
+    private final Matrix4f servedPreviousGbufferProjectionMatrix = new Matrix4f();
     private final Vector3f scratchVector = new Vector3f();
     private final Vector3f scratchTaaOffset = new Vector3f();
     private final Vector3d shadowCameraPosition = new Vector3d();
     private final Vector3d worldCameraPosition = new Vector3d();
+    @Getter
     private final Vector3d previousWorldCameraPosition = new Vector3d();
+    private final Vector3d servedPreviousWorldCameraPosition = new Vector3d();
     @Getter
     private final float[] fogColor = new float[]{1.0f, 1.0f, 1.0f, 1.0f};
 
@@ -207,22 +225,41 @@ public final class ActiniumRenderPipeline {
     private boolean worldTargetsPrepared;
     private boolean prepareProgramsExecutedThisFrame;
     private boolean deferredProgramsExecutedThisFrame;
+    private boolean preTranslucentDepthCapturedThisFrame;
+    private int previousUniformFrame = Integer.MIN_VALUE;
+    private boolean previousUniformInitialized;
     @Getter
     private float centerDepthSmooth;
     private ActiniumRenderPipeline() {
     }
 
-    public void beginWorld() {
+    public void beginWorld(float partialTicks) {
         this.syncReloadState();
-        if (this.frameCounter > 0) {
-            this.previousGbufferModelViewMatrix.set(this.gbufferModelViewMatrix);
-            this.previousGbufferProjectionMatrix.set(this.gbufferProjectionMatrix);
-            this.previousWorldCameraPosition.set(this.worldCameraPosition);
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer framebuffer = minecraft.getFramebuffer();
+
+        if (framebuffer != null) {
+            this.width = Math.max(1, framebuffer.framebufferWidth);
+            this.height = Math.max(1, framebuffer.framebufferHeight);
+        } else {
+            this.width = Math.max(1, minecraft.displayWidth);
+            this.height = Math.max(1, minecraft.displayHeight);
         }
+
+        long now = System.nanoTime();
+        this.currentFrameDeltaSeconds = this.lastFrameNanos == 0L ? 0.0f : Math.max(0.0f, (now - this.lastFrameNanos) / 1_000_000_000.0f);
+        this.lastFrameNanos = now;
+        this.frameTimeCounterSeconds += this.currentFrameDeltaSeconds;
+        if (this.frameTimeCounterSeconds >= 3600.0f) {
+            this.frameTimeCounterSeconds = 0.0f;
+        }
+
+        this.captureInterpolatedWorldCameraPosition(partialTicks);
         this.frameCounter = nextFrameId(this.frameCounter);
         this.worldTargetsPrepared = false;
         this.prepareProgramsExecutedThisFrame = false;
         this.deferredProgramsExecutedThisFrame = false;
+        this.preTranslucentDepthCapturedThisFrame = false;
         this.currentStage = ActiniumRenderStage.WORLD;
     }
 
@@ -283,20 +320,77 @@ public final class ActiniumRenderPipeline {
         this.syncReloadState();
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.gbufferModelViewMatrix);
         captureMatrix(GL11.GL_PROJECTION_MATRIX, this.gbufferProjectionMatrix);
+        this.applyTemporalJitterToProjection(this.gbufferProjectionMatrix);
         this.gbufferModelViewInverseMatrix.set(this.gbufferModelViewMatrix).invert();
         this.gbufferProjectionInverseMatrix.set(this.gbufferProjectionMatrix).invert();
         System.arraycopy(ChunkShaderFogComponent.FOG_SERVICE.getFogColor(), 0, this.fogColor, 0, this.fogColor.length);
+    }
 
+    private void captureInterpolatedWorldCameraPosition(float partialTicks) {
         Entity entity = Minecraft.getMinecraft().getRenderViewEntity();
-        if (entity != null) {
-            this.worldCameraPosition.set(entity.posX, entity.posY, entity.posZ);
+
+        if (entity == null) {
+            this.worldCameraPosition.zero();
+            return;
         }
+
+        double cameraX = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks;
+        double cameraY = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks + entity.getEyeHeight();
+        double cameraZ = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks;
+        this.worldCameraPosition.set(cameraX, cameraY, cameraZ);
+    }
+
+    private void applyTemporalJitterToProjection(Matrix4f projectionMatrix) {
+        if (!this.isTemporalAntiAliasingActive()) {
+            return;
+        }
+
+        float offsetX = this.getTaaOffsetX();
+        float offsetY = this.getTaaOffsetY();
+
+        projectionMatrix.m00(projectionMatrix.m00() + offsetX * projectionMatrix.m03());
+        projectionMatrix.m10(projectionMatrix.m10() + offsetX * projectionMatrix.m13());
+        projectionMatrix.m20(projectionMatrix.m20() + offsetX * projectionMatrix.m23());
+        projectionMatrix.m30(projectionMatrix.m30() + offsetX * projectionMatrix.m33());
+
+        projectionMatrix.m01(projectionMatrix.m01() + offsetY * projectionMatrix.m03());
+        projectionMatrix.m11(projectionMatrix.m11() + offsetY * projectionMatrix.m13());
+        projectionMatrix.m21(projectionMatrix.m21() + offsetY * projectionMatrix.m23());
+        projectionMatrix.m31(projectionMatrix.m31() + offsetY * projectionMatrix.m33());
+    }
+
+    public void capturePreTranslucentDepth() {
+        this.syncReloadState();
+
+        if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasPostProgram() || this.preTranslucentDepthCapturedThisFrame) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer mainFramebuffer = minecraft.getFramebuffer();
+
+        if (mainFramebuffer == null || mainFramebuffer.framebufferTexture <= 0) {
+            return;
+        }
+
+        this.width = Math.max(1, mainFramebuffer.framebufferWidth);
+        this.height = Math.max(1, mainFramebuffer.framebufferHeight);
+        this.ensureRuntimeResources();
+
+        if (this.postTargets == null) {
+            return;
+        }
+
+        this.postTargets.ensureSize(this.width, this.height);
+        this.postTargets.copyPreTranslucentDepth(mainFramebuffer);
+        this.preTranslucentDepthCapturedThisFrame = true;
     }
 
     public void captureSkyStageState() {
         this.syncReloadState();
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.skyStageModelViewMatrix);
         captureMatrix(GL11.GL_PROJECTION_MATRIX, this.skyStageProjectionMatrix);
+        this.applyTemporalJitterToProjection(this.skyStageProjectionMatrix);
         this.skyStageModelViewInverseMatrix.set(this.skyStageModelViewMatrix).invert();
         this.skyStageProjectionInverseMatrix.set(this.skyStageProjectionMatrix).invert();
     }
@@ -347,8 +441,12 @@ public final class ActiniumRenderPipeline {
                 }
 
                 this.postTargets.ensureSize(this.width, this.height);
-                this.postTargets.resetSources();
                 this.postTargets.copySceneTextures(mainFramebuffer, null, worldGaux4Texture);
+
+                if (!this.preTranslucentDepthCapturedThisFrame) {
+                    this.postTargets.copyPreTranslucentDepth(mainFramebuffer);
+                }
+
                 this.updateCenterDepthSmooth();
                 this.debugLogTextureCenter("post-copy.colortex0", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
                 this.debugLogTextureCenter("post-copy.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
@@ -417,7 +515,6 @@ public final class ActiniumRenderPipeline {
                 this.postTargets.ensureSize(this.width, this.height);
 
                 if (initializeTargets) {
-                    this.postTargets.resetSources();
                     this.postTargets.copySceneTextures(mainFramebuffer, null, null);
                 } else {
                     this.postTargets.copySceneInputs(mainFramebuffer);
@@ -530,15 +627,13 @@ public final class ActiniumRenderPipeline {
     }
 
     public Matrix4fc getPreviousGbufferModelViewMatrix() {
-        return this.previousGbufferModelViewMatrix;
+        this.updatePreviousUniformSnapshots();
+        return this.servedPreviousGbufferModelViewMatrix;
     }
 
     public Matrix4fc getPreviousGbufferProjectionMatrix() {
-        return this.previousGbufferProjectionMatrix;
-    }
-
-    public Vector3d getPreviousWorldCameraPosition() {
-        return this.previousWorldCameraPosition;
+        this.updatePreviousUniformSnapshots();
+        return this.servedPreviousGbufferProjectionMatrix;
     }
 
     public Matrix4fc getShadowModelViewMatrix() {
@@ -565,6 +660,62 @@ public final class ActiniumRenderPipeline {
         return this.skyStageProjectionInverseMatrix;
     }
 
+    public Vector3d getWorldCameraPosition() {
+        return this.worldCameraPosition;
+    }
+
+    public Vector3d getServedPreviousWorldCameraPosition() {
+        this.updatePreviousUniformSnapshots();
+        return this.servedPreviousWorldCameraPosition;
+    }
+
+    public boolean isTemporalAntiAliasingActive() {
+        if (!ActiniumShaderPackManager.areShadersEnabled()) {
+            return false;
+        }
+
+        String aaType = ActiniumShaderPackManager.getEffectiveOptionValue("AA_TYPE");
+
+        if (aaType == null) {
+            return false;
+        }
+
+        try {
+            return Integer.parseInt(aaType.trim()) >= 2;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
+    private void updatePreviousUniformSnapshots() {
+        if (this.previousUniformFrame == this.frameCounter) {
+            return;
+        }
+
+        this.previousUniformFrame = this.frameCounter;
+
+        if (!this.previousUniformInitialized) {
+            this.previousGbufferModelViewMatrix.set(this.gbufferModelViewMatrix);
+            this.previousGbufferProjectionMatrix.set(this.gbufferProjectionMatrix);
+            this.previousWorldCameraPosition.set(this.worldCameraPosition);
+            this.previousUniformInitialized = true;
+        }
+
+        this.servedPreviousGbufferModelViewMatrix.set(this.previousGbufferModelViewMatrix);
+        this.servedPreviousGbufferProjectionMatrix.set(this.previousGbufferProjectionMatrix);
+        this.servedPreviousWorldCameraPosition.set(this.previousWorldCameraPosition);
+
+        this.previousGbufferModelViewMatrix.set(this.gbufferModelViewMatrix);
+        this.previousGbufferProjectionMatrix.set(this.gbufferProjectionMatrix);
+        this.previousWorldCameraPosition.set(this.worldCameraPosition);
+    }
+
+    public Matrix4f getTemporalJitteredProjection(Matrix4fc source, Matrix4f destination) {
+        destination.set(source);
+        this.applyTemporalJitterToProjection(destination);
+        return destination;
+    }
+
     public int getFrameMod() {
         return Math.floorMod(this.frameCounter, 16);
     }
@@ -585,14 +736,13 @@ public final class ActiniumRenderPipeline {
     }
 
     public float getTaaOffsetX() {
-        return ((this.getFrameMod() & 1) == 0 ? 0.5f : -0.5f) / Math.max(1, this.width);
+        return TAA_JITTER_SCALE * TAA_OFFSET_SEQUENCE_X[this.getFrameMod()]
+                / Math.max(1, this.width > 0 ? this.width : Minecraft.getMinecraft().displayWidth);
     }
 
     public float getTaaOffsetY() {
-        return switch (this.getFrameMod()) {
-            case 0, 2, 4, 6, 8, 10, 12, 14 -> 0.5f / Math.max(1, this.height);
-            default -> -0.5f / Math.max(1, this.height);
-        };
+        return TAA_JITTER_SCALE * TAA_OFFSET_SEQUENCE_Y[this.getFrameMod()]
+                / Math.max(1, this.height > 0 ? this.height : Minecraft.getMinecraft().displayHeight);
     }
 
     public void renderShadowPass(float partialTicks) {
@@ -818,6 +968,7 @@ public final class ActiniumRenderPipeline {
 
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
         captureMatrix(GL11.GL_PROJECTION_MATRIX, projectionMatrix);
+        this.applyTemporalJitterToProjection(projectionMatrix);
         projectionInverseMatrix.set(projectionMatrix).invert();
 
         if (this.activeWorldProgram != null) {
@@ -880,7 +1031,9 @@ public final class ActiniumRenderPipeline {
             }
             GL11.glViewport(0, 0, this.width, this.height);
             this.renderFullscreenProgram(program.program(), partialTicks, program.name());
-            this.postTargets.flipWrittenTargets(program.drawBuffers());
+            if (this.postTargets != null) {
+                this.postTargets.flipWrittenTargets(program.drawBuffers());
+            }
             this.debugLogPostStage(program.name());
         }
     }
@@ -941,14 +1094,6 @@ public final class ActiniumRenderPipeline {
     }
 
     private void renderFullscreenProgram(GlProgram<ActiniumPostShaderInterface> program, float partialTicks, @Nullable String textureStage) {
-        long now = System.nanoTime();
-        float frameDeltaSeconds = this.lastFrameNanos == 0L ? 0.0f : Math.max(0.0f, (now - this.lastFrameNanos) / 1_000_000_000.0f);
-        this.lastFrameNanos = now;
-        this.frameTimeCounterSeconds += frameDeltaSeconds;
-        if (this.frameTimeCounterSeconds >= 3600.0f) {
-            this.frameTimeCounterSeconds = 0.0f;
-        }
-
         GlStateManager.disableAlpha();
         GlStateManager.disableBlend();
         GlStateManager.disableFog();
@@ -960,7 +1105,7 @@ public final class ActiniumRenderPipeline {
         GL11.glColorMask(true, true, true, true);
 
         program.bind();
-        program.getInterface().setupState(this, this.postTargets, partialTicks, frameDeltaSeconds, this.frameTimeCounterSeconds, this.frameCounter);
+        program.getInterface().setupState(this, this.postTargets, partialTicks, this.currentFrameDeltaSeconds, this.frameTimeCounterSeconds, this.frameCounter);
         this.activePostTextureStage = textureStage;
         this.bindPipelineTextures();
         this.debugLogRenderState("fullscreen." + (textureStage != null ? textureStage : "blit") + ".beforeDraw");
@@ -1840,10 +1985,21 @@ public final class ActiniumRenderPipeline {
         this.shadowVisibilityFrameCounter = 0;
         this.lastFrameNanos = 0L;
         this.frameTimeCounterSeconds = 0.0f;
+        this.currentFrameDeltaSeconds = 0.0f;
         this.width = 0;
         this.height = 0;
         this.prepareProgramsExecutedThisFrame = false;
         this.deferredProgramsExecutedThisFrame = false;
+        this.preTranslucentDepthCapturedThisFrame = false;
+        this.worldCameraPosition.zero();
+        this.previousWorldCameraPosition.zero();
+        this.servedPreviousWorldCameraPosition.zero();
+        this.previousGbufferModelViewMatrix.identity();
+        this.previousGbufferProjectionMatrix.identity();
+        this.servedPreviousGbufferModelViewMatrix.identity();
+        this.servedPreviousGbufferProjectionMatrix.identity();
+        this.previousUniformFrame = Integer.MIN_VALUE;
+        this.previousUniformInitialized = false;
 
         if (this.fullscreenVertexArray != null) {
             this.fullscreenVertexArray.delete();
@@ -1936,6 +2092,7 @@ public final class ActiniumRenderPipeline {
         this.postProgramAvailable = false;
         this.prepareProgramsExecutedThisFrame = false;
         this.deferredProgramsExecutedThisFrame = false;
+        this.preTranslucentDepthCapturedThisFrame = false;
     }
 
     private void deleteWorldPrograms() {
