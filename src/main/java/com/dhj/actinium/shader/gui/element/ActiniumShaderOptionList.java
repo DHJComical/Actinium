@@ -166,33 +166,7 @@ public class ActiniumShaderOptionList extends GuiSlot {
 
     @Override
     protected void drawContainerBackground(Tessellator tessellator) {
-        int panelLeft = (this.width - this.getListWidth()) / 2 - 8;
-        int panelRight = (this.width + this.getListWidth()) / 2 + 8;
-        int panelTop = this.top;
-        int panelBottom = this.bottom;
-
-        BufferBuilder buffer = tessellator.getBuffer();
-        this.mc.getTextureManager().bindTexture(Gui.OPTIONS_BACKGROUND);
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-        float textureScale = 32.0F;
-        buffer.begin(7, DefaultVertexFormats.POSITION_TEX_COLOR);
-        buffer.pos(panelLeft, panelBottom, 0.0)
-                .tex((float) panelLeft / textureScale, (float) (panelBottom + (int) this.amountScrolled) / textureScale)
-                .color(48, 48, 48, 255)
-                .endVertex();
-        buffer.pos(panelRight, panelBottom, 0.0)
-                .tex((float) panelRight / textureScale, (float) (panelBottom + (int) this.amountScrolled) / textureScale)
-                .color(48, 48, 48, 255)
-                .endVertex();
-        buffer.pos(panelRight, panelTop, 0.0)
-                .tex((float) panelRight / textureScale, (float) (panelTop + (int) this.amountScrolled) / textureScale)
-                .color(48, 48, 48, 255)
-                .endVertex();
-        buffer.pos(panelLeft, panelTop, 0.0)
-                .tex((float) panelLeft / textureScale, (float) (panelTop + (int) this.amountScrolled) / textureScale)
-                .color(48, 48, 48, 255)
-                .endVertex();
-        tessellator.draw();
+        // Intentionally transparent in-world so shader changes remain visible behind the option list.
     }
 
     private CellWidget createWidget(String token) {

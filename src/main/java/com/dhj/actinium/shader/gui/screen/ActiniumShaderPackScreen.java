@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.List;
 
 public class ActiniumShaderPackScreen extends GuiScreen {
+    private static final int BOTTOM_BAR_HEIGHT = 32;
     private static final int BUTTON_DONE = 0;
     private static final int BUTTON_CANCEL = 1;
     private static final int BUTTON_APPLY = 2;
@@ -50,16 +51,17 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         this.packList.refresh(this.availablePacks, this.pendingPackName, this.appliedPackName, this.pendingShadersEnabled);
         this.packList.refreshToggleAvailability();
 
-        int bottomCenter = this.width / 2 - 50;
-        int optionRowStart = this.width / 2 - 152;
+        int bottomRowY = this.getBottomBarTop() + (BOTTOM_BAR_HEIGHT - 20) / 2;
+        int topRowY = bottomRowY - 24;
+        int columnStart = this.width / 2 - 154;
 
         this.buttonList.clear();
-        this.buttonList.add(new GuiButton(BUTTON_DONE, bottomCenter + 104, this.height - 27, 100, 20, I18n.format("gui.done")));
-        this.buttonList.add(new GuiButton(BUTTON_APPLY, bottomCenter, this.height - 27, 100, 20, I18n.format("options.actinium.shaderPack.apply")));
-        this.buttonList.add(new GuiButton(BUTTON_CANCEL, bottomCenter - 104, this.height - 27, 100, 20, I18n.format("gui.cancel")));
-        this.buttonList.add(new GuiButton(BUTTON_OPEN_FOLDER, optionRowStart, this.height - 51, 100, 20, I18n.format("options.actinium.shaderPack.openFolder")));
-        this.buttonList.add(new GuiButton(BUTTON_OPTIONS, optionRowStart + 104, this.height - 51, 100, 20, I18n.format("options.actinium.shaderPack.options")));
-        this.buttonList.add(new GuiButton(BUTTON_REFRESH, optionRowStart + 208, this.height - 51, 100, 20, I18n.format("options.actinium.shaderPack.refresh")));
+        this.buttonList.add(new GuiButton(BUTTON_CANCEL, columnStart, bottomRowY, 100, 20, I18n.format("gui.cancel")));
+        this.buttonList.add(new GuiButton(BUTTON_APPLY, columnStart + 104, bottomRowY, 100, 20, I18n.format("options.actinium.shaderPack.apply")));
+        this.buttonList.add(new GuiButton(BUTTON_DONE, columnStart + 208, bottomRowY, 100, 20, I18n.format("gui.done")));
+        this.buttonList.add(new GuiButton(BUTTON_OPEN_FOLDER, columnStart, topRowY, 100, 20, I18n.format("options.actinium.shaderPack.openFolder")));
+        this.buttonList.add(new GuiButton(BUTTON_OPTIONS, columnStart + 104, topRowY, 100, 20, I18n.format("options.actinium.shaderPack.options")));
+        this.buttonList.add(new GuiButton(BUTTON_REFRESH, columnStart + 208, topRowY, 100, 20, I18n.format("options.actinium.shaderPack.refresh")));
         this.buttonList.add(new GuiButton(BUTTON_DEBUG, this.width - 74, 6, 68, 20, this.getDebugButtonLabel()));
         this.updateButtonState();
     }
@@ -238,5 +240,9 @@ public class ActiniumShaderPackScreen extends GuiScreen {
 
     private boolean canOpenShaderOptions() {
         return this.pendingPackName != null && !ActiniumShaderPackManager.isBuiltinPack(this.pendingPackName);
+    }
+
+    private int getBottomBarTop() {
+        return this.height - BOTTOM_BAR_HEIGHT;
     }
 }
