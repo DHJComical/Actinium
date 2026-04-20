@@ -74,6 +74,7 @@ public final class ActiniumRenderPipeline {
     public static final int TERRAIN_SHADOW_TEX0_UNIT = 11;
     public static final int TERRAIN_SHADOW_TEX1_UNIT = 12;
     public static final int TERRAIN_SHADOW_COLOR0_UNIT = 13;
+    private static final int GL_STATE_MANAGER_TEXTURE_UNITS = 8;
     private static final float TAA_JITTER_SCALE = 0.35f;
     private static final float[] TAA_OFFSET_SEQUENCE_X = {
             0.5f, -0.5f, -0.5f, 0.5f,
@@ -161,7 +162,7 @@ public final class ActiniumRenderPipeline {
     private static final boolean ENABLE_PRE_SCENE_PIPELINES = true;
     private static final boolean ENABLE_PRE_SCENE_SHADER_EXECUTION = false;
     private static final boolean ENABLE_PREPARE_SHADER_EXECUTION = true;
-    private static final boolean ENABLE_DEFERRED_SHADER_EXECUTION = false;
+    private static final boolean ENABLE_DEFERRED_SHADER_EXECUTION = true;
     private static final boolean ENABLE_EXTERNAL_SCENE_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_FINAL_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_TERRAIN_REDIRECT = false;
@@ -570,11 +571,11 @@ public final class ActiniumRenderPipeline {
         GL20.glUseProgram(0);
 
         for (int unit = TRACKED_TEXTURE_UNITS - 1; unit >= 0; unit--) {
-            GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+            setActiveTextureUnit(unit);
+            GlStateManager.bindTexture(0);
         }
 
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        setActiveTextureUnit(0);
         GlStateManager.enableTexture2D();
         GlStateManager.enableAlpha();
         GlStateManager.enableBlend();
@@ -812,7 +813,7 @@ public final class ActiniumRenderPipeline {
         bindTexture(TERRAIN_SHADOW_TEX0_UNIT, shadowTex0);
         bindTexture(TERRAIN_SHADOW_TEX1_UNIT, shadowTex1);
         bindTexture(TERRAIN_SHADOW_COLOR0_UNIT, shadowColor0);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        setActiveTextureUnit(0);
     }
 
     public void prepareTerrainInputs() {
@@ -860,7 +861,7 @@ public final class ActiniumRenderPipeline {
         bindTexture(TERRAIN_DEPTHTEX0_UNIT, depthtex0Texture);
         bindTexture(TERRAIN_DEPTHTEX1_UNIT, depthtex1Texture);
         bindTexture(TERRAIN_NOISETEX_UNIT, noiseTextureId);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        setActiveTextureUnit(0);
     }
 
     public void unbindTerrainInputTextures() {
@@ -948,7 +949,7 @@ public final class ActiniumRenderPipeline {
                 ? this.worldTargets.getSourceGaux4TextureOrDefault(this.whiteTexture)
                 : this.whiteTexture != null ? this.whiteTexture : 0;
         bindTexture(WORLD_GAUX4_UNIT, textureId);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        setActiveTextureUnit(0);
     }
 
     public void unbindWorldGaux4Texture() {
@@ -1285,12 +1286,12 @@ public final class ActiniumRenderPipeline {
         int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         int previousBinding = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
 
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+        setActiveTextureUnit(0);
+        bindTextureDirect(textureId);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, integerTexture ? GL11.GL_NEAREST_MIPMAP_NEAREST : GL11.GL_LINEAR_MIPMAP_LINEAR);
         GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousBinding);
-        GL13.glActiveTexture(previousActiveTexture);
+        bindTextureDirect(previousBinding);
+        setActiveTextureEnum(previousActiveTexture);
     }
 
     private void debugLogPostStage(String programName) {
@@ -2359,6 +2360,32 @@ public final class ActiniumRenderPipeline {
         debugCheckGlErrors("pipeline.resetVanillaRenderState");
     }
 
+    public void prepareFirstPersonRenderState() {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer framebuffer = minecraft.getFramebuffer();
+        int framebufferWidth = framebuffer != null ? Math.max(1, framebuffer.framebufferWidth) : Math.max(1, this.width);
+        int framebufferHeight = framebuffer != null ? Math.max(1, framebuffer.framebufferHeight) : Math.max(1, this.height);
+
+        this.restoreMainFramebufferState(framebuffer);
+        GlStateManager.viewport(0, 0, framebufferWidth, framebufferHeight);
+        GlStateManager.matrixMode(GL11.GL_MODELVIEW);
+        GlStateManager.colorMask(true, true, true, true);
+        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
+        GlStateManager.depthMask(true);
+        GlStateManager.depthFunc(GL11.GL_LEQUAL);
+        GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1f);
+        GlStateManager.tryBlendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA,
+                GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                GlStateManager.SourceFactor.ONE,
+                GlStateManager.DestFactor.ZERO
+        );
+        GlStateManager.disableFog();
+        GlStateManager.enableCull();
+        GL11.glCullFace(GL11.GL_BACK);
+        GL11.glFrontFace(GL11.GL_CCW);
+    }
+
     private void releaseActiveWorldStageState() {
         if (this.activeWorldProgram != null) {
             this.unbindWorldStageTextures();
@@ -3059,14 +3086,119 @@ public final class ActiniumRenderPipeline {
     }
 
     private static void bindTexture(int unit, int textureId) {
-        GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+        setActiveTextureUnit(unit);
+        if (unit < GL_STATE_MANAGER_TEXTURE_UNITS) {
+            GlStateManager.bindTexture(textureId);
+        } else {
+            bindTextureDirect(textureId);
+        }
     }
 
     private static void unbindTexture(int unit) {
-        GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        setActiveTextureUnit(unit);
+        if (unit < GL_STATE_MANAGER_TEXTURE_UNITS) {
+            GlStateManager.bindTexture(0);
+        } else {
+            bindTextureDirect(0);
+        }
+        setActiveTextureUnit(0);
+    }
+
+    private static void setActiveTextureUnit(int unit) {
+        setActiveTextureEnum(OpenGlHelper.defaultTexUnit + unit);
+    }
+
+    private static void setActiveTextureEnum(int textureEnum) {
+        int unit = textureEnum - OpenGlHelper.defaultTexUnit;
+        if (unit >= 0 && unit < GL_STATE_MANAGER_TEXTURE_UNITS) {
+            GlStateManager.setActiveTexture(textureEnum);
+        } else {
+            GL13.glActiveTexture(textureEnum);
+        }
+    }
+
+    private static void bindTextureDirect(int textureId) {
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+    }
+
+    private static void syncGlStateManagerToCapturedState(int activeTexture,
+                                                          int[] textureBindings2d,
+                                                          boolean blendEnabled,
+                                                          boolean cullEnabled,
+                                                          boolean depthEnabled,
+                                                          boolean alphaEnabled,
+                                                          boolean fogEnabled,
+                                                          boolean texture2dEnabled,
+                                                          boolean depthMask,
+                                                          boolean[] colorMask,
+                                                          float[] currentColor,
+                                                          int alphaFunc,
+                                                          float alphaRef,
+                                                          int shadeModel,
+                                                          int depthFunc,
+                                                          int blendSrcRgb,
+                                                          int blendDstRgb,
+                                                          int blendSrcAlpha,
+                                                          int blendDstAlpha,
+                                                          int viewportX,
+                                                          int viewportY,
+                                                          int viewportWidth,
+                                                          int viewportHeight,
+                                                          int matrixMode) {
+        for (int unit = 0; unit < Math.min(GL_STATE_MANAGER_TEXTURE_UNITS, textureBindings2d.length); unit++) {
+            setActiveTextureUnit(unit);
+            GlStateManager.bindTexture(textureBindings2d[unit]);
+        }
+
+        setActiveTextureEnum(activeTexture);
+        if (activeTexture - OpenGlHelper.defaultTexUnit >= 0 && activeTexture - OpenGlHelper.defaultTexUnit < GL_STATE_MANAGER_TEXTURE_UNITS) {
+            if (texture2dEnabled) {
+                GlStateManager.enableTexture2D();
+            } else {
+                GlStateManager.disableTexture2D();
+            }
+        }
+
+        if (blendEnabled) {
+            GlStateManager.enableBlend();
+        } else {
+            GlStateManager.disableBlend();
+        }
+
+        if (cullEnabled) {
+            GlStateManager.enableCull();
+        } else {
+            GlStateManager.disableCull();
+        }
+
+        if (depthEnabled) {
+            GlStateManager.enableDepth();
+        } else {
+            GlStateManager.disableDepth();
+        }
+
+        if (alphaEnabled) {
+            GlStateManager.enableAlpha();
+        } else {
+            GlStateManager.disableAlpha();
+        }
+
+        if (fogEnabled) {
+            GlStateManager.enableFog();
+        } else {
+            GlStateManager.disableFog();
+        }
+
+        GlStateManager.depthMask(depthMask);
+        GlStateManager.colorMask(colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
+        GlStateManager.color(currentColor[0], currentColor[1], currentColor[2], currentColor[3]);
+        GlStateManager.alphaFunc(alphaFunc, alphaRef);
+        GlStateManager.shadeModel(shadeModel);
+        GlStateManager.depthFunc(depthFunc);
+        GlStateManager.tryBlendFuncSeparate(blendSrcRgb, blendDstRgb, blendSrcAlpha, blendDstAlpha);
+        GlStateManager.viewport(viewportX, viewportY, viewportWidth, viewportHeight);
+        GlStateManager.matrixMode(matrixMode);
+        setActiveTextureUnit(0);
     }
 
     private static final class ShadowPassGlState {
@@ -3303,12 +3435,20 @@ public final class ActiniumRenderPipeline {
             }
 
             for (int unit = 0; unit < this.textureBindings2d.length; unit++) {
-                GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
-                GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureBindings2d[unit]);
+                setActiveTextureUnit(unit);
+                if (unit < GL_STATE_MANAGER_TEXTURE_UNITS) {
+                    GlStateManager.bindTexture(this.textureBindings2d[unit]);
+                } else {
+                    bindTextureDirect(this.textureBindings2d[unit]);
+                }
             }
 
-            GL13.glActiveTexture(this.activeTexture);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureBinding2d);
+            setActiveTextureEnum(this.activeTexture);
+            if (this.activeTexture - OpenGlHelper.defaultTexUnit < GL_STATE_MANAGER_TEXTURE_UNITS) {
+                GlStateManager.bindTexture(this.textureBinding2d);
+            } else {
+                bindTextureDirect(this.textureBinding2d);
+            }
             GL20.glUseProgram(this.currentProgram);
             GL30.glBindVertexArray(this.vertexArrayBinding);
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.arrayBufferBinding);
@@ -3351,7 +3491,33 @@ public final class ActiniumRenderPipeline {
             }
 
             GL11.glViewport(0, 0, Math.max(1, fallbackWidth), Math.max(1, fallbackHeight));
-            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            setActiveTextureUnit(0);
+            syncGlStateManagerToCapturedState(
+                    this.activeTexture,
+                    this.textureBindings2d,
+                    this.blendEnabled,
+                    this.cullEnabled,
+                    this.depthEnabled,
+                    this.alphaEnabled,
+                    this.fogEnabled,
+                    this.texture2dEnabled,
+                    this.depthMask,
+                    this.colorMask,
+                    this.currentColor,
+                    this.alphaFunc,
+                    this.alphaRef,
+                    this.shadeModel,
+                    this.depthFunc,
+                    this.blendSrcRgb,
+                    this.blendDstRgb,
+                    this.blendSrcAlpha,
+                    this.blendDstAlpha,
+                    0,
+                    0,
+                    Math.max(1, fallbackWidth),
+                    Math.max(1, fallbackHeight),
+                    this.matrixMode
+            );
         }
 
         private static void setEnabled(int capability, boolean enabled) {
@@ -3454,11 +3620,15 @@ public final class ActiniumRenderPipeline {
             GL20.glUseProgram(this.currentProgram);
 
             for (int unit = 0; unit < this.textureBindings2d.length; unit++) {
-                GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
-                GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.textureBindings2d[unit]);
+                setActiveTextureUnit(unit);
+                if (unit < GL_STATE_MANAGER_TEXTURE_UNITS) {
+                    GlStateManager.bindTexture(this.textureBindings2d[unit]);
+                } else {
+                    bindTextureDirect(this.textureBindings2d[unit]);
+                }
             }
 
-            GL13.glActiveTexture(this.activeTexture);
+            setActiveTextureEnum(this.activeTexture);
             setEnabled(GL11.GL_BLEND, this.blendEnabled);
             setEnabled(GL11.GL_CULL_FACE, this.cullEnabled);
             setEnabled(GL11.GL_DEPTH_TEST, this.depthEnabled);
@@ -3467,6 +3637,32 @@ public final class ActiniumRenderPipeline {
             setEnabled(GL11.GL_TEXTURE_2D, this.texture2dEnabled);
             GL11.glDepthMask(this.depthMask);
             GL11.glViewport(this.viewport[0], this.viewport[1], this.viewport[2], this.viewport[3]);
+            syncGlStateManagerToCapturedState(
+                    this.activeTexture,
+                    this.textureBindings2d,
+                    this.blendEnabled,
+                    this.cullEnabled,
+                    this.depthEnabled,
+                    this.alphaEnabled,
+                    this.fogEnabled,
+                    this.texture2dEnabled,
+                    this.depthMask,
+                    new boolean[]{true, true, true, true},
+                    new float[]{1.0f, 1.0f, 1.0f, 1.0f},
+                    GL11.GL_GREATER,
+                    0.1f,
+                    GL11.GL_SMOOTH,
+                    GL11.GL_LEQUAL,
+                    GL11.GL_SRC_ALPHA,
+                    GL11.GL_ONE_MINUS_SRC_ALPHA,
+                    GL11.GL_ONE,
+                    GL11.GL_ZERO,
+                    this.viewport[0],
+                    this.viewport[1],
+                    this.viewport[2],
+                    this.viewport[3],
+                    GL11.GL_MODELVIEW
+            );
         }
 
         private static void setEnabled(int capability, boolean enabled) {

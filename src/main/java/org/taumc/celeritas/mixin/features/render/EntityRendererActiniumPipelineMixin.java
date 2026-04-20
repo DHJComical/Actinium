@@ -56,6 +56,18 @@ public class EntityRendererActiniumPipelineMixin {
         }
     }
 
+    @Inject(
+            method = "renderWorldPass",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/EntityRenderer;renderHand(FI)V",
+                    shift = At.Shift.BEFORE
+            )
+    )
+    private void actinium$prepareFirstPersonState(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.prepareFirstPersonRenderState();
+    }
+
     @Inject(method = "renderWorld", at = @At("HEAD"))
     private void actinium$runShadowPipeline(float partialTicks, long finishTimeNano, CallbackInfo ci) {
         if (ActiniumRenderPipeline.INSTANCE.hasShadowProgram()) {
