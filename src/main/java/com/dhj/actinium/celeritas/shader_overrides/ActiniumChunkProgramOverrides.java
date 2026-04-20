@@ -94,8 +94,8 @@ public final class ActiniumChunkProgramOverrides {
 
     private static boolean shouldForceBundledTerrain(ActiniumTerrainPass pass) {
         return switch (pass) {
-            case GBUFFER_SOLID, GBUFFER_CUTOUT, GBUFFER_TRANSLUCENT -> true;
-            default -> false;
+            case GBUFFER_SOLID, GBUFFER_CUTOUT -> true;
+            case GBUFFER_TRANSLUCENT, SHADOW, SHADOW_CUTOUT -> false;
         };
     }
 
@@ -176,6 +176,10 @@ public final class ActiniumChunkProgramOverrides {
         }
 
         String shaderSource = ShaderParser.parseShader(source, this::resolveShaderSource, constants);
+
+        if (usingLegacyTranslation && pass != null) {
+            shaderSource = ActiniumLegacyChunkShaderAdapter.postProcessParsedSource(pass, shaderSource);
+        }
 
         if (this.enableLegacyGlPatches) {
             if (type != ShaderType.VERTEX && type != ShaderType.FRAGMENT) {

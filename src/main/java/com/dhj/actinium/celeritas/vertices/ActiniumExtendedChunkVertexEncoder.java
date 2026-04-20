@@ -1,6 +1,8 @@
 package com.dhj.actinium.celeritas.vertices;
 
 import com.dhj.actinium.block_rendering.ActiniumBlockRenderingSettings;
+import com.dhj.actinium.celeritas.ActiniumShaders;
+import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import net.minecraft.block.Block;
 import com.dhj.actinium.vertices.ActiniumExtendedDataHelper;
 import com.dhj.actinium.vertices.ActiniumNormalHelper;
@@ -18,6 +20,7 @@ public class ActiniumExtendedChunkVertexEncoder implements ContextAwareChunkVert
     private static final int NORMAL_OFFSET = ActiniumExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("iris_Normal").getPointer();
     private static final int MC_ENTITY_OFFSET = ActiniumExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("mc_Entity").getPointer();
     private static final int MID_BLOCK_OFFSET = ActiniumExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("at_midBlock").getPointer();
+    private static boolean loggedFluidMapping;
 
     private final ChunkVertexEncoder baseEncoder = ActiniumExtendedChunkVertexType.BASE_TYPE.createEncoder();
     private final ActiniumQuadView quad = new ActiniumQuadView();
@@ -42,6 +45,14 @@ public class ActiniumExtendedChunkVertexEncoder implements ContextAwareChunkVert
         ctx.blockId = ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(block, 0);
         ctx.renderType = ActiniumExtendedDataHelper.FLUID_RENDER_TYPE;
         ctx.lightValue = lightValue;
+
+        if (!loggedFluidMapping && ActiniumShaderPackManager.isDebugEnabled()) {
+            loggedFluidMapping = true;
+            ActiniumShaders.logger().info("[DEBUG] Fluid shader block mapping: block='{}', shaderBlockId={}, renderType={}",
+                    Block.REGISTRY.getNameForObject(block),
+                    ctx.blockId,
+                    ctx.renderType);
+        }
     }
 
     @Override

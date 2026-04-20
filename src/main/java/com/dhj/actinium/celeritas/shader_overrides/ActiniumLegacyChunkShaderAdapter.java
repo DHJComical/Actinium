@@ -51,6 +51,17 @@ final class ActiniumLegacyChunkShaderAdapter {
         return (fragmentShader ? fragmentPreamble(alphaTestPass) : vertexPreamble()) + translated;
     }
 
+    public static String postProcessParsedSource(ActiniumTerrainPass pass, String source) {
+        boolean shadowPass = pass == ActiniumTerrainPass.SHADOW || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
+
+        if (shadowPass) {
+            return source;
+        }
+
+        String processed = SHADOW_CASTING_DEFINE.matcher(source).replaceAll("// Actinium legacy compat: SHADOW_CASTING disabled");
+        return FOG_ACTIVE_DEFINE.matcher(processed).replaceAll("// Actinium legacy compat: FOG_ACTIVE disabled");
+    }
+
     private static String stripLeadingDirectives(String source) {
         String stripped = VERSION_DIRECTIVE.matcher(source).replaceFirst("");
         return EXTENSION_DIRECTIVE.matcher(stripped).replaceAll("");
@@ -77,11 +88,18 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "vec3 actinium_gl_Normal;",
                 "vec4 actinium_gl_MultiTexCoord0;",
                 "vec4 actinium_gl_MultiTexCoord1;",
+                "vec4 actinium_gl_MultiTexCoord2;",
                 "mat3 actinium_gl_NormalMatrix;",
                 "mat4 actinium_gl_ProjectionMatrix;",
                 "mat4 actinium_gl_ModelViewMatrix;",
                 "mat4 actinium_gl_ModelViewProjectionMatrix;",
-                "mat4 actinium_gl_TextureMatrix[2] = mat4[2](mat4(1.0), mat4(1.0));",
+                "mat4 actinium_gl_TextureMatrix[8] = mat4[8](",
+                "    mat4(1.0),",
+                "    mat4(0.00390625, 0.0, 0.0, 0.0,",
+                "         0.0, 0.00390625, 0.0, 0.0,",
+                "         0.0, 0.0, 0.00390625, 0.0,",
+                "         0.03125, 0.03125, 0.03125, 1.0),",
+                "    mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0));",
                 "vec4 actinium_mc_Entity;",
                 "vec2 actinium_mc_midTexCoord;",
                 "",
@@ -90,6 +108,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "#define gl_Normal actinium_gl_Normal",
                 "#define gl_MultiTexCoord0 actinium_gl_MultiTexCoord0",
                 "#define gl_MultiTexCoord1 actinium_gl_MultiTexCoord1",
+                "#define gl_MultiTexCoord2 actinium_gl_MultiTexCoord2",
                 "#define gl_NormalMatrix actinium_gl_NormalMatrix",
                 "#define gl_ProjectionMatrix actinium_gl_ProjectionMatrix",
                 "#define gl_ModelViewMatrix actinium_gl_ModelViewMatrix",
@@ -110,6 +129,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "    actinium_gl_Normal = normalize(actinium_Normal);",
                 "    actinium_gl_MultiTexCoord0 = vec4(_vert_tex_diffuse_coord, 0.0, 1.0);",
                 "    actinium_gl_MultiTexCoord1 = vec4(vec2(_vert_tex_light_coord), 0.0, 1.0);",
+                "    actinium_gl_MultiTexCoord2 = actinium_gl_MultiTexCoord1;",
                 "    actinium_gl_NormalMatrix = iris_NormalMatrix;",
                 "    actinium_gl_ProjectionMatrix = u_ProjectionMatrix;",
                 "    actinium_gl_ModelViewMatrix = u_ModelViewMatrix;",

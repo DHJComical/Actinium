@@ -47,19 +47,26 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
             return null;
         }
 
-        if (!this.isShadowPass()) {
+        boolean shadowPass = this.isShadowPass();
+        boolean shouldOverrideWorldPass = pass.isReverseOrder();
+
+        if (!shadowPass && !shouldOverrideWorldPass) {
             if (ActiniumShaderPackManager.isDebugEnabled()) {
                 ActiniumShaders.logger().info("Skipping Actinium chunk shader override for world pass '{}' and using Celeritas default terrain shader", pass.name());
             }
             return null;
         }
 
-        GlProgram<? extends ChunkShaderInterface> localOverride = this.localOverrides.getProgramOverride(pass, this.renderPassConfiguration, this.isShadowPass());
+        if (ActiniumShaderPackManager.isDebugEnabled() && !shadowPass && shouldOverrideWorldPass) {
+            ActiniumShaders.logger().info("Using Actinium translucent terrain override for world pass '{}'", pass.name());
+        }
+
+        GlProgram<? extends ChunkShaderInterface> localOverride = this.localOverrides.getProgramOverride(pass, this.renderPassConfiguration, shadowPass);
 
         if (localOverride != null) {
             if (!this.loggedLocalOverridePath) {
                 this.loggedLocalOverridePath = true;
-                ActiniumShaders.logger().info("Using bundled Actinium terrain override programs");
+                ActiniumShaders.logger().info("Using Actinium terrain override programs");
             }
 
             return localOverride;
