@@ -36,6 +36,7 @@ public final class ActiniumShaderProperties {
     private boolean prepareBeforeShadow;
     private final Map<String, String> conditionallyEnabledPrograms = new LinkedHashMap<>();
     private final Map<String, Map<String, String>> stageTexturePaths = new LinkedHashMap<>();
+    private final Map<String, Map<Integer, Boolean>> explicitFlips = new LinkedHashMap<>();
     private final List<String> sliderOptions = new ArrayList<>();
     private final Map<String, List<String>> profiles = new LinkedHashMap<>();
     private final Map<String, List<String>> profiles2 = new LinkedHashMap<>();
@@ -83,6 +84,7 @@ public final class ActiniumShaderProperties {
             }
 
             parsed.tryParseTextureDirective(key, value);
+            parsed.tryParseFlipDirective(key, value);
         });
 
         DirectiveSourceParser.parseInto(parsed, shaderSources);
@@ -185,6 +187,19 @@ public final class ActiniumShaderProperties {
         return Collections.unmodifiableMap(copy);
     }
 
+    public Map<Integer, Boolean> getExplicitFlips(String passName) {
+        if (passName == null || passName.isBlank()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Integer, Boolean> flips = this.explicitFlips.get(passName);
+        if (flips == null || flips.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return Collections.unmodifiableMap(new LinkedHashMap<>(flips));
+    }
+
     public List<String> getSliderOptions() {
         return Collections.unmodifiableList(this.sliderOptions);
     }
@@ -260,6 +275,35 @@ public final class ActiniumShaderProperties {
         this.stageTexturePaths
                 .computeIfAbsent(stageName, ignored -> new LinkedHashMap<>())
                 .put(samplerName, value);
+    }
+
+    private void tryParseFlipDirective(String key, String value) {
+        if (!key.startsWith("flip.")) {
+            return;
+        }
+
+        String remainder = key.substring("flip.".length()).trim();
+        int separator = remainder.lastIndexOf('.');
+
+        if (separator <= 0 || separator >= remainder.length() - 1) {
+            return;
+        }
+
+        String passName = remainder.substring(0, separator).trim();
+        String bufferName = remainder.substring(separator + 1).trim();
+
+        if (passName.isEmpty() || bufferName.isEmpty()) {
+            return;
+        }
+
+        int targetIndex = resolveRenderTargetIndex(bufferName);
+        if (targetIndex < 0) {
+            return;
+        }
+
+        Map<Integer, Boolean> passFlips = this.explicitFlips.computeIfAbsent(passName, ignored -> new LinkedHashMap<>());
+        boolean fallback = passFlips.getOrDefault(targetIndex, false);
+        passFlips.put(targetIndex, parseBoolean(value, fallback));
     }
 
     private void parseMenuMetadata(Map<String, String> rawProperties) {
@@ -356,6 +400,31 @@ public final class ActiniumShaderProperties {
         Map<String, List<String>> copy = new LinkedHashMap<>();
         source.forEach((key, value) -> copy.put(key, Collections.unmodifiableList(new ArrayList<>(value))));
         return Collections.unmodifiableMap(copy);
+    }
+
+    private static int resolveRenderTargetIndex(String bufferName) {
+        String normalized = bufferName.trim().toLowerCase(Locale.ROOT);
+
+        if (normalized.startsWith("colortex")) {
+            try {
+                int index = Integer.parseInt(normalized.substring("colortex".length()));
+                return index >= 0 && index <= 7 ? index : -1;
+            } catch (NumberFormatException ignored) {
+                return -1;
+            }
+        }
+
+        return switch (normalized) {
+            case "gcolor" -> 0;
+            case "gdepth" -> 1;
+            case "gnormal" -> 2;
+            case "composite" -> 3;
+            case "gaux1" -> 4;
+            case "gaux2" -> 5;
+            case "gaux3" -> 6;
+            case "gaux4" -> 7;
+            default -> -1;
+        };
     }
 
     private static final class DirectiveSourceParser {

@@ -18,6 +18,31 @@ public class EntityRendererActiniumPipelineMixin {
             method = "renderWorldPass",
             at = @At(
                     value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V",
+                    shift = At.Shift.BEFORE
+            )
+    )
+    private void actinium$runPreparePipeline(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.renderPreparePipeline(partialTicks);
+    }
+
+    @Inject(
+            method = "renderWorldPass",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I",
+                    ordinal = 3,
+                    shift = At.Shift.BEFORE
+            )
+    )
+    private void actinium$runDeferredPipeline(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.renderDeferredPipeline(partialTicks);
+    }
+
+    @Inject(
+            method = "renderWorldPass",
+            at = @At(
+                    value = "INVOKE",
                     target = "Lnet/minecraft/client/renderer/GlStateManager;clear(I)V",
                     ordinal = 1,
                     shift = At.Shift.BEFORE

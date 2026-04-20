@@ -243,6 +243,30 @@ final class ActiniumPostTargets {
         }
     }
 
+    public void flipTarget(int targetIndex) {
+        if (targetIndex < 0 || targetIndex >= TARGET_COUNT) {
+            return;
+        }
+
+        this.targets[targetIndex].sourceIsAlt = !this.targets[targetIndex].sourceIsAlt;
+    }
+
+    public boolean isTargetFlipped(int targetIndex) {
+        if (targetIndex < 0 || targetIndex >= TARGET_COUNT) {
+            return false;
+        }
+
+        return this.targets[targetIndex].sourceIsAlt;
+    }
+
+    public void setTargetFlipped(int targetIndex, boolean flipped) {
+        if (targetIndex < 0 || targetIndex >= TARGET_COUNT) {
+            return;
+        }
+
+        this.targets[targetIndex].sourceIsAlt = flipped;
+    }
+
     public int getSourceTexture(int targetIndex) {
         return this.targets[targetIndex].getSourceTexture();
     }
