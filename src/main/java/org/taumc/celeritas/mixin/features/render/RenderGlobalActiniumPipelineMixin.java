@@ -34,6 +34,7 @@ public class RenderGlobalActiniumPipelineMixin {
     private void actinium$beginSky(float partialTicks, int pass, CallbackInfo ci) {
         ActiniumRenderPipeline.INSTANCE.beginSky();
         ActiniumRenderPipeline.INSTANCE.captureSkyStageState();
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.head");
         ActiniumRenderPipeline.INSTANCE.bindWorldStageProgram(partialTicks);
     }
 
@@ -79,7 +80,7 @@ public class RenderGlobalActiniumPipelineMixin {
             slice = @Slice(from = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/WorldClient;getRainStrength(F)F"))
     )
     private void actinium$applySunPathRotation(float partialTicks, int pass, CallbackInfo ci) {
-        if (!ActiniumShaderPackManager.areShadersEnabled()) {
+        if (!ActiniumRenderPipeline.INSTANCE.shouldApplySunPathRotationToVanillaSky()) {
             return;
         }
 
@@ -98,24 +99,57 @@ public class RenderGlobalActiniumPipelineMixin {
             )
     )
     private void actinium$clearSunriseFan(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.sunriseFan");
         if (this.actinium$shouldSuppressVanillaSkyGeometry()) {
             Tessellator.getInstance().getBuffer().reset();
         }
     }
 
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/texture/TextureManager;bindTexture(Lnet/minecraft/util/ResourceLocation;)V", ordinal = 0)
+    )
+    private void actinium$debugSkyTexturedEntry(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.skyTextured");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/vertex/VertexBuffer;drawArrays(I)V", ordinal = 2)
+    )
+    private void actinium$debugSkyHorizonVbo(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.horizonVbo");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;callList(I)V", ordinal = 2)
+    )
+    private void actinium$debugSkyHorizonCallList(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.horizonCallList");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;callList(I)V", ordinal = 3)
+    )
+    private void actinium$debugSkyLowerCap(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.lowerCap");
+    }
+
     @WrapWithCondition(method = "renderSky(FI)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/vertex/VertexBuffer;drawArrays(I)V", ordinal = 2))
     private boolean actinium$renderSky2Vbo(VertexBuffer vertexBuffer, int mode) {
-        return !this.actinium$shouldSuppressVanillaSkyGeometry();
+        return !ActiniumRenderPipeline.INSTANCE.shouldSuppressVanillaSkyHorizonGeometry();
     }
 
     @WrapWithCondition(method = "renderSky(FI)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;callList(I)V", ordinal = 2))
     private boolean actinium$renderSky2CallListBelowHorizon(int displayList) {
-        return !this.actinium$shouldSuppressVanillaSkyGeometry();
+        return !ActiniumRenderPipeline.INSTANCE.shouldSuppressVanillaSkyHorizonGeometry();
     }
 
     @WrapWithCondition(method = "renderSky(FI)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;callList(I)V", ordinal = 3))
     private boolean actinium$renderSky2CallList(int displayList) {
-        return !this.actinium$shouldSuppressVanillaSkyGeometry();
+        return !ActiniumRenderPipeline.INSTANCE.shouldSuppressVanillaSkyHorizonGeometry();
     }
 
     @Inject(method = "drawSelectionBox", at = @At("HEAD"), cancellable = true)

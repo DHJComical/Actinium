@@ -214,7 +214,14 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.shadowcolor0Sampler = context.bindUniformIfPresent("shadowcolor0", GlUniformInt::new);
 
         this.defaultAlphaTest = options.pass().supportsFragmentDiscard() ? 0.1f : 0.0f;
-        this.usesTerrainInputs = options.pass().isReverseOrder();
+        this.usesTerrainInputs = this.gaux1Sampler != null
+                || this.gaux2Sampler != null
+                || this.depthtex0Sampler != null
+                || this.depthtex1Sampler != null
+                || this.noisetexSampler != null
+                || this.shadowtex0Sampler != null
+                || this.shadowtex1Sampler != null
+                || this.shadowcolor0Sampler != null;
     }
 
     @Override

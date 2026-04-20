@@ -161,11 +161,14 @@ public final class ActiniumRenderPipeline {
     private static final int TRACKED_TEXTURE_UNITS = 16;
     private static final boolean ENABLE_PRE_SCENE_PIPELINES = true;
     private static final boolean ENABLE_PRE_SCENE_SHADER_EXECUTION = false;
-    private static final boolean ENABLE_PREPARE_SHADER_EXECUTION = true;
-    private static final boolean ENABLE_DEFERRED_SHADER_EXECUTION = true;
+    private static final boolean ENABLE_PREPARE_SHADER_EXECUTION = false;
+    private static final boolean ENABLE_DEFERRED_SHADER_EXECUTION = false;
     private static final boolean ENABLE_EXTERNAL_SCENE_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_FINAL_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_TERRAIN_REDIRECT = false;
+    private static final boolean ENABLE_EXTERNAL_SKY_BASIC_STAGE = false;
+    private static final boolean ENABLE_EXTERNAL_SKY_TEXTURED_STAGE = false;
+    private static final boolean ENABLE_EXTERNAL_CLOUDS_STAGE = false;
 
     private int observedReloadVersion = -1;
     @Getter
@@ -451,14 +454,8 @@ public final class ActiniumRenderPipeline {
 
         try {
             if (this.postTargets != null) {
-                Integer worldGaux4Texture = null;
-
-                if (this.worldTargets != null && this.worldTargets.hasSourceColorTexture()) {
-                    worldGaux4Texture = this.worldTargets.getSourceGaux4Texture();
-                }
-
                 this.postTargets.ensureSize(this.width, this.height);
-                this.postTargets.copySceneTextures(mainFramebuffer, worldGaux4Texture);
+                this.postTargets.copySceneTextures(mainFramebuffer, null);
                 this.applyExplicitPreFlips(this.postTargets, "composite_pre");
 
                 if (!this.preTranslucentDepthCapturedThisFrame) {
@@ -489,7 +486,7 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        this.renderPreCompositePipeline(partialTicks, this.getPreparePrograms(), true, "prepare");
+        this.renderPreparePrograms(partialTicks);
         this.prepareProgramsExecutedThisFrame = true;
     }
 
@@ -502,11 +499,28 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        this.renderPreCompositePipeline(partialTicks, this.getDeferredPrograms(), !this.prepareProgramsExecutedThisFrame, "deferred");
+        this.renderDeferredPrograms(partialTicks);
         this.deferredProgramsExecutedThisFrame = true;
     }
 
-    private void renderPreCompositePipeline(float partialTicks, List<ActiniumPostProgram> programs, boolean initializeTargets, String stageName) {
+    private void renderPreparePrograms(float partialTicks) {
+        this.renderPreCompositePipeline(partialTicks, this.getPreparePrograms(), "prepare", this::preparePreSceneTargetsForPrepare);
+    }
+
+    private void renderDeferredPrograms(float partialTicks) {
+        boolean prepareExecuted = this.prepareProgramsExecutedThisFrame;
+        this.renderPreCompositePipeline(
+                partialTicks,
+                this.getDeferredPrograms(),
+                "deferred",
+                mainFramebuffer -> this.preparePreSceneTargetsForDeferred(mainFramebuffer, prepareExecuted)
+        );
+    }
+
+    private void renderPreCompositePipeline(float partialTicks,
+                                            List<ActiniumPostProgram> programs,
+                                            String stageName,
+                                            PreSceneTargetInitializer initializer) {
         this.syncReloadState();
 
         if (!ActiniumShaderPackManager.areShadersEnabled() || programs.isEmpty()) {
@@ -528,14 +542,7 @@ public final class ActiniumRenderPipeline {
 
         try {
             if (this.preSceneTargets != null) {
-                this.preSceneTargets.ensureSize(this.width, this.height);
-
-                if (initializeTargets) {
-                    this.preSceneTargets.copySceneTextures(mainFramebuffer, null);
-                } else {
-                    this.preSceneTargets.copySceneInputs(mainFramebuffer);
-                }
-
+                initializer.initialize(mainFramebuffer);
                 this.applyExplicitPreFlips(this.preSceneTargets, stageName + "_pre");
 
                 this.updateCenterDepthSmooth();
@@ -555,6 +562,31 @@ public final class ActiniumRenderPipeline {
             previousState.restore(mainFramebuffer, this.width, this.height);
             this.endPost();
         }
+    }
+
+    private void preparePreSceneTargetsForPrepare(Framebuffer mainFramebuffer) {
+        if (this.preSceneTargets == null) {
+            return;
+        }
+
+        this.preSceneTargets.ensureSize(this.width, this.height);
+        this.preSceneTargets.copySceneTextures(mainFramebuffer, null);
+    }
+
+    private void preparePreSceneTargetsForDeferred(Framebuffer mainFramebuffer, boolean preservePrepareResults) {
+        if (this.preSceneTargets == null) {
+            return;
+        }
+
+        this.preSceneTargets.ensureSize(this.width, this.height);
+
+        if (preservePrepareResults) {
+            this.preSceneTargets.copyPostSceneInputs(mainFramebuffer, null);
+        } else {
+            this.preSceneTargets.copySceneTextures(mainFramebuffer, null);
+        }
+
+        this.preSceneTargets.copyPreTranslucentDepth(mainFramebuffer);
     }
 
     private void restoreMainFramebufferState(Framebuffer mainFramebuffer) {
@@ -629,8 +661,39 @@ public final class ActiniumRenderPipeline {
         this.syncReloadState();
         return ActiniumShaderPackManager.areShadersEnabled()
                 && this.shouldUseExternalWorldPrograms()
+                && ENABLE_EXTERNAL_SKY_BASIC_STAGE
+                && this.skyProgramAvailable;
+    }
+
+    public boolean shouldApplySunPathRotationToVanillaSky() {
+        this.syncReloadState();
+        return ActiniumShaderPackManager.areShadersEnabled()
+                && ENABLE_EXTERNAL_SKY_TEXTURED_STAGE;
+    }
+
+    public boolean shouldSuppressVanillaSkyHorizonGeometry() {
+        this.syncReloadState();
+        return ActiniumShaderPackManager.areShadersEnabled()
+                && this.shouldUseExternalWorldPrograms()
                 && this.skyProgramAvailable
-                && this.postProgramAvailable;
+                && ENABLE_EXTERNAL_SKY_TEXTURED_STAGE;
+    }
+
+    public void debugLogSkySegment(String segment) {
+        if (!this.shouldEmitVerboseDebugFrame()) {
+            return;
+        }
+
+        this.debugLog(
+                "Sky segment '{}' stage={}, suppressSky={}, suppressHorizon={}, applyVanillaSunPathRotation={}, skyProgram={}, postProgram={}",
+                segment,
+                this.currentStage,
+                this.shouldSuppressVanillaSkyGeometry(),
+                this.shouldSuppressVanillaSkyHorizonGeometry(),
+                this.shouldApplySunPathRotationToVanillaSky(),
+                this.skyProgramAvailable,
+                this.postProgramAvailable
+        );
     }
 
     public Matrix4fc getGbufferModelViewMatrix() {
@@ -885,10 +948,6 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        if (!pass.isReverseOrder()) {
-            return;
-        }
-
         if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasPostProgram() || ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             return;
         }
@@ -910,7 +969,8 @@ public final class ActiniumRenderPipeline {
                 this.copyTexture(framebuffer.framebufferTexture, this.worldTargets.getSourceColorTexture());
                 debugCheckGlErrors("terrain.primeFramebuffer:" + pass.name());
             }
-            this.worldTargets.bindWriteFramebuffer(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1}, false);
+            int[] drawBuffers = this.resolveTerrainPassDrawBuffers(pass);
+            this.worldTargets.bindWriteFramebuffer(framebuffer, drawBuffers, false);
             debugCheckGlErrors("terrain.bindFramebuffer:" + pass.name());
         }
     }
@@ -919,10 +979,6 @@ public final class ActiniumRenderPipeline {
         this.syncReloadState();
 
         if (!ENABLE_EXTERNAL_TERRAIN_REDIRECT) {
-            return;
-        }
-
-        if (!pass.isReverseOrder()) {
             return;
         }
 
@@ -937,9 +993,10 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        this.worldTargets.endWrite(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1}, false);
+        int[] drawBuffers = this.resolveTerrainPassDrawBuffers(pass);
+        this.worldTargets.endWrite(framebuffer, drawBuffers, false);
         this.debugLogTerrainPassState("after-endWrite", pass, framebuffer);
-        this.presentTerrainPassResult(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1});
+        this.presentTerrainPassResult(framebuffer, drawBuffers);
         this.debugLogTerrainPassState("after-present", pass, framebuffer);
         debugCheckGlErrors("terrain.unbindFramebuffer:" + pass.name());
     }
@@ -1007,7 +1064,7 @@ public final class ActiniumRenderPipeline {
         if (this.shouldEmitVerboseDebugFrame()) {
             this.debugLog("Binding world-stage program '{}' for {} with draw buffers {}", program.name(), this.currentStage, Arrays.toString(program.drawBuffers()));
         }
-        boolean renderColorTex1ToMain = !this.hasPostProgram();
+        boolean renderColorTex1ToMain = true;
         if (this.worldTargets != null) {
             this.worldTargets.bindWriteFramebuffer(framebuffer, program.drawBuffers(), renderColorTex1ToMain);
         }
@@ -1032,10 +1089,9 @@ public final class ActiniumRenderPipeline {
             this.width = Math.max(1, framebuffer.framebufferWidth);
             this.height = Math.max(1, framebuffer.framebufferHeight);
             this.ensureRuntimeResources();
-            boolean renderColorTex1ToMain = !this.hasPostProgram();
+            boolean renderColorTex1ToMain = true;
             if (this.worldTargets != null) {
                 this.worldTargets.endWrite(framebuffer, this.activeWorldProgram.drawBuffers(), renderColorTex1ToMain);
-                this.presentWorldStageResult(framebuffer, this.activeWorldProgram.drawBuffers());
             }
             debugCheckGlErrors("world-stage.endWrite:" + this.activeWorldProgram.name());
         }
@@ -1663,7 +1719,7 @@ public final class ActiniumRenderPipeline {
             }
 
             String vertexSource = ActiniumShaderPackManager.getProgramSource(programName, ShaderType.VERTEX);
-            ProgramMetadata metadata = ProgramMetadata.parse(fragmentSource);
+            ProgramMetadata metadata = ProgramMetadata.parse(this.resolveShaderForMetadata(fragmentSource));
             int[] drawBuffers = metadata.drawBuffers();
             this.debugLog(
                     "Resolved post program '{}' metadata: drawBuffers={}, mipmappedBuffers={}",
@@ -1710,7 +1766,7 @@ public final class ActiniumRenderPipeline {
         }
 
         String vertexSource = ActiniumShaderPackManager.getProgramSource("final", ShaderType.VERTEX);
-        ProgramMetadata metadata = ProgramMetadata.parse(fragmentSource);
+        ProgramMetadata metadata = ProgramMetadata.parse(this.resolveShaderForMetadata(fragmentSource));
         this.finalProgramMipmappedBuffers = metadata.mipmappedBuffers();
         this.debugLog(
                 "Resolved post program '{}' metadata: drawBuffers={}, mipmappedBuffers={}",
@@ -1842,6 +1898,10 @@ public final class ActiniumRenderPipeline {
         return LEGACY_PACK_MARKERS.matcher(source).find();
     }
 
+    private String resolveShaderForMetadata(String source) {
+        return ShaderParser.parseShader(source, this::resolveShaderSource, ShaderConstants.EMPTY);
+    }
+
     private boolean shouldUseExternalScenePrograms() {
         return ENABLE_EXTERNAL_SCENE_PIPELINE
                 && ActiniumShaderPackManager.areShadersEnabled()
@@ -1849,7 +1909,8 @@ public final class ActiniumRenderPipeline {
     }
 
     private boolean shouldUseExternalWorldPrograms() {
-        return false;
+        return ActiniumShaderPackManager.areShadersEnabled()
+                && ActiniumShaderPackManager.getActivePackResources() != null;
     }
 
     private boolean shouldUseExternalFinalProgram() {
@@ -2407,9 +2468,9 @@ public final class ActiniumRenderPipeline {
         }
 
         return switch (this.currentStage) {
-            case SKY -> this.getWorldStageProgram(ActiniumWorldStage.SKY);
-            case SKY_TEXTURED -> this.getWorldStageProgram(ActiniumWorldStage.SKY_TEXTURED);
-            case CLOUDS -> this.getWorldStageProgram(ActiniumWorldStage.CLOUDS);
+            case SKY -> ENABLE_EXTERNAL_SKY_BASIC_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.SKY) : null;
+            case SKY_TEXTURED -> ENABLE_EXTERNAL_SKY_TEXTURED_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.SKY_TEXTURED) : null;
+            case CLOUDS -> ENABLE_EXTERNAL_CLOUDS_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.CLOUDS) : null;
             case WEATHER -> this.getWorldStageProgram(ActiniumWorldStage.WEATHER);
             default -> null;
         };
@@ -2610,12 +2671,26 @@ public final class ActiniumRenderPipeline {
         }
 
         this.debugLogTextureCenter("terrain." + pass.name() + "." + stage + ".worldColor", this.worldTargets.getSourceColorTexture());
+        this.debugLogTextureCenter("terrain." + pass.name() + "." + stage + ".gaux4", this.worldTargets.getSourceGaux4Texture());
         this.debugLogTextureCenter("terrain." + pass.name() + "." + stage + ".mainFramebuffer", framebuffer.framebufferTexture);
+    }
+
+    private int[] resolveTerrainPassDrawBuffers(TerrainRenderPass pass) {
+        return new int[]{ActiniumPostTargets.TARGET_COLORTEX1, ActiniumPostTargets.TARGET_GAUX4};
     }
 
     private @Nullable String getActivePackShaderSource() {
         String normalizedPath = "src/writebuffers.glsl".startsWith("/") ? "src/writebuffers.glsl".substring(1) : "src/writebuffers.glsl";
         return ActiniumShaderPackManager.getShaderSource("actinium:" + normalizedPath);
+    }
+
+    private @Nullable Integer getWorldGaux4TextureForPost() {
+        if (this.worldTargets == null) {
+            return null;
+        }
+
+        int textureId = this.worldTargets.getSourceGaux4Texture();
+        return textureId > 0 ? textureId : null;
     }
 
     private void copyTexture(int sourceTexture, @Nullable Integer destinationTexture) {
@@ -3674,6 +3749,11 @@ public final class ActiniumRenderPipeline {
         }
     }
 
+    @FunctionalInterface
+    private interface PreSceneTargetInitializer {
+        void initialize(Framebuffer mainFramebuffer);
+    }
+
     private static final class ActiniumPostProgram {
         private final String name;
         private final GlProgram<ActiniumPostShaderInterface> program;
@@ -3767,7 +3847,7 @@ public final class ActiniumRenderPipeline {
 
                 if (trimmed.startsWith("#elif ")) {
                     if (!stack.isEmpty()) {
-                        ConditionalFrame frame = stack.get(stack.size() - 1);
+                        ConditionalFrame frame = stack.getLast();
                         boolean condition = !frame.branchTaken && evaluateExpression(trimmed.substring("#elif ".length()).trim(), defines);
                         frame.branchTaken |= condition;
                         frame.active = frame.parentActive && condition;
@@ -3779,7 +3859,7 @@ public final class ActiniumRenderPipeline {
 
                 if (trimmed.startsWith("#else")) {
                     if (!stack.isEmpty()) {
-                        ConditionalFrame frame = stack.get(stack.size() - 1);
+                        ConditionalFrame frame = stack.getLast();
                         boolean condition = !frame.branchTaken;
                         frame.branchTaken = true;
                         frame.active = frame.parentActive && condition;
@@ -3791,7 +3871,7 @@ public final class ActiniumRenderPipeline {
 
                 if (trimmed.startsWith("#endif")) {
                     if (!stack.isEmpty()) {
-                        ConditionalFrame frame = stack.remove(stack.size() - 1);
+                        ConditionalFrame frame = stack.removeLast();
                         active = frame.parentActive;
                     }
                     location += rawLine.length() + 1;

@@ -37,6 +37,7 @@ public final class ActiniumChunkProgramOverrides {
             "#define uint unsigned int",
             "#define texture texture2D"
     ) + "\n";
+    private static final int LEGACY_FRAGMENT_OUTPUT_COUNT = 8;
 
     private static final List<ChunkShaderComponent.Factory<?>> COMPONENTS = List.of(ChunkShaderFogComponent.FOG_SERVICE.getFogMode());
 
@@ -93,16 +94,14 @@ public final class ActiniumChunkProgramOverrides {
     }
 
     private static boolean shouldForceBundledTerrain(ActiniumTerrainPass pass) {
-        return switch (pass) {
-            case GBUFFER_SOLID, GBUFFER_CUTOUT -> true;
-            case GBUFFER_TRANSLUCENT, SHADOW, SHADOW_CUTOUT -> false;
-        };
+        return false;
     }
 
     private GlProgram<ChunkShaderInterface> createShader(ActiniumTerrainPass pass, RenderPassConfiguration<?> configuration, boolean preferPackProgram) {
         TerrainRenderPass renderPass = pass.toTerrainPass(configuration);
         ChunkShaderOptions options = new ChunkShaderOptions(COMPONENTS, renderPass);
         ShaderConstants constants = options.constants();
+        boolean legacyPackProgram = preferPackProgram && this.isLegacyTerrainProgram(pass);
         if (ActiniumShaderPackManager.isDebugEnabled()) {
             ActiniumShaders.logger().info(
                     "Actinium terrain override {} -> renderPass='{}', discard={}, reverseOrder={}, lightmap={}, preferPack={}, defines={}",
@@ -130,7 +129,13 @@ public final class ActiniumChunkProgramOverrides {
             }
 
             if (!this.enableLegacyGlPatches) {
-                builder.bindFragmentData("fragColor", ChunkShaderBindingPoints.FRAG_COLOR);
+                if (legacyPackProgram) {
+                    for (int i = 0; i < LEGACY_FRAGMENT_OUTPUT_COUNT; i++) {
+                        builder.bindFragmentData("fragColor" + i, i);
+                    }
+                } else {
+                    builder.bindFragmentData("fragColor", ChunkShaderBindingPoints.FRAG_COLOR);
+                }
             }
 
             return builder.link(shader -> new ActiniumChunkShaderInterface(shader, options));
@@ -202,6 +207,13 @@ public final class ActiniumChunkProgramOverrides {
 
     private boolean isLegacyPackProgram(String source) {
         return LEGACY_PACK_MARKERS.matcher(source).find();
+    }
+
+    private boolean isLegacyTerrainProgram(ActiniumTerrainPass pass) {
+        String vertexSource = ActiniumShaderPackManager.getProgramSource(pass, ShaderType.VERTEX);
+        String fragmentSource = ActiniumShaderPackManager.getProgramSource(pass, ShaderType.FRAGMENT);
+        return (vertexSource != null && this.isLegacyPackProgram(vertexSource))
+                || (fragmentSource != null && this.isLegacyPackProgram(fragmentSource));
     }
 
     private String resolveShaderSource(String path) {

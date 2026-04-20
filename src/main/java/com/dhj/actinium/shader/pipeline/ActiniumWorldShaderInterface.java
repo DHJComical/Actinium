@@ -1,5 +1,6 @@
 package com.dhj.actinium.shader.pipeline;
 
+import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
@@ -210,14 +211,20 @@ final class ActiniumWorldShaderInterface {
         if (minecraft.world != null) {
             int currentWorldTime = ActiniumCommonUniforms.getWorldTime(minecraft.world);
             float currentDayMoment = ActiniumCommonUniforms.getDayMoment(currentWorldTime);
-            float celestialAngle = minecraft.world.getCelestialAngle(0.0f) * ((float) Math.PI * 2.0f);
+            float celestialAngle = minecraft.world.getCelestialAngle(minecraft.getRenderPartialTicks());
             float dayNight = ActiniumCommonUniforms.getDayNightMix(currentWorldTime);
-            float sunX = -MathHelper.sin(celestialAngle);
-            float sunY = MathHelper.cos(celestialAngle);
-            float sunZ = 0.0f;
+            float sunPathRotation = ActiniumShaderPackManager.getActiveShaderProperties().getSunPathRotation();
 
-            new Matrix4f(referenceModelViewMatrix).transformDirection(sunX, sunY, sunZ, this.scratchSunPosition);
-            new Matrix4f(referenceModelViewMatrix).transformDirection(-sunX, -sunY, -sunZ, this.scratchMoonPosition);
+            new Matrix4f(referenceModelViewMatrix)
+                    .rotateY((float) Math.toRadians(-90.0f))
+                    .rotateZ((float) Math.toRadians(sunPathRotation))
+                    .rotateX(celestialAngle * ((float) Math.PI * 2.0f))
+                    .transformDirection(0.0f, 100.0f, 0.0f, this.scratchSunPosition);
+            new Matrix4f(referenceModelViewMatrix)
+                    .rotateY((float) Math.toRadians(-90.0f))
+                    .rotateZ((float) Math.toRadians(sunPathRotation))
+                    .rotateX(celestialAngle * ((float) Math.PI * 2.0f))
+                    .transformDirection(0.0f, -100.0f, 0.0f, this.scratchMoonPosition);
 
             if (this.worldTime != null) {
                 this.worldTime.setInt(currentWorldTime);

@@ -52,7 +52,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
         }
 
         boolean shadowPass = this.isShadowPass();
-        boolean shouldOverrideWorldPass = pass.isReverseOrder();
+        boolean shouldOverrideWorldPass = !shadowPass && pass.isReverseOrder();
 
         if (!shadowPass && !shouldOverrideWorldPass) {
             if (ActiniumShaderPackManager.isDebugEnabled() && this.loggedSkippedWorldPasses.add(pass)) {
@@ -62,7 +62,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
         }
 
         if (ActiniumShaderPackManager.isDebugEnabled() && !shadowPass && shouldOverrideWorldPass && this.loggedOverriddenWorldPasses.add(pass)) {
-            ActiniumShaders.logger().info("Using Actinium translucent terrain override for world pass '{}'", pass.name());
+            ActiniumShaders.logger().info("Using Actinium terrain override for world pass '{}'", pass.name());
         }
 
         GlProgram<? extends ChunkShaderInterface> localOverride = this.localOverrides.getProgramOverride(pass, this.renderPassConfiguration, shadowPass);

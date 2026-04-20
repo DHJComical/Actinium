@@ -2,6 +2,7 @@ package com.dhj.actinium.celeritas.shader_overrides;
 
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class ActiniumLegacyChunkShaderAdapter {
@@ -15,7 +16,7 @@ final class ActiniumLegacyChunkShaderAdapter {
     private static final Pattern LIGHTMAP_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+lightmap\\s*;\\s*$");
     private static final Pattern SHADOW_CASTING_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+SHADOW_CASTING\\b.*$");
     private static final Pattern FOG_ACTIVE_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+FOG_ACTIVE\\b.*$");
-    private static final Pattern GL_FRAG_DATA = Pattern.compile("gl_FragData\\s*\\[\\s*\\d+\\s*\\]");
+    private static final Pattern GL_FRAG_DATA = Pattern.compile("gl_FragData\\s*\\[\\s*(\\d+)\\s*\\]");
     private ActiniumLegacyChunkShaderAdapter() {
     }
 
@@ -44,9 +45,13 @@ final class ActiniumLegacyChunkShaderAdapter {
         translated = translated.replace("texture2D(", "texture(");
         translated = translated.replace("texture2DLod(", "textureLod(");
         translated = translated.replace("shadow2D(", "actinium_shadow2D(");
-        translated = GL_FRAG_DATA.matcher(translated).replaceAll("fragColor");
         translated = replaceIdentifier(translated, "tex", "u_BlockTex");
         translated = replaceIdentifier(translated, "lightmap", "u_LightTex");
+
+        if (fragmentShader) {
+            translated = replaceFragDataOutputs(translated);
+            translated = translated.replace("gl_FragColor", "fragColor0");
+        }
 
         return (fragmentShader ? fragmentPreamble(alphaTestPass) : vertexPreamble()) + translated;
     }
@@ -146,7 +151,7 @@ final class ActiniumLegacyChunkShaderAdapter {
         String alphaTestBlock = alphaTestPass
                 ? String.join("\n",
                 "void actinium_apply_legacy_alpha_test() {",
-                "    if (fragColor.a < 0.1) {",
+                "    if (fragColor0.a < 0.1) {",
                 "        discard;",
                 "    }",
                 "}",
@@ -166,9 +171,17 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "",
                 "in float actinium_FogFragCoord;",
                 "",
-                "out vec4 fragColor;",
+                "out vec4 fragColor0;",
+                "out vec4 fragColor1;",
+                "out vec4 fragColor2;",
+                "out vec4 fragColor3;",
+                "out vec4 fragColor4;",
+                "out vec4 fragColor5;",
+                "out vec4 fragColor6;",
+                "out vec4 fragColor7;",
                 "",
                 "#define gl_FogFragCoord actinium_FogFragCoord",
+                "#define gl_FragColor fragColor0",
                 "",
                 "void actinium_pack_main();",
                 alphaTestBlock,
@@ -183,6 +196,18 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "}",
                 ""
         );
+    }
+
+    private static String replaceFragDataOutputs(String source) {
+        Matcher matcher = GL_FRAG_DATA.matcher(source);
+        StringBuilder buffer = new StringBuilder(source.length());
+
+        while (matcher.find()) {
+            matcher.appendReplacement(buffer, "fragColor" + matcher.group(1));
+        }
+
+        matcher.appendTail(buffer);
+        return buffer.toString();
     }
 
     private static String replaceIdentifier(String source, String oldName, String newName) {
