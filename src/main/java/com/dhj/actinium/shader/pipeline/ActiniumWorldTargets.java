@@ -87,10 +87,17 @@ final class ActiniumWorldTargets {
     }
 
     public void endWrite(Framebuffer mainFramebuffer, int[] drawBuffers, boolean renderColorTex1ToMain) {
+        this.finalizeWrite(drawBuffers, renderColorTex1ToMain);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, mainFramebuffer.framebufferObject);
         GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
         ActiniumRenderPipeline.debugCheckGlErrors("world-targets.endWrite");
+    }
 
+    public void transitionWrite(int[] drawBuffers, boolean renderColorTex1ToMain) {
+        this.finalizeWrite(drawBuffers, renderColorTex1ToMain);
+    }
+
+    private void finalizeWrite(int[] drawBuffers, boolean renderColorTex1ToMain) {
         if (!renderColorTex1ToMain && containsTarget(drawBuffers, 1)) {
             this.colorTexture1.markWritten();
         }

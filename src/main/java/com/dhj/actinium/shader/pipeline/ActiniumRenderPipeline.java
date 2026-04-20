@@ -8,13 +8,17 @@ import com.dhj.actinium.shadows.ActiniumInternalShadowRenderingState;
 import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
 import lombok.Getter;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderHelper;
+import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.BlockRenderLayer;
+import net.minecraft.util.math.Vec3d;
 import org.embeddedt.embeddium.impl.gl.array.GlVertexArray;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
@@ -76,6 +80,7 @@ public final class ActiniumRenderPipeline {
     public static final int TERRAIN_SHADOW_COLOR0_UNIT = 13;
     private static final int GL_STATE_MANAGER_TEXTURE_UNITS = 8;
     private static final float TAA_JITTER_SCALE = 0.35f;
+    private static final float SKY_HORIZON_TOP = 16.0f;
     private static final float[] TAA_OFFSET_SEQUENCE_X = {
             0.5f, -0.5f, -0.5f, 0.5f,
             0.5f, -0.5f, -0.5f, 0.5f,
@@ -161,13 +166,13 @@ public final class ActiniumRenderPipeline {
     private static final int TRACKED_TEXTURE_UNITS = 16;
     private static final boolean ENABLE_PRE_SCENE_PIPELINES = true;
     private static final boolean ENABLE_PRE_SCENE_SHADER_EXECUTION = false;
-    private static final boolean ENABLE_PREPARE_SHADER_EXECUTION = false;
+    private static final boolean ENABLE_PREPARE_SHADER_EXECUTION = true;
     private static final boolean ENABLE_DEFERRED_SHADER_EXECUTION = false;
     private static final boolean ENABLE_EXTERNAL_SCENE_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_FINAL_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_TERRAIN_REDIRECT = false;
-    private static final boolean ENABLE_EXTERNAL_SKY_BASIC_STAGE = false;
-    private static final boolean ENABLE_EXTERNAL_SKY_TEXTURED_STAGE = false;
+    private static final boolean ENABLE_EXTERNAL_SKY_BASIC_STAGE = true;
+    private static final boolean ENABLE_EXTERNAL_SKY_TEXTURED_STAGE = true;
     private static final boolean ENABLE_EXTERNAL_CLOUDS_STAGE = false;
 
     private int observedReloadVersion = -1;
@@ -213,6 +218,11 @@ public final class ActiniumRenderPipeline {
     private final Matrix4f servedPreviousGbufferProjectionMatrix = new Matrix4f();
     private final Vector3f scratchVector = new Vector3f();
     private final Vector3f scratchTaaOffset = new Vector3f();
+    private final Vector3f managedSkyColor = new Vector3f(1.0f, 1.0f, 1.0f);
+    private final Vector3f managedSkyUpPosition = new Vector3f(0.0f, 100.0f, 0.0f);
+    private final Vector3f managedSkySunPosition = new Vector3f(0.0f, 100.0f, 0.0f);
+    private final Vector3f managedSkyMoonPosition = new Vector3f(0.0f, -100.0f, 0.0f);
+    private final Vector3f managedSkyShadowLightPosition = new Vector3f(0.0f, 100.0f, 0.0f);
     private final Vector3d shadowCameraPosition = new Vector3d();
     private final Vector3d worldCameraPosition = new Vector3d();
     @Getter
@@ -243,6 +253,8 @@ public final class ActiniumRenderPipeline {
     private @Nullable Integer terrainGaux1Texture;
     private @Nullable Integer terrainDepthTexture0;
     private @Nullable Integer terrainDepthTexture1;
+    private int terrainInputTextureWidth = -1;
+    private int terrainInputTextureHeight = -1;
     private final Map<String, Integer> packTextureCache = new HashMap<>();
     private @Nullable String activePostTextureStage;
     private List<ActiniumPostProgram> preScenePrograms = Collections.emptyList();
@@ -253,6 +265,7 @@ public final class ActiniumRenderPipeline {
     private boolean preTranslucentDepthCapturedThisFrame;
     private int previousUniformFrame = Integer.MIN_VALUE;
     private boolean previousUniformInitialized;
+    private boolean managedSkyCelestialStateValid;
     @Getter
     private float centerDepthSmooth;
     private ActiniumRenderPipeline() {
@@ -306,6 +319,58 @@ public final class ActiniumRenderPipeline {
     public void beginSkyTextured() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.SKY_TEXTURED;
+    }
+
+    public void beginManagedSky(float partialTicks) {
+        this.syncReloadState();
+        this.captureManagedSkyColor(partialTicks);
+        this.captureManagedSkyUpPosition();
+        this.managedSkyCelestialStateValid = false;
+        this.currentStage = ActiniumRenderStage.SKY_TEXTURED;
+        this.bindWorldStageProgram(partialTicks);
+    }
+
+    public void updateManagedSkyTextureState(boolean textured, float partialTicks) {
+        if (this.currentStage != ActiniumRenderStage.SKY && this.currentStage != ActiniumRenderStage.SKY_TEXTURED) {
+            return;
+        }
+
+        ActiniumRenderStage targetStage = textured ? ActiniumRenderStage.SKY_TEXTURED : ActiniumRenderStage.SKY;
+        if (this.currentStage == targetStage && this.activeWorldProgram != null) {
+            return;
+        }
+
+        this.currentStage = targetStage;
+        this.bindWorldStageProgram(partialTicks);
+    }
+
+    public void refreshManagedSkyProgram(float partialTicks) {
+        if (this.currentStage != ActiniumRenderStage.SKY && this.currentStage != ActiniumRenderStage.SKY_TEXTURED) {
+            return;
+        }
+
+        if (this.activeWorldProgram == null) {
+            return;
+        }
+
+        this.bindWorldStageProgram(partialTicks);
+    }
+
+    public void endManagedSky() {
+        this.unbindWorldStageProgram();
+        this.managedSkyCelestialStateValid = false;
+        this.endSky();
+    }
+
+    public void captureManagedSkyPreCelestialState(float partialTicks) {
+        this.captureManagedSkyColor(partialTicks);
+        this.captureManagedSkyUpPosition();
+    }
+
+    public void captureManagedSkyPostCelestialState(float partialTicks) {
+        this.captureManagedSkyColor(partialTicks);
+        this.captureManagedSkyCelestialState();
+        this.refreshManagedSkyProgram(partialTicks);
     }
 
     public void beginClouds() {
@@ -455,7 +520,7 @@ public final class ActiniumRenderPipeline {
         try {
             if (this.postTargets != null) {
                 this.postTargets.ensureSize(this.width, this.height);
-                this.postTargets.copySceneTextures(mainFramebuffer, null);
+                this.postTargets.copySceneTextures(mainFramebuffer, this.getWorldGaux4TextureForPost());
                 this.applyExplicitPreFlips(this.postTargets, "composite_pre");
 
                 if (!this.preTranslucentDepthCapturedThisFrame) {
@@ -570,7 +635,7 @@ public final class ActiniumRenderPipeline {
         }
 
         this.preSceneTargets.ensureSize(this.width, this.height);
-        this.preSceneTargets.copySceneTextures(mainFramebuffer, null);
+        this.preSceneTargets.copySceneTextures(mainFramebuffer, this.getWorldGaux4TextureForPost());
     }
 
     private void preparePreSceneTargetsForDeferred(Framebuffer mainFramebuffer, boolean preservePrepareResults) {
@@ -579,11 +644,12 @@ public final class ActiniumRenderPipeline {
         }
 
         this.preSceneTargets.ensureSize(this.width, this.height);
+        Integer worldGaux4Texture = this.getWorldGaux4TextureForPost();
 
         if (preservePrepareResults) {
-            this.preSceneTargets.copyPostSceneInputs(mainFramebuffer, null);
+            this.preSceneTargets.copyPostSceneInputs(mainFramebuffer, worldGaux4Texture);
         } else {
-            this.preSceneTargets.copySceneTextures(mainFramebuffer, null);
+            this.preSceneTargets.copySceneTextures(mainFramebuffer, worldGaux4Texture);
         }
 
         this.preSceneTargets.copyPreTranslucentDepth(mainFramebuffer);
@@ -668,15 +734,82 @@ public final class ActiniumRenderPipeline {
     public boolean shouldApplySunPathRotationToVanillaSky() {
         this.syncReloadState();
         return ActiniumShaderPackManager.areShadersEnabled()
-                && ENABLE_EXTERNAL_SKY_TEXTURED_STAGE;
+                && this.shouldUseExternalWorldPrograms()
+                && this.skyProgramAvailable
+                && (ENABLE_EXTERNAL_SKY_BASIC_STAGE || ENABLE_EXTERNAL_SKY_TEXTURED_STAGE);
     }
 
     public boolean shouldSuppressVanillaSkyHorizonGeometry() {
-        this.syncReloadState();
-        return ActiniumShaderPackManager.areShadersEnabled()
-                && this.shouldUseExternalWorldPrograms()
-                && this.skyProgramAvailable
-                && ENABLE_EXTERNAL_SKY_TEXTURED_STAGE;
+        return false;
+    }
+
+    public void renderShaderCoreSkyHorizon() {
+        if (!ActiniumShaderPackManager.areShadersEnabled() || this.currentStage != ActiniumRenderStage.SKY) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        float farDistance = Math.max(16.0f, minecraft.gameSettings.renderDistanceChunks * 16.0f);
+        double xzq = farDistance * 0.9238D;
+        double xzp = farDistance * 0.3826D;
+        double xzn = -xzp;
+        double xzm = -xzq;
+        double top = SKY_HORIZON_TOP;
+        double bot = -this.worldCameraPosition.y;
+
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder bufferBuilder = tessellator.getBuffer();
+
+        GlStateManager.color(this.managedSkyColor.x, this.managedSkyColor.y, this.managedSkyColor.z, 1.0f);
+        bufferBuilder.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION);
+
+        bufferBuilder.pos(xzn, bot, xzm).endVertex();
+        bufferBuilder.pos(xzn, top, xzm).endVertex();
+        bufferBuilder.pos(xzm, top, xzn).endVertex();
+        bufferBuilder.pos(xzm, bot, xzn).endVertex();
+
+        bufferBuilder.pos(xzm, bot, xzn).endVertex();
+        bufferBuilder.pos(xzm, top, xzn).endVertex();
+        bufferBuilder.pos(xzm, top, xzp).endVertex();
+        bufferBuilder.pos(xzm, bot, xzp).endVertex();
+
+        bufferBuilder.pos(xzm, bot, xzp).endVertex();
+        bufferBuilder.pos(xzm, top, xzp).endVertex();
+        bufferBuilder.pos(xzn, top, xzp).endVertex();
+        bufferBuilder.pos(xzn, bot, xzp).endVertex();
+
+        bufferBuilder.pos(xzn, bot, xzp).endVertex();
+        bufferBuilder.pos(xzn, top, xzp).endVertex();
+        bufferBuilder.pos(xzp, top, xzq).endVertex();
+        bufferBuilder.pos(xzp, bot, xzq).endVertex();
+
+        bufferBuilder.pos(xzp, bot, xzq).endVertex();
+        bufferBuilder.pos(xzp, top, xzq).endVertex();
+        bufferBuilder.pos(xzq, top, xzp).endVertex();
+        bufferBuilder.pos(xzq, bot, xzp).endVertex();
+
+        bufferBuilder.pos(xzq, bot, xzp).endVertex();
+        bufferBuilder.pos(xzq, top, xzp).endVertex();
+        bufferBuilder.pos(xzq, top, xzn).endVertex();
+        bufferBuilder.pos(xzq, bot, xzn).endVertex();
+
+        bufferBuilder.pos(xzq, bot, xzn).endVertex();
+        bufferBuilder.pos(xzq, top, xzn).endVertex();
+        bufferBuilder.pos(xzp, top, xzm).endVertex();
+        bufferBuilder.pos(xzp, bot, xzm).endVertex();
+
+        bufferBuilder.pos(xzp, bot, xzm).endVertex();
+        bufferBuilder.pos(xzp, top, xzm).endVertex();
+        bufferBuilder.pos(xzn, top, xzm).endVertex();
+        bufferBuilder.pos(xzn, bot, xzm).endVertex();
+
+        tessellator.draw();
+
+        GlStateManager.color(this.managedSkyColor.x, this.managedSkyColor.y, this.managedSkyColor.z, 1.0f);
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Rendered shader-core sky horizon walls with farDistance {} and cameraY {}", farDistance, this.worldCameraPosition.y);
+        }
     }
 
     public void debugLogSkySegment(String segment) {
@@ -748,6 +881,26 @@ public final class ActiniumRenderPipeline {
 
     public Vector3d getWorldCameraPosition() {
         return this.worldCameraPosition;
+    }
+
+    public Vector3f getManagedSkyColor() {
+        return this.managedSkyColor;
+    }
+
+    public Vector3f getManagedSkySunPosition() {
+        return this.managedSkySunPosition;
+    }
+
+    public Vector3f getManagedSkyMoonPosition() {
+        return this.managedSkyMoonPosition;
+    }
+
+    public Vector3f getManagedSkyShadowLightPosition() {
+        return this.managedSkyShadowLightPosition;
+    }
+
+    public boolean hasManagedSkyCelestialState() {
+        return this.managedSkyCelestialStateValid;
     }
 
     public Vector3d getServedPreviousWorldCameraPosition() {
@@ -1056,11 +1209,31 @@ public final class ActiniumRenderPipeline {
         projectionInverseMatrix.set(projectionMatrix).invert();
 
         if (this.activeWorldProgram != null) {
-            this.unbindWorldStageProgram();
+            if (this.activeWorldProgram == program) {
+                program.program().bind();
+                program.program().getInterface().setupState(this, modelViewMatrix, projectionInverseMatrix);
+                this.bindWorldStageTextures();
+                debugCheckGlErrors("world-stage.refreshProgram:" + program.name());
+                return;
+            }
+
+            if (this.worldTargets != null) {
+                this.worldTargets.transitionWrite(this.activeWorldProgram.drawBuffers(), true);
+                if (this.shouldEmitVerboseDebugFrame()) {
+                    this.debugLogTextureCenter("world-stage." + this.activeWorldProgram.name() + ".gaux4", this.worldTargets.getSourceGaux4Texture());
+                }
+            }
+
+            this.unbindWorldStageTextures();
+            this.activeWorldProgram.program().unbind();
+            this.activeWorldProgram = null;
+            debugCheckGlErrors("world-stage.switchProgram");
         }
 
-        this.worldStageGlState = WorldStageGlState.capture();
-        debugCheckGlErrors("world-stage.capture:" + program.name());
+        if (this.worldStageGlState == null) {
+            this.worldStageGlState = WorldStageGlState.capture();
+            debugCheckGlErrors("world-stage.capture:" + program.name());
+        }
         if (this.shouldEmitVerboseDebugFrame()) {
             this.debugLog("Binding world-stage program '{}' for {} with draw buffers {}", program.name(), this.currentStage, Arrays.toString(program.drawBuffers()));
         }
@@ -1092,6 +1265,9 @@ public final class ActiniumRenderPipeline {
             boolean renderColorTex1ToMain = true;
             if (this.worldTargets != null) {
                 this.worldTargets.endWrite(framebuffer, this.activeWorldProgram.drawBuffers(), renderColorTex1ToMain);
+                if (this.shouldEmitVerboseDebugFrame()) {
+                    this.debugLogTextureCenter("world-stage." + this.activeWorldProgram.name() + ".gaux4", this.worldTargets.getSourceGaux4Texture());
+                }
             }
             debugCheckGlErrors("world-stage.endWrite:" + this.activeWorldProgram.name());
         }
@@ -2342,6 +2518,9 @@ public final class ActiniumRenderPipeline {
             this.terrainDepthTexture1 = null;
         }
 
+        this.terrainInputTextureWidth = -1;
+        this.terrainInputTextureHeight = -1;
+
         for (Integer textureId : this.packTextureCache.values()) {
             if (textureId != null && textureId > 0) {
                 GL11.glDeleteTextures(textureId);
@@ -2539,6 +2718,16 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
+        if (this.terrainInputTextureWidth != this.width || this.terrainInputTextureHeight != this.height) {
+            if (this.terrainInputTextureWidth > 0 && this.terrainInputTextureHeight > 0) {
+                this.debugLog("Resizing terrain input textures from {}x{} to {}x{}",
+                        this.terrainInputTextureWidth, this.terrainInputTextureHeight, this.width, this.height);
+            }
+            this.deleteTerrainInputTextures();
+            this.terrainInputTextureWidth = this.width;
+            this.terrainInputTextureHeight = this.height;
+        }
+
         if (this.terrainGaux1Texture == null) {
             this.terrainGaux1Texture = createColorTexture(this.width, this.height);
             this.debugLog("Allocated terrain gaux1 texture {} with size {}x{}", this.terrainGaux1Texture, this.width, this.height);
@@ -2560,6 +2749,28 @@ public final class ActiniumRenderPipeline {
         }
     }
 
+    private void deleteTerrainInputTextures() {
+        if (this.terrainGaux2Texture != null) {
+            GL11.glDeleteTextures(this.terrainGaux2Texture);
+            this.terrainGaux2Texture = null;
+        }
+
+        if (this.terrainGaux1Texture != null) {
+            GL11.glDeleteTextures(this.terrainGaux1Texture);
+            this.terrainGaux1Texture = null;
+        }
+
+        if (this.terrainDepthTexture0 != null) {
+            GL11.glDeleteTextures(this.terrainDepthTexture0);
+            this.terrainDepthTexture0 = null;
+        }
+
+        if (this.terrainDepthTexture1 != null) {
+            GL11.glDeleteTextures(this.terrainDepthTexture1);
+            this.terrainDepthTexture1 = null;
+        }
+    }
+
     private void prepareWorldTargets(Framebuffer framebuffer) {
         if (this.worldTargets == null || this.width <= 0 || this.height <= 0) {
             return;
@@ -2570,15 +2781,28 @@ public final class ActiniumRenderPipeline {
         debugCheckGlErrors("pipeline.prepareWorldTargets.ensureSize");
 
         if (!this.worldTargetsPrepared) {
-            float[] fogClearColor = ChunkShaderFogComponent.FOG_SERVICE.getFogColor();
-            float clearRed = fogClearColor.length > 0 ? fogClearColor[0] : 0.0f;
-            float clearGreen = fogClearColor.length > 1 ? fogClearColor[1] : clearRed;
-            float clearBlue = fogClearColor.length > 2 ? fogClearColor[2] : clearGreen;
+            float clearRed = this.fogColor[0];
+            float clearGreen = this.fogColor[1];
+            float clearBlue = this.fogColor[2];
+
+            if (ActiniumShaderPackManager.areShadersEnabled()) {
+                Minecraft minecraft = Minecraft.getMinecraft();
+                Entity entity = minecraft.getRenderViewEntity();
+
+                if (minecraft.world != null && entity != null) {
+                    Vec3d skyColor = minecraft.world.getSkyColor(entity, minecraft.getRenderPartialTicks());
+                    this.managedSkyColor.set((float) skyColor.x, (float) skyColor.y, (float) skyColor.z);
+                    clearRed = this.managedSkyColor.x;
+                    clearGreen = this.managedSkyColor.y;
+                    clearBlue = this.managedSkyColor.z;
+                }
+            }
+
             this.worldTargets.beginFrame(framebuffer, clearRed, clearGreen, clearBlue, 1.0f);
             debugCheckGlErrors("pipeline.prepareWorldTargets.beginFrame");
             this.worldTargetsPrepared = true;
             if (this.shouldEmitVerboseDebugFrame()) {
-                this.debugLog("Prepared world-stage MRT targets for {}x{} with fog clear color [{}, {}, {}]", this.width, this.height, clearRed, clearGreen, clearBlue);
+                this.debugLog("Prepared world-stage MRT targets for {}x{} with sky clear color [{}, {}, {}]", this.width, this.height, clearRed, clearGreen, clearBlue);
             }
         }
     }
@@ -2691,6 +2915,41 @@ public final class ActiniumRenderPipeline {
 
         int textureId = this.worldTargets.getSourceGaux4Texture();
         return textureId > 0 ? textureId : null;
+    }
+
+    private void captureManagedSkyColor(float partialTicks) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Entity entity = minecraft.getRenderViewEntity();
+
+        if (minecraft.world == null || entity == null) {
+            return;
+        }
+
+        Vec3d skyColor = minecraft.world.getSkyColor(entity, partialTicks);
+        this.managedSkyColor.set((float) skyColor.x, (float) skyColor.y, (float) skyColor.z);
+    }
+
+    private void captureManagedSkyUpPosition() {
+        Matrix4f modelViewMatrix = new Matrix4f();
+        captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
+        modelViewMatrix.transformDirection(0.0f, 100.0f, 0.0f, this.managedSkyUpPosition);
+    }
+
+    private void captureManagedSkyCelestialState() {
+        Minecraft minecraft = Minecraft.getMinecraft();
+
+        if (minecraft.world == null) {
+            return;
+        }
+
+        Matrix4f modelViewMatrix = new Matrix4f();
+        captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
+        modelViewMatrix.transformDirection(0.0f, 100.0f, 0.0f, this.managedSkySunPosition);
+        modelViewMatrix.transformDirection(0.0f, -100.0f, 0.0f, this.managedSkyMoonPosition);
+
+        Vector3f shadowLight = minecraft.world.isDaytime() ? this.managedSkySunPosition : this.managedSkyMoonPosition;
+        this.managedSkyShadowLightPosition.set(shadowLight);
+        this.managedSkyCelestialStateValid = true;
     }
 
     private void copyTexture(int sourceTexture, @Nullable Integer destinationTexture) {

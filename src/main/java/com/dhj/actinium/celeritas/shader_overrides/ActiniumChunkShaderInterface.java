@@ -6,6 +6,7 @@ import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.init.MobEffects;
@@ -275,8 +276,9 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.legacySkyColor.set((float) currentSkyColor.x, (float) currentSkyColor.y, (float) currentSkyColor.z);
         }
 
-        int width = Math.max(1, minecraft.displayWidth);
-        int height = Math.max(1, minecraft.displayHeight);
+        Framebuffer framebuffer = minecraft.getFramebuffer();
+        int width = framebuffer != null ? Math.max(1, framebuffer.framebufferWidth) : Math.max(1, minecraft.displayWidth);
+        int height = framebuffer != null ? Math.max(1, framebuffer.framebufferHeight) : Math.max(1, minecraft.displayHeight);
 
         if (this.viewWidth != null) {
             this.viewWidth.set((float) width);

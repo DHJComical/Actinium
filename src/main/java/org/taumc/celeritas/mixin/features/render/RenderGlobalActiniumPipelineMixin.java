@@ -32,22 +32,13 @@ public class RenderGlobalActiniumPipelineMixin {
 
     @Inject(method = "renderSky(FI)V", at = @At("HEAD"))
     private void actinium$beginSky(float partialTicks, int pass, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.beginSky();
-        ActiniumRenderPipeline.INSTANCE.captureSkyStageState();
+        ActiniumRenderPipeline.INSTANCE.beginManagedSky(partialTicks);
         ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.head");
-        ActiniumRenderPipeline.INSTANCE.bindWorldStageProgram(partialTicks);
-    }
-
-    @Inject(method = "renderSky(FI)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;disableFog()V", ordinal = 0))
-    private void actinium$endBaseSky(float partialTicks, int pass, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.unbindWorldStageProgram();
-        ActiniumRenderPipeline.INSTANCE.endSky();
     }
 
     @Inject(method = "renderSky(FI)V", at = @At("RETURN"))
     private void actinium$endSky(float partialTicks, int pass, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.unbindWorldStageProgram();
-        ActiniumRenderPipeline.INSTANCE.endSky();
+        ActiniumRenderPipeline.INSTANCE.endManagedSky();
     }
 
     @Inject(method = "renderClouds(FIDDD)V", at = @At("HEAD"))
@@ -62,24 +53,14 @@ public class RenderGlobalActiniumPipelineMixin {
         ActiniumRenderPipeline.INSTANCE.endClouds();
     }
 
-    @Inject(method = "renderSky(FI)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/texture/TextureManager;bindTexture(Lnet/minecraft/util/ResourceLocation;)V", ordinal = 0))
-    private void actinium$beginSkyTextured(float partialTicks, int pass, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.beginSkyTextured();
-        ActiniumRenderPipeline.INSTANCE.bindWorldStageProgram(partialTicks);
-    }
-
-    @Inject(method = "renderSky(FI)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;disableTexture2D()V", ordinal = 2))
-    private void actinium$endSkyTextured(float partialTicks, int pass, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.unbindWorldStageProgram();
-        ActiniumRenderPipeline.INSTANCE.endSky();
-    }
-
     @Inject(
             method = "renderSky(FI)V",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/WorldClient;getCelestialAngle(F)F"),
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;rotate(FFFF)V", ordinal = 0, shift = At.Shift.AFTER),
             slice = @Slice(from = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/WorldClient;getRainStrength(F)F"))
     )
-    private void actinium$applySunPathRotation(float partialTicks, int pass, CallbackInfo ci) {
+    private void actinium$preCelestialRotate(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.captureManagedSkyPreCelestialState(partialTicks);
+
         if (!ActiniumRenderPipeline.INSTANCE.shouldApplySunPathRotationToVanillaSky()) {
             return;
         }
@@ -88,6 +69,27 @@ public class RenderGlobalActiniumPipelineMixin {
         if (sunPathRotation != 0.0F) {
             GlStateManager.rotate(sunPathRotation, 0.0F, 0.0F, 1.0F);
         }
+
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.preCelestialRotate");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;rotate(FFFF)V", ordinal = 1, shift = At.Shift.AFTER),
+            slice = @Slice(from = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/WorldClient;getRainStrength(F)F"))
+    )
+    private void actinium$postCelestialRotate(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.captureManagedSkyPostCelestialState(partialTicks);
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.postCelestialRotate");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;color(FFF)V", ordinal = 1, shift = At.Shift.AFTER)
+    )
+    private void actinium$preSkyList(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.renderShaderCoreSkyHorizon();
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.preSkyList");
     }
 
     @Inject(
@@ -100,9 +102,6 @@ public class RenderGlobalActiniumPipelineMixin {
     )
     private void actinium$clearSunriseFan(float partialTicks, int pass, CallbackInfo ci) {
         ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.sunriseFan");
-        if (this.actinium$shouldSuppressVanillaSkyGeometry()) {
-            Tessellator.getInstance().getBuffer().reset();
-        }
     }
 
     @Inject(
@@ -111,6 +110,51 @@ public class RenderGlobalActiniumPipelineMixin {
     )
     private void actinium$debugSkyTexturedEntry(float partialTicks, int pass, CallbackInfo ci) {
         ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.skyTextured");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;disableTexture2D()V", ordinal = 0, shift = At.Shift.AFTER)
+    )
+    private void actinium$onSkyDisableTexture0(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.updateManagedSkyTextureState(false, partialTicks);
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.disableTexture0");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;disableTexture2D()V", ordinal = 1, shift = At.Shift.AFTER)
+    )
+    private void actinium$onSkyDisableTexture1(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.updateManagedSkyTextureState(false, partialTicks);
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.disableTexture1");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;disableTexture2D()V", ordinal = 2, shift = At.Shift.AFTER)
+    )
+    private void actinium$onSkyDisableTexture2(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.updateManagedSkyTextureState(false, partialTicks);
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.disableTexture2");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;enableTexture2D()V", ordinal = 0, shift = At.Shift.AFTER)
+    )
+    private void actinium$onSkyEnableTexture0(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.updateManagedSkyTextureState(true, partialTicks);
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.enableTexture0");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;enableTexture2D()V", ordinal = 1, shift = At.Shift.AFTER)
+    )
+    private void actinium$onSkyEnableTexture1(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.updateManagedSkyTextureState(true, partialTicks);
+        ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.enableTexture1");
     }
 
     @Inject(

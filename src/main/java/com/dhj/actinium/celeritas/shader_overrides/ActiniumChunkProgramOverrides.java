@@ -182,6 +182,10 @@ public final class ActiniumChunkProgramOverrides {
 
         String shaderSource = ShaderParser.parseShader(source, this::resolveShaderSource, constants);
 
+        if (usingExternalPackProgram && pass == ActiniumTerrainPass.GBUFFER_TRANSLUCENT && type == ShaderType.FRAGMENT) {
+            shaderSource = this.patchExternalWaterFragment(shaderSource);
+        }
+
         if (usingLegacyTranslation && pass != null) {
             shaderSource = ActiniumLegacyChunkShaderAdapter.postProcessParsedSource(pass, shaderSource);
         }
@@ -214,6 +218,18 @@ public final class ActiniumChunkProgramOverrides {
         String fragmentSource = ActiniumShaderPackManager.getProgramSource(pass, ShaderType.FRAGMENT);
         return (vertexSource != null && this.isLegacyPackProgram(vertexSource))
                 || (fragmentSource != null && this.isLegacyPackProgram(fragmentSource));
+    }
+
+    private String patchExternalWaterFragment(String shaderSource) {
+        if (!shaderSource.contains("sun_reflection(") || !shaderSource.contains("#if SUN_REFLECTION == 1")) {
+            return shaderSource;
+        }
+
+        if (ActiniumShaderPackManager.isDebugEnabled()) {
+            ActiniumShaders.logger().info("Patching external water fragment shader to disable duplicated SUN_REFLECTION contribution");
+        }
+
+        return shaderSource.replace("#if SUN_REFLECTION == 1", "#if 0 /* Actinium: avoid duplicated water sun reflection */");
     }
 
     private String resolveShaderSource(String path) {

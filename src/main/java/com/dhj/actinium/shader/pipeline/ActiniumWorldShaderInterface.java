@@ -4,6 +4,7 @@ import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.init.MobEffects;
@@ -120,11 +121,6 @@ final class ActiniumWorldShaderInterface {
         Matrix4fc referenceModelViewMatrix = modelViewMatrix;
         Matrix4fc referenceProjectionInverseMatrix = projectionInverseMatrix;
 
-        if (pipeline.getCurrentStage() == ActiniumRenderStage.SKY || pipeline.getCurrentStage() == ActiniumRenderStage.SKY_TEXTURED) {
-            referenceModelViewMatrix = pipeline.getSkyStageModelViewMatrix();
-            referenceProjectionInverseMatrix = pipeline.getSkyStageProjectionInverseMatrix();
-        }
-
         if (this.texSampler != null) {
             this.texSampler.setInt(0);
         }
@@ -150,8 +146,9 @@ final class ActiniumWorldShaderInterface {
         }
 
         Minecraft minecraft = Minecraft.getMinecraft();
-        int width = Math.max(1, minecraft.displayWidth);
-        int height = Math.max(1, minecraft.displayHeight);
+        Framebuffer framebuffer = minecraft.getFramebuffer();
+        int width = framebuffer != null ? Math.max(1, framebuffer.framebufferWidth) : Math.max(1, minecraft.displayWidth);
+        int height = framebuffer != null ? Math.max(1, framebuffer.framebufferHeight) : Math.max(1, minecraft.displayHeight);
 
         setFloat(this.viewWidth, width);
         setFloat(this.viewHeight, height);
@@ -175,6 +172,9 @@ final class ActiniumWorldShaderInterface {
         Entity entity = minecraft.getRenderViewEntity();
         Vec3d currentWorldSkyColor = null;
         Vec3d currentWorldFogColor = null;
+        boolean useManagedSkyState = pipeline.getCurrentStage() == ActiniumRenderStage.SKY
+                || pipeline.getCurrentStage() == ActiniumRenderStage.SKY_TEXTURED
+                || pipeline.getCurrentStage() == ActiniumRenderStage.CLOUDS;
 
         if (entity != null) {
             if (this.cameraPosition != null) {
@@ -203,28 +203,40 @@ final class ActiniumWorldShaderInterface {
                 currentWorldFogColor = minecraft.world.getFogColor(partialTicks);
             }
 
-            if (this.skyColor != null && currentWorldSkyColor != null) {
-                this.skyColor.set((float) currentWorldSkyColor.x, (float) currentWorldSkyColor.y, (float) currentWorldSkyColor.z);
+            if (this.skyColor != null) {
+                if (useManagedSkyState) {
+                    Vector3f managedSkyColor = pipeline.getManagedSkyColor();
+                    this.skyColor.set(managedSkyColor.x, managedSkyColor.y, managedSkyColor.z);
+                } else if (currentWorldSkyColor != null) {
+                    this.skyColor.set((float) currentWorldSkyColor.x, (float) currentWorldSkyColor.y, (float) currentWorldSkyColor.z);
+                }
             }
         }
 
         if (minecraft.world != null) {
             int currentWorldTime = ActiniumCommonUniforms.getWorldTime(minecraft.world);
             float currentDayMoment = ActiniumCommonUniforms.getDayMoment(currentWorldTime);
-            float celestialAngle = minecraft.world.getCelestialAngle(minecraft.getRenderPartialTicks());
             float dayNight = ActiniumCommonUniforms.getDayNightMix(currentWorldTime);
-            float sunPathRotation = ActiniumShaderPackManager.getActiveShaderProperties().getSunPathRotation();
+            boolean useManagedCelestialState = useManagedSkyState && pipeline.hasManagedSkyCelestialState();
 
-            new Matrix4f(referenceModelViewMatrix)
-                    .rotateY((float) Math.toRadians(-90.0f))
-                    .rotateZ((float) Math.toRadians(sunPathRotation))
-                    .rotateX(celestialAngle * ((float) Math.PI * 2.0f))
-                    .transformDirection(0.0f, 100.0f, 0.0f, this.scratchSunPosition);
-            new Matrix4f(referenceModelViewMatrix)
-                    .rotateY((float) Math.toRadians(-90.0f))
-                    .rotateZ((float) Math.toRadians(sunPathRotation))
-                    .rotateX(celestialAngle * ((float) Math.PI * 2.0f))
-                    .transformDirection(0.0f, -100.0f, 0.0f, this.scratchMoonPosition);
+            if (useManagedCelestialState) {
+                this.scratchSunPosition.set(pipeline.getManagedSkySunPosition());
+                this.scratchMoonPosition.set(pipeline.getManagedSkyMoonPosition());
+            } else {
+                float celestialAngle = minecraft.world.getCelestialAngle(minecraft.getRenderPartialTicks());
+                float sunPathRotation = ActiniumShaderPackManager.getActiveShaderProperties().getSunPathRotation();
+
+                new Matrix4f(referenceModelViewMatrix)
+                        .rotateY((float) Math.toRadians(-90.0f))
+                        .rotateZ((float) Math.toRadians(sunPathRotation))
+                        .rotateX(celestialAngle * ((float) Math.PI * 2.0f))
+                        .transformDirection(0.0f, 100.0f, 0.0f, this.scratchSunPosition);
+                new Matrix4f(referenceModelViewMatrix)
+                        .rotateY((float) Math.toRadians(-90.0f))
+                        .rotateZ((float) Math.toRadians(sunPathRotation))
+                        .rotateX(celestialAngle * ((float) Math.PI * 2.0f))
+                        .transformDirection(0.0f, -100.0f, 0.0f, this.scratchMoonPosition);
+            }
 
             if (this.worldTime != null) {
                 this.worldTime.setInt(currentWorldTime);
@@ -249,7 +261,9 @@ final class ActiniumWorldShaderInterface {
             }
 
             if (this.shadowLightPosition != null) {
-                Vector3f light = dayNight >= 0.5f ? this.scratchSunPosition : this.scratchMoonPosition;
+                Vector3f light = useManagedCelestialState
+                        ? pipeline.getManagedSkyShadowLightPosition()
+                        : dayNight >= 0.5f ? this.scratchSunPosition : this.scratchMoonPosition;
                 this.shadowLightPosition.set(light.x, light.y, light.z);
             }
         }
