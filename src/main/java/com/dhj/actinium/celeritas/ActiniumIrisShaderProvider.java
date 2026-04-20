@@ -13,12 +13,16 @@ import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
     private static final ActiniumExtendedChunkVertexType EXTENDED_VERTEX_TYPE = new ActiniumExtendedChunkVertexType();
 
     private final ActiniumChunkProgramOverrides localOverrides = new ActiniumChunkProgramOverrides();
+    private final Set<TerrainRenderPass> loggedSkippedWorldPasses = new HashSet<>();
+    private final Set<TerrainRenderPass> loggedOverriddenWorldPasses = new HashSet<>();
     private RenderPassConfiguration<?> renderPassConfiguration;
     private boolean loggedLocalOverridePath;
     private int observedReloadVersion = -1;
@@ -51,13 +55,13 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
         boolean shouldOverrideWorldPass = pass.isReverseOrder();
 
         if (!shadowPass && !shouldOverrideWorldPass) {
-            if (ActiniumShaderPackManager.isDebugEnabled()) {
+            if (ActiniumShaderPackManager.isDebugEnabled() && this.loggedSkippedWorldPasses.add(pass)) {
                 ActiniumShaders.logger().info("Skipping Actinium chunk shader override for world pass '{}' and using Celeritas default terrain shader", pass.name());
             }
             return null;
         }
 
-        if (ActiniumShaderPackManager.isDebugEnabled() && !shadowPass && shouldOverrideWorldPass) {
+        if (ActiniumShaderPackManager.isDebugEnabled() && !shadowPass && shouldOverrideWorldPass && this.loggedOverriddenWorldPasses.add(pass)) {
             ActiniumShaders.logger().info("Using Actinium translucent terrain override for world pass '{}'", pass.name());
         }
 
@@ -93,6 +97,8 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
         if (this.renderPassConfiguration != configuration) {
             this.localOverrides.deleteShaders();
             this.loggedLocalOverridePath = false;
+            this.loggedSkippedWorldPasses.clear();
+            this.loggedOverriddenWorldPasses.clear();
         }
 
         this.renderPassConfiguration = configuration;
@@ -112,6 +118,8 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
         this.localOverrides.deleteShaders();
         this.renderPassConfiguration = null;
         this.loggedLocalOverridePath = false;
+        this.loggedSkippedWorldPasses.clear();
+        this.loggedOverriddenWorldPasses.clear();
         this.observedReloadVersion = ActiniumShaderPackManager.getReloadVersion();
     }
 
@@ -122,6 +130,8 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
             this.localOverrides.deleteShaders();
             this.renderPassConfiguration = null;
             this.loggedLocalOverridePath = false;
+            this.loggedSkippedWorldPasses.clear();
+            this.loggedOverriddenWorldPasses.clear();
             this.observedReloadVersion = reloadVersion;
         }
     }

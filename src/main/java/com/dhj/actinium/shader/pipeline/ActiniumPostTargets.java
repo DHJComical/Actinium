@@ -119,7 +119,7 @@ final class ActiniumPostTargets {
         }
     }
 
-    public void copySceneTextures(Framebuffer mainFramebuffer, @Nullable Integer worldColorTexture, @Nullable Integer worldGaux4Texture) {
+    public void copySceneTextures(Framebuffer mainFramebuffer, @Nullable Integer worldGaux4Texture) {
         if (this.width <= 0 || this.height <= 0) {
             return;
         }

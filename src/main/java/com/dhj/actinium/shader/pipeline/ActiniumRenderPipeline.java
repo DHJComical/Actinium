@@ -435,22 +435,14 @@ public final class ActiniumRenderPipeline {
                     worldGaux4Texture = this.worldTargets.getSourceGaux4Texture();
                 }
 
-                this.debugLogTextureCenter("pre-copy.mainFramebuffer", mainFramebuffer.framebufferTexture);
-                if (worldGaux4Texture != null && worldGaux4Texture > 0) {
-                    this.debugLogTextureCenter("pre-copy.worldGaux4Texture", worldGaux4Texture);
-                }
-
                 this.postTargets.ensureSize(this.width, this.height);
-                this.postTargets.copySceneTextures(mainFramebuffer, null, worldGaux4Texture);
+                this.postTargets.copySceneTextures(mainFramebuffer, worldGaux4Texture);
 
                 if (!this.preTranslucentDepthCapturedThisFrame) {
                     this.postTargets.copyPreTranslucentDepth(mainFramebuffer);
                 }
 
                 this.updateCenterDepthSmooth();
-                this.debugLogTextureCenter("post-copy.colortex0", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
-                this.debugLogTextureCenter("post-copy.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
-                this.debugLogTextureCenter("post-copy.gaux4", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
             }
             this.executeScenePrograms(scenePrograms, partialTicks);
             this.renderFinalPass(mainFramebuffer, finalProgram, partialTicks);
@@ -515,7 +507,7 @@ public final class ActiniumRenderPipeline {
                 this.postTargets.ensureSize(this.width, this.height);
 
                 if (initializeTargets) {
-                    this.postTargets.copySceneTextures(mainFramebuffer, null, null);
+                    this.postTargets.copySceneTextures(mainFramebuffer, null);
                 } else {
                     this.postTargets.copySceneInputs(mainFramebuffer);
                 }
@@ -883,6 +875,10 @@ public final class ActiniumRenderPipeline {
         this.prepareWorldTargets(framebuffer);
 
         if (this.worldTargets != null) {
+            if (this.worldTargets.getSourceColorTexture() > 0) {
+                this.copyTexture(framebuffer.framebufferTexture, this.worldTargets.getSourceColorTexture());
+                debugCheckGlErrors("terrain.primeFramebuffer:" + pass.name());
+            }
             this.worldTargets.bindWriteFramebuffer(framebuffer, new int[]{ActiniumPostTargets.TARGET_COLORTEX1}, false);
             debugCheckGlErrors("terrain.bindFramebuffer:" + pass.name());
         }
@@ -977,7 +973,9 @@ public final class ActiniumRenderPipeline {
 
         this.worldStageGlState = WorldStageGlState.capture();
         debugCheckGlErrors("world-stage.capture:" + program.name());
-        this.debugLog("Binding world-stage program '{}' for {} with draw buffers {}", program.name(), this.currentStage, Arrays.toString(program.drawBuffers()));
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Binding world-stage program '{}' for {} with draw buffers {}", program.name(), this.currentStage, Arrays.toString(program.drawBuffers()));
+        }
         boolean renderColorTex1ToMain = !this.hasPostProgram();
         if (this.worldTargets != null) {
             this.worldTargets.bindWriteFramebuffer(framebuffer, program.drawBuffers(), renderColorTex1ToMain);
@@ -1202,7 +1200,7 @@ public final class ActiniumRenderPipeline {
     }
 
     private void debugLogTextureCenter(String label, int textureId) {
-        if (!ActiniumShaderPackManager.isDebugEnabled() || textureId <= 0) {
+        if (!this.shouldEmitVerboseDebugFrame() || textureId <= 0) {
             return;
         }
 
@@ -1355,7 +1353,7 @@ public final class ActiniumRenderPipeline {
     }
 
     private void debugLogFramebufferCenter(String label, int framebufferId, int readBufferAttachment) {
-        if (!ActiniumShaderPackManager.isDebugEnabled() || framebufferId <= 0) {
+        if (!this.shouldEmitVerboseDebugFrame() || framebufferId <= 0) {
             return;
         }
 
@@ -2264,7 +2262,9 @@ public final class ActiniumRenderPipeline {
             this.worldTargets.beginFrame(framebuffer, clearRed, clearGreen, clearBlue, 1.0f);
             debugCheckGlErrors("pipeline.prepareWorldTargets.beginFrame");
             this.worldTargetsPrepared = true;
-            this.debugLog("Prepared world-stage MRT targets for {}x{} with fog clear color [{}, {}, {}]", this.width, this.height, clearRed, clearGreen, clearBlue);
+            if (this.shouldEmitVerboseDebugFrame()) {
+                this.debugLog("Prepared world-stage MRT targets for {}x{} with fog clear color [{}, {}, {}]", this.width, this.height, clearRed, clearGreen, clearBlue);
+            }
         }
     }
 
@@ -2272,7 +2272,9 @@ public final class ActiniumRenderPipeline {
         int[] drawBuffers = parseDrawBuffers(resolvedFragmentSource);
 
         if (this.shouldForceLegacySkyDrawBuffers(stage, resolvedFragmentSource, drawBuffers)) {
-            this.debugLog("Forcing world-stage program '{}' draw buffers to [1, 7] from writebuffers.glsl compatibility rule", stage.programName());
+            if (this.shouldEmitVerboseDebugFrame()) {
+                this.debugLog("Forcing world-stage program '{}' draw buffers to [1, 7] from writebuffers.glsl compatibility rule", stage.programName());
+            }
             return new int[]{ActiniumPostTargets.TARGET_COLORTEX1, ActiniumPostTargets.TARGET_GAUX4};
         }
 
@@ -2296,22 +2298,26 @@ public final class ActiniumRenderPipeline {
 
         String writeBuffersSource = this.getActivePackShaderSource();
         if (writeBuffersSource == null || writeBuffersSource.isBlank()) {
-            this.debugLog(
-                    "Skipping world-stage draw buffer compatibility check for '{}' because src/writebuffers.glsl is unavailable in the active pack",
-                    stage.programName()
-            );
+            if (this.shouldEmitVerboseDebugFrame()) {
+                this.debugLog(
+                        "Skipping world-stage draw buffer compatibility check for '{}' because src/writebuffers.glsl is unavailable in the active pack",
+                        stage.programName()
+                );
+            }
             return false;
         }
         boolean hasSkyBasicBranch = writeBuffersSource.contains("MC_VERSION < 11604 && defined GBUFFER_SKYBASIC");
         boolean hasSkyBasicDrawBuffers = hasSkyBasicBranch && writeBuffersSource.contains("/* DRAWBUFFERS:17 */");
 
-        this.debugLog(
-                "Resolved world-stage draw buffers for '{}' as {} before compatibility fix; skybasicBranch={}, skybasicDrawBuffers17={}",
-                stage.programName(),
-                Arrays.toString(parsedDrawBuffers),
-                hasSkyBasicBranch,
-                hasSkyBasicDrawBuffers
-        );
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog(
+                    "Resolved world-stage draw buffers for '{}' as {} before compatibility fix; skybasicBranch={}, skybasicDrawBuffers17={}",
+                    stage.programName(),
+                    Arrays.toString(parsedDrawBuffers),
+                    hasSkyBasicBranch,
+                    hasSkyBasicDrawBuffers
+            );
+        }
 
         return hasSkyBasicDrawBuffers;
     }
