@@ -113,7 +113,9 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
                 rawShaderProperties,
                 directiveSources
         );
-        ActiniumIdMap idMap = ActiniumIdMap.parse(readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties", directiveSources));
+        Properties blockProperties = readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties", directiveSources);
+        Properties entityProperties = readDimensionAwareProperties(shadersRoot, "entity.properties", directiveSources);
+        ActiniumIdMap idMap = ActiniumIdMap.parse(blockProperties, entityProperties);
 
         return new ActiniumShaderPackResources(pack.name(), packPath, fileSystem, shadersRoot, configProperties, shaderProperties, idMap, optionOverrides);
     }
@@ -276,6 +278,18 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
 
     private static Properties readPropertiesFile(Path path, String logicalName, Iterable<String> directiveSources) {
         return ActiniumDirectiveProcessor.loadPropertiesFile(path, logicalName, directiveSources);
+    }
+
+    private static Properties readDimensionAwareProperties(Path shadersRoot, String logicalName, Iterable<String> directiveSources) {
+        Properties merged = new Properties();
+        merged.putAll(readPropertiesFile(shadersRoot.resolve(logicalName), logicalName, directiveSources));
+
+        for (String prefix : getDimensionPrefixes()) {
+            Path overridePath = shadersRoot.resolve(prefix).resolve(logicalName);
+            merged.putAll(readPropertiesFile(overridePath, prefix + "/" + logicalName, directiveSources));
+        }
+
+        return merged;
     }
 
     private static Map<String, String> readRawPropertiesEntries(Path path) {

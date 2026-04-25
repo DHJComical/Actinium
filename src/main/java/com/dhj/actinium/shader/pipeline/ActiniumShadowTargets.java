@@ -27,6 +27,22 @@ final class ActiniumShadowTargets {
         this.framebufferId = GL30.glGenFramebuffers();
     }
 
+    public void configureSampling(boolean hardwareFiltering) {
+        int filter = hardwareFiltering ? GL11.GL_LINEAR : GL11.GL_NEAREST;
+
+        for (int depthTexture : this.depthTextures) {
+            if (depthTexture == 0) {
+                continue;
+            }
+
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, depthTexture);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, filter);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, filter);
+        }
+
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+    }
+
     public void updatePlaceholderFromMainFramebuffer(Framebuffer mainFramebuffer) {
         if (this.resolution <= 0) {
             return;
@@ -60,10 +76,7 @@ final class ActiniumShadowTargets {
         GL11.glViewport(0, 0, this.resolution, this.resolution);
         GL11.glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.framebufferId);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.depthTextures[1]);
-        GL11.glCopyTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, 0, 0, this.resolution, this.resolution, 0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        this.copyDepthPrimaryToSecondary();
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
     }
 
@@ -78,11 +91,18 @@ final class ActiniumShadowTargets {
     }
 
     public void endWrite() {
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+    }
+
+    public void copyDepthPrimaryToSecondary() {
+        if (this.framebufferId == 0 || this.resolution <= 0 || this.depthTextures[1] == 0) {
+            return;
+        }
+
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.framebufferId);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.depthTextures[1]);
-        GL11.glCopyTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, 0, 0, this.resolution, this.resolution, 0);
+        GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, this.resolution, this.resolution);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
     }
 
     public int getDepthTexture(int index) {

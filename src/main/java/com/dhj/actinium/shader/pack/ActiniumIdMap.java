@@ -3,6 +3,8 @@ package com.dhj.actinium.shader.pack;
 import com.dhj.actinium.celeritas.ActiniumBlockRenderLayer;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.block.Block;
@@ -24,21 +26,31 @@ import java.util.Properties;
 import java.util.Set;
 
 public final class ActiniumIdMap {
-    public static final ActiniumIdMap EMPTY = new ActiniumIdMap(new Reference2ObjectOpenHashMap<>(), Collections.emptyMap());
+    public static final ActiniumIdMap EMPTY = new ActiniumIdMap(new Reference2ObjectOpenHashMap<>(), Collections.emptyMap(), new Object2IntOpenHashMap<>());
 
     private final Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches;
     private final Map<Block, ActiniumBlockRenderLayer> blockTypeIds;
+    private final Object2IntMap<ActiniumNamespacedId> entityIds;
 
-    private ActiniumIdMap(Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches, Map<Block, ActiniumBlockRenderLayer> blockTypeIds) {
+    private ActiniumIdMap(Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches,
+                          Map<Block, ActiniumBlockRenderLayer> blockTypeIds,
+                          Object2IntMap<ActiniumNamespacedId> entityIds) {
         this.blockMetaMatches = blockMetaMatches;
         this.blockTypeIds = blockTypeIds;
+        this.entityIds = entityIds;
     }
 
     public static ActiniumIdMap parse(Properties properties) {
+        return parse(properties, new Properties());
+    }
+
+    public static ActiniumIdMap parse(Properties blockProperties, Properties entityProperties) {
         Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches = new Reference2ObjectOpenHashMap<>();
         Map<Block, ActiniumBlockRenderLayer> blockTypeIds = new HashMap<>();
+        Object2IntMap<ActiniumNamespacedId> entityIds = new Object2IntOpenHashMap<>();
+        entityIds.defaultReturnValue(-1);
 
-        properties.forEach((keyObject, valueObject) -> {
+        blockProperties.forEach((keyObject, valueObject) -> {
             String key = keyObject.toString();
             String value = valueObject.toString();
 
@@ -52,7 +64,16 @@ public final class ActiniumIdMap {
             }
         });
 
-        return new ActiniumIdMap(blockMetaMatches, blockTypeIds);
+        entityProperties.forEach((keyObject, valueObject) -> {
+            String key = keyObject.toString();
+            String value = valueObject.toString();
+
+            if (key.startsWith("entity.")) {
+                parseEntityEntry(key.substring("entity.".length()), value, entityIds);
+            }
+        });
+
+        return new ActiniumIdMap(blockMetaMatches, blockTypeIds, entityIds);
     }
 
     public @Nullable Reference2ObjectMap<Block, Int2IntMap> getBlockMetaMatches() {
@@ -61,6 +82,10 @@ public final class ActiniumIdMap {
 
     public @Nullable Map<Block, ActiniumBlockRenderLayer> getBlockTypeIds() {
         return this.blockTypeIds.isEmpty() ? null : this.blockTypeIds;
+    }
+
+    public @Nullable Object2IntMap<ActiniumNamespacedId> getEntityIds() {
+        return this.entityIds.isEmpty() ? null : this.entityIds;
     }
 
     private static void parseBlockEntry(String idString, String value, Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches) {
@@ -123,6 +148,24 @@ public final class ActiniumIdMap {
             }
 
             blockTypeIds.put(block, layer);
+        }
+    }
+
+    private static void parseEntityEntry(String idString, String value, Object2IntMap<ActiniumNamespacedId> entityIds) {
+        int intId;
+
+        try {
+            intId = Integer.parseInt(idString);
+        } catch (NumberFormatException ignored) {
+            return;
+        }
+
+        for (String token : parseIdentifierList(value)) {
+            if (token.isEmpty() || token.contains("=")) {
+                continue;
+            }
+
+            entityIds.put(new ActiniumNamespacedId(token), intId);
         }
     }
 

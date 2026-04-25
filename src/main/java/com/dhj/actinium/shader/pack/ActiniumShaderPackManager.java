@@ -24,7 +24,7 @@ import java.util.stream.Stream;
 
 public final class ActiniumShaderPackManager {
     public static final String BUILTIN_PACK_NAME = "Actinium Shader";
-    public static final int MAX_TERRAIN_DEBUG_MODE = 8;
+    public static final int MAX_TERRAIN_DEBUG_MODE = 13;
     private static final Path ROOT_SHADERPACKS_DIRECTORY = Paths.get("shaderpacks");
     private static final Path DEV_CLIENT_DIRECTORY = Paths.get("run", "client");
     private static final Path DEV_SHADERPACKS_DIRECTORY = DEV_CLIENT_DIRECTORY.resolve("shaderpacks");

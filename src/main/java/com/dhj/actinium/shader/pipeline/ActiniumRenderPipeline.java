@@ -8,17 +8,25 @@ import com.dhj.actinium.shadows.ActiniumInternalShadowRenderingState;
 import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
 import lombok.Getter;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.renderer.BufferBuilder;
+import net.minecraft.client.renderer.GLAllocation;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.culling.ICamera;
+import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.BlockRenderLayer;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.Vec3d;
+import net.minecraftforge.client.ForgeHooksClient;
+import net.minecraftforge.client.MinecraftForgeClient;
 import org.embeddedt.embeddium.impl.gl.array.GlVertexArray;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
@@ -31,6 +39,7 @@ import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.shader.ShaderLoader;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
+import org.embeddedt.embeddium.impl.render.viewport.frustum.Frustum;
 import org.embeddedt.embeddium.impl.render.viewport.frustum.SimpleFrustum;
 import org.jetbrains.annotations.Nullable;
 import org.joml.FrustumIntersection;
@@ -38,6 +47,7 @@ import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -198,6 +208,7 @@ public final class ActiniumRenderPipeline {
     private boolean sceneProgramsResolved;
     private boolean preSceneProgramsResolved;
     private boolean finalProgramResolved;
+    private boolean shadowEntityProgramResolved;
     private boolean loggedPostProgramUse;
     private boolean loggedFinalProgramUse;
     @Getter
@@ -228,6 +239,8 @@ public final class ActiniumRenderPipeline {
     private final Matrix4f previousGbufferProjectionMatrix = new Matrix4f();
     private final Matrix4f servedPreviousGbufferModelViewMatrix = new Matrix4f();
     private final Matrix4f servedPreviousGbufferProjectionMatrix = new Matrix4f();
+    private final Matrix4f scratchShadowStabilizationMatrix = new Matrix4f();
+    private final Matrix4f scratchCelestialModelViewMatrix = new Matrix4f();
     private final Vector3f scratchVector = new Vector3f();
     private final Vector3f scratchTaaOffset = new Vector3f();
     private final Vector3f managedSkyColor = new Vector3f(1.0f, 1.0f, 1.0f);
@@ -235,6 +248,7 @@ public final class ActiniumRenderPipeline {
     private final Vector3f managedSkySunPosition = new Vector3f(0.0f, 100.0f, 0.0f);
     private final Vector3f managedSkyMoonPosition = new Vector3f(0.0f, -100.0f, 0.0f);
     private final Vector3f managedSkyShadowLightPosition = new Vector3f(0.0f, 100.0f, 0.0f);
+    private final Vector4f scratchShadowOrigin = new Vector4f();
     private final Vector3d shadowCameraPosition = new Vector3d();
     private final Vector3d worldCameraPosition = new Vector3d();
     @Getter
@@ -255,6 +269,7 @@ public final class ActiniumRenderPipeline {
     private @Nullable ActiniumWorldProgram weatherProgram;
     private @Nullable ActiniumWorldProgram activeWorldProgram;
     private @Nullable WorldStageGlState worldStageGlState;
+    private @Nullable GlProgram<ActiniumShadowShaderInterface> shadowEntityProgram;
     private @Nullable GlProgram<ActiniumPostShaderInterface> finalProgram;
     private int[] finalProgramMipmappedBuffers = new int[0];
     private Map<Integer, Boolean> finalProgramExplicitFlips = Collections.emptyMap();
@@ -422,7 +437,6 @@ public final class ActiniumRenderPipeline {
         this.syncReloadState();
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.gbufferModelViewMatrix);
         captureMatrix(GL11.GL_PROJECTION_MATRIX, this.gbufferProjectionMatrix);
-        this.applyTemporalJitterToProjection(this.gbufferProjectionMatrix);
         this.gbufferModelViewInverseMatrix.set(this.gbufferModelViewMatrix).invert();
         this.gbufferProjectionInverseMatrix.set(this.gbufferProjectionMatrix).invert();
         System.arraycopy(ChunkShaderFogComponent.FOG_SERVICE.getFogColor(), 0, this.fogColor, 0, this.fogColor.length);
@@ -437,7 +451,7 @@ public final class ActiniumRenderPipeline {
         }
 
         double cameraX = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks;
-        double cameraY = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks + entity.getEyeHeight();
+        double cameraY = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks;
         double cameraZ = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks;
         this.worldCameraPosition.set(cameraX, cameraY, cameraZ);
     }
@@ -492,7 +506,6 @@ public final class ActiniumRenderPipeline {
         this.syncReloadState();
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.skyStageModelViewMatrix);
         captureMatrix(GL11.GL_PROJECTION_MATRIX, this.skyStageProjectionMatrix);
-        this.applyTemporalJitterToProjection(this.skyStageProjectionMatrix);
         this.skyStageModelViewInverseMatrix.set(this.skyStageModelViewMatrix).invert();
         this.skyStageProjectionInverseMatrix.set(this.skyStageProjectionMatrix).invert();
     }
@@ -1025,6 +1038,7 @@ public final class ActiniumRenderPipeline {
 
     public void renderShadowPass(float partialTicks) {
         this.syncReloadState();
+        this.captureInterpolatedWorldCameraPosition(partialTicks);
 
         if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasShadowProgram()) {
             return;
@@ -1042,10 +1056,9 @@ public final class ActiniumRenderPipeline {
         this.width = Math.max(1, mainFramebuffer != null ? mainFramebuffer.framebufferWidth : minecraft.displayWidth);
         this.height = Math.max(1, mainFramebuffer != null ? mainFramebuffer.framebufferHeight : minecraft.displayHeight);
 
-        this.ensureRuntimeResources();
-        this.computeShadowMatrices(partialTicks, properties);
-
         int resolution = chooseShadowResolution(properties);
+        this.ensureRuntimeResources();
+        this.computeShadowMatrices(partialTicks, properties, resolution);
 
         if (!this.renderShadowTerrainPass(properties, resolution, partialTicks)) {
             if (this.shadowTargets != null) {
@@ -1059,6 +1072,40 @@ public final class ActiniumRenderPipeline {
 
     public Vector3f transformDirection(float x, float y, float z) {
         return this.gbufferModelViewMatrix.transformDirection(x, y, z, this.scratchVector).normalize();
+    }
+
+    public float getShaderCoreCelestialAngle(float partialTicks) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        return minecraft.world != null ? minecraft.world.getCelestialAngle(partialTicks) : 0.0f;
+    }
+
+    public float getShaderCoreSunAngle(float partialTicks) {
+        float celestialAngle = this.getShaderCoreCelestialAngle(partialTicks);
+        return celestialAngle < 0.75f ? celestialAngle + 0.25f : celestialAngle - 0.75f;
+    }
+
+    public boolean isShaderCoreShadowUsingSun(float partialTicks) {
+        return this.getShaderCoreSunAngle(partialTicks) <= 0.5f;
+    }
+
+    public void fillShaderCoreCelestialUniforms(Matrix4fc referenceModelViewMatrix,
+                                                float partialTicks,
+                                                Vector3f sunPosition,
+                                                Vector3f moonPosition,
+                                                @Nullable Vector3f shadowLightPosition) {
+        float celestialAngle = this.getShaderCoreCelestialAngle(partialTicks);
+        float sunPathRotation = ActiniumShaderPackManager.getActiveShaderProperties().getSunPathRotation();
+
+        this.scratchCelestialModelViewMatrix.set(referenceModelViewMatrix)
+                .rotateY((float) Math.toRadians(-90.0f))
+                .rotateZ((float) Math.toRadians(sunPathRotation))
+                .rotateX(celestialAngle * ((float) Math.PI * 2.0f));
+        this.scratchCelestialModelViewMatrix.transformDirection(0.0f, 100.0f, 0.0f, sunPosition);
+        this.scratchCelestialModelViewMatrix.transformDirection(0.0f, -100.0f, 0.0f, moonPosition);
+
+        if (shadowLightPosition != null) {
+            shadowLightPosition.set(this.isShaderCoreShadowUsingSun(partialTicks) ? sunPosition : moonPosition);
+        }
     }
 
     public void bindTerrainShadowTextures() {
@@ -1244,7 +1291,6 @@ public final class ActiniumRenderPipeline {
 
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
         captureMatrix(GL11.GL_PROJECTION_MATRIX, projectionMatrix);
-        this.applyTemporalJitterToProjection(projectionMatrix);
         projectionInverseMatrix.set(projectionMatrix).invert();
 
         if (this.activeWorldProgram != null) {
@@ -1886,6 +1932,50 @@ public final class ActiniumRenderPipeline {
             GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, textureId, 0);
             GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
             this.debugReadSamplePoints(label, this.width, this.height);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+            GL30.glDeleteFramebuffers(framebuffer);
+        }
+    }
+
+    private void debugLogTextureSamples(String label, int textureId, int width, int height) {
+        if (!this.shouldEmitVerboseDebugFrame() || textureId <= 0) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int framebuffer = GL30.glGenFramebuffers();
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, textureId, 0);
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            this.debugReadSamplePoints(label, width, height);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+            GL30.glDeleteFramebuffers(framebuffer);
+        }
+    }
+
+    private void debugLogDepthTextureSample(String label, int textureId, int width, int height) {
+        if (!this.shouldEmitVerboseDebugFrame() || textureId <= 0 || width <= 0 || height <= 0) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int framebuffer = GL30.glGenFramebuffers();
+        FloatBuffer pixel = BufferUtils.createFloatBuffer(1);
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, textureId, 0);
+            GL11.glReadBuffer(GL11.GL_NONE);
+            GL11.glReadPixels(Math.max(0, width / 2), Math.max(0, height / 2), 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, pixel);
+            this.debugLog("Post debug '{}' center depth={}", label, pixel.get(0));
         } finally {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
             GL11.glReadBuffer(previousReadBuffer);
@@ -2591,7 +2681,13 @@ public final class ActiniumRenderPipeline {
             this.blitProgram = null;
         }
 
+        if (this.shadowEntityProgram != null) {
+            this.shadowEntityProgram.delete();
+            this.shadowEntityProgram = null;
+        }
+
         this.finalProgramResolved = false;
+        this.shadowEntityProgramResolved = false;
         this.loggedPostProgramUse = false;
         this.loggedFinalProgramUse = false;
         this.finalProgramExplicitFlips = Collections.emptyMap();
@@ -3104,7 +3200,9 @@ public final class ActiniumRenderPipeline {
         modelViewMatrix.transformDirection(0.0f, 100.0f, 0.0f, this.managedSkySunPosition);
         modelViewMatrix.transformDirection(0.0f, -100.0f, 0.0f, this.managedSkyMoonPosition);
 
-        Vector3f shadowLight = minecraft.world.isDaytime() ? this.managedSkySunPosition : this.managedSkyMoonPosition;
+        Vector3f shadowLight = this.isShaderCoreShadowUsingSun(minecraft.getRenderPartialTicks())
+                ? this.managedSkySunPosition
+                : this.managedSkyMoonPosition;
         this.managedSkyShadowLightPosition.set(shadowLight);
         this.managedSkyCelestialStateValid = true;
     }
@@ -3188,11 +3286,10 @@ public final class ActiniumRenderPipeline {
         destination.set(buffer);
     }
 
-    private void computeShadowMatrices(float partialTicks, ActiniumShaderProperties properties) {
+    private void computeShadowMatrices(float partialTicks, ActiniumShaderProperties properties, int resolution) {
         Minecraft minecraft = Minecraft.getMinecraft();
 
         if (minecraft.world == null || minecraft.getRenderViewEntity() == null) {
-            this.worldCameraPosition.zero();
             this.shadowCameraPosition.zero();
             this.shadowModelViewMatrix.identity();
             this.shadowProjectionMatrix.identity();
@@ -3201,16 +3298,13 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        double camX = minecraft.getRenderViewEntity().lastTickPosX + (minecraft.getRenderViewEntity().posX - minecraft.getRenderViewEntity().lastTickPosX) * partialTicks;
-        double camY = minecraft.getRenderViewEntity().lastTickPosY + (minecraft.getRenderViewEntity().posY - minecraft.getRenderViewEntity().lastTickPosY) * partialTicks + minecraft.getRenderViewEntity().getEyeHeight();
-        double camZ = minecraft.getRenderViewEntity().lastTickPosZ + (minecraft.getRenderViewEntity().posZ - minecraft.getRenderViewEntity().lastTickPosZ) * partialTicks;
-        this.worldCameraPosition.set(camX, camY, camZ);
         this.shadowCameraPosition.set(this.worldCameraPosition);
 
-        float skyAngle = minecraft.world.getCelestialAngle(partialTicks);
-        float sunAngle = skyAngle < 0.75f ? skyAngle + 0.25f : skyAngle - 0.75f;
-        float shadowAngle = sunAngle > 0.5f ? sunAngle - 0.5f : sunAngle;
+        float celestialAngle = this.getShaderCoreCelestialAngle(partialTicks);
+        float sunAngle = celestialAngle < 0.75f ? celestialAngle + 0.25f : celestialAngle - 0.75f;
+        float angle = celestialAngle * -360.0f;
         float intervalSize = Math.max(0.0f, properties.getShadowIntervalSize());
+        float angleInterval = 0.0f;
         float shadowDistance = Math.max(16.0f, Math.min(
                 properties.getShadowDistance(),
                 minecraft.gameSettings.renderDistanceChunks * 16.0f
@@ -3220,21 +3314,47 @@ public final class ActiniumRenderPipeline {
 
         this.shadowModelViewMatrix.identity()
                 .translate(0.0f, 0.0f, -100.0f)
-                .rotateX((float) Math.toRadians(90.0f))
-                .rotateZ((float) Math.toRadians(shadowAngle * -360.0f))
-                .rotateX((float) Math.toRadians(properties.getSunPathRotation()));
+                .rotateX((float) Math.toRadians(90.0f));
+
+        if (sunAngle <= 0.5f) {
+            this.shadowModelViewMatrix.rotateZ((float) Math.toRadians(angle - angleInterval));
+        } else {
+            this.shadowModelViewMatrix.rotateZ((float) Math.toRadians(angle + 180.0f - angleInterval));
+        }
+
+        this.shadowModelViewMatrix.rotateX((float) Math.toRadians(properties.getSunPathRotation()));
 
         if (intervalSize > 0.0f) {
             float halfInterval = intervalSize * 0.5f;
-            float offsetX = (float) camX % intervalSize - halfInterval;
-            float offsetY = (float) camY % intervalSize - halfInterval;
-            float offsetZ = (float) camZ % intervalSize - halfInterval;
+            float offsetX = (float) this.shadowCameraPosition.x % intervalSize - halfInterval;
+            float offsetY = (float) this.shadowCameraPosition.y % intervalSize - halfInterval;
+            float offsetZ = (float) this.shadowCameraPosition.z % intervalSize - halfInterval;
             this.shadowModelViewMatrix.translate(offsetX, offsetY, offsetZ);
         }
 
         this.shadowProjectionMatrix.identity().ortho(-shadowDistance, shadowDistance, -shadowDistance, shadowDistance, nearPlane, farPlane);
+        this.stabilizeShadowProjection(resolution);
         this.shadowModelViewInverseMatrix.set(this.shadowModelViewMatrix).invert();
         this.shadowProjectionInverseMatrix.set(this.shadowProjectionMatrix).invert();
+    }
+
+    private void stabilizeShadowProjection(int resolution) {
+        if (resolution <= 0) {
+            return;
+        }
+
+        this.scratchShadowStabilizationMatrix.set(this.shadowProjectionMatrix).mul(this.shadowModelViewMatrix);
+        this.scratchShadowOrigin.set(0.0f, 0.0f, 0.0f, 1.0f);
+        this.scratchShadowStabilizationMatrix.transform(this.scratchShadowOrigin);
+
+        float texelSize = 2.0f / resolution;
+        float snappedX = Math.round(this.scratchShadowOrigin.x / texelSize) * texelSize;
+        float snappedY = Math.round(this.scratchShadowOrigin.y / texelSize) * texelSize;
+        float offsetX = snappedX - this.scratchShadowOrigin.x;
+        float offsetY = snappedY - this.scratchShadowOrigin.y;
+
+        this.shadowProjectionMatrix.m30(this.shadowProjectionMatrix.m30() + offsetX);
+        this.shadowProjectionMatrix.m31(this.shadowProjectionMatrix.m31() + offsetY);
     }
 
     private int chooseShadowResolution(ActiniumShaderProperties properties) {
@@ -3257,6 +3377,7 @@ public final class ActiniumRenderPipeline {
 
         if (this.shadowTargets != null) {
             this.shadowTargets.ensureSize(resolution);
+            this.shadowTargets.configureSampling(properties.isShadowHardwareFiltering());
         }
         FloatBuffer previousProjection = copyFloatBuffer(ActiveRenderInfoAccessor.getProjectionMatrix());
         FloatBuffer previousModelView = copyFloatBuffer(ActiveRenderInfoAccessor.getModelViewMatrix());
@@ -3270,11 +3391,30 @@ public final class ActiniumRenderPipeline {
             ActiveRenderInfoAccessor.setModelViewMatrix(toBuffer(this.shadowModelViewMatrix));
             ActiniumInternalShadowRenderingState.begin(this.shadowModelViewMatrix, this.shadowProjectionMatrix);
             this.shadowTargets.beginWrite();
+            if (ActiniumShaderPackManager.isDebugEnabled() && this.shouldEmitVerboseDebugFrame()) {
+                int framebufferStatus = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+                this.debugLog(
+                        "Shadow terrain framebuffer status={} ({}) resolution={} camera=({}, {}, {})",
+                        framebufferStatusName(framebufferStatus),
+                        framebufferStatus,
+                        resolution,
+                        this.shadowCameraPosition.x,
+                        this.shadowCameraPosition.y,
+                        this.shadowCameraPosition.z
+                );
+            }
             RenderDevice.enterManagedCode();
             RenderHelper.disableStandardItemLighting();
             GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
             GlStateManager.bindTexture(minecraft.getTextureMapBlocks().getGlTextureId());
             GlStateManager.enableTexture2D();
+            GlStateManager.enableDepth();
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
+            GlStateManager.depthMask(true);
+            GlStateManager.colorMask(true, true, true, true);
+            GlStateManager.disableBlend();
+            GlStateManager.enableCull();
+            GlStateManager.shadeModel(GL11.GL_SMOOTH);
             minecraft.entityRenderer.enableLightmap();
 
             renderer.setupTerrain(
@@ -3285,12 +3425,38 @@ public final class ActiniumRenderPipeline {
                     false
             );
 
-            renderer.drawChunkLayer(BlockRenderLayer.SOLID, this.worldCameraPosition.x, this.worldCameraPosition.y, this.worldCameraPosition.z);
-            renderer.drawChunkLayer(BlockRenderLayer.CUTOUT_MIPPED, this.worldCameraPosition.x, this.worldCameraPosition.y, this.worldCameraPosition.z);
-            renderer.drawChunkLayer(BlockRenderLayer.CUTOUT, this.worldCameraPosition.x, this.worldCameraPosition.y, this.worldCameraPosition.z);
+            if (ActiniumShaderPackManager.isDebugEnabled() && this.shouldEmitVerboseDebugFrame()) {
+                this.debugLog(
+                        "Shadow terrain setup visibleChunks={} shadowFrame={} shadowDistance={} interval={} near={} far={}",
+                        renderer.getVisibleChunkCount(),
+                        shadowFrame,
+                        properties.getShadowDistance(),
+                        properties.getShadowIntervalSize(),
+                        properties.getShadowNearPlane(),
+                        properties.getShadowFarPlane()
+                );
+            }
+
+            renderer.drawChunkLayer(BlockRenderLayer.SOLID, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+            renderer.drawChunkLayer(BlockRenderLayer.CUTOUT_MIPPED, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+            renderer.drawChunkLayer(BlockRenderLayer.CUTOUT, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+
+            try {
+                this.renderShadowEntityPass(resolution, partialTicks);
+            } catch (RuntimeException e) {
+                ActiniumShaders.logger().warn("Failed to render Actinium shadow entity pass; keeping terrain shadow map", e);
+            }
+
+            if (this.shadowTargets != null) {
+                this.shadowTargets.copyDepthPrimaryToSecondary();
+            }
 
             if (properties.isShadowTranslucent()) {
-                renderer.drawChunkLayer(BlockRenderLayer.TRANSLUCENT, this.worldCameraPosition.x, this.worldCameraPosition.y, this.worldCameraPosition.z);
+                renderer.drawChunkLayer(BlockRenderLayer.TRANSLUCENT, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+            }
+
+            if (ActiniumShaderPackManager.isDebugEnabled() && this.shouldEmitVerboseDebugFrame() && this.shadowTargets != null) {
+                this.debugLogShadowTargetState("shadow.terrain", resolution);
             }
 
             this.shadowTargets.endWrite();
@@ -3310,29 +3476,166 @@ public final class ActiniumRenderPipeline {
     }
 
     private Viewport createShadowViewport() {
-        Matrix4f combinedMatrix = new Matrix4f(this.shadowProjectionMatrix).mul(this.shadowModelViewMatrix);
-        FrustumIntersection frustum = new FrustumIntersection();
-        frustum.set(combinedMatrix, true);
-        return new Viewport(new SimpleFrustum(frustum), new Vector3d(this.worldCameraPosition));
+        float shadowDistance = Math.max(16.0f, ActiniumShaderPackManager.getActiveShaderProperties().getShadowDistance());
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Entity renderViewEntity = minecraft.getRenderViewEntity();
+        double cullY = this.shadowCameraPosition.y + (renderViewEntity != null ? renderViewEntity.getEyeHeight() : 0.0);
+        return new Viewport(new ShadowViewportFrustum(shadowDistance), new Vector3d(this.shadowCameraPosition.x, cullY, this.shadowCameraPosition.z));
     }
 
     private SimpleWorldRenderer.CameraState createShadowCameraState(float partialTicks) {
         Minecraft minecraft = Minecraft.getMinecraft();
-        double camX = 0;
-        if (minecraft.getRenderViewEntity() != null) {
-            camX = minecraft.getRenderViewEntity().lastTickPosX + (minecraft.getRenderViewEntity().posX - minecraft.getRenderViewEntity().lastTickPosX) * partialTicks;
-        }
-        double camY = minecraft.getRenderViewEntity().lastTickPosY + (minecraft.getRenderViewEntity().posY - minecraft.getRenderViewEntity().lastTickPosY) * partialTicks + minecraft.getRenderViewEntity().getEyeHeight();
-        double camZ = minecraft.getRenderViewEntity().lastTickPosZ + (minecraft.getRenderViewEntity().posZ - minecraft.getRenderViewEntity().lastTickPosZ) * partialTicks;
         Entity renderViewEntity = minecraft.getRenderViewEntity();
+        double cullY = this.shadowCameraPosition.y + (renderViewEntity != null ? renderViewEntity.getEyeHeight() : 0.0);
         return new SimpleWorldRenderer.CameraState(
-                camX,
-                camY,
-                camZ,
+                this.shadowCameraPosition.x,
+                cullY,
+                this.shadowCameraPosition.z,
                 renderViewEntity.rotationPitch,
                 renderViewEntity.rotationYaw,
                 ChunkShaderFogComponent.FOG_SERVICE.getFogCutoff()
         );
+    }
+
+    private void renderShadowEntityPass(int resolution, float partialTicks) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Entity renderViewEntity = minecraft.getRenderViewEntity();
+        ActiniumShaderProperties properties = ActiniumShaderPackManager.getActiveShaderProperties();
+
+        if (minecraft.world == null || renderViewEntity == null || !properties.isShadowEnabled()) {
+            return;
+        }
+
+        boolean renderEntityShadows = properties.isShadowEntities();
+        boolean renderPlayerShadow = properties.isShadowPlayer();
+
+        if (!renderEntityShadows && !renderPlayerShadow) {
+            return;
+        }
+
+        ShadowEntityCamera camera = new ShadowEntityCamera(this.shadowProjectionMatrix, this.shadowModelViewMatrix);
+        double entityX = renderViewEntity.lastTickPosX + (renderViewEntity.posX - renderViewEntity.lastTickPosX) * partialTicks;
+        double entityY = renderViewEntity.lastTickPosY + (renderViewEntity.posY - renderViewEntity.lastTickPosY) * partialTicks;
+        double entityZ = renderViewEntity.lastTickPosZ + (renderViewEntity.posZ - renderViewEntity.lastTickPosZ) * partialTicks;
+        camera.setPosition(entityX, entityY, entityZ);
+
+        RenderManager renderManager = minecraft.getRenderManager();
+        int previousRenderPass = MinecraftForgeClient.getRenderPass();
+        boolean previousRenderShadow = renderManager.isRenderShadow();
+        int previousThirdPersonView = minecraft.gameSettings.thirdPersonView;
+        FloatBuffer previousProjection = ActiveRenderInfoAccessor.getProjectionMatrix();
+        FloatBuffer previousModelView = ActiveRenderInfoAccessor.getModelViewMatrix();
+        FloatBuffer previousObjectCoords = ActiveRenderInfoAccessor.getObjectCoords();
+        IntBuffer previousViewport = ActiveRenderInfoAccessor.getViewportBuffer();
+
+        try {
+            ForgeHooksClient.setRenderPass(0);
+            if (renderPlayerShadow) {
+                minecraft.gameSettings.thirdPersonView = 1;
+            }
+            renderManager.cacheActiveRenderInfo(
+                    minecraft.world,
+                    minecraft.fontRenderer,
+                    renderViewEntity,
+                    minecraft.pointedEntity,
+                    minecraft.gameSettings,
+                    partialTicks
+            );
+            renderManager.setRenderPosition(this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+            renderManager.setRenderShadow(false);
+            GL20.glUseProgram(0);
+            GL30.glBindVertexArray(0);
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
+            GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
+            GL11.glMatrixMode(GL11.GL_PROJECTION);
+            GL11.glLoadMatrixf(toGlMatrixBuffer(this.shadowProjectionMatrix));
+            GL11.glMatrixMode(GL11.GL_MODELVIEW);
+            GL11.glLoadMatrixf(toGlMatrixBuffer(this.shadowModelViewMatrix));
+            GL11.glViewport(0, 0, resolution, resolution);
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+            GlStateManager.enableTexture2D();
+            GlStateManager.enableDepth();
+            GlStateManager.depthMask(true);
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
+            GlStateManager.enableAlpha();
+            GlStateManager.alphaFunc(GL11.GL_GREATER, 0.1f);
+            GlStateManager.disableBlend();
+            GlStateManager.disableFog();
+            GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonOffset(2.0f, 8.0f);
+            GlStateManager.shadeModel(GL11.GL_SMOOTH);
+            GlStateManager.colorMask(true, true, true, true);
+            GlStateManager.enableCull();
+            ActiveRenderInfoAccessor.setModelViewMatrix(GLAllocation.createDirectFloatBuffer(16));
+            ActiveRenderInfoAccessor.setProjectionMatrix(GLAllocation.createDirectFloatBuffer(16));
+            ActiveRenderInfoAccessor.setObjectCoords(GLAllocation.createDirectFloatBuffer(3));
+            ActiveRenderInfoAccessor.setViewportBuffer(GLAllocation.createDirectIntBuffer(16));
+            ActiveRenderInfo.updateRenderInfo(renderViewEntity, minecraft.gameSettings.thirdPersonView == 2);
+            if (renderEntityShadows || renderPlayerShadow) {
+                GL11.glMatrixMode(GL11.GL_MODELVIEW);
+                GL11.glPushMatrix();
+                minecraft.renderGlobal.renderEntities(renderViewEntity, camera, partialTicks);
+                GL11.glPopMatrix();
+            }
+
+            if (ActiniumShaderPackManager.isDebugEnabled() && this.shouldEmitVerboseDebugFrame() && this.shadowTargets != null) {
+                this.debugLogShadowTargetState("shadow.entities", resolution);
+            }
+        } finally {
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonOffset(0.0f, 0.0f);
+            ActiveRenderInfoAccessor.setProjectionMatrix(previousProjection);
+            ActiveRenderInfoAccessor.setModelViewMatrix(previousModelView);
+            ActiveRenderInfoAccessor.setObjectCoords(previousObjectCoords);
+            ActiveRenderInfoAccessor.setViewportBuffer(previousViewport);
+            minecraft.gameSettings.thirdPersonView = previousThirdPersonView;
+            renderManager.setRenderShadow(previousRenderShadow);
+            ForgeHooksClient.setRenderPass(previousRenderPass);
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        }
+    }
+
+    private @Nullable GlProgram<ActiniumShadowShaderInterface> getShadowEntityProgram() {
+        if (this.shadowEntityProgramResolved) {
+            return this.shadowEntityProgram;
+        }
+
+        this.shadowEntityProgramResolved = true;
+        String vertexSource = ActiniumShaderPackManager.getProgramSource("shadow", ShaderType.VERTEX);
+        String fragmentSource = ActiniumShaderPackManager.getProgramSource("shadow", ShaderType.FRAGMENT);
+
+        if (vertexSource == null || fragmentSource == null) {
+            return null;
+        }
+
+        String resolvedVertexSource = ShaderParser.parseShader(vertexSource, this::resolveShaderSource, ShaderConstants.EMPTY);
+        String resolvedFragmentSource = ShaderParser.parseShader(fragmentSource, this::resolveShaderSource, ShaderConstants.EMPTY);
+        List<GlShader> shaders = new ArrayList<>(2);
+        shaders.add(new GlShader(ShaderType.VERTEX, "actinium:shadow/entity." + ShaderType.VERTEX.fileExtension, resolvedVertexSource));
+        shaders.add(new GlShader(ShaderType.FRAGMENT, "actinium:shadow/entity." + ShaderType.FRAGMENT.fileExtension, resolvedFragmentSource));
+
+        try {
+            GlProgram.Builder builder = GlProgram.builder("actinium:shadow/entity");
+            shaders.forEach(builder::attachShader);
+            this.shadowEntityProgram = builder.link(ActiniumShadowShaderInterface::new);
+            this.debugLog("Compiled external shader pack entity shadow program");
+            return this.shadowEntityProgram;
+        } catch (RuntimeException e) {
+            ActiniumShaders.logger().warn("Failed to compile external shader pack entity shadow program", e);
+            return null;
+        } finally {
+            shaders.forEach(GlShader::delete);
+        }
+    }
+
+    private void debugLogShadowTargetState(String label, int resolution) {
+        if (!this.shouldEmitVerboseDebugFrame() || this.shadowTargets == null || resolution <= 0) {
+            return;
+        }
+
+        this.debugLogTextureSamples(label + ".color", this.shadowTargets.getColorTexture(), resolution, resolution);
+        this.debugLogDepthTextureSample(label + ".depth0", this.shadowTargets.getDepthTexture(0), resolution, resolution);
+        this.debugLogDepthTextureSample(label + ".depth1", this.shadowTargets.getDepthTexture(1), resolution, resolution);
     }
 
     private static @Nullable Method findGlGetFloatBufferMethod() {
@@ -3382,7 +3685,16 @@ public final class ActiniumRenderPipeline {
     private static FloatBuffer toBuffer(Matrix4f matrix) {
         FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
         matrix.get(buffer);
-        buffer.flip();
+        buffer.position(0);
+        buffer.limit(16);
+        return buffer;
+    }
+
+    private static FloatBuffer toGlMatrixBuffer(Matrix4f matrix) {
+        FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+        matrix.get(buffer);
+        buffer.position(0);
+        buffer.limit(16);
         return buffer;
     }
 
@@ -3576,6 +3888,36 @@ public final class ActiniumRenderPipeline {
         };
     }
 
+    private static String framebufferStatusName(int status) {
+        return switch (status) {
+            case GL30.GL_FRAMEBUFFER_COMPLETE -> "GL_FRAMEBUFFER_COMPLETE";
+            case GL30.GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT -> "GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT";
+            case GL30.GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT -> "GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT";
+            case GL30.GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER -> "GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER";
+            case GL30.GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER -> "GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER";
+            case GL30.GL_FRAMEBUFFER_UNSUPPORTED -> "GL_FRAMEBUFFER_UNSUPPORTED";
+            case GL30.GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE -> "GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE";
+            default -> "UNKNOWN_FRAMEBUFFER_STATUS";
+        };
+    }
+
+    private static final class ShadowViewportFrustum implements Frustum {
+        private final float horizontalExtent;
+        private final float verticalExtent;
+
+        private ShadowViewportFrustum(float shadowDistance) {
+            this.horizontalExtent = Math.max(32.0f, shadowDistance + 32.0f);
+            this.verticalExtent = Math.max(32.0f, shadowDistance + 32.0f);
+        }
+
+        @Override
+        public boolean testAab(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+            return maxX >= -this.horizontalExtent && minX <= this.horizontalExtent
+                    && maxY >= -this.verticalExtent && minY <= this.verticalExtent
+                    && maxZ >= -this.horizontalExtent && minZ <= this.horizontalExtent;
+        }
+    }
+
     private static void bindTexture(int unit, int textureId) {
         setActiveTextureUnit(unit);
         if (unit < GL_STATE_MANAGER_TEXTURE_UNITS) {
@@ -3690,6 +4032,45 @@ public final class ActiniumRenderPipeline {
         GlStateManager.viewport(viewportX, viewportY, viewportWidth, viewportHeight);
         GlStateManager.matrixMode(matrixMode);
         setActiveTextureUnit(0);
+    }
+
+    private static final class ShadowEntityCamera implements ICamera {
+        private final FrustumIntersection frustum = new FrustumIntersection();
+        private double x;
+        private double y;
+        private double z;
+
+        private ShadowEntityCamera(Matrix4fc projection, Matrix4fc modelView) {
+            this.frustum.set(new Matrix4f(projection).mul(modelView), true);
+        }
+
+        @Override
+        public boolean isBoundingBoxInFrustum(AxisAlignedBB box) {
+            return this.isBoxInFrustum(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ);
+        }
+
+        public boolean isBoxInFrustum(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+            if (Double.isInfinite(minX) || Double.isInfinite(minY) || Double.isInfinite(minZ)
+                    || Double.isInfinite(maxX) || Double.isInfinite(maxY) || Double.isInfinite(maxZ)) {
+                return true;
+            }
+
+            return this.frustum.testAab(
+                    (float) (minX - this.x),
+                    (float) (minY - this.y),
+                    (float) (minZ - this.z),
+                    (float) (maxX - this.x),
+                    (float) (maxY - this.y),
+                    (float) (maxZ - this.z)
+            );
+        }
+
+        @Override
+        public void setPosition(double x, double y, double z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
     }
 
     private static final class ShadowPassGlState {

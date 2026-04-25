@@ -2,7 +2,9 @@ package com.dhj.actinium.celeritas.shader_overrides;
 
 import com.dhj.actinium.shadows.ActiniumShadowMatrixAccess;
 import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
+import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
+import com.dhj.actinium.shader.uniform.ActiniumCapturedRenderingState;
 import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
@@ -36,6 +38,7 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.jetbrains.annotations.Nullable;
 import org.taumc.celeritas.lwjgl.MemoryStack;
 import org.lwjgl.opengl.GL11;
@@ -120,6 +123,8 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformInt shadowtex0Sampler;
     private final @Nullable GlUniformInt shadowtex1Sampler;
     private final @Nullable GlUniformInt shadowcolor0Sampler;
+    private final @Nullable GlUniformInt entityId;
+    private final @Nullable GlUniformFloat4v entityColor;
 
     private final float defaultAlphaTest;
     private final boolean usesTerrainInputs;
@@ -138,6 +143,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final Matrix3f scratchNormalMatrix = new Matrix3f();
     private final Vector3f scratchSunPosition = new Vector3f();
     private final Vector3f scratchMoonPosition = new Vector3f();
+    private final Vector3f scratchShadowLightPosition = new Vector3f();
 
     private boolean shadowPassActive;
     private @Nullable TerrainRenderPass currentPass;
@@ -217,6 +223,8 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.shadowtex0Sampler = context.bindUniformIfPresent("shadowtex0", GlUniformInt::new);
         this.shadowtex1Sampler = context.bindUniformIfPresent("shadowtex1", GlUniformInt::new);
         this.shadowcolor0Sampler = context.bindUniformIfPresent("shadowcolor0", GlUniformInt::new);
+        this.entityId = context.bindUniformIfPresent("entityId", GlUniformInt::new);
+        this.entityColor = context.bindUniformIfPresent("entityColor", GlUniformFloat4v::new);
 
         this.defaultAlphaTest = options.pass().supportsFragmentDiscard() ? 0.1f : 0.0f;
         this.usesTerrainInputs = this.gaux1Sampler != null
@@ -379,6 +387,15 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.shadowcolor0Sampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_COLOR0_UNIT);
         }
 
+        if (this.entityId != null) {
+            this.entityId.setInt(ActiniumCapturedRenderingState.getCurrentRenderedEntity());
+        }
+
+        if (this.entityColor != null) {
+            Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
+            this.entityColor.set(new float[]{capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w});
+        }
+
         if (this.usesTerrainInputs) {
             ActiniumRenderPipeline.INSTANCE.prepareTerrainInputs();
             ActiniumRenderPipeline.INSTANCE.bindTerrainInputTextures();
@@ -406,15 +423,21 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
     @Override
     public void setProjectionMatrix(Matrix4fc matrix) {
-        this.uniformProjectionMatrix.set(matrix);
-        this.currentProjection.set(matrix);
+        Matrix4fc matrixToUse = matrix;
+
+        if (this.shadowPassActive && ActiniumShadowMatrixAccess.fillShadowMatrices(this.scratchShadowModelView, this.scratchShadowProjection)) {
+            matrixToUse = this.scratchShadowProjection;
+        }
+
+        this.uniformProjectionMatrix.set(matrixToUse);
+        this.currentProjection.set(matrixToUse);
 
         if (this.irisProjectionMatrix != null) {
-            this.irisProjectionMatrix.set(matrix);
+            this.irisProjectionMatrix.set(matrixToUse);
         }
 
         if (this.irisProjectionMatrixInverse != null || this.irisProjectionMatrixInv != null || this.gbufferProjectionInverse != null || this.shadowProjectionInverse != null) {
-            this.scratchProjectionInverse.set(matrix);
+            this.scratchProjectionInverse.set(matrixToUse);
             this.scratchProjectionInverse.invert();
 
             if (this.irisProjectionMatrixInverse != null) {
@@ -427,7 +450,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         if (this.gbufferProjection != null || this.gbufferProjectionInverse != null) {
-            ActiniumRenderPipeline.INSTANCE.getTemporalJitteredProjection(matrix, this.scratchGbufferProjection);
+            this.scratchGbufferProjection.set(matrixToUse);
             this.scratchGbufferProjectionInverse.set(this.scratchGbufferProjection).invert();
         }
 
@@ -436,16 +459,22 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
     @Override
     public void setModelViewMatrix(Matrix4fc matrix) {
-        this.uniformModelViewMatrix.set(matrix);
-        this.currentModelView.set(matrix);
+        Matrix4fc matrixToUse = matrix;
+
+        if (this.shadowPassActive && ActiniumShadowMatrixAccess.fillShadowMatrices(this.scratchShadowModelView, this.scratchShadowProjection)) {
+            matrixToUse = this.scratchShadowModelView;
+        }
+
+        this.uniformModelViewMatrix.set(matrixToUse);
+        this.currentModelView.set(matrixToUse);
 
         if (this.irisModelViewMatrix != null) {
-            this.irisModelViewMatrix.set(matrix);
+            this.irisModelViewMatrix.set(matrixToUse);
         }
 
         if (this.irisModelViewMatrixInverse != null || this.irisModelViewMatrixInv != null || this.irisNormalMatrix != null || this.irisNormalMat != null
                 || this.gbufferModelViewInverse != null || this.shadowModelViewInverse != null) {
-            this.scratchModelViewInverse.set(matrix);
+            this.scratchModelViewInverse.set(matrixToUse);
             this.scratchModelViewInverse.invert();
 
             if (this.irisModelViewMatrixInverse != null) {
@@ -599,11 +628,11 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         if (minecraft.world != null) {
-            float celestialAngle = minecraft.world.getCelestialAngle(0.0f) * ((float) Math.PI * 2.0f);
             int currentWorldTime = ActiniumCommonUniforms.getWorldTime(minecraft.world);
             float currentDayMoment = ActiniumCommonUniforms.getDayMoment(currentWorldTime);
             float rawDayNightMix = ActiniumCommonUniforms.getDayNightMix(currentWorldTime);
             float rain = minecraft.world.getRainStrength(0.0f);
+            float partialTicks = minecraft.getRenderPartialTicks();
 
             if (this.worldTime != null) {
                 this.worldTime.setInt(currentWorldTime);
@@ -633,12 +662,13 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
                 this.rainStrength.set(rain);
             }
 
-            float sunX = -MathHelper.sin(celestialAngle);
-            float sunY = MathHelper.cos(celestialAngle);
-            float sunZ = 0.0f;
-
-            this.currentModelView.transformDirection(sunX, sunY, sunZ, this.scratchSunPosition);
-            this.currentModelView.transformDirection(-sunX, -sunY, -sunZ, this.scratchMoonPosition);
+            ActiniumRenderPipeline.INSTANCE.fillShaderCoreCelestialUniforms(
+                    this.currentModelView,
+                    partialTicks,
+                    this.scratchSunPosition,
+                    this.scratchMoonPosition,
+                    this.scratchShadowLightPosition
+            );
 
             if (this.sunPosition != null) {
                 this.sunPosition.set(this.scratchSunPosition.x, this.scratchSunPosition.y, this.scratchSunPosition.z);
@@ -649,7 +679,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             }
 
             if (this.shadowLightPosition != null) {
-                Vector3f light = rawDayNightMix >= 0.5f ? this.scratchSunPosition : this.scratchMoonPosition;
+                Vector3f light = this.scratchShadowLightPosition;
                 this.shadowLightPosition.set(light.x, light.y, light.z);
             }
         }

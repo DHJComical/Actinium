@@ -1,6 +1,6 @@
 package com.dhj.actinium.shader.pipeline;
 
-import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
+import com.dhj.actinium.shader.uniform.ActiniumCapturedRenderingState;
 import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
@@ -14,6 +14,7 @@ import net.minecraft.util.math.Vec3d;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
+import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat4v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt2v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix4f;
@@ -21,6 +22,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 
 final class ActiniumWorldShaderInterface {
     private final @Nullable GlUniformInt texSampler;
@@ -29,6 +31,8 @@ final class ActiniumWorldShaderInterface {
     private final @Nullable GlUniformInt shadowtex0Sampler;
     private final @Nullable GlUniformInt shadowtex1Sampler;
     private final @Nullable GlUniformInt shadowcolor0Sampler;
+    private final @Nullable GlUniformInt entityId;
+    private final @Nullable GlUniformFloat4v entityColor;
 
     private final @Nullable GlUniformFloat viewWidth;
     private final @Nullable GlUniformFloat viewHeight;
@@ -70,6 +74,7 @@ final class ActiniumWorldShaderInterface {
     private final Matrix4f scratchModelViewInverse = new Matrix4f();
     private final Vector3f scratchSunPosition = new Vector3f();
     private final Vector3f scratchMoonPosition = new Vector3f();
+    private final Vector3f scratchShadowLightPosition = new Vector3f();
 
     ActiniumWorldShaderInterface(ShaderBindingContext context) {
         this.texSampler = context.bindUniformIfPresent("tex", GlUniformInt::new);
@@ -78,6 +83,8 @@ final class ActiniumWorldShaderInterface {
         this.shadowtex0Sampler = context.bindUniformIfPresent("shadowtex0", GlUniformInt::new);
         this.shadowtex1Sampler = context.bindUniformIfPresent("shadowtex1", GlUniformInt::new);
         this.shadowcolor0Sampler = context.bindUniformIfPresent("shadowcolor0", GlUniformInt::new);
+        this.entityId = context.bindUniformIfPresent("entityId", GlUniformInt::new);
+        this.entityColor = context.bindUniformIfPresent("entityColor", GlUniformFloat4v::new);
 
         this.viewWidth = context.bindUniformIfPresent("viewWidth", GlUniformFloat::new);
         this.viewHeight = context.bindUniformIfPresent("viewHeight", GlUniformFloat::new);
@@ -143,6 +150,15 @@ final class ActiniumWorldShaderInterface {
 
         if (this.shadowcolor0Sampler != null) {
             this.shadowcolor0Sampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_COLOR0_UNIT);
+        }
+
+        if (this.entityId != null) {
+            this.entityId.setInt(ActiniumCapturedRenderingState.getCurrentRenderedEntity());
+        }
+
+        if (this.entityColor != null) {
+            Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
+            this.entityColor.set(new float[]{capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w});
         }
 
         Minecraft minecraft = Minecraft.getMinecraft();
@@ -217,25 +233,21 @@ final class ActiniumWorldShaderInterface {
             int currentWorldTime = ActiniumCommonUniforms.getWorldTime(minecraft.world);
             float currentDayMoment = ActiniumCommonUniforms.getDayMoment(currentWorldTime);
             float dayNight = ActiniumCommonUniforms.getDayNightMix(currentWorldTime);
+            float partialTicks = minecraft.getRenderPartialTicks();
             boolean useManagedCelestialState = useManagedSkyState && pipeline.hasManagedSkyCelestialState();
 
             if (useManagedCelestialState) {
                 this.scratchSunPosition.set(pipeline.getManagedSkySunPosition());
                 this.scratchMoonPosition.set(pipeline.getManagedSkyMoonPosition());
+                this.scratchShadowLightPosition.set(pipeline.getManagedSkyShadowLightPosition());
             } else {
-                float celestialAngle = minecraft.world.getCelestialAngle(minecraft.getRenderPartialTicks());
-                float sunPathRotation = ActiniumShaderPackManager.getActiveShaderProperties().getSunPathRotation();
-
-                new Matrix4f(referenceModelViewMatrix)
-                        .rotateY((float) Math.toRadians(-90.0f))
-                        .rotateZ((float) Math.toRadians(sunPathRotation))
-                        .rotateX(celestialAngle * ((float) Math.PI * 2.0f))
-                        .transformDirection(0.0f, 100.0f, 0.0f, this.scratchSunPosition);
-                new Matrix4f(referenceModelViewMatrix)
-                        .rotateY((float) Math.toRadians(-90.0f))
-                        .rotateZ((float) Math.toRadians(sunPathRotation))
-                        .rotateX(celestialAngle * ((float) Math.PI * 2.0f))
-                        .transformDirection(0.0f, -100.0f, 0.0f, this.scratchMoonPosition);
+                pipeline.fillShaderCoreCelestialUniforms(
+                        referenceModelViewMatrix,
+                        partialTicks,
+                        this.scratchSunPosition,
+                        this.scratchMoonPosition,
+                        this.scratchShadowLightPosition
+                );
             }
 
             if (this.worldTime != null) {
@@ -263,7 +275,7 @@ final class ActiniumWorldShaderInterface {
             if (this.shadowLightPosition != null) {
                 Vector3f light = useManagedCelestialState
                         ? pipeline.getManagedSkyShadowLightPosition()
-                        : dayNight >= 0.5f ? this.scratchSunPosition : this.scratchMoonPosition;
+                        : this.scratchShadowLightPosition;
                 this.shadowLightPosition.set(light.x, light.y, light.z);
             }
         }
