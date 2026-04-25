@@ -78,6 +78,18 @@ public final class ActiniumRenderPipeline {
     public static final int TERRAIN_SHADOW_TEX0_UNIT = 11;
     public static final int TERRAIN_SHADOW_TEX1_UNIT = 12;
     public static final int TERRAIN_SHADOW_COLOR0_UNIT = 13;
+    public static final int POST_SHADOW_TEX0_UNIT = 4;
+    public static final int POST_SHADOW_TEX1_UNIT = 5;
+    public static final int POST_DEPTHTEX0_UNIT = 6;
+    public static final int POST_GAUX1_UNIT = 7;
+    public static final int POST_GAUX2_UNIT = 8;
+    public static final int POST_GAUX3_UNIT = 9;
+    public static final int POST_GAUX4_UNIT = 10;
+    public static final int POST_DEPTHTEX1_UNIT = 11;
+    public static final int POST_DEPTHTEX2_UNIT = 12;
+    public static final int POST_SHADOW_COLOR0_UNIT = 13;
+    public static final int POST_SHADOW_COLOR1_UNIT = 14;
+    public static final int POST_NOISETEX_UNIT = 15;
     private static final int GL_STATE_MANAGER_TEXTURE_UNITS = 8;
     private static final float TAA_JITTER_SCALE = 0.35f;
     private static final float SKY_HORIZON_TOP = 16.0f;
@@ -164,10 +176,10 @@ public final class ActiniumRenderPipeline {
             "gaux4"
     };
     private static final int TRACKED_TEXTURE_UNITS = 16;
-    private static final boolean ENABLE_PRE_SCENE_PIPELINES = true;
+    private static final boolean ENABLE_PRE_SCENE_PIPELINES = false;
     private static final boolean ENABLE_PRE_SCENE_SHADER_EXECUTION = false;
     private static final boolean ENABLE_PREPARE_SHADER_EXECUTION = true;
-    private static final boolean ENABLE_DEFERRED_SHADER_EXECUTION = false;
+    private static final boolean ENABLE_DEFERRED_SHADER_EXECUTION = true;
     private static final boolean ENABLE_EXTERNAL_SCENE_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_FINAL_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_TERRAIN_REDIRECT = false;
@@ -518,9 +530,18 @@ public final class ActiniumRenderPipeline {
         this.beginPost();
 
         try {
+            this.executePreSceneProgramsInPostPhase(mainFramebuffer, partialTicks);
+
             if (this.postTargets != null) {
                 this.postTargets.ensureSize(this.width, this.height);
                 this.postTargets.copySceneTextures(mainFramebuffer, this.getWorldGaux4TextureForPost());
+                if (this.hasPreSceneResults()) {
+                    int[] preSceneOutputTargets = this.collectPreSceneOutputTargets();
+                    this.postTargets.copyTargetsFrom(this.preSceneTargets, preSceneOutputTargets);
+                    if (this.shouldEmitVerboseDebugFrame()) {
+                        this.debugLog("Merged pre-scene outputs into scene post targets: {}", Arrays.toString(preSceneOutputTargets));
+                    }
+                }
                 this.applyExplicitPreFlips(this.postTargets, "composite_pre");
 
                 if (!this.preTranslucentDepthCapturedThisFrame) {
@@ -741,6 +762,24 @@ public final class ActiniumRenderPipeline {
 
     public boolean shouldSuppressVanillaSkyHorizonGeometry() {
         return false;
+    }
+
+    public int getCloudRenderModeOverride(int currentCloudMode, int renderDistanceChunks) {
+        if (!ActiniumShaderPackManager.areShadersEnabled() || renderDistanceChunks < 4) {
+            return renderDistanceChunks >= 4 ? currentCloudMode : 0;
+        }
+
+        String cloudSetting = ActiniumShaderPackManager.getActiveShaderProperties().getCloudSetting();
+        if (cloudSetting == null) {
+            return currentCloudMode;
+        }
+
+        return switch (cloudSetting.trim().toLowerCase(Locale.ROOT)) {
+            case "off" -> 0;
+            case "fast" -> 1;
+            case "fancy", "on" -> 2;
+            default -> currentCloudMode;
+        };
     }
 
     public void renderShaderCoreSkyHorizon() {
@@ -1333,6 +1372,80 @@ public final class ActiniumRenderPipeline {
         this.renderFullscreenProgram(program, partialTicks, null);
     }
 
+    private void executePreSceneProgramsInPostPhase(Framebuffer mainFramebuffer, float partialTicks) {
+        if (this.preSceneTargets == null) {
+            return;
+        }
+
+        List<ActiniumPostProgram> preparePrograms = this.getPreparePrograms();
+        List<ActiniumPostProgram> deferredPrograms = this.getDeferredPrograms();
+
+        if (preparePrograms.isEmpty() && deferredPrograms.isEmpty()) {
+            return;
+        }
+
+        if (!preparePrograms.isEmpty()) {
+            this.preparePreSceneTargetsForPrepare(mainFramebuffer);
+            this.applyExplicitPreFlips(this.preSceneTargets, "prepare_pre");
+            this.debugLogPreSceneStageEntry("prepare");
+            this.executePostPrograms(preparePrograms, this.preSceneTargets, partialTicks);
+            this.prepareProgramsExecutedThisFrame = true;
+        }
+
+        if (!deferredPrograms.isEmpty()) {
+            // Match Iris-style stage separation more closely: deferred should
+            // operate on the current scene inputs, not on prepare's colortex1
+            // result. Reusing prepare's color output here causes sky-prepass
+            // data to replace the actual scene, which washes the world out.
+            this.preparePreSceneTargetsForDeferred(mainFramebuffer, false);
+            this.applyExplicitPreFlips(this.preSceneTargets, "deferred_pre");
+            this.debugLogPreSceneStageEntry("deferred");
+            this.executePostPrograms(deferredPrograms, this.preSceneTargets, partialTicks);
+            this.deferredProgramsExecutedThisFrame = true;
+        }
+    }
+
+    private boolean hasPreSceneResults() {
+        return this.preSceneTargets != null && (this.prepareProgramsExecutedThisFrame || this.deferredProgramsExecutedThisFrame);
+    }
+
+    private int[] collectPreSceneOutputTargets() {
+        Set<Integer> targets = new LinkedHashSet<>();
+
+        if (this.prepareProgramsExecutedThisFrame) {
+            for (ActiniumPostProgram program : this.getPreparePrograms()) {
+                for (int drawBuffer : program.drawBuffers()) {
+                    if (this.shouldMergePrepareTarget(drawBuffer)) {
+                        targets.add(drawBuffer);
+                    }
+                }
+            }
+        }
+
+        if (this.deferredProgramsExecutedThisFrame) {
+            for (ActiniumPostProgram program : this.getDeferredPrograms()) {
+                for (int drawBuffer : program.drawBuffers()) {
+                    if (this.shouldMergeDeferredTarget(drawBuffer)) {
+                        targets.add(drawBuffer);
+                    }
+                }
+            }
+        }
+
+        return targets.stream().mapToInt(Integer::intValue).toArray();
+    }
+
+    private boolean shouldMergePrepareTarget(int drawBuffer) {
+        // Prepare runs in a compatibility path after the world is already
+        // rendered, so its colortex1 output does not match Iris's intended
+        // timing. Keep only auxiliary writes from prepare.
+        return drawBuffer != ActiniumPostTargets.TARGET_COLORTEX1;
+    }
+
+    private boolean shouldMergeDeferredTarget(int drawBuffer) {
+        return true;
+    }
+
     private boolean shouldExecutePreSceneShaders(String stageName) {
         if (!ENABLE_PRE_SCENE_SHADER_EXECUTION) {
             return ENABLE_PREPARE_SHADER_EXECUTION && "prepare".equals(stageName)
@@ -1349,6 +1462,15 @@ public final class ActiniumRenderPipeline {
 
         this.debugLogTextureSamples("pre-scene.capture.colortex1", this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
         this.debugLogTextureSamples("pre-scene.capture.gaux4", this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
+    }
+
+    private void debugLogPreSceneStageEntry(String stageName) {
+        if (!ActiniumShaderPackManager.isDebugEnabled() || !this.shouldEmitVerboseDebugFrame() || this.preSceneTargets == null) {
+            return;
+        }
+
+        this.debugLogTextureCenter(stageName + ".entry.colortex1", this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+        this.debugLogTextureCenter(stageName + ".entry.gaux4", this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
     }
 
     private void applyExplicitPreFlips(ActiniumPostTargets targets, String stageName) {
@@ -1461,25 +1583,39 @@ public final class ActiniumRenderPipeline {
 
     private void bindPipelineTextures(ActiniumPostTargets targets) {
         if (targets != null) {
-            this.bindPipelineTexture("colortex0", 0, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
-            this.bindPipelineTexture("colortex1", 1, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
-            this.bindPipelineTexture("colortex2", 2, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX2));
-            this.bindPipelineTexture("colortex3", 3, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX3));
-            this.bindPipelineTexture("gaux1", 4, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX1));
-            this.bindPipelineTexture("gaux2", 5, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX2));
-            this.bindPipelineTexture("gaux3", 6, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX3));
-            this.bindPipelineTexture("gaux4", 7, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
-            bindTexture(8, targets.getDepthTexture(0));
-            bindTexture(9, targets.getDepthTexture(1));
-            this.bindPipelineTexture("noisetex", 10, this.noiseTexture);
-            this.bindPipelineTexture("shadowtex0", TERRAIN_SHADOW_TEX0_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(0) : this.whiteTexture);
-            this.bindPipelineTexture("shadowtex1", TERRAIN_SHADOW_TEX1_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(1) : this.whiteTexture);
-            this.bindPipelineTexture("shadowcolor0", TERRAIN_SHADOW_COLOR0_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture() : this.whiteTexture);
+            this.bindPipelineTextureAliases(0, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0), "colortex0", "gcolor");
+            this.bindPipelineTextureAliases(1, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1), "colortex1", "gdepth");
+            this.bindPipelineTextureAliases(2, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX2), "colortex2", "gnormal");
+            this.bindPipelineTextureAliases(3, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX3), "colortex3", "composite");
+            this.bindPipelineTextureAliases(POST_SHADOW_TEX0_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(0) : this.whiteTexture, "shadowtex0", "watershadow", "shadow");
+            this.bindPipelineTextureAliases(POST_SHADOW_TEX1_UNIT, this.shadowTargets != null ? this.shadowTargets.getDepthTexture(1) : this.whiteTexture, "shadowtex1");
+            bindTexture(POST_DEPTHTEX0_UNIT, targets.getDepthTexture(0));
+            this.bindPipelineTextureAliases(POST_GAUX1_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX1), "gaux1", "colortex4");
+            this.bindPipelineTextureAliases(POST_GAUX2_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX2), "gaux2", "colortex5");
+            this.bindPipelineTextureAliases(POST_GAUX3_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX3), "gaux3", "colortex6");
+            this.bindPipelineTextureAliases(POST_GAUX4_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4), "gaux4", "colortex7");
+            bindTexture(POST_DEPTHTEX1_UNIT, targets.getDepthTexture(1));
+            bindTexture(POST_DEPTHTEX2_UNIT, targets.getDepthTexture(2));
+            this.bindPipelineTextureAliases(POST_SHADOW_COLOR0_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture() : this.whiteTexture, "shadowcolor0", "shadowcolor");
+            this.bindPipelineTextureAliases(POST_SHADOW_COLOR1_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture() : this.whiteTexture, "shadowcolor1");
+            this.bindPipelineTextureAliases(POST_NOISETEX_UNIT, this.noiseTexture, "noisetex");
         }
     }
 
     private void bindPipelineTexture(String samplerName, int unit, @Nullable Integer fallbackTexture) {
         bindTexture(unit, this.getPostTextureOverride(samplerName, fallbackTexture));
+    }
+
+    private void bindPipelineTextureAliases(int unit, @Nullable Integer fallbackTexture, String... samplerNames) {
+        for (String samplerName : samplerNames) {
+            int overrideTexture = this.getPostTextureOverride(samplerName, null);
+            if (overrideTexture > 0) {
+                bindTexture(unit, overrideTexture);
+                return;
+            }
+        }
+
+        bindTexture(unit, fallbackTexture != null ? fallbackTexture : 0);
     }
 
     private void bindWorldStageTextures() {
@@ -1491,7 +1627,7 @@ public final class ActiniumRenderPipeline {
     }
 
     private void unbindPipelineTextures() {
-        for (int unit = TERRAIN_SHADOW_COLOR0_UNIT; unit >= 0; unit--) {
+        for (int unit = TRACKED_TEXTURE_UNITS - 1; unit >= 0; unit--) {
             unbindTexture(unit);
         }
     }
@@ -1599,16 +1735,27 @@ public final class ActiniumRenderPipeline {
             relativePath = properties.getStageTexturePath("final", samplerName);
         }
 
+        if (relativePath == null && "noisetex".equalsIgnoreCase(samplerName)) {
+            relativePath = properties.getStageTexturePath("gbuffers", samplerName);
+        }
+
+        if (relativePath == null && "noisetex".equalsIgnoreCase(samplerName)) {
+            relativePath = properties.getNoiseTexturePath();
+        }
+
         if (relativePath == null) {
             return fallbackTexture != null ? fallbackTexture : 0;
         }
 
         final String resolvedPath = relativePath;
-        Integer textureId = this.packTextureCache.computeIfAbsent(stageName + ":" + samplerName, key -> this.loadPackTexture(resolvedPath));
+        Integer textureId = this.packTextureCache.computeIfAbsent(
+                stageName + ":" + samplerName + ":" + resolvedPath,
+                key -> this.loadPackTexture(stageName, samplerName, resolvedPath)
+        );
         return textureId != null && textureId > 0 ? textureId : fallbackTexture != null ? fallbackTexture : 0;
     }
 
-    private int loadPackTexture(String relativePath) {
+    private int loadPackTexture(String stageName, String samplerName, String relativePath) {
         ActiniumShaderPackResources resources = ActiniumShaderPackManager.getActivePackResources();
         if (resources == null) {
             return 0;
@@ -1620,13 +1767,23 @@ public final class ActiniumRenderPipeline {
                 return 0;
             }
 
-            return uploadPackTexture(TextureUtil.readBufferedImage(stream));
+            return uploadPackTexture(TextureUtil.readBufferedImage(stream), this.shouldRepeatPackTexture(stageName, samplerName, relativePath));
         } catch (IOException e) {
             throw new RuntimeException("Failed to load shader pack texture " + relativePath, e);
         }
     }
 
-    private static int uploadPackTexture(java.awt.image.BufferedImage image) {
+    private boolean shouldRepeatPackTexture(String stageName, String samplerName, String relativePath) {
+        String normalizedSampler = samplerName.toLowerCase(Locale.ROOT);
+        if ("noisetex".equals(normalizedSampler) || "gaux2".equals(normalizedSampler)) {
+            return true;
+        }
+
+        String normalizedPath = relativePath.toLowerCase(Locale.ROOT);
+        return normalizedPath.contains("noise") || normalizedPath.contains("cloud");
+    }
+
+    private static int uploadPackTexture(java.awt.image.BufferedImage image, boolean repeat) {
         int width = image.getWidth();
         int height = image.getHeight();
         int[] pixels = new int[width * height];
@@ -1645,8 +1802,8 @@ public final class ActiniumRenderPipeline {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, repeat ? GL11.GL_REPEAT : GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, repeat ? GL11.GL_REPEAT : GL12.GL_CLAMP_TO_EDGE);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buffer);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
         return texture;

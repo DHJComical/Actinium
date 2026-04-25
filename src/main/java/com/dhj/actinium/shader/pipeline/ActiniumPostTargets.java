@@ -28,7 +28,7 @@ final class ActiniumPostTargets {
     private final TargetSettings[] settings;
     private final TargetSlot[] targets = new TargetSlot[TARGET_COUNT];
     private final int framebufferId;
-    private final int[] depthTextures = new int[2];
+    private final int[] depthTextures = new int[3];
     private final int[] drawAttachmentScratch = new int[TARGET_COUNT];
     private final IntBuffer drawBufferBuffer = BufferUtils.createIntBuffer(TARGET_COUNT);
 
@@ -70,6 +70,7 @@ final class ActiniumPostTargets {
         deleteTextures(this.depthTextures);
         this.depthTextures[0] = createDepthTexture(width, height);
         this.depthTextures[1] = createDepthTexture(width, height);
+        this.depthTextures[2] = createDepthTexture(width, height);
     }
 
     public void resetSources() {
@@ -87,6 +88,7 @@ final class ActiniumPostTargets {
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].getSourceTexture(), this.width, this.height);
         this.copyDepthTexture(mainFramebuffer, 0);
+        this.copyDepthTexture(mainFramebuffer, 2);
     }
 
     public void copySceneInputs(Framebuffer mainFramebuffer, @Nullable Integer gaux4Texture) {
@@ -105,6 +107,7 @@ final class ActiniumPostTargets {
         int sceneTexture = mainFramebuffer.framebufferTexture;
         copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
         this.copyDepthTexture(mainFramebuffer, 0);
+        this.copyDepthTexture(mainFramebuffer, 2);
 
         if (gaux4Texture != null && gaux4Texture > 0) {
             copyTexture(gaux4Texture, this.targets[TARGET_GAUX4].getSourceTexture(), this.width, this.height);
@@ -145,6 +148,7 @@ final class ActiniumPostTargets {
         clearTargetAltIfRequested(TARGET_GAUX4);
 
         this.copyDepthTexture(mainFramebuffer, 0);
+        this.copyDepthTexture(mainFramebuffer, 2);
     }
 
     public void copyPreTranslucentDepth(Framebuffer mainFramebuffer) {
@@ -162,6 +166,27 @@ final class ActiniumPostTargets {
 
         this.copyDepthTexture(mainFramebuffer, 0);
         this.copyDepthTexture(mainFramebuffer, 1);
+        this.copyDepthTexture(mainFramebuffer, 2);
+    }
+
+    public void copyTargetsFrom(@Nullable ActiniumPostTargets other, int[] targetIndices) {
+        if (other == null || this.width <= 0 || this.height <= 0 || targetIndices == null || targetIndices.length == 0) {
+            return;
+        }
+
+        for (int targetIndex : targetIndices) {
+            if (targetIndex < 0 || targetIndex >= TARGET_COUNT) {
+                continue;
+            }
+
+            int sourceTexture = other.getSourceTexture(targetIndex);
+            if (sourceTexture != 0) {
+                copyTexture(sourceTexture, this.targets[targetIndex].mainTexture, this.width, this.height);
+            } else {
+                clearTargetTexture(this.targets[targetIndex].mainTexture, this.width, this.height, this.resolveSettings(targetIndex));
+            }
+            this.targets[targetIndex].sourceIsAlt = false;
+        }
     }
 
     private void prepareFramePersistentTargets() {
@@ -293,30 +318,75 @@ final class ActiniumPostTargets {
 
     private void copyDepthTexture(Framebuffer mainFramebuffer, int index) {
         int resolvedIndex = Math.max(0, Math.min(index, this.depthTextures.length - 1));
-        mainFramebuffer.bindFramebuffer(true);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.depthTextures[resolvedIndex]);
-        GL11.glCopyTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, 0, 0, this.width, this.height, 0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+
+        try {
+            mainFramebuffer.bindFramebuffer(true);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.depthTextures[resolvedIndex]);
+            GL11.glCopyTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, 0, 0, this.width, this.height, 0);
+        } finally {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        }
     }
 
-    private static void copyTexture(int sourceTexture, int destinationTexture, int width, int height) {
+    private static void copyDepthTexture(int sourceTexture, int destinationTexture, int width, int height) {
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawBuffer = GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
         int readFramebuffer = GL30.glGenFramebuffers();
         int drawFramebuffer = GL30.glGenFramebuffers();
 
-        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFramebuffer);
-        GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, sourceTexture, 0);
-        GL30.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+        try {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFramebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, sourceTexture, 0);
 
-        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFramebuffer);
-        GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, destinationTexture, 0);
-        GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFramebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, destinationTexture, 0);
 
-        GL30.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
+            GL30.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL11.GL_DEPTH_BUFFER_BIT, GL11.GL_NEAREST);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glDrawBuffer(previousDrawBuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+            GL30.glDeleteFramebuffers(readFramebuffer);
+            GL30.glDeleteFramebuffers(drawFramebuffer);
+        }
+    }
 
-        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, 0);
-        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, 0);
-        GL30.glDeleteFramebuffers(readFramebuffer);
-        GL30.glDeleteFramebuffers(drawFramebuffer);
+    private static void copyTexture(int sourceTexture, int destinationTexture, int width, int height) {
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawBuffer = GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int readFramebuffer = GL30.glGenFramebuffers();
+        int drawFramebuffer = GL30.glGenFramebuffers();
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFramebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, sourceTexture, 0);
+            GL30.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFramebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, destinationTexture, 0);
+            GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+
+            GL30.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glDrawBuffer(previousDrawBuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+            GL30.glDeleteFramebuffers(readFramebuffer);
+            GL30.glDeleteFramebuffers(drawFramebuffer);
+        }
     }
 
     private static void clearColorTexture(int textureId, int width, int height) {

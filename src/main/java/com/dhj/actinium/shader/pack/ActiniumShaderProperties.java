@@ -37,6 +37,7 @@ public final class ActiniumShaderProperties {
     private final Map<String, String> conditionallyEnabledPrograms = new LinkedHashMap<>();
     private final Map<String, Map<String, String>> stageTexturePaths = new LinkedHashMap<>();
     private final Map<String, Map<Integer, Boolean>> explicitFlips = new LinkedHashMap<>();
+    private @Nullable String noiseTexturePath;
     private final List<String> sliderOptions = new ArrayList<>();
     private final Map<String, List<String>> profiles = new LinkedHashMap<>();
     private final Map<String, List<String>> profiles2 = new LinkedHashMap<>();
@@ -181,6 +182,10 @@ public final class ActiniumShaderProperties {
         return stageTextures != null ? stageTextures.get(samplerName) : null;
     }
 
+    public @Nullable String getNoiseTexturePath() {
+        return this.noiseTexturePath;
+    }
+
     public Map<String, Map<String, String>> getStageTexturePaths() {
         Map<String, Map<String, String>> copy = new LinkedHashMap<>();
         this.stageTexturePaths.forEach((stage, samplers) -> copy.put(stage, Collections.unmodifiableMap(new LinkedHashMap<>(samplers))));
@@ -255,6 +260,11 @@ public final class ActiniumShaderProperties {
 
     private void tryParseTextureDirective(String key, String value) {
         if (!key.startsWith("texture.")) {
+            return;
+        }
+
+        if ("texture.noise".equals(key)) {
+            this.noiseTexturePath = value;
             return;
         }
 
