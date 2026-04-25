@@ -156,7 +156,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         this.packList.drawScreen(mouseX, mouseY, partialTicks);
         this.drawCenteredString(this.fontRenderer, I18n.format("options.actinium.shaderPackSelection"), this.width / 2, 10, 0xFFFFFF);
         this.drawCenteredString(this.fontRenderer, I18n.format("pack.actinium.select.title"), this.width / 2, 21, 0xA0A0A0);
-        this.drawString(this.fontRenderer, "Actinium Shader", 2, this.height - 10, 0xFFFFFF);
+        this.drawString(this.fontRenderer, I18n.format("options.actinium.shaderPack.brand"), 2, this.height - 10, 0xFFFFFF);
         this.drawCenteredString(this.fontRenderer, this.getStatusLine(), this.width / 2, this.height - 80, 0x808080);
         super.drawScreen(mouseX, mouseY, partialTicks);
     }

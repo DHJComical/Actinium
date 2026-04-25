@@ -262,7 +262,7 @@ public class ActiniumShaderOptionList extends GuiSlot {
 
         @Override
         public String getCommentBody(ActiniumShaderOptionScreen screen) {
-            return "Missing option in parsed shader sources";
+            return I18n.format("options.actinium.shaderPack.options.missing");
         }
     }
 
@@ -428,7 +428,7 @@ public class ActiniumShaderOptionList extends GuiSlot {
 
         @Override
         public String getCommentBody(ActiniumShaderOptionScreen screen) {
-            String comment = screen.getMenu().getOptionComment(this.option);
+            String comment = screen.getMenu().getOptionComment(this.option, screen.getCurrentScreenId());
             return comment != null ? comment : "";
         }
     }

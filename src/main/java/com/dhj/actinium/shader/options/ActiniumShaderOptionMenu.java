@@ -101,6 +101,30 @@ public final class ActiniumShaderOptionMenu {
         return translated != null ? translated : option.getSourceComment();
     }
 
+    public @Nullable String getOptionComment(ActiniumShaderOption option, @Nullable String screenId) {
+        String translated = this.translations.get("option." + option.name() + ".comment");
+
+        if (translated != null && !translated.isBlank()) {
+            return translated;
+        }
+
+        String screenComment = this.getScreenComment(screenId);
+
+        if (screenComment != null && !screenComment.isBlank()) {
+            return screenComment;
+        }
+
+        String ownerScreenId = this.findOwningScreenId(option.name());
+        String ownerScreenComment = this.getScreenComment(ownerScreenId);
+
+        if (ownerScreenComment != null && !ownerScreenComment.isBlank()) {
+            return ownerScreenComment;
+        }
+
+        String sourceComment = option.getSourceComment();
+        return sourceComment != null && !sourceComment.isBlank() ? sourceComment : null;
+    }
+
     public String getValueLabel(ActiniumShaderOption option, String value) {
         return this.translations.getOrDefault("value." + option.name() + "." + value, value);
     }
@@ -169,6 +193,16 @@ public final class ActiniumShaderOptionMenu {
 
             referenced.add(token);
         }
+    }
+
+    private @Nullable String findOwningScreenId(String optionId) {
+        for (Map.Entry<String, List<String>> entry : this.subScreenTokens.entrySet()) {
+            if (entry.getValue().contains(optionId)) {
+                return entry.getKey();
+            }
+        }
+
+        return null;
     }
 
     private static Map<String, List<String>> immutableListMap(Map<String, List<String>> source) {

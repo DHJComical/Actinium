@@ -45,6 +45,10 @@ public interface ControlValueFormatter {
         return (v) -> TextComponent.literal(v == 0 ? disableText : v + " " + name);
     }
 
+    static ControlValueFormatter translateDisabledOrVariable(String disabledKey, String variableKey) {
+        return (v) -> v == 0 ? TextComponent.translatable(disabledKey) : TextComponent.translatable(variableKey, v);
+    }
+
     static ControlValueFormatter number() {
         return (v) -> TextComponent.literal(String.valueOf(v));
     }

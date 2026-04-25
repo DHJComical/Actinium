@@ -49,7 +49,10 @@ public class CommonOptionPages {
                         .setId(StandardOptions.Option.CHUNK_UPDATE_THREADS.cast())
                         .setName(TextComponent.translatable("sodium.options.chunk_update_threads.name"))
                         .setTooltip(TextComponent.translatable("sodium.options.chunk_update_threads.tooltip"))
-                        .setControl(o -> new SliderControl(o, 0, ChunkBuilder.getMaxThreadCount(), 1, ControlValueFormatter.quantityOrDisabled("threads", "Default")))
+                        .setControl(o -> new SliderControl(o, 0, ChunkBuilder.getMaxThreadCount(), 1, ControlValueFormatter.translateDisabledOrVariable(
+                                "celeritas.options.chunk_update_threads.default",
+                                "celeritas.options.chunk_update_threads.value"
+                        )))
                         .setImpact(OptionImpact.HIGH)
                         .setBinding((opts, value) -> opts.performance.chunkBuilderThreads = value, opts -> opts.performance.chunkBuilderThreads)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
@@ -68,7 +71,11 @@ public class CommonOptionPages {
                         .setId(StandardOptions.Option.ASYNC_GRAPH_SEARCH.cast())
                         .setName(TextComponent.translatable("celeritas.options.async_graph_search.name"))
                         .setTooltip(TextComponent.translatable("celeritas.options.async_graph_search.tooltip"))
-                        .setControl(o -> new CyclingControl<>(o, AsyncOcclusionMode.class, new TextComponent[] { TextComponent.literal("Off"), TextComponent.literal("Only Shadows"), TextComponent.literal("Everything") }))
+                        .setControl(o -> new CyclingControl<>(o, AsyncOcclusionMode.class, new TextComponent[] {
+                                TextComponent.translatable("celeritas.options.async_graph_search.off"),
+                                TextComponent.translatable("celeritas.options.async_graph_search.only_shadows"),
+                                TextComponent.translatable("celeritas.options.async_graph_search.everything")
+                        }))
                         .setImpact(OptionImpact.MEDIUM)
                         .setBinding((opts, value) -> opts.performance.asyncOcclusionMode = value, opts -> opts.performance.asyncOcclusionMode)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
