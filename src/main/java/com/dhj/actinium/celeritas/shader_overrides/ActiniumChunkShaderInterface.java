@@ -6,6 +6,8 @@ import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -36,6 +38,8 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.jetbrains.annotations.Nullable;
 import org.taumc.celeritas.lwjgl.MemoryStack;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 
 import java.nio.FloatBuffer;
 import java.util.EnumMap;
@@ -337,6 +341,8 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.lightmapSampler.setInt(1);
         }
 
+        bindVanillaTerrainTextures(minecraft);
+
         if (this.gaux1Sampler != null) {
             this.gaux1Sampler.setInt(ActiniumRenderPipeline.TERRAIN_GAUX1_UNIT);
         }
@@ -380,6 +386,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         ActiniumRenderPipeline.INSTANCE.bindWorldGaux4Texture();
         ActiniumRenderPipeline.INSTANCE.bindTerrainShadowTextures();
         ActiniumRenderPipeline.INSTANCE.bindTerrainPassFramebuffer(pass);
+        bindVanillaTerrainTextures(minecraft);
         this.pushLegacyRuntimeState(minecraft);
         this.pushLegacyMatrices();
     }
@@ -680,6 +687,18 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
         PotionEffect effect = living.getActivePotionEffect(MobEffects.BLINDNESS);
         return effect != null ? 1.0f : 0.0f;
+    }
+
+    private static void bindVanillaTerrainTextures(Minecraft minecraft) {
+        int blockTextureId = minecraft.getTextureMapBlocks().getGlTextureId();
+        GL13.glActiveTexture(OpenGlHelper.defaultTexUnit);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, blockTextureId);
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.bindTexture(blockTextureId);
+        GlStateManager.enableTexture2D();
+        minecraft.entityRenderer.enableLightmap();
+        GL13.glActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
     }
 
     private static void bindTextureUniform(Map<ChunkShaderTextureSlot, GlUniformInt> uniforms, ChunkShaderTextureSlot slot, ShaderBindingContext context, String primaryName, String fallbackName) {

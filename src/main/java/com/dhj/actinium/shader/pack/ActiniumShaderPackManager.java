@@ -24,6 +24,7 @@ import java.util.stream.Stream;
 
 public final class ActiniumShaderPackManager {
     public static final String BUILTIN_PACK_NAME = "Actinium Shader";
+    public static final int MAX_TERRAIN_DEBUG_MODE = 8;
     private static final Path ROOT_SHADERPACKS_DIRECTORY = Paths.get("shaderpacks");
     private static final Path DEV_CLIENT_DIRECTORY = Paths.get("run", "client");
     private static final Path DEV_SHADERPACKS_DIRECTORY = DEV_CLIENT_DIRECTORY.resolve("shaderpacks");
@@ -63,6 +64,21 @@ public final class ActiniumShaderPackManager {
 
     public static boolean isDebugEnabled() {
         return getConfig().isDebugEnabled();
+    }
+
+    public static int getTerrainDebugMode() {
+        return clampTerrainDebugMode(getConfig().getTerrainDebugMode());
+    }
+
+    public static void setTerrainDebugMode(int terrainDebugMode) {
+        ActiniumShaderConfig config = getConfig();
+        config.setTerrainDebugMode(clampTerrainDebugMode(terrainDebugMode));
+        config.save();
+        reload();
+    }
+
+    private static int clampTerrainDebugMode(int terrainDebugMode) {
+        return Math.max(0, Math.min(MAX_TERRAIN_DEBUG_MODE, terrainDebugMode));
     }
 
     public static void setDebugEnabled(boolean debugEnabled) {

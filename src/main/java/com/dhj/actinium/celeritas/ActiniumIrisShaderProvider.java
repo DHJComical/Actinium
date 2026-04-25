@@ -4,9 +4,12 @@ import com.dhj.actinium.block_rendering.ActiniumBlockRenderingSettings;
 import net.minecraft.block.Block;
 import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.celeritas.shader_overrides.ActiniumChunkProgramOverrides;
+import com.dhj.actinium.celeritas.shader_overrides.ActiniumTerrainPass;
 import com.dhj.actinium.celeritas.vertices.ActiniumExtendedChunkVertexType;
+import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
 import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
+import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
@@ -52,7 +55,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
         }
 
         boolean shadowPass = this.isShadowPass();
-        boolean shouldOverrideWorldPass = !shadowPass && pass.isReverseOrder();
+        boolean shouldOverrideWorldPass = !shadowPass && (pass.isReverseOrder() || this.shouldOverrideShadowReceiverPass(pass));
 
         if (!shadowPass && !shouldOverrideWorldPass) {
             if (ActiniumShaderPackManager.isDebugEnabled() && this.loggedSkippedWorldPasses.add(pass)) {
@@ -134,5 +137,16 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
             this.loggedOverriddenWorldPasses.clear();
             this.observedReloadVersion = reloadVersion;
         }
+    }
+
+    private boolean shouldOverrideShadowReceiverPass(TerrainRenderPass pass) {
+        if (pass.isReverseOrder() || !ActiniumRenderPipeline.INSTANCE.hasShadowProgram()
+                || !ActiniumShaderPackManager.getActiveShaderProperties().isShadowEnabled()) {
+            return false;
+        }
+
+        ActiniumTerrainPass terrainPass = ActiniumTerrainPass.fromTerrainPass(pass, false);
+        return ActiniumShaderPackManager.getProgramSource(terrainPass, ShaderType.VERTEX) != null
+                && ActiniumShaderPackManager.getProgramSource(terrainPass, ShaderType.FRAGMENT) != null;
     }
 }

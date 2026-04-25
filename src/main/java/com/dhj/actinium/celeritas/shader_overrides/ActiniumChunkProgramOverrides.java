@@ -158,7 +158,7 @@ public final class ActiniumChunkProgramOverrides {
                 usingExternalPackProgram = true;
 
                 if (this.isLegacyPackProgram(source)) {
-                    source = ActiniumLegacyChunkShaderAdapter.translate(type, pass, source);
+                    source = ActiniumLegacyChunkShaderAdapter.translate(type, pass, source, ActiniumShaderPackManager.getTerrainDebugMode());
                     usingLegacyTranslation = true;
                 }
             }

@@ -23,6 +23,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
     private static final int BUTTON_REFRESH = 4;
     private static final int BUTTON_DEBUG = 5;
     private static final int BUTTON_OPTIONS = 6;
+    private static final int BUTTON_TERRAIN_DEBUG = 7;
 
     private final GuiScreen parent;
 
@@ -33,6 +34,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
     private boolean pendingShadersEnabled;
     private boolean appliedShadersEnabled;
     private boolean debugEnabled;
+    private int terrainDebugMode;
 
     public ActiniumShaderPackScreen(GuiScreen parent) {
         this.parent = parent;
@@ -45,6 +47,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         this.appliedPackName = ActiniumShaderPackManager.getSelectedPackName();
         this.appliedShadersEnabled = ActiniumShaderPackManager.isShaderToggleEnabled();
         this.debugEnabled = ActiniumShaderPackManager.isDebugEnabled();
+        this.terrainDebugMode = ActiniumShaderPackManager.getTerrainDebugMode();
         this.pendingPackName = this.appliedPackName;
         this.pendingShadersEnabled = this.appliedShadersEnabled;
         this.packList = new ActiniumShaderPackSelectionList(this, this.mc, this.width, this.height, 32, this.height - 58);
@@ -63,6 +66,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         this.buttonList.add(new GuiButton(BUTTON_OPTIONS, columnStart + 104, topRowY, 100, 20, I18n.format("options.actinium.shaderPack.options")));
         this.buttonList.add(new GuiButton(BUTTON_REFRESH, columnStart + 208, topRowY, 100, 20, I18n.format("options.actinium.shaderPack.refresh")));
         this.buttonList.add(new GuiButton(BUTTON_DEBUG, this.width - 74, 6, 68, 20, this.getDebugButtonLabel()));
+        this.buttonList.add(new GuiButton(BUTTON_TERRAIN_DEBUG, this.width - 144, 30, 138, 20, this.getTerrainDebugButtonLabel()));
         this.updateButtonState();
     }
 
@@ -84,6 +88,7 @@ public class ActiniumShaderPackScreen extends GuiScreen {
                 this.packList.refreshToggleAvailability();
             }
             case BUTTON_DEBUG -> this.toggleDebug(button);
+            case BUTTON_TERRAIN_DEBUG -> this.cycleTerrainDebug(button);
             default -> {
             }
         }
@@ -201,6 +206,29 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         ActiniumShaderPackManager.setDebugEnabled(this.debugEnabled);
         button.displayString = this.getDebugButtonLabel();
 
+        this.reloadShaderRuntime();
+    }
+
+    private String getDebugButtonLabel() {
+        return I18n.format(this.debugEnabled ? "options.actinium.shaderPack.debugOn" : "options.actinium.shaderPack.debugOff");
+    }
+
+    private void cycleTerrainDebug(GuiButton button) {
+        this.terrainDebugMode = (this.terrainDebugMode + 1) % (ActiniumShaderPackManager.MAX_TERRAIN_DEBUG_MODE + 1);
+        ActiniumShaderPackManager.setTerrainDebugMode(this.terrainDebugMode);
+        button.displayString = this.getTerrainDebugButtonLabel();
+        this.reloadShaderRuntime();
+    }
+
+    private String getTerrainDebugButtonLabel() {
+        return I18n.format(
+                "options.actinium.shaderPack.terrainDebug",
+                this.terrainDebugMode,
+                I18n.format("options.actinium.shaderPack.terrainDebug." + this.terrainDebugMode)
+        );
+    }
+
+    private void reloadShaderRuntime() {
         ActiniumShaderProvider provider = ActiniumShaderEntrypoint.getProvider();
         if (provider != null) {
             provider.deleteShaders();
@@ -211,10 +239,6 @@ public class ActiniumShaderPackScreen extends GuiScreen {
         if (this.mc.world != null) {
             this.mc.renderGlobal.loadRenderers();
         }
-    }
-
-    private String getDebugButtonLabel() {
-        return I18n.format(this.debugEnabled ? "options.actinium.shaderPack.debugOn" : "options.actinium.shaderPack.debugOff");
     }
 
     private void updateButtonState() {

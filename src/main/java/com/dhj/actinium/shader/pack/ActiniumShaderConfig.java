@@ -35,6 +35,9 @@ public final class ActiniumShaderConfig {
     @Setter
     @Getter
     public boolean debugEnabled;
+    @Setter
+    @Getter
+    public int terrainDebugMode;
     public Map<String, Map<String, String>> packOptionOverrides = new LinkedHashMap<>();
 
     private transient Path configPath;
