@@ -1,6 +1,7 @@
 package com.dhj.actinium.shader.pipeline;
 
 enum ActiniumWorldStage {
+    ENTITIES("gbuffers_entities"),
     SKY("gbuffers_skybasic"),
     SKY_TEXTURED("gbuffers_skytextured"),
     CLOUDS("gbuffers_clouds"),

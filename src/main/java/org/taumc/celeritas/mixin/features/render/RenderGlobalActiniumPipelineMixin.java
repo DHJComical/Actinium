@@ -3,13 +3,16 @@ package org.taumc.celeritas.mixin.features.render;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
+import com.dhj.actinium.shader.pipeline.ActiniumRenderStage;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.culling.ICamera;
 import net.minecraft.client.renderer.vertex.VertexBuffer;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
@@ -51,6 +54,34 @@ public class RenderGlobalActiniumPipelineMixin {
     private void actinium$endClouds(float partialTicks, int pass, double x, double y, double z, CallbackInfo ci) {
         ActiniumRenderPipeline.INSTANCE.unbindWorldStageProgram();
         ActiniumRenderPipeline.INSTANCE.endClouds();
+    }
+
+    @Inject(
+            method = "renderEntities",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/profiler/Profiler;endStartSection(Ljava/lang/String;)V",
+                    ordinal = 1,
+                    shift = At.Shift.AFTER
+            )
+    )
+    private void actinium$beginEntities(Entity renderViewEntity, ICamera camera, float partialTicks, CallbackInfo ci) {
+    }
+
+    @Inject(
+            method = "renderEntities",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/profiler/Profiler;endStartSection(Ljava/lang/String;)V",
+                    ordinal = 2,
+                    shift = At.Shift.BEFORE
+            )
+    )
+    private void actinium$endEntities(Entity renderViewEntity, ICamera camera, float partialTicks, CallbackInfo ci) {
+    }
+
+    @Inject(method = "renderEntities", at = @At("RETURN"))
+    private void actinium$endEntitiesFallback(Entity renderViewEntity, ICamera camera, float partialTicks, CallbackInfo ci) {
     }
 
     @Inject(

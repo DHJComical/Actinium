@@ -196,6 +196,7 @@ public final class ActiniumRenderPipeline {
     private static final boolean ENABLE_EXTERNAL_SKY_BASIC_STAGE = true;
     private static final boolean ENABLE_EXTERNAL_SKY_TEXTURED_STAGE = true;
     private static final boolean ENABLE_EXTERNAL_CLOUDS_STAGE = false;
+    private static final boolean ENABLE_EXTERNAL_ENTITIES_STAGE = false;
 
     private int observedReloadVersion = -1;
     @Getter
@@ -204,6 +205,8 @@ public final class ActiniumRenderPipeline {
     private boolean skyProgramAvailable;
     private boolean weatherProgramAvailable;
     private boolean postProgramAvailable;
+    @Getter
+    private boolean renderingShadowPass;
     private boolean loggedCapabilities;
     private boolean sceneProgramsResolved;
     private boolean preSceneProgramsResolved;
@@ -267,9 +270,12 @@ public final class ActiniumRenderPipeline {
     private @Nullable ActiniumWorldProgram skyTexturedProgram;
     private @Nullable ActiniumWorldProgram cloudsProgram;
     private @Nullable ActiniumWorldProgram weatherProgram;
+    private @Nullable ActiniumWorldProgram entitiesProgram;
     private @Nullable ActiniumWorldProgram activeWorldProgram;
+    private @Nullable ActiniumWorldProgram activeEntityWorldProgram;
     private @Nullable WorldStageGlState worldStageGlState;
     private @Nullable GlProgram<ActiniumShadowShaderInterface> shadowEntityProgram;
+    private @Nullable GlProgram<ActiniumShadowShaderInterface> activeShadowEntityProgram;
     private @Nullable GlProgram<ActiniumPostShaderInterface> finalProgram;
     private int[] finalProgramMipmappedBuffers = new int[0];
     private Map<Integer, Boolean> finalProgramExplicitFlips = Collections.emptyMap();
@@ -403,6 +409,17 @@ public final class ActiniumRenderPipeline {
     public void beginClouds() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.CLOUDS;
+    }
+
+    public void beginEntities() {
+        this.syncReloadState();
+        this.currentStage = ActiniumRenderStage.ENTITIES;
+    }
+
+    public void endEntities() {
+        if (this.currentStage == ActiniumRenderStage.ENTITIES) {
+            this.currentStage = ActiniumRenderStage.WORLD;
+        }
     }
 
     public void endClouds() {
@@ -1059,12 +1076,16 @@ public final class ActiniumRenderPipeline {
         int resolution = chooseShadowResolution(properties);
         this.ensureRuntimeResources();
         this.computeShadowMatrices(partialTicks, properties, resolution);
-
-        if (!this.renderShadowTerrainPass(properties, resolution, partialTicks)) {
-            if (this.shadowTargets != null) {
-                this.shadowTargets.ensureSize(resolution);
-                this.shadowTargets.clear();
+        this.renderingShadowPass = true;
+        try {
+            if (!this.renderShadowTerrainPass(properties, resolution, partialTicks)) {
+                if (this.shadowTargets != null) {
+                    this.shadowTargets.ensureSize(resolution);
+                    this.shadowTargets.clear();
+                }
             }
+        } finally {
+            this.renderingShadowPass = false;
         }
 
         ActiniumInternalShadowRenderingState.update(this.shadowModelViewMatrix, this.shadowProjectionMatrix);
@@ -1302,7 +1323,7 @@ public final class ActiniumRenderPipeline {
                 return;
             }
 
-            if (this.worldTargets != null) {
+            if (this.worldTargets != null && this.shouldRedirectWorldStageFramebuffer(this.activeWorldProgram)) {
                 this.worldTargets.transitionWrite(this.activeWorldProgram.drawBuffers(), true);
                 if (this.shouldEmitVerboseDebugFrame()) {
                     this.debugLogTextureCenter("world-stage." + this.activeWorldProgram.name() + ".gaux4", this.worldTargets.getSourceGaux4Texture());
@@ -1322,8 +1343,9 @@ public final class ActiniumRenderPipeline {
         if (this.shouldEmitVerboseDebugFrame()) {
             this.debugLog("Binding world-stage program '{}' for {} with draw buffers {}", program.name(), this.currentStage, Arrays.toString(program.drawBuffers()));
         }
+        boolean redirectFramebuffer = this.shouldRedirectWorldStageFramebuffer(program);
         boolean renderColorTex1ToMain = true;
-        if (this.worldTargets != null) {
+        if (redirectFramebuffer && this.worldTargets != null) {
             this.worldTargets.bindWriteFramebuffer(framebuffer, program.drawBuffers(), renderColorTex1ToMain);
         }
         debugCheckGlErrors("world-stage.bindFramebuffer:" + program.name());
@@ -1348,7 +1370,7 @@ public final class ActiniumRenderPipeline {
             this.height = Math.max(1, framebuffer.framebufferHeight);
             this.ensureRuntimeResources();
             boolean renderColorTex1ToMain = true;
-            if (this.worldTargets != null) {
+            if (this.worldTargets != null && this.shouldRedirectWorldStageFramebuffer(this.activeWorldProgram)) {
                 this.worldTargets.endWrite(framebuffer, this.activeWorldProgram.drawBuffers(), renderColorTex1ToMain);
                 if (this.shouldEmitVerboseDebugFrame()) {
                     this.debugLogTextureCenter("world-stage." + this.activeWorldProgram.name() + ".gaux4", this.worldTargets.getSourceGaux4Texture());
@@ -1367,6 +1389,63 @@ public final class ActiniumRenderPipeline {
             this.worldStageGlState = null;
             debugCheckGlErrors("world-stage.restoreState");
         }
+    }
+
+    public void refreshEntityUniforms() {
+        if (this.activeWorldProgram != null) {
+            this.activeWorldProgram.program().getInterface().updateEntityState();
+        }
+
+        if (this.activeEntityWorldProgram != null) {
+            this.activeEntityWorldProgram.program().getInterface().updateEntityState();
+        }
+
+        if (this.activeShadowEntityProgram != null) {
+            this.activeShadowEntityProgram.getInterface().updateEntityState();
+        }
+    }
+
+    public void beginPerEntityWorldProgram(float partialTicks) {
+        this.syncReloadState();
+
+        if (!ActiniumShaderPackManager.areShadersEnabled() || this.renderingShadowPass) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (minecraft.world == null || minecraft.getRenderViewEntity() == null) {
+            return;
+        }
+
+        ActiniumWorldProgram program = this.getWorldStageProgram(ActiniumWorldStage.ENTITIES);
+        if (program == null) {
+            return;
+        }
+
+        Matrix4f modelViewMatrix = new Matrix4f();
+        Matrix4f projectionMatrix = new Matrix4f();
+        Matrix4f projectionInverseMatrix = new Matrix4f();
+
+        captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
+        captureMatrix(GL11.GL_PROJECTION_MATRIX, projectionMatrix);
+        projectionInverseMatrix.set(projectionMatrix).invert();
+
+        this.activeEntityWorldProgram = program;
+        program.program().bind();
+        program.program().getInterface().setupState(this, modelViewMatrix, projectionInverseMatrix);
+        this.bindWorldStageTextures();
+        debugCheckGlErrors("world-stage.bindPerEntity:" + program.name());
+    }
+
+    public void endPerEntityWorldProgram() {
+        if (this.activeEntityWorldProgram == null) {
+            return;
+        }
+
+        this.unbindWorldStageTextures();
+        this.activeEntityWorldProgram.program().unbind();
+        debugCheckGlErrors("world-stage.unbindPerEntity:" + this.activeEntityWorldProgram.name());
+        this.activeEntityWorldProgram = null;
     }
 
     private void executePostPrograms(List<ActiniumPostProgram> programs, float partialTicks) {
@@ -2817,6 +2896,11 @@ public final class ActiniumRenderPipeline {
     private void deleteWorldPrograms() {
         this.releaseActiveWorldStageState();
 
+        if (this.entitiesProgram != null) {
+            this.entitiesProgram.program().delete();
+            this.entitiesProgram = null;
+        }
+
         if (this.skyProgram != null) {
             this.skyProgram.program().delete();
             this.skyProgram = null;
@@ -2887,6 +2971,15 @@ public final class ActiniumRenderPipeline {
             debugCheckGlErrors("world-stage.releaseProgram");
         }
 
+        if (this.activeEntityWorldProgram != null) {
+            this.unbindWorldStageTextures();
+            this.activeEntityWorldProgram.program().unbind();
+            this.activeEntityWorldProgram = null;
+            debugCheckGlErrors("world-stage.releasePerEntityProgram");
+        }
+
+        this.activeShadowEntityProgram = null;
+
         if (this.worldStageGlState != null) {
             this.worldStageGlState.restore();
             this.worldStageGlState = null;
@@ -2900,6 +2993,7 @@ public final class ActiniumRenderPipeline {
         }
 
         return switch (this.currentStage) {
+            case ENTITIES -> ENABLE_EXTERNAL_ENTITIES_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.ENTITIES) : null;
             case SKY -> ENABLE_EXTERNAL_SKY_BASIC_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.SKY) : null;
             case SKY_TEXTURED -> ENABLE_EXTERNAL_SKY_TEXTURED_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.SKY_TEXTURED) : null;
             case CLOUDS -> ENABLE_EXTERNAL_CLOUDS_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.CLOUDS) : null;
@@ -2910,6 +3004,12 @@ public final class ActiniumRenderPipeline {
 
     private @Nullable ActiniumWorldProgram getWorldStageProgram(ActiniumWorldStage stage) {
         return switch (stage) {
+            case ENTITIES -> {
+                if (this.entitiesProgram == null) {
+                    this.entitiesProgram = this.createWorldStageProgram(stage);
+                }
+                yield this.entitiesProgram;
+            }
             case SKY -> {
                 if (this.skyProgram == null) {
                     this.skyProgram = this.createWorldStageProgram(stage);
@@ -2963,6 +3063,10 @@ public final class ActiniumRenderPipeline {
         } finally {
             shaders.forEach(GlShader::delete);
         }
+    }
+
+    private boolean shouldRedirectWorldStageFramebuffer(@Nullable ActiniumWorldProgram program) {
+        return program != null && program != this.entitiesProgram;
     }
 
     private void ensureTerrainInputTextures() {
@@ -3541,7 +3645,7 @@ public final class ActiniumRenderPipeline {
                     minecraft.gameSettings,
                     partialTicks
             );
-            renderManager.setRenderPosition(this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+            renderManager.setRenderPosition(entityX, entityY, entityZ);
             renderManager.setRenderShadow(false);
             GL20.glUseProgram(0);
             GL30.glBindVertexArray(0);
@@ -3566,6 +3670,19 @@ public final class ActiniumRenderPipeline {
             GlStateManager.shadeModel(GL11.GL_SMOOTH);
             GlStateManager.colorMask(true, true, true, true);
             GlStateManager.enableCull();
+            GlProgram<ActiniumShadowShaderInterface> shadowProgram = this.getShadowEntityProgram();
+            if (shadowProgram != null) {
+                shadowProgram.bind();
+                shadowProgram.getInterface().setupState(
+                        this.shadowModelViewMatrix,
+                        this.shadowModelViewInverseMatrix,
+                        this.shadowProjectionMatrix,
+                        this.shadowProjectionInverseMatrix
+                );
+                this.activeShadowEntityProgram = shadowProgram;
+            } else {
+                this.activeShadowEntityProgram = null;
+            }
             ActiveRenderInfoAccessor.setModelViewMatrix(GLAllocation.createDirectFloatBuffer(16));
             ActiveRenderInfoAccessor.setProjectionMatrix(GLAllocation.createDirectFloatBuffer(16));
             ActiveRenderInfoAccessor.setObjectCoords(GLAllocation.createDirectFloatBuffer(3));
@@ -3588,6 +3705,10 @@ public final class ActiniumRenderPipeline {
             ActiveRenderInfoAccessor.setModelViewMatrix(previousModelView);
             ActiveRenderInfoAccessor.setObjectCoords(previousObjectCoords);
             ActiveRenderInfoAccessor.setViewportBuffer(previousViewport);
+            if (this.activeShadowEntityProgram != null) {
+                this.activeShadowEntityProgram.unbind();
+                this.activeShadowEntityProgram = null;
+            }
             minecraft.gameSettings.thirdPersonView = previousThirdPersonView;
             renderManager.setRenderShadow(previousRenderShadow);
             ForgeHooksClient.setRenderPass(previousRenderPass);
@@ -4408,6 +4529,13 @@ public final class ActiniumRenderPipeline {
         private final int activeTexture;
         private final int[] textureBindings2d;
         private final int currentProgram;
+        private final int matrixMode;
+        private final int shadeModel;
+        private final int depthFunc;
+        private final int blendSrcRgb;
+        private final int blendDstRgb;
+        private final int blendSrcAlpha;
+        private final int blendDstAlpha;
         private final boolean blendEnabled;
         private final boolean cullEnabled;
         private final boolean depthEnabled;
@@ -4415,6 +4543,10 @@ public final class ActiniumRenderPipeline {
         private final boolean fogEnabled;
         private final boolean texture2dEnabled;
         private final boolean depthMask;
+        private final boolean[] colorMask;
+        private final float[] currentColor;
+        private final int alphaFunc;
+        private final float alphaRef;
         private final int[] viewport;
 
         private WorldStageGlState(int framebufferBinding,
@@ -4423,6 +4555,13 @@ public final class ActiniumRenderPipeline {
                                   int activeTexture,
                                   int[] textureBindings2d,
                                   int currentProgram,
+                                  int matrixMode,
+                                  int shadeModel,
+                                  int depthFunc,
+                                  int blendSrcRgb,
+                                  int blendDstRgb,
+                                  int blendSrcAlpha,
+                                  int blendDstAlpha,
                                   boolean blendEnabled,
                                   boolean cullEnabled,
                                   boolean depthEnabled,
@@ -4430,6 +4569,10 @@ public final class ActiniumRenderPipeline {
                                   boolean fogEnabled,
                                   boolean texture2dEnabled,
                                   boolean depthMask,
+                                  boolean[] colorMask,
+                                  float[] currentColor,
+                                  int alphaFunc,
+                                  float alphaRef,
                                   int[] viewport) {
             this.framebufferBinding = framebufferBinding;
             this.drawBuffer = drawBuffer;
@@ -4437,6 +4580,13 @@ public final class ActiniumRenderPipeline {
             this.activeTexture = activeTexture;
             this.textureBindings2d = textureBindings2d;
             this.currentProgram = currentProgram;
+            this.matrixMode = matrixMode;
+            this.shadeModel = shadeModel;
+            this.depthFunc = depthFunc;
+            this.blendSrcRgb = blendSrcRgb;
+            this.blendDstRgb = blendDstRgb;
+            this.blendSrcAlpha = blendSrcAlpha;
+            this.blendDstAlpha = blendDstAlpha;
             this.blendEnabled = blendEnabled;
             this.cullEnabled = cullEnabled;
             this.depthEnabled = depthEnabled;
@@ -4444,10 +4594,20 @@ public final class ActiniumRenderPipeline {
             this.fogEnabled = fogEnabled;
             this.texture2dEnabled = texture2dEnabled;
             this.depthMask = depthMask;
+            this.colorMask = colorMask;
+            this.currentColor = currentColor;
+            this.alphaFunc = alphaFunc;
+            this.alphaRef = alphaRef;
             this.viewport = viewport;
         }
 
         public static WorldStageGlState capture() {
+            IntBuffer colorMaskBuffer = BufferUtils.createIntBuffer(16);
+            invokeGlGetInteger(GL11.GL_COLOR_WRITEMASK, colorMaskBuffer);
+            FloatBuffer alphaRefBuffer = BufferUtils.createFloatBuffer(16);
+            invokeGlGetFloat(GL11.GL_ALPHA_TEST_REF, alphaRefBuffer);
+            FloatBuffer currentColorBuffer = BufferUtils.createFloatBuffer(16);
+            invokeGlGetFloat(GL11.GL_CURRENT_COLOR, currentColorBuffer);
             IntBuffer viewportBuffer = BufferUtils.createIntBuffer(16);
             invokeGlGetInteger(GL11.GL_VIEWPORT, viewportBuffer);
             int activeTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
@@ -4467,6 +4627,13 @@ public final class ActiniumRenderPipeline {
                     activeTexture,
                     textureBindings2d,
                     GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+                    GL11.glGetInteger(GL11.GL_MATRIX_MODE),
+                    GL11.glGetInteger(GL11.GL_SHADE_MODEL),
+                    GL11.glGetInteger(GL11.GL_DEPTH_FUNC),
+                    GL11.glGetInteger(GL14.GL_BLEND_SRC_RGB),
+                    GL11.glGetInteger(GL14.GL_BLEND_DST_RGB),
+                    GL11.glGetInteger(GL14.GL_BLEND_SRC_ALPHA),
+                    GL11.glGetInteger(GL14.GL_BLEND_DST_ALPHA),
                     GL11.glIsEnabled(GL11.GL_BLEND),
                     GL11.glIsEnabled(GL11.GL_CULL_FACE),
                     GL11.glIsEnabled(GL11.GL_DEPTH_TEST),
@@ -4474,6 +4641,20 @@ public final class ActiniumRenderPipeline {
                     GL11.glIsEnabled(GL11.GL_FOG),
                     GL11.glIsEnabled(GL11.GL_TEXTURE_2D),
                     GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
+                    new boolean[]{
+                            colorMaskBuffer.get(0) != 0,
+                            colorMaskBuffer.get(1) != 0,
+                            colorMaskBuffer.get(2) != 0,
+                            colorMaskBuffer.get(3) != 0
+                    },
+                    new float[]{
+                            currentColorBuffer.get(0),
+                            currentColorBuffer.get(1),
+                            currentColorBuffer.get(2),
+                            currentColorBuffer.get(3)
+                    },
+                    GL11.glGetInteger(GL11.GL_ALPHA_TEST_FUNC),
+                    alphaRefBuffer.get(0),
                     new int[]{
                             viewportBuffer.get(0),
                             viewportBuffer.get(1),
@@ -4501,6 +4682,10 @@ public final class ActiniumRenderPipeline {
             }
 
             setActiveTextureEnum(this.activeTexture);
+            GL11.glMatrixMode(this.matrixMode);
+            GL11.glShadeModel(this.shadeModel);
+            GL11.glDepthFunc(this.depthFunc);
+            GL14.glBlendFuncSeparate(this.blendSrcRgb, this.blendDstRgb, this.blendSrcAlpha, this.blendDstAlpha);
             setEnabled(GL11.GL_BLEND, this.blendEnabled);
             setEnabled(GL11.GL_CULL_FACE, this.cullEnabled);
             setEnabled(GL11.GL_DEPTH_TEST, this.depthEnabled);
@@ -4508,6 +4693,9 @@ public final class ActiniumRenderPipeline {
             setEnabled(GL11.GL_FOG, this.fogEnabled);
             setEnabled(GL11.GL_TEXTURE_2D, this.texture2dEnabled);
             GL11.glDepthMask(this.depthMask);
+            GL11.glColorMask(this.colorMask[0], this.colorMask[1], this.colorMask[2], this.colorMask[3]);
+            GL11.glColor4f(this.currentColor[0], this.currentColor[1], this.currentColor[2], this.currentColor[3]);
+            GL11.glAlphaFunc(this.alphaFunc, this.alphaRef);
             GL11.glViewport(this.viewport[0], this.viewport[1], this.viewport[2], this.viewport[3]);
             syncGlStateManagerToCapturedState(
                     this.activeTexture,
@@ -4519,21 +4707,21 @@ public final class ActiniumRenderPipeline {
                     this.fogEnabled,
                     this.texture2dEnabled,
                     this.depthMask,
-                    new boolean[]{true, true, true, true},
-                    new float[]{1.0f, 1.0f, 1.0f, 1.0f},
-                    GL11.GL_GREATER,
-                    0.1f,
-                    GL11.GL_SMOOTH,
-                    GL11.GL_LEQUAL,
-                    GL11.GL_SRC_ALPHA,
-                    GL11.GL_ONE_MINUS_SRC_ALPHA,
-                    GL11.GL_ONE,
-                    GL11.GL_ZERO,
+                    this.colorMask,
+                    this.currentColor,
+                    this.alphaFunc,
+                    this.alphaRef,
+                    this.shadeModel,
+                    this.depthFunc,
+                    this.blendSrcRgb,
+                    this.blendDstRgb,
+                    this.blendSrcAlpha,
+                    this.blendDstAlpha,
                     this.viewport[0],
                     this.viewport[1],
                     this.viewport[2],
                     this.viewport[3],
-                    GL11.GL_MODELVIEW
+                    this.matrixMode
             );
         }
 

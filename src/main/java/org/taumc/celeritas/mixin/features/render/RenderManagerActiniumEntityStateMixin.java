@@ -1,5 +1,6 @@
 package org.taumc.celeritas.mixin.features.render;
 
+import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import com.dhj.actinium.shader.uniform.ActiniumCapturedRenderingState;
 import com.dhj.actinium.shader.uniform.ActiniumEntityIdHelper;
 import net.minecraft.client.renderer.entity.RenderManager;
@@ -18,10 +19,12 @@ public class RenderManagerActiniumEntityStateMixin {
                                             double z,
                                             float yaw,
                                             float partialTicks,
-                                            boolean debugBoundingBox,
-                                            CallbackInfo ci) {
+        boolean debugBoundingBox,
+        CallbackInfo ci) {
         ActiniumCapturedRenderingState.setCurrentEntity(ActiniumEntityIdHelper.getEntityId(entityIn));
         ActiniumCapturedRenderingState.setCurrentEntityColor(0.0f, 0.0f, 0.0f, 0.0f);
+        ActiniumRenderPipeline.INSTANCE.beginPerEntityWorldProgram(partialTicks);
+        ActiniumRenderPipeline.INSTANCE.refreshEntityUniforms();
     }
 
     @Inject(method = "renderEntity", at = @At("RETURN"))
@@ -31,19 +34,25 @@ public class RenderManagerActiniumEntityStateMixin {
                                           double z,
                                           float yaw,
                                           float partialTicks,
-                                          boolean debugBoundingBox,
-                                          CallbackInfo ci) {
+        boolean debugBoundingBox,
+        CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.endPerEntityWorldProgram();
         ActiniumCapturedRenderingState.resetEntityState();
+        ActiniumRenderPipeline.INSTANCE.refreshEntityUniforms();
     }
 
     @Inject(method = "renderMultipass", at = @At("HEAD"))
     private void actinium$beginRenderMultipass(Entity entityIn, float partialTicks, CallbackInfo ci) {
         ActiniumCapturedRenderingState.setCurrentEntity(ActiniumEntityIdHelper.getEntityId(entityIn));
         ActiniumCapturedRenderingState.setCurrentEntityColor(0.0f, 0.0f, 0.0f, 0.0f);
+        ActiniumRenderPipeline.INSTANCE.beginPerEntityWorldProgram(partialTicks);
+        ActiniumRenderPipeline.INSTANCE.refreshEntityUniforms();
     }
 
     @Inject(method = "renderMultipass", at = @At("RETURN"))
     private void actinium$endRenderMultipass(Entity entityIn, float partialTicks, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.endPerEntityWorldProgram();
         ActiniumCapturedRenderingState.resetEntityState();
+        ActiniumRenderPipeline.INSTANCE.refreshEntityUniforms();
     }
 }

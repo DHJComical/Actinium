@@ -61,7 +61,7 @@ final class ActiniumLegacyChunkShaderAdapter {
             return fragmentPreamble(alphaTestPass) + translated + fragmentFooter(debugMode);
         }
 
-        return vertexPreamble() + translated;
+        return vertexPreamble(shadowPass) + translated + vertexFooter(shadowPass);
     }
 
     public static String postProcessParsedSource(ActiniumTerrainPass pass, String source) {
@@ -90,7 +90,17 @@ final class ActiniumLegacyChunkShaderAdapter {
         return EXTENSION_DIRECTIVE.matcher(stripped).replaceAll("");
     }
 
-    private static String vertexPreamble() {
+    private static String vertexPreamble(boolean shadowPass) {
+        String shadowCompatUniforms = shadowPass
+                ? String.join("\n",
+                "uniform vec3 actinium_ShadowCompatCameraPosition;",
+                "uniform float actinium_ShadowCompatFrameTimeCounter;",
+                "uniform float actinium_ShadowCompatRainStrength;",
+                "")
+                : "";
+        String shadowCompatPrototype = shadowPass ? "vec4 actinium_postprocess_shadow_position(vec4 currentPosition);" : "";
+        String shadowCompatCall = shadowPass ? "    gl_Position = actinium_postprocess_shadow_position(gl_Position);" : "";
+
         return String.join("\n",
                 "#version 330 core",
                 "#define MC_VERSION 11202",
@@ -103,6 +113,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "uniform mat4 u_ModelViewMatrix;",
                 "uniform vec3 u_RegionOffset;",
                 "uniform mat3 iris_NormalMatrix;",
+                shadowCompatUniforms,
                 "",
                 "out float actinium_FogFragCoord;",
                 "out vec2 actinium_DebugTexCoord;",
@@ -156,6 +167,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "#define iris_Normal actinium_iris_Normal",
                 "",
                 "void actinium_pack_main();",
+                shadowCompatPrototype,
                 "",
                 "void main() {",
                 "    _vert_init();",
@@ -173,6 +185,73 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "    actinium_at_midBlock = actinium_MidBlock;",
                 "    actinium_iris_Normal = actinium_normal;",
                 "    actinium_pack_main();",
+                shadowCompatCall,
+                "}",
+                ""
+        );
+    }
+
+    private static String vertexFooter(boolean shadowPass) {
+        if (!shadowPass) {
+            return "";
+        }
+
+        return String.join("\n",
+                "",
+                "vec3 actinium_shadow_wave_move(vec3 pos) {",
+                "    float timer = actinium_ShadowCompatFrameTimeCounter * 3.141592653589793;",
+                "    pos = mod(pos, 157.07963267948966);",
+                "    vec2 wave_x = vec2(timer * 0.5, timer) + pos.xy;",
+                "    vec2 wave_z = vec2(timer, timer * 1.5) + pos.xy;",
+                "    vec2 wave_y = vec2(timer * 0.5, timer * 0.25) - pos.zx;",
+                "    wave_x = sin(wave_x + wave_y);",
+                "    wave_z = cos(wave_z + wave_y);",
+                "    return vec3(wave_x.x + wave_x.y, 0.0, wave_z.x + wave_z.y);",
+                "}",
+                "",
+                "vec4 actinium_postprocess_shadow_position(vec4 currentPosition) {",
+                "    #if WAVING == 1 && defined(ENTITY_SMALLGRASS) && defined(ENTITY_LOWERGRASS) && defined(ENTITY_UPPERGRASS) && defined(ENTITY_LEAVES)",
+                "    bool actiniumIsFoliageEntity =",
+                "        actinium_mc_Entity.x == ENTITY_LOWERGRASS ||",
+                "        actinium_mc_Entity.x == ENTITY_UPPERGRASS ||",
+                "        actinium_mc_Entity.x == ENTITY_SMALLGRASS ||",
+                "        actinium_mc_Entity.x == ENTITY_LEAVES;",
+                "    #ifdef ENTITY_SMALLENTS",
+                "    actiniumIsFoliageEntity = actiniumIsFoliageEntity || actinium_mc_Entity.x == ENTITY_SMALLENTS;",
+                "    #endif",
+                "    #ifdef ENTITY_SMALLENTS_NW",
+                "    actiniumIsFoliageEntity = actiniumIsFoliageEntity || actinium_mc_Entity.x == ENTITY_SMALLENTS_NW;",
+                "    #endif",
+                "    if (actiniumIsFoliageEntity) {",
+                "        #ifdef ENTITY_SMALLENTS_NW",
+                "        if (actinium_mc_Entity.x == ENTITY_SMALLENTS_NW) {",
+                "            return currentPosition;",
+                "        }",
+                "        #endif",
+                "        vec3 actiniumWorldPos = gl_Vertex.xyz + actinium_ShadowCompatCameraPosition;",
+                "        float weight = float(gl_MultiTexCoord0.t < actinium_mc_midTexCoord.t);",
+                "        if (actinium_mc_Entity.x == ENTITY_UPPERGRASS) {",
+                "            weight += 1.0;",
+                "        } else if (actinium_mc_Entity.x == ENTITY_LEAVES) {",
+                "            weight = 0.3;",
+                "        }",
+                "        #ifdef ENTITY_SMALLENTS",
+                "        else if (actinium_mc_Entity.x == ENTITY_SMALLENTS && (weight > 0.9 || fract(actiniumWorldPos.y + 0.0675) > 0.01)) {",
+                "            weight = 1.0;",
+                "        }",
+                "        #endif",
+                "        vec2 actiniumLmcoord = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy * 1.0323886639676114;",
+                "        weight *= actiniumLmcoord.y * actiniumLmcoord.y;",
+                "        vec3 waveOffsetWorld = actinium_shadow_wave_move(actiniumWorldPos.xzy) * weight * (0.03 + (actinium_ShadowCompatRainStrength * 0.05));",
+                "        vec4 shadowPosition = shadowProjection * shadowModelView * vec4(gl_Vertex.xyz + waveOffsetWorld, 1.0);",
+                "        float dist = length(shadowPosition.xy);",
+                "        float distortFactor = dist * SHADOW_DIST + (1.0 - SHADOW_DIST);",
+                "        shadowPosition.xy *= 1.0 / distortFactor;",
+                "        shadowPosition.z *= 0.2;",
+                "        return shadowPosition;",
+                "    }",
+                "    #endif",
+                "    return currentPosition;",
                 "}",
                 ""
         );

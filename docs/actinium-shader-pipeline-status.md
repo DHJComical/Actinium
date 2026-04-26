@@ -1,22 +1,16 @@
 # Actinium Shader Pipeline Status
 
-Last updated: 2026-04-25
+Last updated: 2026-04-26
 
 This document summarizes the current Actinium shader-pipeline work, the architecture that now exists, the external projects used as references, and the known risks that should guide the next development pass.
 
 ## Current State
 
-Actinium is now able to run the MakeUp Ultra Fast shader pack in a usable state. The core world render path, sky path, water path, post pipeline, GUI isolation, TAA compatibility, and volumetric-cloud texture sampling have all been iterated to the point where the latest reported state is stable: the scene renders normally and volumetric clouds no longer stretch to infinity.
+Actinium is now able to run the MakeUp Ultra Fast shader pack in a usable state. The core world render path, sky path, water path, post pipeline, GUI isolation, TAA compatibility, volumetric-cloud texture sampling, and shadow path have all been iterated to the point where the latest reported state is stable: the scene renders normally, volumetric clouds no longer stretch to infinity, and real-time shadows are working again in the current MakeUp test configuration.
 
 The current work is not yet a complete Iris-equivalent implementation. It is a compatibility pipeline that supports enough OptiFine/Iris-style behavior for MakeUp to work, while still using selective fallbacks and guarded integration points where the full deferred renderer is not yet implemented.
 
-The latest committed baseline is:
-
-```text
-60383c3 [Fix] Stabilize sky and terrain shader pipeline state
-```
-
-There are active uncommitted changes after that baseline, centered on post-program sampler compatibility, post target depth support, deferred/prepare handling, and cloud behavior.
+The current working baseline now includes the completed MakeUp shadow bring-up described below. The most important recent changes are concentrated in shadow compatibility, entity shadow semantics, and the final cleanup needed to keep the runtime stable after the shadow work.
 
 ## Recent Progress
 
@@ -32,6 +26,14 @@ There are active uncommitted changes after that baseline, centered on post-progr
 - Fixed translucent terrain/water block metadata and shader block mapping so vanilla water is recognized by shader pack logic.
 - Restored water rendering from black to normal, including improved full-screen water reflection behavior.
 - Disabled broad external terrain redirection for solid/cutout paths where it caused scene loss; translucent terrain remains the sensitive path for water and post interactions.
+
+### Shadows and Entities
+
+- Rebuilt the MakeUp shadow path into a usable state after multiple iterations of black terrain, missing shadows, unstable noise, and camera-relative shadow jitter.
+- Block, grass, foliage, and animal shadows are now rendering correctly in the current verified state.
+- Fixed dynamic foliage shadow behavior so waving plants animate in shadows instead of projecting a static silhouette.
+- Routed shadow-entity rendering through the external `shadow` program and refreshed `entityId` / `entityColor` semantics during entity draws, bringing the result closer to shader-core/Iris expectations.
+- Reworked entity-side shader binding several times to isolate side effects from `RenderGlobal.renderEntities`, ending with a per-entity binding path that no longer blocks the final shadow result.
 
 ### Sky and Clouds
 
@@ -76,6 +78,7 @@ This singleton coordinates almost all shader integration work:
 - Owns world-stage targets, post targets, shadow targets, fallback textures, custom shader-pack textures, and terrain input textures.
 - Executes prepare/deferred/composite/final programs.
 - Restores OpenGL/framebuffer state after shader passes.
+- Owns the shadow pass integration for terrain and entities, including current MakeUp-focused compatibility behavior.
 
 ### Post Targets
 
@@ -311,14 +314,13 @@ Potential missing features:
 
 Solid/cutout terrain does not yet fully run external terrain programs in the safe default path.
 
-This limits:
+This still limits:
 
 - material-specific deferred data
 - normal/specular data
-- advanced shadows and lighting effects
 - full shader-pack water and reflection behavior in packs that depend on richer terrain gbuffers
 
-The conservative approach avoids major regressions but also means many high-end effects will still be absent.
+The conservative approach avoids major regressions but also means many high-end effects will still be absent, even though the current MakeUp shadow result is now considered usable.
 
 ### Sky and Cloud Edge Cases
 
@@ -366,9 +368,9 @@ D:\Github Desktop\Actinium\run\client\logs\latest.log
 
 ### Short Term
 
-- Commit the current working changes once the latest cloud fix is verified in-game.
-- Keep testing MakeUp with high feature settings: volumetric clouds, water reflection, TAA, bloom, DOF, and volumetric light.
-- Add targeted debug for post target flips if effects appear missing but the scene remains visually stable.
+- Commit the current working shadow fixes and keep the docs synchronized with the verified runtime state.
+- Keep testing MakeUp with high feature settings: volumetric clouds, water reflection, shadows, TAA, bloom, DOF, and volumetric light.
+- Add targeted debug only when a new regression appears; the latest shadow bring-up required several temporary debug paths that should stay secondary to runtime stability.
 
 ### Medium Term
 

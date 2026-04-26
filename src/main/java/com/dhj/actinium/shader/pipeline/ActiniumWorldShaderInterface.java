@@ -152,14 +152,7 @@ final class ActiniumWorldShaderInterface {
             this.shadowcolor0Sampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_COLOR0_UNIT);
         }
 
-        if (this.entityId != null) {
-            this.entityId.setInt(ActiniumCapturedRenderingState.getCurrentRenderedEntity());
-        }
-
-        if (this.entityColor != null) {
-            Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
-            this.entityColor.set(new float[]{capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w});
-        }
+        this.updateEntityState();
 
         Minecraft minecraft = Minecraft.getMinecraft();
         Framebuffer framebuffer = minecraft.getFramebuffer();
@@ -336,6 +329,17 @@ final class ActiniumWorldShaderInterface {
     private static void setFloat(@Nullable GlUniformFloat uniform, float value) {
         if (uniform != null) {
             uniform.setFloat(value);
+        }
+    }
+
+    public void updateEntityState() {
+        if (this.entityId != null) {
+            this.entityId.setInt(ActiniumCapturedRenderingState.getCurrentRenderedEntity());
+        }
+
+        if (this.entityColor != null) {
+            Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
+            this.entityColor.set(new float[]{capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w});
         }
     }
 

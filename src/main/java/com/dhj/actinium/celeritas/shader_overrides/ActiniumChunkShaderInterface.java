@@ -89,6 +89,9 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformFloat3v sunPosition;
     private final @Nullable GlUniformFloat3v moonPosition;
     private final @Nullable GlUniformFloat3v shadowLightPosition;
+    private final @Nullable GlUniformFloat3v actiniumShadowCompatCameraPosition;
+    private final @Nullable GlUniformFloat actiniumShadowCompatFrameTimeCounter;
+    private final @Nullable GlUniformFloat actiniumShadowCompatRainStrength;
     private final @Nullable GlUniformFloat viewWidth;
     private final @Nullable GlUniformFloat viewHeight;
     private final @Nullable GlUniformFloat pixelSizeX;
@@ -189,6 +192,9 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.sunPosition = context.bindUniformIfPresent("sunPosition", GlUniformFloat3v::new);
         this.moonPosition = context.bindUniformIfPresent("moonPosition", GlUniformFloat3v::new);
         this.shadowLightPosition = context.bindUniformIfPresent("shadowLightPosition", GlUniformFloat3v::new);
+        this.actiniumShadowCompatCameraPosition = context.bindUniformIfPresent("actinium_ShadowCompatCameraPosition", GlUniformFloat3v::new);
+        this.actiniumShadowCompatFrameTimeCounter = context.bindUniformIfPresent("actinium_ShadowCompatFrameTimeCounter", GlUniformFloat::new);
+        this.actiniumShadowCompatRainStrength = context.bindUniformIfPresent("actinium_ShadowCompatRainStrength", GlUniformFloat::new);
         this.viewWidth = context.bindUniformIfPresent("viewWidth", GlUniformFloat::new);
         this.viewHeight = context.bindUniformIfPresent("viewHeight", GlUniformFloat::new);
         this.pixelSizeX = context.bindUniformIfPresent("pixelSizeX", GlUniformFloat::new);
@@ -318,6 +324,10 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
         if (this.frameTimeCounter != null) {
             this.frameTimeCounter.set(ActiniumRenderPipeline.INSTANCE.getFrameTimeCounterSeconds());
+        }
+
+        if (this.actiniumShadowCompatFrameTimeCounter != null) {
+            this.actiniumShadowCompatFrameTimeCounter.set(ActiniumRenderPipeline.INSTANCE.getFrameTimeCounterSeconds());
         }
 
         if (this.ditherShift != null) {
@@ -618,6 +628,14 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             );
         }
 
+        if (this.actiniumShadowCompatCameraPosition != null) {
+            this.actiniumShadowCompatCameraPosition.set(
+                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().x,
+                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().y,
+                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().z
+            );
+        }
+
         if (this.isEyeInWater != null) {
             this.isEyeInWater.setInt(entity.isInsideOfMaterial(Material.WATER) ? 1 : 0);
         }
@@ -660,6 +678,10 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
             if (this.rainStrength != null) {
                 this.rainStrength.set(rain);
+            }
+
+            if (this.actiniumShadowCompatRainStrength != null) {
+                this.actiniumShadowCompatRainStrength.set(rain);
             }
 
             ActiniumRenderPipeline.INSTANCE.fillShaderCoreCelestialUniforms(

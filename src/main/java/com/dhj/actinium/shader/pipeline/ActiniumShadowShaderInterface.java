@@ -33,14 +33,7 @@ final class ActiniumShadowShaderInterface {
             this.texSampler.setInt(0);
         }
 
-        if (this.entityId != null) {
-            this.entityId.setInt(ActiniumCapturedRenderingState.getCurrentRenderedEntity());
-        }
-
-        if (this.entityColor != null) {
-            Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
-            this.entityColor.set(new float[]{capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w});
-        }
+        this.updateEntityState();
 
         if (this.shadowModelView != null) {
             this.shadowModelView.set(modelView);
@@ -56,6 +49,17 @@ final class ActiniumShadowShaderInterface {
 
         if (this.shadowProjectionInverse != null) {
             this.shadowProjectionInverse.set(projectionInverse);
+        }
+    }
+
+    public void updateEntityState() {
+        if (this.entityId != null) {
+            this.entityId.setInt(ActiniumCapturedRenderingState.getCurrentRenderedEntity());
+        }
+
+        if (this.entityColor != null) {
+            Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
+            this.entityColor.set(new float[]{capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w});
         }
     }
 }
