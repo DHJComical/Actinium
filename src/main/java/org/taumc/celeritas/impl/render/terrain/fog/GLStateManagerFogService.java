@@ -2,31 +2,24 @@ package org.taumc.celeritas.impl.render.terrain.fog;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
+import net.minecraft.client.renderer.GlStateManager;
 import org.embeddedt.embeddium.impl.render.chunk.fog.FogService;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
-import org.taumc.celeritas.mixin.core.terrain.EntityRendererAccessor;
-import org.taumc.celeritas.mixin.core.terrain.GlStateManagerAccessor;
-import org.taumc.celeritas.mixin.core.terrain.GlStateManagerBooleanStateAccessor;
-import org.taumc.celeritas.mixin.core.terrain.GlStateManagerFogStateAccessor;
 
 public class GLStateManagerFogService implements FogService {
-    private static GlStateManagerFogStateAccessor getFogState() {
-        return (GlStateManagerFogStateAccessor) (Object) GlStateManagerAccessor.celeritas$getFogState();
-    }
-
     @Override
     public float getFogEnd() {
-        return getFogState().celeritas$getEnd();
+        return GlStateManager.fogState.end;
     }
 
     @Override
     public float getFogStart() {
-        return getFogState().celeritas$getStart();
+        return GlStateManager.fogState.start;
     }
 
     @Override
     public float getFogDensity() {
-        return getFogState().celeritas$getDensity();
+        return GlStateManager.fogState.density;
     }
 
     @Override
@@ -36,22 +29,20 @@ public class GLStateManagerFogService implements FogService {
 
     @Override
     public float getFogCutoff() {
-        return getFogState().celeritas$getEnd();
+        return GlStateManager.fogState.end;
     }
 
     @Override
     public float[] getFogColor() {
         EntityRenderer entityRenderer = Minecraft.getMinecraft().entityRenderer;
-        EntityRendererAccessor accessor = (EntityRendererAccessor) entityRenderer;
-        return new float[]{accessor.celeritas$getFogColorRed(), accessor.celeritas$getFogColorGreen(), accessor.celeritas$getFogColorBlue(), 1.0F};
+        return new float[]{entityRenderer.fogColorRed, entityRenderer.fogColorGreen, entityRenderer.fogColorBlue, 1.0F};
     }
 
     @Override
     public ChunkFogMode getFogMode() {
-        GlStateManagerFogStateAccessor fogState = getFogState();
-        if (!((GlStateManagerBooleanStateAccessor) (Object) fogState.celeritas$getFog()).celeritas$getCurrentState()) {
+        if (!GlStateManager.fogState.fog.currentState) {
             return ChunkFogMode.NONE;
         }
-        return ChunkFogMode.fromGLMode(fogState.celeritas$getMode());
+        return ChunkFogMode.fromGLMode(GlStateManager.fogState.mode);
     }
 }

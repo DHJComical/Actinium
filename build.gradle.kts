@@ -1,7 +1,11 @@
+import org.taumc.actinium.gradle.ActiniumUniminedHelper
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import org.jetbrains.gradle.ext.Gradle
 import org.jetbrains.gradle.ext.compiler
 import org.jetbrains.gradle.ext.runConfigurations
 import org.jetbrains.gradle.ext.settings
+import java.io.File
 
 plugins {
     java
@@ -27,7 +31,7 @@ version = propertyString("mod_version")
 group = propertyString("root_package")
 
 base {
-    archivesName.set(propertyString("mod_id"))
+    archivesName.set(propertyString("mod_name"))
 }
 
 java {
@@ -63,6 +67,9 @@ sourceSets {
     named("main") {
         java.srcDir("src/lwjglCommon/java")
         java.srcDir("src/lwjgl3/java")
+        resources {
+            exclude("mixins.celeritas.json")
+        }
     }
 }
 
@@ -107,12 +114,7 @@ unimined.minecraft {
 
     defaultRemapJar = false
 
-    remap(tasks.named<Jar>("jar").get()) {
-        mixinRemap {
-            enableBaseMixin()
-            disableRefmap()
-        }
-    }
+    remap(tasks.named<Jar>("jar").get())
 
     mods {
         val modCompileOnly by configurations.getting
@@ -124,7 +126,64 @@ unimined.minecraft {
 
 apply(plugin = "dependencies")
 
+ActiniumUniminedHelper.configureProductionRemap(project)
+if (propertyBool("use_access_transformer")) {
+    ActiniumUniminedHelper.configureSourceAccessTransformers(project, "src/main/resources/${propertyString("access_transformer_locations")}")
+}
+
+val generatedMixinConfigDir = layout.buildDirectory.dir("generated/actinium/mixins")
+
+val generateMixinConfig by tasks.registering {
+    val templateFile = layout.projectDirectory.file("src/main/resources/mixins.celeritas.json")
+    val outputFile = generatedMixinConfigDir.map { it.file("mixins.celeritas.json") }
+
+    inputs.file(templateFile)
+    inputs.files(sourceSets.named("main").get().allJava.srcDirs)
+    outputs.file(outputFile)
+
+    doLast {
+        @Suppress("UNCHECKED_CAST")
+        val mixinConfig = JsonSlurper().parse(templateFile.asFile) as MutableMap<String, Any?>
+        val mixinPackage = mixinConfig["package"] as? String
+            ?: error("mixins.celeritas.json is missing a package field")
+        val mixinPackagePath = mixinPackage.replace('.', '/') + "/"
+
+        val mixinClasses = sourceSets.named("main").get().allJava.srcDirs
+            .asSequence()
+            .filter(File::exists)
+            .flatMap { sourceRoot ->
+                sourceRoot.walkTopDown()
+                    .filter { it.isFile && it.extension == "java" }
+                    .mapNotNull { sourceFile ->
+                        val relativePath = sourceFile.relativeTo(sourceRoot).invariantSeparatorsPath
+                        if (!relativePath.startsWith(mixinPackagePath)) {
+                            return@mapNotNull null
+                        }
+
+                        if (!sourceFile.readText(Charsets.UTF_8).contains("@Mixin")) {
+                            return@mapNotNull null
+                        }
+
+                        relativePath
+                            .removePrefix(mixinPackagePath)
+                            .removeSuffix(".java")
+                            .replace('/', '.')
+                    }
+            }
+            .distinct()
+            .sorted()
+            .toList()
+
+        mixinConfig["client"] = mixinClasses
+
+        val output = outputFile.get().asFile
+        output.parentFile.mkdirs()
+        output.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(mixinConfig)) + System.lineSeparator(), Charsets.UTF_8)
+    }
+}
+
 tasks.processResources {
+    dependsOn(generateMixinConfig)
     val resourceProperties = mapOf(
         "mod_id" to propertyString("mod_id"),
         "mod_name" to propertyString("mod_name"),
@@ -139,6 +198,7 @@ tasks.processResources {
 
     inputs.properties(resourceProperties)
     filteringCharset = "UTF-8"
+    from(generateMixinConfig)
 
     filesMatching(listOf("mcmod.info", "pack.mcmeta")) {
         expand(resourceProperties)

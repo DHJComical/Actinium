@@ -1,5 +1,8 @@
 package org.taumc.celeritas.mixin;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.util.MixinClassValidator;
@@ -7,9 +10,11 @@ import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
+import java.io.InputStreamReader;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,12 +30,12 @@ public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public String getRefMapperConfig() {
-        return "";
+        return null;
     }
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return false;
+        return true;
     }
 
     @Override
@@ -48,6 +53,32 @@ public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public List<String> getMixins() {
+        if (hasStaticMixinEntries()) {
+            return Collections.emptyList();
+        }
+
+        return discoverMixins();
+    }
+
+    private static boolean hasStaticMixinEntries() {
+        try (var stream = CeleritasVintageMixinPlugin.class.getResourceAsStream("/mixins.celeritas.json")) {
+            if (stream == null) {
+                return false;
+            }
+
+            JsonObject config = JsonParser.parseReader(new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject();
+            return hasEntries(config.getAsJsonArray("mixins")) || hasEntries(config.getAsJsonArray("client"));
+        } catch (Exception e) {
+            LOGGER.warn("Failed to inspect mixin config for static entries, falling back to runtime discovery", e);
+            return false;
+        }
+    }
+
+    private static boolean hasEntries(JsonArray entries) {
+        return entries != null && !entries.isEmpty();
+    }
+
+    private static List<String> discoverMixins() {
         List<Path> rootPaths = new ArrayList<>();
 
         rootPaths.addAll(Stream.of("org.taumc.celeritas.mixin")
