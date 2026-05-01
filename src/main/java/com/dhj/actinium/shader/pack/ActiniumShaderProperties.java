@@ -20,6 +20,7 @@ public final class ActiniumShaderProperties {
     private static final float DEFAULT_SHADOW_NEAR_PLANE = 0.05f;
     private static final float DEFAULT_SHADOW_FAR_PLANE = 256.0f;
     private static final float DEFAULT_SHADOW_DISTANCE_RENDER_MUL = -1.0f;
+    private static final float DEFAULT_ENTITY_SHADOW_DISTANCE_MUL = 1.0f;
     private static final boolean DEFAULT_SHADOW_HARDWARE_FILTERING = false;
 
     private @Nullable String cloudSetting;
@@ -52,6 +53,7 @@ public final class ActiniumShaderProperties {
     private float shadowNearPlane = DEFAULT_SHADOW_NEAR_PLANE;
     private float shadowFarPlane = DEFAULT_SHADOW_FAR_PLANE;
     private float shadowDistanceRenderMul = DEFAULT_SHADOW_DISTANCE_RENDER_MUL;
+    private float entityShadowDistanceMul = DEFAULT_ENTITY_SHADOW_DISTANCE_MUL;
     private boolean shadowHardwareFiltering = DEFAULT_SHADOW_HARDWARE_FILTERING;
 
     public static ActiniumShaderProperties parse(Properties properties) {
@@ -91,6 +93,42 @@ public final class ActiniumShaderProperties {
         DirectiveSourceParser.parseInto(parsed, shaderSources);
         parsed.parseMenuMetadata(rawProperties);
         return parsed;
+    }
+
+    public void applyRuntimeOverrides(Map<String, String> overrides) {
+        if (overrides == null || overrides.isEmpty()) {
+            return;
+        }
+
+        overrides.forEach((keyObject, valueObject) -> {
+            String key = keyObject != null ? keyObject.trim() : "";
+            String value = valueObject != null ? valueObject.trim() : "";
+
+            switch (key) {
+                case "clouds" -> this.cloudSetting = value;
+                case "oldHandLight" -> this.oldHandLight = parseBoolean(value, this.oldHandLight);
+                case "separateAo" -> this.separateAo = parseBoolean(value, this.separateAo);
+                case "shadowTerrain" -> this.shadowTerrain = parseBoolean(value, this.shadowTerrain);
+                case "shadowTranslucent" -> this.shadowTranslucent = parseBoolean(value, this.shadowTranslucent);
+                case "shadowEntities" -> this.shadowEntities = parseBoolean(value, this.shadowEntities);
+                case "shadowPlayer" -> this.shadowPlayer = parseBoolean(value, this.shadowPlayer);
+                case "shadowBlockEntities" -> this.shadowBlockEntities = parseBoolean(value, this.shadowBlockEntities);
+                case "shadow.enabled", "shadowEnabled" -> this.shadowEnabled = parseBoolean(value, this.shadowEnabled);
+                case "prepareBeforeShadow" -> this.prepareBeforeShadow = parseBoolean(value, this.prepareBeforeShadow);
+                case "sunPathRotation" -> this.sunPathRotation = parseFloat(value, this.sunPathRotation);
+                case "shadowIntervalSize" -> this.shadowIntervalSize = parseFloat(value, this.shadowIntervalSize);
+                case "shadowMapResolution" -> this.shadowMapResolution = parseInteger(value, this.shadowMapResolution);
+                case "shadowDistance" -> this.shadowDistance = parseFloat(value, this.shadowDistance);
+                case "shadowNearPlane" -> this.shadowNearPlane = parseFloat(value, this.shadowNearPlane);
+                case "shadowFarPlane" -> this.shadowFarPlane = parseFloat(value, this.shadowFarPlane);
+                case "shadowDistanceRenderMul" -> this.shadowDistanceRenderMul = parseFloat(value, this.shadowDistanceRenderMul);
+                case "entityShadowDistanceMul" -> this.entityShadowDistanceMul = parseFloat(value, this.entityShadowDistanceMul);
+                case "shadowHardwareFiltering" -> this.shadowHardwareFiltering = parseBoolean(value, this.shadowHardwareFiltering);
+                case "weather" -> this.parseWeather(value);
+                default -> {
+                }
+            }
+        });
     }
 
     public @Nullable String getCloudSetting() {
@@ -167,6 +205,10 @@ public final class ActiniumShaderProperties {
 
     public float getShadowDistanceRenderMul() {
         return this.shadowDistanceRenderMul;
+    }
+
+    public float getEntityShadowDistanceMul() {
+        return this.entityShadowDistanceMul;
     }
 
     public boolean isShadowHardwareFiltering() {
@@ -389,6 +431,14 @@ public final class ActiniumShaderProperties {
         }
     }
 
+    private static float parseFloat(String value, float fallback) {
+        try {
+            return Float.parseFloat(value);
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
     private static List<String> splitWhitespaceList(String value) {
         if (value.isBlank()) {
             return List.of();
@@ -578,6 +628,7 @@ public final class ActiniumShaderProperties {
                 case "shadowNearPlane" -> target.shadowNearPlane = parseFloat(value, target.shadowNearPlane);
                 case "shadowFarPlane" -> target.shadowFarPlane = parseFloat(value, target.shadowFarPlane);
                 case "shadowDistanceRenderMul" -> target.shadowDistanceRenderMul = parseFloat(value, target.shadowDistanceRenderMul);
+                case "entityShadowDistanceMul" -> target.entityShadowDistanceMul = parseFloat(value, target.entityShadowDistanceMul);
                 case "shadowHardwareFiltering" -> {
                     if ("bool".equals(type)) {
                         target.shadowHardwareFiltering = parseBoolean(value, target.shadowHardwareFiltering);

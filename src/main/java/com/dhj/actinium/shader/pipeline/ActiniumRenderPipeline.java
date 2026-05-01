@@ -197,6 +197,10 @@ public final class ActiniumRenderPipeline {
     private static final boolean ENABLE_EXTERNAL_SKY_TEXTURED_STAGE = true;
     private static final boolean ENABLE_EXTERNAL_CLOUDS_STAGE = false;
     private static final boolean ENABLE_EXTERNAL_ENTITIES_STAGE = false;
+    private static final int TERRAIN_INPUT_GAUX1 = 1;
+    private static final int TERRAIN_INPUT_GAUX2 = 1 << 1;
+    private static final int TERRAIN_INPUT_DEPTHTEX0 = 1 << 2;
+    private static final int TERRAIN_INPUT_DEPTHTEX1 = 1 << 3;
 
     private int observedReloadVersion = -1;
     @Getter
@@ -296,11 +300,18 @@ public final class ActiniumRenderPipeline {
     private boolean prepareProgramsExecutedThisFrame;
     private boolean deferredProgramsExecutedThisFrame;
     private boolean preTranslucentDepthCapturedThisFrame;
+    private int terrainInputsPreparedFrame = Integer.MIN_VALUE;
+    private int terrainInputsPreparedFramebufferTexture = -1;
+    private int terrainInputsPreparedWidth = -1;
+    private int terrainInputsPreparedHeight = -1;
+    private int terrainInputsPreparedMask;
     private int previousUniformFrame = Integer.MIN_VALUE;
     private boolean previousUniformInitialized;
     private boolean managedSkyCelestialStateValid;
     @Getter
     private float centerDepthSmooth;
+    private int scratchCopyReadFramebuffer;
+    private int scratchCopyDrawFramebuffer;
     private ActiniumRenderPipeline() {
     }
 
@@ -1139,7 +1150,7 @@ public final class ActiniumRenderPipeline {
         setActiveTextureUnit(0);
     }
 
-    public void prepareTerrainInputs() {
+    public void prepareTerrainInputs(boolean needsGaux1, boolean needsGaux2, boolean needsDepthtex0, boolean needsDepthtex1) {
         this.syncReloadState();
 
         if (!ActiniumShaderPackManager.areShadersEnabled()) {
@@ -1155,21 +1166,64 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
+        int requiredMask = 0;
+        if (needsGaux1) {
+            requiredMask |= TERRAIN_INPUT_GAUX1;
+        }
+        if (needsGaux2) {
+            requiredMask |= TERRAIN_INPUT_GAUX2;
+        }
+        if (needsDepthtex0) {
+            requiredMask |= TERRAIN_INPUT_DEPTHTEX0;
+        }
+        if (needsDepthtex1) {
+            requiredMask |= TERRAIN_INPUT_DEPTHTEX1;
+        }
+
+        if (requiredMask == 0) {
+            return;
+        }
+
         this.width = Math.max(1, framebuffer.framebufferWidth);
         this.height = Math.max(1, framebuffer.framebufferHeight);
+        boolean sameSource = this.terrainInputsPreparedFrame == this.frameCounter
+                && this.terrainInputsPreparedFramebufferTexture == framebuffer.framebufferTexture
+                && this.terrainInputsPreparedWidth == this.width
+                && this.terrainInputsPreparedHeight == this.height;
+
+        if (sameSource && (this.terrainInputsPreparedMask & requiredMask) == requiredMask) {
+            return;
+        }
+
         this.ensureRuntimeResources();
         debugCheckGlErrors("pipeline.prepareTerrainInputs.ensureRuntimeResources");
         if (ENABLE_EXTERNAL_TERRAIN_REDIRECT && this.hasPostProgram()) {
             this.prepareWorldTargets(framebuffer);
             debugCheckGlErrors("pipeline.prepareTerrainInputs.prepareWorldTargets");
         }
-        this.ensureTerrainInputTextures();
+        this.ensureTerrainInputTextures(requiredMask);
         debugCheckGlErrors("pipeline.prepareTerrainInputs.ensureTerrainInputTextures");
 
+        if (!sameSource) {
+            this.terrainInputsPreparedMask = 0;
+        }
+
         framebuffer.bindFramebuffer(true);
-        this.copyTexture(framebuffer.framebufferTexture, this.terrainGaux1Texture);
-        this.copyFramebufferDepthToTexture(this.terrainDepthTexture0);
-        this.copyFramebufferDepthToTexture(this.terrainDepthTexture1);
+        int missingMask = requiredMask & ~this.terrainInputsPreparedMask;
+        if ((missingMask & TERRAIN_INPUT_GAUX1) != 0) {
+            this.copyCurrentFramebufferColorToTexture(this.terrainGaux1Texture);
+        }
+        if ((missingMask & TERRAIN_INPUT_DEPTHTEX0) != 0) {
+            this.copyFramebufferDepthToTexture(this.terrainDepthTexture0);
+        }
+        if ((missingMask & TERRAIN_INPUT_DEPTHTEX1) != 0) {
+            this.copyFramebufferDepthToTexture(this.terrainDepthTexture1);
+        }
+        this.terrainInputsPreparedFrame = this.frameCounter;
+        this.terrainInputsPreparedFramebufferTexture = framebuffer.framebufferTexture;
+        this.terrainInputsPreparedWidth = this.width;
+        this.terrainInputsPreparedHeight = this.height;
+        this.terrainInputsPreparedMask |= requiredMask;
     }
 
     public void bindTerrainInputTextures() {
@@ -1226,7 +1280,8 @@ public final class ActiniumRenderPipeline {
 
         if (this.worldTargets != null) {
             if (this.worldTargets.getSourceColorTexture() > 0) {
-                this.copyTexture(framebuffer.framebufferTexture, this.worldTargets.getSourceColorTexture());
+                framebuffer.bindFramebuffer(true);
+                this.copyCurrentFramebufferColorToTexture(this.worldTargets.getSourceColorTexture());
                 debugCheckGlErrors("terrain.primeFramebuffer:" + pass.name());
             }
             int[] drawBuffers = this.resolveTerrainPassDrawBuffers(pass);
@@ -2480,7 +2535,6 @@ public final class ActiniumRenderPipeline {
             this.noiseTexture = createNoiseTexture();
         }
 
-        this.ensureTerrainInputTextures();
     }
 
     private static ActiniumPostTargets.ColorFormat[] createDefaultPostTargetFormats() {
@@ -2780,6 +2834,11 @@ public final class ActiniumRenderPipeline {
         this.prepareProgramsExecutedThisFrame = false;
         this.deferredProgramsExecutedThisFrame = false;
         this.preTranslucentDepthCapturedThisFrame = false;
+        this.terrainInputsPreparedFrame = Integer.MIN_VALUE;
+        this.terrainInputsPreparedFramebufferTexture = -1;
+        this.terrainInputsPreparedWidth = -1;
+        this.terrainInputsPreparedHeight = -1;
+        this.terrainInputsPreparedMask = 0;
         this.worldCameraPosition.zero();
         this.previousWorldCameraPosition.zero();
         this.servedPreviousWorldCameraPosition.zero();
@@ -2848,6 +2907,16 @@ public final class ActiniumRenderPipeline {
         if (this.terrainDepthTexture1 != null) {
             GL11.glDeleteTextures(this.terrainDepthTexture1);
             this.terrainDepthTexture1 = null;
+        }
+
+        if (this.scratchCopyReadFramebuffer != 0) {
+            GL30.glDeleteFramebuffers(this.scratchCopyReadFramebuffer);
+            this.scratchCopyReadFramebuffer = 0;
+        }
+
+        if (this.scratchCopyDrawFramebuffer != 0) {
+            GL30.glDeleteFramebuffers(this.scratchCopyDrawFramebuffer);
+            this.scratchCopyDrawFramebuffer = 0;
         }
 
         this.terrainInputTextureWidth = -1;
@@ -3069,7 +3138,7 @@ public final class ActiniumRenderPipeline {
         return program != null && program != this.entitiesProgram;
     }
 
-    private void ensureTerrainInputTextures() {
+    private void ensureTerrainInputTextures(int requiredMask) {
         if (this.width <= 0 || this.height <= 0) {
             this.debugLog("Skipping terrain input allocation because framebuffer size is invalid: {}x{}", this.width, this.height);
             return;
@@ -3085,22 +3154,22 @@ public final class ActiniumRenderPipeline {
             this.terrainInputTextureHeight = this.height;
         }
 
-        if (this.terrainGaux1Texture == null) {
+        if ((requiredMask & TERRAIN_INPUT_GAUX1) != 0 && this.terrainGaux1Texture == null) {
             this.terrainGaux1Texture = createColorTexture(this.width, this.height);
             this.debugLog("Allocated terrain gaux1 texture {} with size {}x{}", this.terrainGaux1Texture, this.width, this.height);
         }
 
-        if (this.terrainGaux2Texture == null) {
+        if ((requiredMask & TERRAIN_INPUT_GAUX2) != 0 && this.terrainGaux2Texture == null) {
             this.terrainGaux2Texture = createColorTexture(this.width, this.height);
             this.debugLog("Allocated terrain gaux2 texture {} with size {}x{}", this.terrainGaux2Texture, this.width, this.height);
         }
 
-        if (this.terrainDepthTexture0 == null) {
+        if ((requiredMask & TERRAIN_INPUT_DEPTHTEX0) != 0 && this.terrainDepthTexture0 == null) {
             this.terrainDepthTexture0 = createDepthTexture(this.width, this.height);
             this.debugLog("Allocated terrain depthtex0 texture {} with size {}x{}", this.terrainDepthTexture0, this.width, this.height);
         }
 
-        if (this.terrainDepthTexture1 == null) {
+        if ((requiredMask & TERRAIN_INPUT_DEPTHTEX1) != 0 && this.terrainDepthTexture1 == null) {
             this.terrainDepthTexture1 = createDepthTexture(this.width, this.height);
             this.debugLog("Allocated terrain depthtex1 texture {} with size {}x{}", this.terrainDepthTexture1, this.width, this.height);
         }
@@ -3316,19 +3385,18 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
+        this.ensureScratchCopyFramebuffers();
         int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
         int previousDrawBuffer = GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
-        int readFramebuffer = GL30.glGenFramebuffers();
-        int drawFramebuffer = GL30.glGenFramebuffers();
 
         try {
-            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, this.scratchCopyReadFramebuffer);
             GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, sourceTexture, 0);
             GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
 
-            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, this.scratchCopyDrawFramebuffer);
             GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, destinationTexture, 0);
             GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
 
@@ -3338,8 +3406,6 @@ public final class ActiniumRenderPipeline {
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
             GL11.glReadBuffer(previousReadBuffer);
             GL11.glDrawBuffer(previousDrawBuffer);
-            GL30.glDeleteFramebuffers(readFramebuffer);
-            GL30.glDeleteFramebuffers(drawFramebuffer);
         }
     }
 
@@ -3349,8 +3415,36 @@ public final class ActiniumRenderPipeline {
         }
 
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
-        GL11.glCopyTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, 0, 0, this.width, this.height, 0);
+        GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, this.width, this.height);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+    }
+
+    private void copyCurrentFramebufferColorToTexture(@Nullable Integer textureId) {
+        if (textureId == null) {
+            return;
+        }
+
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int previousTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+
+        try {
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
+            GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, this.width, this.height);
+        } finally {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
+            GL11.glReadBuffer(previousReadBuffer);
+        }
+    }
+
+    private void ensureScratchCopyFramebuffers() {
+        if (this.scratchCopyReadFramebuffer == 0) {
+            this.scratchCopyReadFramebuffer = GL30.glGenFramebuffers();
+        }
+
+        if (this.scratchCopyDrawFramebuffer == 0) {
+            this.scratchCopyDrawFramebuffer = GL30.glGenFramebuffers();
+        }
     }
 
     private void debugLog(String message, Object... args) {
@@ -3493,7 +3587,13 @@ public final class ActiniumRenderPipeline {
         try {
             ActiveRenderInfoAccessor.setProjectionMatrix(toBuffer(this.shadowProjectionMatrix));
             ActiveRenderInfoAccessor.setModelViewMatrix(toBuffer(this.shadowModelViewMatrix));
-            ActiniumInternalShadowRenderingState.begin(this.shadowModelViewMatrix, this.shadowProjectionMatrix);
+            ActiniumInternalShadowRenderingState.begin(
+                    this.shadowModelViewMatrix,
+                    this.shadowProjectionMatrix,
+                    properties.isShadowEntities(),
+                    properties.isShadowPlayer(),
+                    properties.isShadowBlockEntities()
+            );
             this.shadowTargets.beginWrite();
             if (ActiniumShaderPackManager.isDebugEnabled() && this.shouldEmitVerboseDebugFrame()) {
                 int framebufferStatus = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
@@ -3541,9 +3641,11 @@ public final class ActiniumRenderPipeline {
                 );
             }
 
-            renderer.drawChunkLayer(BlockRenderLayer.SOLID, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
-            renderer.drawChunkLayer(BlockRenderLayer.CUTOUT_MIPPED, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
-            renderer.drawChunkLayer(BlockRenderLayer.CUTOUT, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+            if (properties.isShadowTerrain()) {
+                renderer.drawChunkLayer(BlockRenderLayer.SOLID, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+                renderer.drawChunkLayer(BlockRenderLayer.CUTOUT_MIPPED, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+                renderer.drawChunkLayer(BlockRenderLayer.CUTOUT, this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+            }
 
             try {
                 this.renderShadowEntityPass(resolution, partialTicks);
@@ -3580,7 +3682,7 @@ public final class ActiniumRenderPipeline {
     }
 
     private Viewport createShadowViewport() {
-        float shadowDistance = Math.max(16.0f, ActiniumShaderPackManager.getActiveShaderProperties().getShadowDistance());
+        float shadowDistance = this.getShadowTerrainRenderDistance();
         Minecraft minecraft = Minecraft.getMinecraft();
         Entity renderViewEntity = minecraft.getRenderViewEntity();
         double cullY = this.shadowCameraPosition.y + (renderViewEntity != null ? renderViewEntity.getEyeHeight() : 0.0);
@@ -3617,7 +3719,7 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        ShadowEntityCamera camera = new ShadowEntityCamera(this.shadowProjectionMatrix, this.shadowModelViewMatrix);
+        ICamera camera = this.createShadowEntityCamera(properties);
         double entityX = renderViewEntity.lastTickPosX + (renderViewEntity.posX - renderViewEntity.lastTickPosX) * partialTicks;
         double entityY = renderViewEntity.lastTickPosY + (renderViewEntity.posY - renderViewEntity.lastTickPosY) * partialTicks;
         double entityZ = renderViewEntity.lastTickPosZ + (renderViewEntity.posZ - renderViewEntity.lastTickPosZ) * partialTicks;
@@ -3757,6 +3859,29 @@ public final class ActiniumRenderPipeline {
         this.debugLogTextureSamples(label + ".color", this.shadowTargets.getColorTexture(), resolution, resolution);
         this.debugLogDepthTextureSample(label + ".depth0", this.shadowTargets.getDepthTexture(0), resolution, resolution);
         this.debugLogDepthTextureSample(label + ".depth1", this.shadowTargets.getDepthTexture(1), resolution, resolution);
+    }
+
+    private float getShadowTerrainRenderDistance() {
+        ActiniumShaderProperties properties = ActiniumShaderPackManager.getActiveShaderProperties();
+        Minecraft minecraft = Minecraft.getMinecraft();
+        float shadowDistance = Math.max(16.0f, Math.min(
+                properties.getShadowDistance(),
+                minecraft.gameSettings.renderDistanceChunks * 16.0f
+        ));
+        float renderMultiplier = properties.getShadowDistanceRenderMul();
+        if (renderMultiplier >= 0.0f) {
+            shadowDistance *= renderMultiplier;
+        }
+        return Math.max(16.0f, shadowDistance);
+    }
+
+    private ICamera createShadowEntityCamera(ActiniumShaderProperties properties) {
+        float entityShadowDistanceMul = properties.getEntityShadowDistanceMul();
+        if (entityShadowDistanceMul > 0.0f && entityShadowDistanceMul != 1.0f) {
+            return new ShadowDistanceCamera(this.getShadowTerrainRenderDistance() * entityShadowDistanceMul);
+        }
+
+        return new ShadowEntityCamera(this.shadowProjectionMatrix, this.shadowModelViewMatrix);
     }
 
     private static @Nullable Method findGlGetFloatBufferMethod() {
@@ -4153,6 +4278,37 @@ public final class ActiniumRenderPipeline {
         GlStateManager.viewport(viewportX, viewportY, viewportWidth, viewportHeight);
         GlStateManager.matrixMode(matrixMode);
         setActiveTextureUnit(0);
+    }
+
+    private static final class ShadowDistanceCamera implements ICamera {
+        private final double maxDistance;
+        private double minAllowedX;
+        private double maxAllowedX;
+        private double minAllowedY;
+        private double maxAllowedY;
+        private double minAllowedZ;
+        private double maxAllowedZ;
+
+        private ShadowDistanceCamera(double maxDistance) {
+            this.maxDistance = maxDistance;
+        }
+
+        @Override
+        public boolean isBoundingBoxInFrustum(AxisAlignedBB box) {
+            return !(box.maxX < this.minAllowedX || box.minX > this.maxAllowedX
+                    || box.maxY < this.minAllowedY || box.minY > this.maxAllowedY
+                    || box.maxZ < this.minAllowedZ || box.minZ > this.maxAllowedZ);
+        }
+
+        @Override
+        public void setPosition(double x, double y, double z) {
+            this.minAllowedX = x - this.maxDistance;
+            this.maxAllowedX = x + this.maxDistance;
+            this.minAllowedY = y - this.maxDistance;
+            this.maxAllowedY = y + this.maxDistance;
+            this.minAllowedZ = z - this.maxDistance;
+            this.maxAllowedZ = z + this.maxDistance;
+        }
     }
 
     private static final class ShadowEntityCamera implements ICamera {

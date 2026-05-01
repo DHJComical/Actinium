@@ -1,5 +1,8 @@
 package org.taumc.celeritas.impl.render.terrain.fog;
 
+import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
+import com.dhj.actinium.shader.pack.ActiniumShaderProperties;
+import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.GlStateManager;
@@ -29,6 +32,22 @@ public class GLStateManagerFogService implements FogService {
 
     @Override
     public float getFogCutoff() {
+        if (ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered() && ActiniumShaderPackManager.areShadersEnabled()) {
+            ActiniumShaderProperties properties = ActiniumShaderPackManager.getActiveShaderProperties();
+            if (properties.isShadowEnabled()) {
+                Minecraft minecraft = Minecraft.getMinecraft();
+                float shadowDistance = Math.max(16.0f, Math.min(
+                        properties.getShadowDistance(),
+                        minecraft.gameSettings.renderDistanceChunks * 16.0f
+                ));
+                float renderMultiplier = properties.getShadowDistanceRenderMul();
+                if (renderMultiplier >= 0.0f) {
+                    shadowDistance *= renderMultiplier;
+                }
+                return Math.max(16.0f, shadowDistance);
+            }
+        }
+
         return GlStateManager.fogState.end;
     }
 

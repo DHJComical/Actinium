@@ -113,6 +113,7 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
                 rawShaderProperties,
                 directiveSources
         );
+        shaderProperties.applyRuntimeOverrides(optionOverrides);
         Properties blockProperties = readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties", directiveSources);
         Properties entityProperties = readDimensionAwareProperties(shadersRoot, "entity.properties", directiveSources);
         ActiniumIdMap idMap = ActiniumIdMap.parse(blockProperties, entityProperties);

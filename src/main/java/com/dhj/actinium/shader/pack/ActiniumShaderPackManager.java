@@ -29,6 +29,18 @@ import java.util.stream.Stream;
 public final class ActiniumShaderPackManager {
     public static final String BUILTIN_PACK_NAME = "Actinium Shader";
     public static final int MAX_TERRAIN_DEBUG_MODE = 13;
+    private static final String[] EXTENDED_TERRAIN_VERTEX_TOKENS = {
+            "mc_midTexCoord",
+            "at_tangent",
+            "iris_Normal",
+            "mc_Entity",
+            "at_midBlock",
+            "gl_Normal",
+            "gl_MultiTexCoord3",
+            "useMidTexCoordAttrib",
+            "useTangentAttrib",
+            "useEntityAttrib"
+    };
     private static final Path ROOT_SHADERPACKS_DIRECTORY = Paths.get("shaderpacks");
     private static final Path DEV_CLIENT_DIRECTORY = Paths.get("run", "client");
     private static final Path DEV_SHADERPACKS_DIRECTORY = DEV_CLIENT_DIRECTORY.resolve("shaderpacks");
@@ -500,6 +512,42 @@ public final class ActiniumShaderPackManager {
         settings.setBlockMetaMatches(idMap.getBlockMetaMatches());
         settings.setBlockTypeIds(idMap.getBlockTypeIds());
         settings.setUseSeparateAo(shaderProperties.isSeparateAo());
-        settings.setUseExtendedVertexFormat(true);
+        settings.setUseExtendedVertexFormat(shouldUseExtendedVertexFormat());
+    }
+
+    private static boolean shouldUseExtendedVertexFormat() {
+        if (activePackResources == null || activePackResources.isBuiltin()) {
+            return true;
+        }
+
+        for (ActiniumTerrainPass pass : ActiniumTerrainPass.values()) {
+            String source = activePackResources.readProgramSource(pass, ShaderType.VERTEX);
+            if (sourceUsesExtendedTerrainVertexData(source)) {
+                if (isDebugEnabled()) {
+                    ActiniumShaders.logger().info("[DEBUG] Enabling extended terrain vertex format for pass '{}'", pass.getName());
+                }
+                return true;
+            }
+        }
+
+        if (isDebugEnabled()) {
+            ActiniumShaders.logger().info("[DEBUG] No extended terrain vertex attributes detected in active shader pack; using default terrain vertex format");
+        }
+
+        return false;
+    }
+
+    private static boolean sourceUsesExtendedTerrainVertexData(@Nullable String source) {
+        if (source == null || source.isBlank()) {
+            return false;
+        }
+
+        for (String token : EXTENDED_TERRAIN_VERTEX_TOKENS) {
+            if (source.contains(token)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

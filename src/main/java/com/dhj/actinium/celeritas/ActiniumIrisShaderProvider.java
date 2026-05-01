@@ -43,7 +43,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
 
     @Override
     public boolean shouldUseFaceCulling() {
-        return !this.isShadowPass();
+        return true;
     }
 
     @Override

@@ -1,6 +1,8 @@
 package org.taumc.celeritas.mixin.core.terrain;
 
 import com.llamalad7.mixinextras.sugar.Local;
+import com.dhj.actinium.shadows.ActiniumInternalShadowRenderingState;
+import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
 import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -191,22 +193,29 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
 
     @Inject(method = "renderEntities", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderHelper;enableStandardItemLighting()V", shift = At.Shift.AFTER, ordinal = 1), cancellable = true)
     public void sodium$renderTileEntities(Entity entity, ICamera camera, float partialTicks, CallbackInfo ci, @Local(ordinal = 0) int pass) {
-        this.renderer.renderBlockEntities(new CeleritasWorldRenderer.TileEntityRenderContext(damagedBlocks, partialTicks));
+        boolean renderShadowBlockEntities = !ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()
+                || ActiniumInternalShadowRenderingState.shouldRenderShadowBlockEntities();
+
+        if (renderShadowBlockEntities) {
+            this.renderer.renderBlockEntities(new CeleritasWorldRenderer.TileEntityRenderContext(damagedBlocks, partialTicks));
+        }
 
         /*
          * Normally, setTileEntities will be empty because we suppress vanilla chunk rendering. However, some mods
          * inject a custom renderer into the set. So we render any TE we find in it.
          * https://github.com/pau101/Fairy-Lights/blob/8a92f770d69be6fa164d24d7a023d828249423bb/src/main/java/com/pau101/fairylights/client/ClientProxy.java#L203
          */
-        synchronized(this.setTileEntities) {
-            if (!this.setTileEntities.isEmpty()) {
-                TileEntityRendererDispatcher.instance.preDrawBatch();
-                for (var te : this.setTileEntities) {
-                    if (te.shouldRenderInPass(pass)) {
-                        TileEntityRendererDispatcher.instance.render(te, partialTicks, -1);
+        if (renderShadowBlockEntities) {
+            synchronized(this.setTileEntities) {
+                if (!this.setTileEntities.isEmpty()) {
+                    TileEntityRendererDispatcher.instance.preDrawBatch();
+                    for (var te : this.setTileEntities) {
+                        if (te.shouldRenderInPass(pass)) {
+                            TileEntityRendererDispatcher.instance.render(te, partialTicks, -1);
+                        }
                     }
+                    TileEntityRendererDispatcher.instance.drawBatch(pass);
                 }
-                TileEntityRendererDispatcher.instance.drawBatch(pass);
             }
         }
 
@@ -250,6 +259,10 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         Entity.setRenderDistanceWeight(MathHelper.clamp((double)this.mc.gameSettings.renderDistanceChunks / 8.0D, 1.0D, 2.5D) * 1);
 
         for(Entity entity : celeritas$collectedEntities[pass]) {
+            if (!this.actinium$shouldRenderShadowEntity(entity, renderViewEntity)) {
+                continue;
+            }
+
             // Do regular vanilla checks for visibility
             if(!this.renderManager.shouldRender(entity, camera, renderViewX, renderViewY, renderViewZ) && !entity.isRidingOrBeingRiddenBy(player)) {
                 continue;
@@ -278,6 +291,23 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
                 }
             }
         }
+    }
+
+    private boolean actinium$shouldRenderShadowEntity(Entity entity, Entity renderViewEntity) {
+        if (!ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+            return true;
+        }
+
+        boolean renderEntities = ActiniumInternalShadowRenderingState.shouldRenderShadowEntities();
+        boolean renderPlayer = ActiniumInternalShadowRenderingState.shouldRenderShadowPlayer();
+        boolean playerEntity = entity == renderViewEntity
+                || (this.mc.player != null && entity.isRidingOrBeingRiddenBy(this.mc.player));
+
+        if (!renderEntities) {
+            return renderPlayer && playerEntity;
+        }
+
+        return renderPlayer || !playerEntity;
     }
 }
 

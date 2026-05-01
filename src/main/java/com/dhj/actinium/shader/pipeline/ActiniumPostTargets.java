@@ -28,9 +28,13 @@ final class ActiniumPostTargets {
     private final TargetSettings[] settings;
     private final TargetSlot[] targets = new TargetSlot[TARGET_COUNT];
     private final int framebufferId;
+    private final int copyReadFramebufferId;
+    private final int copyDrawFramebufferId;
+    private final int clearFramebufferId;
     private final int[] depthTextures = new int[3];
     private final int[] drawAttachmentScratch = new int[TARGET_COUNT];
     private final IntBuffer drawBufferBuffer = BufferUtils.createIntBuffer(TARGET_COUNT);
+    private final FloatBuffer clearColorBuffer = BufferUtils.createFloatBuffer(4);
 
     private int width;
     private int height;
@@ -39,6 +43,9 @@ final class ActiniumPostTargets {
         this.formats = formats.clone();
         this.settings = settings.clone();
         this.framebufferId = GL30.glGenFramebuffers();
+        this.copyReadFramebufferId = GL30.glGenFramebuffers();
+        this.copyDrawFramebufferId = GL30.glGenFramebuffers();
+        this.clearFramebufferId = GL30.glGenFramebuffers();
 
         for (int i = 0; i < TARGET_COUNT; i++) {
             this.targets[i] = new TargetSlot();
@@ -63,8 +70,8 @@ final class ActiniumPostTargets {
             slot.mainTexture = createColorTexture(width, height, format);
             slot.altTexture = createColorTexture(width, height, format);
             slot.sourceIsAlt = false;
-            clearTargetTexture(slot.mainTexture, width, height, this.resolveSettings(i));
-            clearTargetTexture(slot.altTexture, width, height, this.resolveSettings(i));
+            this.clearTargetTexture(slot.mainTexture, width, height, this.resolveSettings(i));
+            this.clearTargetTexture(slot.altTexture, width, height, this.resolveSettings(i));
         }
 
         deleteTextures(this.depthTextures);
@@ -85,8 +92,8 @@ final class ActiniumPostTargets {
         }
 
         int sceneTexture = mainFramebuffer.framebufferTexture;
-        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
-        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].getSourceTexture(), this.width, this.height);
+        this.copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
+        this.copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].getSourceTexture(), this.width, this.height);
         this.copyDepthTexture(mainFramebuffer, 0);
         this.copyDepthTexture(mainFramebuffer, 2);
     }
@@ -95,7 +102,7 @@ final class ActiniumPostTargets {
         this.copySceneInputs(mainFramebuffer);
 
         if (gaux4Texture != null && gaux4Texture > 0) {
-            copyTexture(gaux4Texture, this.targets[TARGET_GAUX4].getSourceTexture(), this.width, this.height);
+            this.copyTexture(gaux4Texture, this.targets[TARGET_GAUX4].getSourceTexture(), this.width, this.height);
         }
     }
 
@@ -105,12 +112,12 @@ final class ActiniumPostTargets {
         }
 
         int sceneTexture = mainFramebuffer.framebufferTexture;
-        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
+        this.copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].getSourceTexture(), this.width, this.height);
         this.copyDepthTexture(mainFramebuffer, 0);
         this.copyDepthTexture(mainFramebuffer, 2);
 
         if (gaux4Texture != null && gaux4Texture > 0) {
-            copyTexture(gaux4Texture, this.targets[TARGET_GAUX4].getSourceTexture(), this.width, this.height);
+            this.copyTexture(gaux4Texture, this.targets[TARGET_GAUX4].getSourceTexture(), this.width, this.height);
         }
     }
 
@@ -122,10 +129,10 @@ final class ActiniumPostTargets {
         int sceneTexture = mainFramebuffer.framebufferTexture;
         this.prepareFramePersistentTargets();
 
-        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].mainTexture, this.width, this.height);
+        this.copyTexture(sceneTexture, this.targets[TARGET_COLORTEX0].mainTexture, this.width, this.height);
         // Post programs expect colortex1 to contain the current fully rendered scene.
         // World-stage color targets may only contain sky/translucent intermediates.
-        copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].mainTexture, this.width, this.height);
+        this.copyTexture(sceneTexture, this.targets[TARGET_COLORTEX1].mainTexture, this.width, this.height);
         this.targets[TARGET_COLORTEX0].sourceIsAlt = false;
         this.targets[TARGET_COLORTEX1].sourceIsAlt = false;
 
@@ -134,9 +141,9 @@ final class ActiniumPostTargets {
         clearTargetIfRequested(TARGET_GAUX2);
 
         if (worldGaux4Texture != null && worldGaux4Texture > 0) {
-            copyTexture(worldGaux4Texture, this.targets[TARGET_GAUX4].mainTexture, this.width, this.height);
+            this.copyTexture(worldGaux4Texture, this.targets[TARGET_GAUX4].mainTexture, this.width, this.height);
         } else if (this.resolveSettings(TARGET_GAUX4).clear()) {
-            clearTargetTexture(this.targets[TARGET_GAUX4].mainTexture, this.width, this.height, this.resolveSettings(TARGET_GAUX4));
+            this.clearTargetTexture(this.targets[TARGET_GAUX4].mainTexture, this.width, this.height, this.resolveSettings(TARGET_GAUX4));
         }
         this.targets[TARGET_GAUX4].sourceIsAlt = false;
 
@@ -181,9 +188,9 @@ final class ActiniumPostTargets {
 
             int sourceTexture = other.getSourceTexture(targetIndex);
             if (sourceTexture != 0) {
-                copyTexture(sourceTexture, this.targets[targetIndex].mainTexture, this.width, this.height);
+                this.copyTexture(sourceTexture, this.targets[targetIndex].mainTexture, this.width, this.height);
             } else {
-                clearTargetTexture(this.targets[targetIndex].mainTexture, this.width, this.height, this.resolveSettings(targetIndex));
+                this.clearTargetTexture(this.targets[targetIndex].mainTexture, this.width, this.height, this.resolveSettings(targetIndex));
             }
             this.targets[targetIndex].sourceIsAlt = false;
         }
@@ -199,7 +206,7 @@ final class ActiniumPostTargets {
                 int previousSource = slot.getSourceTexture();
 
                 if (previousSource != 0 && previousSource != slot.mainTexture) {
-                    copyTexture(previousSource, slot.mainTexture, this.width, this.height);
+                    this.copyTexture(previousSource, slot.mainTexture, this.width, this.height);
                 }
 
                 slot.sourceIsAlt = false;
@@ -207,31 +214,27 @@ final class ActiniumPostTargets {
             }
 
             slot.sourceIsAlt = false;
-            clearTargetTexture(slot.mainTexture, this.width, this.height, settings);
-            clearTargetTexture(slot.altTexture, this.width, this.height, settings);
+            this.clearTargetTexture(slot.mainTexture, this.width, this.height, settings);
+            this.clearTargetTexture(slot.altTexture, this.width, this.height, settings);
         }
     }
 
     private void clearTargetIfRequested(int targetIndex) {
         TargetSettings settings = this.resolveSettings(targetIndex);
         if (settings.clear()) {
-            clearTargetTexture(this.targets[targetIndex].mainTexture, this.width, this.height, settings);
+            this.clearTargetTexture(this.targets[targetIndex].mainTexture, this.width, this.height, settings);
         }
     }
 
     private void clearTargetAltIfRequested(int targetIndex) {
         TargetSettings settings = this.resolveSettings(targetIndex);
         if (settings.clear()) {
-            clearTargetTexture(this.targets[targetIndex].altTexture, this.width, this.height, settings);
+            this.clearTargetTexture(this.targets[targetIndex].altTexture, this.width, this.height, settings);
         }
     }
 
     private TargetSettings resolveSettings(int targetIndex) {
         return this.settings[Math.max(0, Math.min(targetIndex, this.settings.length - 1))];
-    }
-
-    private static void clearTargetTexture(int textureId, int width, int height, TargetSettings settings) {
-        clearColorTexture(textureId, width, height, settings.clearRed(), settings.clearGreen(), settings.clearBlue(), settings.clearAlpha());
     }
 
     public void bindWriteFramebuffer(int[] drawBuffers) {
@@ -314,6 +317,15 @@ final class ActiniumPostTargets {
         if (this.framebufferId != 0) {
             GL30.glDeleteFramebuffers(this.framebufferId);
         }
+        if (this.copyReadFramebufferId != 0) {
+            GL30.glDeleteFramebuffers(this.copyReadFramebufferId);
+        }
+        if (this.copyDrawFramebufferId != 0) {
+            GL30.glDeleteFramebuffers(this.copyDrawFramebufferId);
+        }
+        if (this.clearFramebufferId != 0) {
+            GL30.glDeleteFramebuffers(this.clearFramebufferId);
+        }
     }
 
     private void copyDepthTexture(Framebuffer mainFramebuffer, int index) {
@@ -324,27 +336,25 @@ final class ActiniumPostTargets {
         try {
             mainFramebuffer.bindFramebuffer(true);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.depthTextures[resolvedIndex]);
-            GL11.glCopyTexImage2D(GL11.GL_TEXTURE_2D, 0, GL14.GL_DEPTH_COMPONENT24, 0, 0, this.width, this.height, 0);
+            GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, this.width, this.height);
         } finally {
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
         }
     }
 
-    private static void copyDepthTexture(int sourceTexture, int destinationTexture, int width, int height) {
+    private void copyDepthTexture(int sourceTexture, int destinationTexture, int width, int height) {
         int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
         int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int previousDrawBuffer = GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
         int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
-        int readFramebuffer = GL30.glGenFramebuffers();
-        int drawFramebuffer = GL30.glGenFramebuffers();
 
         try {
-            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, this.copyReadFramebufferId);
             GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, sourceTexture, 0);
 
-            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, this.copyDrawFramebufferId);
             GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, destinationTexture, 0);
 
             GL30.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL11.GL_DEPTH_BUFFER_BIT, GL11.GL_NEAREST);
@@ -354,26 +364,22 @@ final class ActiniumPostTargets {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
             GL11.glDrawBuffer(previousDrawBuffer);
             GL11.glReadBuffer(previousReadBuffer);
-            GL30.glDeleteFramebuffers(readFramebuffer);
-            GL30.glDeleteFramebuffers(drawFramebuffer);
         }
     }
 
-    private static void copyTexture(int sourceTexture, int destinationTexture, int width, int height) {
+    private void copyTexture(int sourceTexture, int destinationTexture, int width, int height) {
         int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
         int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int previousDrawBuffer = GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
         int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
-        int readFramebuffer = GL30.glGenFramebuffers();
-        int drawFramebuffer = GL30.glGenFramebuffers();
 
         try {
-            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, readFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, this.copyReadFramebufferId);
             GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, sourceTexture, 0);
             GL30.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
 
-            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, this.copyDrawFramebufferId);
             GL30.glFramebufferTexture2D(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, destinationTexture, 0);
             GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
 
@@ -384,24 +390,21 @@ final class ActiniumPostTargets {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
             GL11.glDrawBuffer(previousDrawBuffer);
             GL11.glReadBuffer(previousReadBuffer);
-            GL30.glDeleteFramebuffers(readFramebuffer);
-            GL30.glDeleteFramebuffers(drawFramebuffer);
         }
     }
 
-    private static void clearColorTexture(int textureId, int width, int height) {
-        clearColorTexture(textureId, width, height, 0.0f, 0.0f, 0.0f, 0.0f);
+    private void clearTargetTexture(int textureId, int width, int height, TargetSettings settings) {
+        this.clearColorTexture(textureId, width, height, settings.clearRed(), settings.clearGreen(), settings.clearBlue(), settings.clearAlpha());
     }
 
-    private static void clearColorTexture(int textureId, int width, int height, float red, float green, float blue, float alpha) {
+    private void clearColorTexture(int textureId, int width, int height, float red, float green, float blue, float alpha) {
         ActiniumRenderPipeline.clearGlErrorsSilently();
         int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
         int previousDrawBuffer = GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
         int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
-        int framebuffer = GL30.glGenFramebuffers();
 
         try {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.clearFramebufferId);
             GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, textureId, 0);
             int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
 
@@ -409,15 +412,14 @@ final class ActiniumPostTargets {
                 throw new RuntimeException("Incomplete Actinium post clear framebuffer: " + status);
             }
 
-            FloatBuffer clearColor = BufferUtils.createFloatBuffer(4);
-            clearColor.put(red).put(green).put(blue).put(alpha);
-            clearColor.flip();
-            GL30.glClearBufferfv(GL11.GL_COLOR, 0, clearColor);
+            this.clearColorBuffer.clear();
+            this.clearColorBuffer.put(red).put(green).put(blue).put(alpha);
+            this.clearColorBuffer.flip();
+            GL30.glClearBufferfv(GL11.GL_COLOR, 0, this.clearColorBuffer);
         } finally {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
             GL11.glDrawBuffer(previousDrawBuffer);
             GL11.glReadBuffer(previousReadBuffer);
-            GL30.glDeleteFramebuffers(framebuffer);
         }
     }
 

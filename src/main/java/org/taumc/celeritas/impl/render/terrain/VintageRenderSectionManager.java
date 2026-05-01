@@ -16,8 +16,10 @@ import org.embeddedt.embeddium.impl.render.chunk.data.BuiltRenderSectionData;
 import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
 import org.embeddedt.embeddium.impl.render.chunk.lists.SectionTicker;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
+import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderTextureSlot;
+import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
 import org.embeddedt.embeddium.impl.render.chunk.sprite.GenericSectionSpriteTicker;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
@@ -64,7 +66,19 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
     @Override
     protected boolean useFogOcclusion() {
-        return CeleritasVintage.options().performance.useFogOcclusion && !ActiniumShaderProviderHolder.isActive();
+        if (!CeleritasVintage.options().performance.useFogOcclusion) {
+            return false;
+        }
+
+        if (ActiniumShaderProviderHolder.isShadowPass()) {
+            return true;
+        }
+
+        if (!ActiniumShaderProviderHolder.isActive()) {
+            return true;
+        }
+
+        return ChunkShaderFogComponent.FOG_SERVICE.getFogMode() != ChunkFogMode.NONE;
     }
 
     @Override

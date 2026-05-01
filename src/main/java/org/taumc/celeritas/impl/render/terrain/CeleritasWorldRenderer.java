@@ -127,7 +127,7 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
      * @return True if the entity is visible, otherwise false
      */
     public boolean isEntityVisible(Entity entity) {
-        if (!CeleritasVintage.options().performance.useEntityCulling || this.renderSectionManager.isInShadowPass()) {
+        if (!CeleritasVintage.options().performance.useEntityCulling) {
             return true;
         }
 

@@ -131,6 +131,12 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
     private final float defaultAlphaTest;
     private final boolean usesTerrainInputs;
+    private final boolean usesTerrainColorInput;
+    private final boolean usesTerrainAuxInput;
+    private final boolean usesTerrainDepth0Input;
+    private final boolean usesTerrainDepth1Input;
+    private final boolean usesWorldGaux4Input;
+    private final boolean usesShadowInputs;
     private GlPrimitiveType primitiveType;
 
     private final Matrix4f currentModelView = new Matrix4f();
@@ -233,14 +239,20 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.entityColor = context.bindUniformIfPresent("entityColor", GlUniformFloat4v::new);
 
         this.defaultAlphaTest = options.pass().supportsFragmentDiscard() ? 0.1f : 0.0f;
-        this.usesTerrainInputs = this.gaux1Sampler != null
-                || this.gaux2Sampler != null
-                || this.depthtex0Sampler != null
-                || this.depthtex1Sampler != null
-                || this.noisetexSampler != null
-                || this.shadowtex0Sampler != null
+        this.usesTerrainColorInput = this.gaux1Sampler != null;
+        this.usesTerrainAuxInput = this.gaux2Sampler != null;
+        this.usesTerrainDepth0Input = this.depthtex0Sampler != null;
+        this.usesTerrainDepth1Input = this.depthtex1Sampler != null;
+        this.usesWorldGaux4Input = this.gaux4Sampler != null;
+        this.usesShadowInputs = this.shadowtex0Sampler != null
                 || this.shadowtex1Sampler != null
                 || this.shadowcolor0Sampler != null;
+        this.usesTerrainInputs = this.usesTerrainColorInput
+                || this.usesTerrainAuxInput
+                || this.usesTerrainDepth0Input
+                || this.usesTerrainDepth1Input
+                || this.noisetexSampler != null
+                || this.usesShadowInputs;
     }
 
     @Override
@@ -407,13 +419,21 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         if (this.usesTerrainInputs) {
-            ActiniumRenderPipeline.INSTANCE.prepareTerrainInputs();
+            ActiniumRenderPipeline.INSTANCE.prepareTerrainInputs(
+                    this.usesTerrainColorInput,
+                    this.usesTerrainAuxInput,
+                    this.usesTerrainDepth0Input,
+                    this.usesTerrainDepth1Input
+            );
             ActiniumRenderPipeline.INSTANCE.bindTerrainInputTextures();
         }
-        ActiniumRenderPipeline.INSTANCE.bindWorldGaux4Texture();
-        ActiniumRenderPipeline.INSTANCE.bindTerrainShadowTextures();
+        if (this.usesWorldGaux4Input) {
+            ActiniumRenderPipeline.INSTANCE.bindWorldGaux4Texture();
+        }
+        if (this.usesShadowInputs) {
+            ActiniumRenderPipeline.INSTANCE.bindTerrainShadowTextures();
+        }
         ActiniumRenderPipeline.INSTANCE.bindTerrainPassFramebuffer(pass);
-        bindVanillaTerrainTextures(minecraft);
         this.pushLegacyRuntimeState(minecraft);
         this.pushLegacyMatrices();
     }
@@ -427,8 +447,12 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         if (this.usesTerrainInputs) {
             ActiniumRenderPipeline.INSTANCE.unbindTerrainInputTextures();
         }
-        ActiniumRenderPipeline.INSTANCE.unbindWorldGaux4Texture();
-        ActiniumRenderPipeline.INSTANCE.unbindTerrainShadowTextures();
+        if (this.usesWorldGaux4Input) {
+            ActiniumRenderPipeline.INSTANCE.unbindWorldGaux4Texture();
+        }
+        if (this.usesShadowInputs) {
+            ActiniumRenderPipeline.INSTANCE.unbindTerrainShadowTextures();
+        }
     }
 
     @Override
