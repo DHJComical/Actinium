@@ -1,31 +1,30 @@
 package com.dhj.actinium.shader.pipeline;
 
-import org.jetbrains.annotations.Nullable;
-
 enum ActiniumWorldStage {
     ENTITIES("gbuffers_entities"),
+    PARTICLES("gbuffers_particles", "gbuffers_textured_lit", "gbuffers_textured", "gbuffers_basic"),
     SKY("gbuffers_skybasic"),
     SKY_TEXTURED("gbuffers_skytextured"),
     CLOUDS("gbuffers_clouds"),
-    WEATHER("gbuffers_weather", "gbuffers_textured_lit");
+    WEATHER("gbuffers_weather", "gbuffers_textured_lit", "gbuffers_textured", "gbuffers_basic");
 
     private final String programName;
-    private final @Nullable String fallbackProgramName;
+    private final String[] fallbackProgramNames;
 
     ActiniumWorldStage(String programName) {
-        this(programName, null);
+        this(programName, new String[0]);
     }
 
-    ActiniumWorldStage(String programName, @Nullable String fallbackProgramName) {
+    ActiniumWorldStage(String programName, String... fallbackProgramNames) {
         this.programName = programName;
-        this.fallbackProgramName = fallbackProgramName;
+        this.fallbackProgramNames = fallbackProgramNames;
     }
 
     public String programName() {
         return this.programName;
     }
 
-    public @Nullable String fallbackProgramName() {
-        return this.fallbackProgramName;
+    public String[] fallbackProgramNames() {
+        return this.fallbackProgramNames;
     }
 }

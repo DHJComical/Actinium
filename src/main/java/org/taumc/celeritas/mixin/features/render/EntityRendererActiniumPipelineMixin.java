@@ -68,6 +68,40 @@ public class EntityRendererActiniumPipelineMixin {
         ActiniumRenderPipeline.INSTANCE.prepareFirstPersonRenderState();
     }
 
+    @Inject(
+            method = "renderWorldPass",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/particle/ParticleManager;renderParticles(Lnet/minecraft/entity/Entity;F)V",
+                    shift = At.Shift.BEFORE
+            )
+    )
+    private void actinium$beginParticlePass(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (!ActiniumRenderPipeline.INSTANCE.shouldUseParticleProgram()) {
+            return;
+        }
+
+        ActiniumRenderPipeline.INSTANCE.beginParticles();
+        ActiniumRenderPipeline.INSTANCE.bindWorldStageProgram(partialTicks);
+    }
+
+    @Inject(
+            method = "renderWorldPass",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/particle/ParticleManager;renderParticles(Lnet/minecraft/entity/Entity;F)V",
+                    shift = At.Shift.AFTER
+            )
+    )
+    private void actinium$endParticlePass(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (!ActiniumRenderPipeline.INSTANCE.shouldUseParticleProgram()) {
+            return;
+        }
+
+        ActiniumRenderPipeline.INSTANCE.unbindWorldStageProgram();
+        ActiniumRenderPipeline.INSTANCE.endParticles();
+    }
+
     @Inject(method = "renderWorld", at = @At("HEAD"))
     private void actinium$runShadowPipeline(float partialTicks, long finishTimeNano, CallbackInfo ci) {
         if (ActiniumRenderPipeline.INSTANCE.hasShadowProgram()) {

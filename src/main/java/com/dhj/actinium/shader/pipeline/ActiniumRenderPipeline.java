@@ -133,7 +133,15 @@ public final class ActiniumRenderPipeline {
     };
     private static final String[] WEATHER_PROGRAMS = {
             "gbuffers_weather",
-            "gbuffers_textured_lit"
+            "gbuffers_textured_lit",
+            "gbuffers_textured",
+            "gbuffers_basic"
+    };
+    private static final String[] PARTICLE_PROGRAMS = {
+            "gbuffers_particles",
+            "gbuffers_textured_lit",
+            "gbuffers_textured",
+            "gbuffers_basic"
     };
     private static final String[] PRE_SCENE_POST_PROGRAMS = {
             "prepare",
@@ -208,6 +216,7 @@ public final class ActiniumRenderPipeline {
     private ActiniumRenderStage currentStage = ActiniumRenderStage.NONE;
     private boolean shadowProgramAvailable;
     private boolean skyProgramAvailable;
+    private boolean particleProgramAvailable;
     private boolean weatherProgramAvailable;
     private boolean postProgramAvailable;
     @Getter
@@ -274,6 +283,7 @@ public final class ActiniumRenderPipeline {
     private @Nullable ActiniumWorldProgram skyProgram;
     private @Nullable ActiniumWorldProgram skyTexturedProgram;
     private @Nullable ActiniumWorldProgram cloudsProgram;
+    private @Nullable ActiniumWorldProgram particlesProgram;
     private @Nullable ActiniumWorldProgram weatherProgram;
     private @Nullable ActiniumWorldProgram entitiesProgram;
     private @Nullable ActiniumWorldProgram activeWorldProgram;
@@ -428,8 +438,19 @@ public final class ActiniumRenderPipeline {
         this.currentStage = ActiniumRenderStage.ENTITIES;
     }
 
+    public void beginParticles() {
+        this.syncReloadState();
+        this.currentStage = ActiniumRenderStage.PARTICLES;
+    }
+
     public void endEntities() {
         if (this.currentStage == ActiniumRenderStage.ENTITIES) {
+            this.currentStage = ActiniumRenderStage.WORLD;
+        }
+    }
+
+    public void endParticles() {
+        if (this.currentStage == ActiniumRenderStage.PARTICLES) {
             this.currentStage = ActiniumRenderStage.WORLD;
         }
     }
@@ -781,6 +802,11 @@ public final class ActiniumRenderPipeline {
         return this.weatherProgramAvailable;
     }
 
+    public boolean hasParticleProgram() {
+        this.syncReloadState();
+        return this.particleProgramAvailable;
+    }
+
     public boolean shouldUseWeatherProgram() {
         this.syncReloadState();
         if (!ActiniumShaderPackManager.areShadersEnabled()) {
@@ -798,6 +824,12 @@ public final class ActiniumRenderPipeline {
         }
 
         return ActiniumShaderPackManager.getActiveShaderProperties().isWeatherParticles();
+    }
+
+    public boolean shouldUseParticleProgram() {
+        this.syncReloadState();
+        return ActiniumShaderPackManager.areShadersEnabled()
+                && this.hasParticleProgram();
     }
 
     public boolean hasPostProgram() {
@@ -2758,14 +2790,16 @@ public final class ActiniumRenderPipeline {
         this.currentStage = ActiniumRenderStage.NONE;
         this.shadowProgramAvailable = hasAnyStageProgram("shadow");
         this.skyProgramAvailable = hasAnyStageProgram(SKY_PROGRAMS);
+        this.particleProgramAvailable = hasAnyStageProgram(PARTICLE_PROGRAMS);
         this.weatherProgramAvailable = hasAnyStageProgram(WEATHER_PROGRAMS);
         this.postProgramAvailable = this.hasUsablePostProgram();
         this.loggedCapabilities = false;
         this.debugLog(
-                "Observed shader reload version {}: shadow={}, sky={}, weather={}, post={}",
+                "Observed shader reload version {}: shadow={}, sky={}, particles={}, weather={}, post={}",
                 reloadVersion,
                 this.shadowProgramAvailable,
                 this.skyProgramAvailable,
+                this.particleProgramAvailable,
                 this.weatherProgramAvailable,
                 this.postProgramAvailable
         );
@@ -2793,6 +2827,10 @@ public final class ActiniumRenderPipeline {
             capabilities.add("sky");
         }
 
+        if (this.particleProgramAvailable) {
+            capabilities.add("particles");
+        }
+
         if (this.weatherProgramAvailable) {
             capabilities.add("weather");
         }
@@ -2802,7 +2840,7 @@ public final class ActiniumRenderPipeline {
         }
 
         if (capabilities.isEmpty()) {
-            ActiniumShaders.logger().info("Active shader pack does not expose shadow/sky/weather/post programs yet");
+            ActiniumShaders.logger().info("Active shader pack does not expose shadow/sky/particles/weather/post programs yet");
         } else {
             ActiniumShaders.logger().info("Active shader pack stage programs detected: {}", String.join(", ", capabilities));
         }
@@ -3005,6 +3043,11 @@ public final class ActiniumRenderPipeline {
             this.cloudsProgram = null;
         }
 
+        if (this.particlesProgram != null) {
+            this.particlesProgram.program().delete();
+            this.particlesProgram = null;
+        }
+
         if (this.weatherProgram != null) {
             this.weatherProgram.program().delete();
             this.weatherProgram = null;
@@ -3086,6 +3129,7 @@ public final class ActiniumRenderPipeline {
             case SKY -> ENABLE_EXTERNAL_SKY_BASIC_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.SKY) : null;
             case SKY_TEXTURED -> ENABLE_EXTERNAL_SKY_TEXTURED_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.SKY_TEXTURED) : null;
             case CLOUDS -> ENABLE_EXTERNAL_CLOUDS_STAGE ? this.getWorldStageProgram(ActiniumWorldStage.CLOUDS) : null;
+            case PARTICLES -> this.getWorldStageProgram(ActiniumWorldStage.PARTICLES);
             case WEATHER -> this.getWorldStageProgram(ActiniumWorldStage.WEATHER);
             default -> null;
         };
@@ -3117,16 +3161,17 @@ public final class ActiniumRenderPipeline {
                 }
                 yield this.cloudsProgram;
             }
+            case PARTICLES -> {
+                if (this.particlesProgram == null) {
+                    this.particlesProgram = this.createWorldStageProgram(stage);
+                    this.particlesProgram = this.tryCreateFallbackWorldStageProgram(stage, this.particlesProgram);
+                }
+                yield this.particlesProgram;
+            }
             case WEATHER -> {
                 if (this.weatherProgram == null) {
                     this.weatherProgram = this.createWorldStageProgram(stage);
-                    if (this.weatherProgram == null) {
-                        String fallbackProgramName = stage.fallbackProgramName();
-                        if (fallbackProgramName != null) {
-                            this.debugLog("Falling back world-stage program '{}' to '{}'", stage.programName(), fallbackProgramName);
-                            this.weatherProgram = this.createWorldStageProgram(stage, fallbackProgramName);
-                        }
-                    }
+                    this.weatherProgram = this.tryCreateFallbackWorldStageProgram(stage, this.weatherProgram);
                 }
                 yield this.weatherProgram;
             }
@@ -3163,6 +3208,22 @@ public final class ActiniumRenderPipeline {
         } finally {
             shaders.forEach(GlShader::delete);
         }
+    }
+
+    private @Nullable ActiniumWorldProgram tryCreateFallbackWorldStageProgram(ActiniumWorldStage stage, @Nullable ActiniumWorldProgram currentProgram) {
+        if (currentProgram != null) {
+            return currentProgram;
+        }
+
+        for (String fallbackProgramName : stage.fallbackProgramNames()) {
+            this.debugLog("Falling back world-stage program '{}' to '{}'", stage.programName(), fallbackProgramName);
+            ActiniumWorldProgram fallbackProgram = this.createWorldStageProgram(stage, fallbackProgramName);
+            if (fallbackProgram != null) {
+                return fallbackProgram;
+            }
+        }
+
+        return null;
     }
 
     private boolean shouldRedirectWorldStageFramebuffer(@Nullable ActiniumWorldProgram program) {
