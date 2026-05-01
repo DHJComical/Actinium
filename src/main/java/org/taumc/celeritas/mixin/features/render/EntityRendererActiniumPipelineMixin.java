@@ -77,12 +77,20 @@ public class EntityRendererActiniumPipelineMixin {
 
     @Inject(method = "renderRainSnow", at = @At("HEAD"))
     private void actinium$beginWeather(float partialTicks, CallbackInfo ci) {
+        if (!ActiniumRenderPipeline.INSTANCE.shouldUseWeatherProgram()) {
+            return;
+        }
+
         ActiniumRenderPipeline.INSTANCE.beginWeather();
         ActiniumRenderPipeline.INSTANCE.bindWorldStageProgram(partialTicks);
     }
 
     @Inject(method = "renderRainSnow", at = @At("RETURN"))
     private void actinium$endWeather(float partialTicks, CallbackInfo ci) {
+        if (!ActiniumRenderPipeline.INSTANCE.shouldUseWeatherProgram()) {
+            return;
+        }
+
         ActiniumRenderPipeline.INSTANCE.unbindWorldStageProgram();
         ActiniumRenderPipeline.INSTANCE.endWeather();
     }

@@ -132,7 +132,8 @@ public final class ActiniumRenderPipeline {
             "gbuffers_clouds"
     };
     private static final String[] WEATHER_PROGRAMS = {
-            "gbuffers_weather"
+            "gbuffers_weather",
+            "gbuffers_textured_lit"
     };
     private static final String[] PRE_SCENE_POST_PROGRAMS = {
             "prepare",
@@ -778,6 +779,25 @@ public final class ActiniumRenderPipeline {
     public boolean hasWeatherProgram() {
         this.syncReloadState();
         return this.weatherProgramAvailable;
+    }
+
+    public boolean shouldUseWeatherProgram() {
+        this.syncReloadState();
+        if (!ActiniumShaderPackManager.areShadersEnabled()) {
+            return false;
+        }
+
+        ActiniumShaderProperties properties = ActiniumShaderPackManager.getActiveShaderProperties();
+        return properties.isWeather() && this.hasWeatherProgram();
+    }
+
+    public boolean shouldRenderWeatherParticles() {
+        this.syncReloadState();
+        if (!ActiniumShaderPackManager.areShadersEnabled()) {
+            return true;
+        }
+
+        return ActiniumShaderPackManager.getActiveShaderProperties().isWeatherParticles();
     }
 
     public boolean hasPostProgram() {
@@ -3100,6 +3120,13 @@ public final class ActiniumRenderPipeline {
             case WEATHER -> {
                 if (this.weatherProgram == null) {
                     this.weatherProgram = this.createWorldStageProgram(stage);
+                    if (this.weatherProgram == null) {
+                        String fallbackProgramName = stage.fallbackProgramName();
+                        if (fallbackProgramName != null) {
+                            this.debugLog("Falling back world-stage program '{}' to '{}'", stage.programName(), fallbackProgramName);
+                            this.weatherProgram = this.createWorldStageProgram(stage, fallbackProgramName);
+                        }
+                    }
                 }
                 yield this.weatherProgram;
             }
@@ -3107,8 +3134,12 @@ public final class ActiniumRenderPipeline {
     }
 
     private @Nullable ActiniumWorldProgram createWorldStageProgram(ActiniumWorldStage stage) {
-        String vertexSource = ActiniumShaderPackManager.getProgramSource(stage.programName(), ShaderType.VERTEX);
-        String fragmentSource = ActiniumShaderPackManager.getProgramSource(stage.programName(), ShaderType.FRAGMENT);
+        return this.createWorldStageProgram(stage, stage.programName());
+    }
+
+    private @Nullable ActiniumWorldProgram createWorldStageProgram(ActiniumWorldStage stage, String programName) {
+        String vertexSource = ActiniumShaderPackManager.getProgramSource(programName, ShaderType.VERTEX);
+        String fragmentSource = ActiniumShaderPackManager.getProgramSource(programName, ShaderType.FRAGMENT);
 
         if (vertexSource == null || fragmentSource == null) {
             return null;
@@ -3118,16 +3149,16 @@ public final class ActiniumRenderPipeline {
         String resolvedFragmentSource = ShaderParser.parseShader(fragmentSource, this::resolveShaderSource, ShaderConstants.EMPTY);
         int[] drawBuffers = this.resolveWorldStageDrawBuffers(stage, resolvedFragmentSource);
         List<GlShader> shaders = new ArrayList<>(2);
-        shaders.add(new GlShader(ShaderType.VERTEX, "actinium:world/" + stage.programName() + "." + ShaderType.VERTEX.fileExtension, resolvedVertexSource));
-        shaders.add(new GlShader(ShaderType.FRAGMENT, "actinium:world/" + stage.programName() + "." + ShaderType.FRAGMENT.fileExtension, resolvedFragmentSource));
+        shaders.add(new GlShader(ShaderType.VERTEX, "actinium:world/" + programName + "." + ShaderType.VERTEX.fileExtension, resolvedVertexSource));
+        shaders.add(new GlShader(ShaderType.FRAGMENT, "actinium:world/" + programName + "." + ShaderType.FRAGMENT.fileExtension, resolvedFragmentSource));
 
         try {
-            GlProgram.Builder builder = GlProgram.builder("actinium:world/" + stage.programName());
+            GlProgram.Builder builder = GlProgram.builder("actinium:world/" + programName);
             shaders.forEach(builder::attachShader);
-            this.debugLog("Compiled world-stage program '{}' with draw buffers {}", stage.programName(), Arrays.toString(drawBuffers));
-            return new ActiniumWorldProgram(stage.programName(), builder.link(ActiniumWorldShaderInterface::new), drawBuffers);
+            this.debugLog("Compiled world-stage program '{}' with draw buffers {}", programName, Arrays.toString(drawBuffers));
+            return new ActiniumWorldProgram(programName, builder.link(ActiniumWorldShaderInterface::new), drawBuffers);
         } catch (RuntimeException e) {
-            ActiniumShaders.logger().warn("Failed to compile external shader pack world-stage program '{}'", stage.programName(), e);
+            ActiniumShaders.logger().warn("Failed to compile external shader pack world-stage program '{}'", programName, e);
             return null;
         } finally {
             shaders.forEach(GlShader::delete);

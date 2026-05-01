@@ -26,7 +26,7 @@ public final class ActiniumShaderProperties {
     private @Nullable String cloudSetting;
     private boolean oldHandLight;
     private boolean separateAo;
-    private boolean weather;
+    private boolean weather = true;
     private boolean weatherParticles = true;
     private boolean shadowTerrain = true;
     private boolean shadowTranslucent = true;
