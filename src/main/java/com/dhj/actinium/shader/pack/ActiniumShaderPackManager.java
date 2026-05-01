@@ -10,16 +10,20 @@ import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.Desktop;
+import java.io.InputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 public final class ActiniumShaderPackManager {
@@ -47,6 +51,7 @@ public final class ActiniumShaderPackManager {
         } catch (IOException e) {
             ActiniumShaders.logger().warn("Failed to create shaderpacks directory", e);
         }
+        migrateLegacyPackOptionOverrides();
         reload();
     }
 
@@ -288,13 +293,36 @@ public final class ActiniumShaderPackManager {
     }
 
     public static Map<String, String> getPackOptionOverrides(@Nullable String packName) {
-        return new LinkedHashMap<>(getConfig().getPackOptionOverrides(packName));
+        if (packName == null || isBuiltinPack(packName)) {
+            return Map.of();
+        }
+
+        Path configPath = getPackOptionsPath(packName);
+
+        if (configPath == null) {
+            return Map.of();
+        }
+
+        if (Files.isRegularFile(configPath)) {
+            return readPackOptionOverrides(configPath);
+        }
+
+        Map<String, String> legacyOverrides = getConfig().packOptionOverrides.get(packName);
+        return legacyOverrides != null ? new LinkedHashMap<>(legacyOverrides) : Map.of();
     }
 
     public static void savePackOptionOverrides(@Nullable String packName, Map<String, String> overrides) {
-        ActiniumShaderConfig config = getConfig();
-        config.setPackOptionOverrides(packName, overrides);
-        config.save();
+        if (packName == null || isBuiltinPack(packName)) {
+            return;
+        }
+
+        Path configPath = getPackOptionsPath(packName);
+
+        if (configPath == null) {
+            return;
+        }
+
+        writePackOptionOverrides(configPath, packName, overrides);
     }
 
     public static @Nullable ActiniumShaderOptionMenu loadShaderOptionMenu(@Nullable String packName) {
@@ -344,6 +372,67 @@ public final class ActiniumShaderPackManager {
         return directory;
     }
 
+    private static @Nullable Path getPackOptionsPath(@Nullable String packName) {
+        if (packName == null || packName.isBlank()) {
+            return null;
+        }
+
+        return getShaderPacksDirectory().resolve(packName + ".txt");
+    }
+
+    private static Map<String, String> readPackOptionOverrides(Path path) {
+        Properties properties = new Properties();
+
+        try (InputStream inputStream = Files.newInputStream(path)) {
+            properties.load(inputStream);
+        } catch (IOException | IllegalArgumentException e) {
+            ActiniumShaders.logger().warn("Failed to read shader pack options from {}", path, e);
+            return Map.of();
+        }
+
+        LinkedHashMap<String, String> overrides = new LinkedHashMap<>();
+        properties.stringPropertyNames().stream()
+                .sorted()
+                .forEach(name -> overrides.put(name, properties.getProperty(name, "")));
+
+        if (isDebugEnabled() && !overrides.isEmpty()) {
+            ActiniumShaders.logger().info("[DEBUG] Loaded {} shader pack option override(s) from {}", overrides.size(), path);
+        }
+
+        return overrides;
+    }
+
+    private static boolean writePackOptionOverrides(Path path, String packName, Map<String, String> overrides) {
+        try {
+            if (overrides.isEmpty()) {
+                Files.deleteIfExists(path);
+                return true;
+            }
+
+            Path parent = path.getParent();
+
+            if (parent != null && !Files.exists(parent)) {
+                Files.createDirectories(parent);
+            }
+
+            Properties properties = new Properties();
+            overrides.forEach(properties::setProperty);
+
+            try (OutputStream outputStream = Files.newOutputStream(path)) {
+                properties.store(outputStream, null);
+            }
+
+            if (isDebugEnabled()) {
+                ActiniumShaders.logger().info("[DEBUG] Saved {} shader pack option override(s) to {}", overrides.size(), path);
+            }
+
+            return true;
+        } catch (IOException e) {
+            ActiniumShaders.logger().warn("Failed to write shader pack options for '{}' to {}", packName, path, e);
+            return false;
+        }
+    }
+
     private static ActiniumShaderConfig getConfig() {
         if (config == null) {
             try {
@@ -356,6 +445,40 @@ public final class ActiniumShaderPackManager {
         }
 
         return config;
+    }
+
+    private static void migrateLegacyPackOptionOverrides() {
+        ActiniumShaderConfig config = getConfig();
+
+        if (config.packOptionOverrides.isEmpty()) {
+            return;
+        }
+
+        boolean migratedAny = false;
+
+        for (Iterator<Map.Entry<String, Map<String, String>>> iterator = config.packOptionOverrides.entrySet().iterator(); iterator.hasNext(); ) {
+            Map.Entry<String, Map<String, String>> entry = iterator.next();
+            Path path = getPackOptionsPath(entry.getKey());
+
+            if (path == null || Files.isRegularFile(path)) {
+                iterator.remove();
+                migratedAny = true;
+                continue;
+            }
+
+            if (writePackOptionOverrides(path, entry.getKey(), entry.getValue())) {
+                iterator.remove();
+                migratedAny = true;
+            }
+        }
+
+        if (migratedAny) {
+            try {
+                config.save();
+            } catch (Exception e) {
+                ActiniumShaders.logger().warn("Failed to save Actinium shader config after migrating legacy shader pack options", e);
+            }
+        }
     }
 
     private static void closeActiveResources() {

@@ -16,7 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -38,6 +37,9 @@ public final class ActiniumShaderConfig {
     @Setter
     @Getter
     public int terrainDebugMode;
+    /**
+     * Legacy pack override storage. Migrated to per-pack .txt files in shaderpacks/.
+     */
     public Map<String, Map<String, String>> packOptionOverrides = new LinkedHashMap<>();
 
     private transient Path configPath;
@@ -115,32 +117,6 @@ public final class ActiniumShaderConfig {
 
     public boolean isShaderPackEnabled() {
         return this.areShadersEnabled();
-    }
-
-    public Map<String, String> getPackOptionOverrides(@Nullable String packName) {
-        String normalizedPackName = normalizePackName(packName);
-
-        if (normalizedPackName == null) {
-            return Collections.emptyMap();
-        }
-
-        Map<String, String> overrides = this.packOptionOverrides.get(normalizedPackName);
-        return overrides != null ? Collections.unmodifiableMap(overrides) : Collections.emptyMap();
-    }
-
-    public void setPackOptionOverrides(@Nullable String packName, Map<String, String> overrides) {
-        String normalizedPackName = normalizePackName(packName);
-
-        if (normalizedPackName == null) {
-            return;
-        }
-
-        if (overrides.isEmpty()) {
-            this.packOptionOverrides.remove(normalizedPackName);
-            return;
-        }
-
-        this.packOptionOverrides.put(normalizedPackName, new LinkedHashMap<>(overrides));
     }
 
     private static @Nullable String normalizePackName(@Nullable String packName) {
