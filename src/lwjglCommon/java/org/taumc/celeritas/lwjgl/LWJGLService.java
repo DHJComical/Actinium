@@ -84,6 +84,7 @@ public interface LWJGLService {
     void glUniform1i(int location, int v0);
     void glUniform1fv(int location, FloatBuffer value);
     void glUniform2i(int location, int v0, int v1);
+    void glUniform3i(int location, int v0, int v1, int v2);
     void glUniform3f(int location, float v0, float v1, float v2);
     void glUniform3fv(int location, FloatBuffer value);
     void glUniform3fv(int location, float[] value);

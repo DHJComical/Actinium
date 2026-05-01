@@ -17,6 +17,7 @@ import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat4v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt2v;
+import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt3v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix4f;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -53,12 +54,18 @@ final class ActiniumWorldShaderInterface {
 
     private final @Nullable GlUniformInt frameCounter;
     private final @Nullable GlUniformInt frameMod;
+    private final @Nullable GlUniformFloat frameMod8;
     private final @Nullable GlUniformInt worldTime;
     private final @Nullable GlUniformInt moonPhase;
     private final @Nullable GlUniformInt isEyeInWater;
     private final @Nullable GlUniformInt2v eyeBrightnessSmooth;
 
     private final @Nullable GlUniformFloat3v cameraPosition;
+    private final @Nullable GlUniformInt3v cameraPositionInt;
+    private final @Nullable GlUniformFloat3v cameraPositionFract;
+    private final @Nullable GlUniformFloat3v previousCameraPosition;
+    private final @Nullable GlUniformInt3v previousCameraPositionInt;
+    private final @Nullable GlUniformFloat3v previousCameraPositionFract;
     private final @Nullable GlUniformFloat3v sunPosition;
     private final @Nullable GlUniformFloat3v moonPosition;
     private final @Nullable GlUniformFloat3v shadowLightPosition;
@@ -111,12 +118,18 @@ final class ActiniumWorldShaderInterface {
 
         this.frameCounter = context.bindUniformIfPresent("frameCounter", GlUniformInt::new);
         this.frameMod = context.bindUniformIfPresent("frameMod", GlUniformInt::new);
+        this.frameMod8 = context.bindUniformIfPresent("framemod8", GlUniformFloat::new);
         this.worldTime = context.bindUniformIfPresent("worldTime", GlUniformInt::new);
         this.moonPhase = context.bindUniformIfPresent("moonPhase", GlUniformInt::new);
         this.isEyeInWater = context.bindUniformIfPresent("isEyeInWater", GlUniformInt::new);
         this.eyeBrightnessSmooth = context.bindUniformIfPresent("eyeBrightnessSmooth", GlUniformInt2v::new);
 
         this.cameraPosition = context.bindUniformIfPresent("cameraPosition", GlUniformFloat3v::new);
+        this.cameraPositionInt = context.bindUniformIfPresent("cameraPositionInt", GlUniformInt3v::new);
+        this.cameraPositionFract = context.bindUniformIfPresent("cameraPositionFract", GlUniformFloat3v::new);
+        this.previousCameraPosition = context.bindUniformIfPresent("previousCameraPosition", GlUniformFloat3v::new);
+        this.previousCameraPositionInt = context.bindUniformIfPresent("previousCameraPositionInt", GlUniformInt3v::new);
+        this.previousCameraPositionFract = context.bindUniformIfPresent("previousCameraPositionFract", GlUniformFloat3v::new);
         this.sunPosition = context.bindUniformIfPresent("sunPosition", GlUniformFloat3v::new);
         this.moonPosition = context.bindUniformIfPresent("moonPosition", GlUniformFloat3v::new);
         this.shadowLightPosition = context.bindUniformIfPresent("shadowLightPosition", GlUniformFloat3v::new);
@@ -183,6 +196,8 @@ final class ActiniumWorldShaderInterface {
             this.frameMod.setInt(pipeline.getFrameMod());
         }
 
+        setFloat(this.frameMod8, pipeline.getFrameMod8());
+
 
         Entity entity = minecraft.getRenderViewEntity();
         Vec3d currentWorldSkyColor = null;
@@ -194,9 +209,49 @@ final class ActiniumWorldShaderInterface {
         if (entity != null) {
             if (this.cameraPosition != null) {
                 this.cameraPosition.set(
-                        (float) pipeline.getWorldCameraPosition().x,
-                        (float) pipeline.getWorldCameraPosition().y,
-                        (float) pipeline.getWorldCameraPosition().z
+                        (float) pipeline.getShaderCameraPosition().x,
+                        (float) pipeline.getShaderCameraPosition().y,
+                        (float) pipeline.getShaderCameraPosition().z
+                );
+            }
+
+            if (this.cameraPositionInt != null) {
+                this.cameraPositionInt.set(
+                        pipeline.getCameraPositionIntX(),
+                        pipeline.getCameraPositionIntY(),
+                        pipeline.getCameraPositionIntZ()
+                );
+            }
+
+            if (this.cameraPositionFract != null) {
+                this.cameraPositionFract.set(
+                        pipeline.getCameraPositionFractX(),
+                        pipeline.getCameraPositionFractY(),
+                        pipeline.getCameraPositionFractZ()
+                );
+            }
+
+            if (this.previousCameraPosition != null) {
+                this.previousCameraPosition.set(
+                        (float) pipeline.getPreviousShaderCameraPosition().x,
+                        (float) pipeline.getPreviousShaderCameraPosition().y,
+                        (float) pipeline.getPreviousShaderCameraPosition().z
+                );
+            }
+
+            if (this.previousCameraPositionInt != null) {
+                this.previousCameraPositionInt.set(
+                        (int) Math.floor(pipeline.getPreviousShaderCameraPositionUnshifted().x),
+                        (int) Math.floor(pipeline.getPreviousShaderCameraPositionUnshifted().y),
+                        (int) Math.floor(pipeline.getPreviousShaderCameraPositionUnshifted().z)
+                );
+            }
+
+            if (this.previousCameraPositionFract != null) {
+                this.previousCameraPositionFract.set(
+                        (float) (pipeline.getPreviousShaderCameraPositionUnshifted().x - Math.floor(pipeline.getPreviousShaderCameraPositionUnshifted().x)),
+                        (float) (pipeline.getPreviousShaderCameraPositionUnshifted().y - Math.floor(pipeline.getPreviousShaderCameraPositionUnshifted().y)),
+                        (float) (pipeline.getPreviousShaderCameraPositionUnshifted().z - Math.floor(pipeline.getPreviousShaderCameraPositionUnshifted().z))
                 );
             }
 

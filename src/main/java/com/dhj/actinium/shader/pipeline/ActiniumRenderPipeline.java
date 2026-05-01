@@ -256,6 +256,12 @@ public final class ActiniumRenderPipeline {
     private final Matrix4f previousGbufferProjectionMatrix = new Matrix4f();
     private final Matrix4f servedPreviousGbufferModelViewMatrix = new Matrix4f();
     private final Matrix4f servedPreviousGbufferProjectionMatrix = new Matrix4f();
+    private final Vector3d shaderCameraPosition = new Vector3d();
+    private final Vector3d previousShaderCameraPosition = new Vector3d();
+    private final Vector3d shaderCameraPositionUnshifted = new Vector3d();
+    private final Vector3d previousShaderCameraPositionUnshifted = new Vector3d();
+    private final Vector3d shaderCameraShift = new Vector3d();
+    private boolean shaderCameraPositionInitialized;
     private final Matrix4f scratchWorldStageModelViewMatrix = new Matrix4f();
     private final Matrix4f scratchWorldStageProjectionMatrix = new Matrix4f();
     private final Matrix4f scratchWorldStageProjectionInverseMatrix = new Matrix4f();
@@ -360,6 +366,7 @@ public final class ActiniumRenderPipeline {
         }
 
         this.captureInterpolatedWorldCameraPosition(partialTicks);
+        this.updateShaderCameraPositions();
         this.frameCounter = nextFrameId(this.frameCounter);
         this.worldTargetsPrepared = false;
         this.prepareProgramsExecutedThisFrame = false;
@@ -1027,6 +1034,24 @@ public final class ActiniumRenderPipeline {
         return this.worldCameraPosition;
     }
 
+    public Vector3d getShaderCameraPosition() {
+        return this.shaderCameraPosition;
+    }
+
+    public Vector3d getPreviousShaderCameraPosition() {
+        this.updatePreviousUniformSnapshots();
+        return this.previousShaderCameraPosition;
+    }
+
+    public Vector3d getShaderCameraPositionUnshifted() {
+        return this.shaderCameraPositionUnshifted;
+    }
+
+    public Vector3d getPreviousShaderCameraPositionUnshifted() {
+        this.updatePreviousUniformSnapshots();
+        return this.previousShaderCameraPositionUnshifted;
+    }
+
     public Vector3f getManagedSkyColor() {
         return this.managedSkyColor;
     }
@@ -1103,6 +1128,10 @@ public final class ActiniumRenderPipeline {
         return Math.floorMod(this.frameCounter, 16);
     }
 
+    public float getFrameMod8() {
+        return Math.floorMod(this.frameCounter, 8);
+    }
+
     public float getDitherShift() {
         final float[] sequence = {
                 0.0625f, 0.4375f, 0.875f, 0.625f,
@@ -1116,6 +1145,30 @@ public final class ActiniumRenderPipeline {
     public float getSoftLod() {
         float softLodScale = Math.max(1.0f, this.height / 128.0f);
         return Math.max(0.0f, (float) (Math.log(softLodScale) / Math.log(2.0)));
+    }
+
+    public int getCameraPositionIntX() {
+        return (int) Math.floor(this.shaderCameraPositionUnshifted.x);
+    }
+
+    public int getCameraPositionIntY() {
+        return (int) Math.floor(this.shaderCameraPositionUnshifted.y);
+    }
+
+    public int getCameraPositionIntZ() {
+        return (int) Math.floor(this.shaderCameraPositionUnshifted.z);
+    }
+
+    public float getCameraPositionFractX() {
+        return (float) (this.shaderCameraPositionUnshifted.x - Math.floor(this.shaderCameraPositionUnshifted.x));
+    }
+
+    public float getCameraPositionFractY() {
+        return (float) (this.shaderCameraPositionUnshifted.y - Math.floor(this.shaderCameraPositionUnshifted.y));
+    }
+
+    public float getCameraPositionFractZ() {
+        return (float) (this.shaderCameraPositionUnshifted.z - Math.floor(this.shaderCameraPositionUnshifted.z));
     }
 
     public float getTaaOffsetX() {
@@ -2921,6 +2974,12 @@ public final class ActiniumRenderPipeline {
         this.previousGbufferProjectionMatrix.identity();
         this.servedPreviousGbufferModelViewMatrix.identity();
         this.servedPreviousGbufferProjectionMatrix.identity();
+        this.shaderCameraPosition.zero();
+        this.previousShaderCameraPosition.zero();
+        this.shaderCameraPositionUnshifted.zero();
+        this.previousShaderCameraPositionUnshifted.zero();
+        this.shaderCameraShift.zero();
+        this.shaderCameraPositionInitialized = false;
         this.previousUniformFrame = Integer.MIN_VALUE;
         this.previousUniformInitialized = false;
 
@@ -3566,11 +3625,7 @@ public final class ActiniumRenderPipeline {
     }
 
     private static int nextFrameId(int current) {
-        if (current == Integer.MAX_VALUE) {
-            return 1;
-        }
-
-        return Math.max(1, current + 1);
+        return (current + 1) % 720720;
     }
 
     private static boolean hasAnyStageProgram(String... programNames) {
@@ -3586,6 +3641,46 @@ public final class ActiniumRenderPipeline {
     private static boolean hasProgram(String programName) {
         return ActiniumShaderPackManager.getProgramSource(programName, ShaderType.VERTEX) != null
                 || ActiniumShaderPackManager.getProgramSource(programName, ShaderType.FRAGMENT) != null;
+    }
+
+    private void updateShaderCameraPositions() {
+        if (!this.shaderCameraPositionInitialized) {
+            this.shaderCameraPosition.set(this.worldCameraPosition);
+            this.previousShaderCameraPosition.set(this.worldCameraPosition);
+            this.shaderCameraPositionUnshifted.set(this.worldCameraPosition);
+            this.previousShaderCameraPositionUnshifted.set(this.worldCameraPosition);
+            this.shaderCameraPositionInitialized = true;
+        } else {
+            this.previousShaderCameraPosition.set(this.shaderCameraPosition);
+            this.previousShaderCameraPositionUnshifted.set(this.shaderCameraPositionUnshifted);
+            this.shaderCameraPosition.set(this.worldCameraPosition).add(this.shaderCameraShift);
+            this.shaderCameraPositionUnshifted.set(this.worldCameraPosition);
+        }
+
+        double dX = getCameraShift(this.shaderCameraPosition.x, this.previousShaderCameraPosition.x);
+        double dZ = getCameraShift(this.shaderCameraPosition.z, this.previousShaderCameraPosition.z);
+
+        if (dX != 0.0D || dZ != 0.0D) {
+            applyShaderCameraShift(dX, dZ);
+        }
+    }
+
+    private static double getCameraShift(double value, double prevValue) {
+        if (Math.abs(value) > 30000.0D || Math.abs(value - prevValue) > 1000.0D) {
+            return -(value - (value % 30000.0D));
+        }
+
+        return 0.0D;
+    }
+
+    private void applyShaderCameraShift(double dX, double dZ) {
+        this.shaderCameraShift.x += dX;
+        this.shaderCameraPosition.x += dX;
+        this.previousShaderCameraPosition.x += dX;
+
+        this.shaderCameraShift.z += dZ;
+        this.shaderCameraPosition.z += dZ;
+        this.previousShaderCameraPosition.z += dZ;
     }
 
     private void captureMatrix(int matrixType, Matrix4f destination) {

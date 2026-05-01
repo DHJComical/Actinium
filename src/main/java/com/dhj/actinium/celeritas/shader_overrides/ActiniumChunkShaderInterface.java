@@ -24,6 +24,7 @@ import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat4v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloatArray;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt2v;
+import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt3v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix3f;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix4f;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
@@ -79,6 +80,8 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformMatrix4f gbufferModelViewInverse;
     private final @Nullable GlUniformMatrix4f gbufferProjection;
     private final @Nullable GlUniformMatrix4f gbufferProjectionInverse;
+    private final @Nullable GlUniformMatrix4f gbufferPreviousModelView;
+    private final @Nullable GlUniformMatrix4f gbufferPreviousProjection;
     private final @Nullable GlUniformMatrix4f shadowModelView;
     private final @Nullable GlUniformMatrix4f shadowModelViewInverse;
     private final @Nullable GlUniformMatrix4f shadowProjection;
@@ -86,6 +89,11 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformFloat3v legacyFogColor;
     private final @Nullable GlUniformFloat3v legacySkyColor;
     private final @Nullable GlUniformFloat3v cameraPosition;
+    private final @Nullable GlUniformInt3v cameraPositionInt;
+    private final @Nullable GlUniformFloat3v cameraPositionFract;
+    private final @Nullable GlUniformFloat3v previousCameraPosition;
+    private final @Nullable GlUniformInt3v previousCameraPositionInt;
+    private final @Nullable GlUniformFloat3v previousCameraPositionFract;
     private final @Nullable GlUniformFloat3v sunPosition;
     private final @Nullable GlUniformFloat3v moonPosition;
     private final @Nullable GlUniformFloat3v shadowLightPosition;
@@ -103,6 +111,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformFloat ditherShift;
     private final @Nullable GlUniformInt frameCounter;
     private final @Nullable GlUniformInt frameMod;
+    private final @Nullable GlUniformFloat frameMod8;
     private final @Nullable GlUniformInt worldTime;
     private final @Nullable GlUniformFloat dayNightMix;
     private final @Nullable GlUniformFloat dayMoment;
@@ -188,6 +197,8 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.gbufferModelViewInverse = context.bindUniformIfPresent("gbufferModelViewInverse", GlUniformMatrix4f::new);
         this.gbufferProjection = context.bindUniformIfPresent("gbufferProjection", GlUniformMatrix4f::new);
         this.gbufferProjectionInverse = context.bindUniformIfPresent("gbufferProjectionInverse", GlUniformMatrix4f::new);
+        this.gbufferPreviousModelView = context.bindUniformIfPresent("gbufferPreviousModelView", GlUniformMatrix4f::new);
+        this.gbufferPreviousProjection = context.bindUniformIfPresent("gbufferPreviousProjection", GlUniformMatrix4f::new);
         this.shadowModelView = context.bindUniformIfPresent("shadowModelView", GlUniformMatrix4f::new);
         this.shadowModelViewInverse = context.bindUniformIfPresent("shadowModelViewInverse", GlUniformMatrix4f::new);
         this.shadowProjection = context.bindUniformIfPresent("shadowProjection", GlUniformMatrix4f::new);
@@ -195,6 +206,11 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.legacyFogColor = context.bindUniformIfPresent("fogColor", GlUniformFloat3v::new);
         this.legacySkyColor = context.bindUniformIfPresent("skyColor", GlUniformFloat3v::new);
         this.cameraPosition = context.bindUniformIfPresent("cameraPosition", GlUniformFloat3v::new);
+        this.cameraPositionInt = context.bindUniformIfPresent("cameraPositionInt", GlUniformInt3v::new);
+        this.cameraPositionFract = context.bindUniformIfPresent("cameraPositionFract", GlUniformFloat3v::new);
+        this.previousCameraPosition = context.bindUniformIfPresent("previousCameraPosition", GlUniformFloat3v::new);
+        this.previousCameraPositionInt = context.bindUniformIfPresent("previousCameraPositionInt", GlUniformInt3v::new);
+        this.previousCameraPositionFract = context.bindUniformIfPresent("previousCameraPositionFract", GlUniformFloat3v::new);
         this.sunPosition = context.bindUniformIfPresent("sunPosition", GlUniformFloat3v::new);
         this.moonPosition = context.bindUniformIfPresent("moonPosition", GlUniformFloat3v::new);
         this.shadowLightPosition = context.bindUniformIfPresent("shadowLightPosition", GlUniformFloat3v::new);
@@ -212,6 +228,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.ditherShift = context.bindUniformIfPresent("ditherShift", GlUniformFloat::new);
         this.frameCounter = context.bindUniformIfPresent("frameCounter", GlUniformInt::new);
         this.frameMod = context.bindUniformIfPresent("frameMod", GlUniformInt::new);
+        this.frameMod8 = context.bindUniformIfPresent("framemod8", GlUniformFloat::new);
         this.worldTime = context.bindUniformIfPresent("worldTime", GlUniformInt::new);
         this.dayNightMix = context.bindUniformIfPresent("dayNightMix", GlUniformFloat::new);
         this.dayMoment = context.bindUniformIfPresent("dayMoment", GlUniformFloat::new);
@@ -354,6 +371,10 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.frameMod.setInt(ActiniumRenderPipeline.INSTANCE.getFrameMod());
         }
 
+        if (this.frameMod8 != null) {
+            this.frameMod8.set(ActiniumRenderPipeline.INSTANCE.getFrameMod8());
+        }
+
 
         if (this.darknessFactor != null) {
             this.darknessFactor.set(0.0f);
@@ -485,6 +506,14 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         if (this.gbufferProjection != null || this.gbufferProjectionInverse != null) {
             this.scratchGbufferProjection.set(matrixToUse);
             this.scratchGbufferProjectionInverse.set(this.scratchGbufferProjection).invert();
+        }
+
+        if (this.gbufferPreviousModelView != null) {
+            this.gbufferPreviousModelView.set(ActiniumRenderPipeline.INSTANCE.getPreviousGbufferModelViewMatrix());
+        }
+
+        if (this.gbufferPreviousProjection != null) {
+            this.gbufferPreviousProjection.set(ActiniumRenderPipeline.INSTANCE.getPreviousGbufferProjectionMatrix());
         }
 
         this.pushLegacyMatrices();
@@ -645,17 +674,57 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
         if (this.cameraPosition != null) {
             this.cameraPosition.set(
-                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().x,
-                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().y,
-                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().z
+                    (float) ActiniumRenderPipeline.INSTANCE.getShaderCameraPosition().x,
+                    (float) ActiniumRenderPipeline.INSTANCE.getShaderCameraPosition().y,
+                    (float) ActiniumRenderPipeline.INSTANCE.getShaderCameraPosition().z
+            );
+        }
+
+        if (this.cameraPositionInt != null) {
+            this.cameraPositionInt.set(
+                    ActiniumRenderPipeline.INSTANCE.getCameraPositionIntX(),
+                    ActiniumRenderPipeline.INSTANCE.getCameraPositionIntY(),
+                    ActiniumRenderPipeline.INSTANCE.getCameraPositionIntZ()
+            );
+        }
+
+        if (this.cameraPositionFract != null) {
+            this.cameraPositionFract.set(
+                    ActiniumRenderPipeline.INSTANCE.getCameraPositionFractX(),
+                    ActiniumRenderPipeline.INSTANCE.getCameraPositionFractY(),
+                    ActiniumRenderPipeline.INSTANCE.getCameraPositionFractZ()
+            );
+        }
+
+        if (this.previousCameraPosition != null) {
+            this.previousCameraPosition.set(
+                    (float) ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPosition().x,
+                    (float) ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPosition().y,
+                    (float) ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPosition().z
+            );
+        }
+
+        if (this.previousCameraPositionInt != null) {
+            this.previousCameraPositionInt.set(
+                    (int) Math.floor(ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().x),
+                    (int) Math.floor(ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().y),
+                    (int) Math.floor(ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().z)
+            );
+        }
+
+        if (this.previousCameraPositionFract != null) {
+            this.previousCameraPositionFract.set(
+                    (float) (ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().x - Math.floor(ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().x)),
+                    (float) (ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().y - Math.floor(ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().y)),
+                    (float) (ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().z - Math.floor(ActiniumRenderPipeline.INSTANCE.getPreviousShaderCameraPositionUnshifted().z))
             );
         }
 
         if (this.actiniumShadowCompatCameraPosition != null) {
             this.actiniumShadowCompatCameraPosition.set(
-                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().x,
-                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().y,
-                    (float) ActiniumRenderPipeline.INSTANCE.getWorldCameraPosition().z
+                    (float) ActiniumRenderPipeline.INSTANCE.getShaderCameraPosition().x,
+                    (float) ActiniumRenderPipeline.INSTANCE.getShaderCameraPosition().y,
+                    (float) ActiniumRenderPipeline.INSTANCE.getShaderCameraPosition().z
             );
         }
 
