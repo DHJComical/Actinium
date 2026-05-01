@@ -17,6 +17,7 @@ import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashSet;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -24,6 +25,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
     private static final ActiniumExtendedChunkVertexType EXTENDED_VERTEX_TYPE = new ActiniumExtendedChunkVertexType();
 
     private final ActiniumChunkProgramOverrides localOverrides = new ActiniumChunkProgramOverrides();
+    private final EnumMap<ActiniumTerrainPass, Boolean> shadowReceiverOverrideCache = new EnumMap<>(ActiniumTerrainPass.class);
     private final Set<TerrainRenderPass> loggedSkippedWorldPasses = new HashSet<>();
     private final Set<TerrainRenderPass> loggedOverriddenWorldPasses = new HashSet<>();
     private RenderPassConfiguration<?> renderPassConfiguration;
@@ -99,6 +101,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
 
         if (this.renderPassConfiguration != configuration) {
             this.localOverrides.deleteShaders();
+            this.shadowReceiverOverrideCache.clear();
             this.loggedLocalOverridePath = false;
             this.loggedSkippedWorldPasses.clear();
             this.loggedOverriddenWorldPasses.clear();
@@ -119,6 +122,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
     @Override
     public void deleteShaders() {
         this.localOverrides.deleteShaders();
+        this.shadowReceiverOverrideCache.clear();
         this.renderPassConfiguration = null;
         this.loggedLocalOverridePath = false;
         this.loggedSkippedWorldPasses.clear();
@@ -131,6 +135,7 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
 
         if (this.observedReloadVersion != reloadVersion) {
             this.localOverrides.deleteShaders();
+            this.shadowReceiverOverrideCache.clear();
             this.renderPassConfiguration = null;
             this.loggedLocalOverridePath = false;
             this.loggedSkippedWorldPasses.clear();
@@ -145,8 +150,15 @@ public class ActiniumIrisShaderProvider implements ActiniumShaderProvider {
             return false;
         }
 
-        ActiniumTerrainPass terrainPass = ActiniumTerrainPass.fromTerrainPass(pass, false);
-        return ActiniumShaderPackManager.getProgramSource(terrainPass, ShaderType.VERTEX) != null
+        ActiniumTerrainPass terrainPass = ActiniumTerrainPass.fromTerrainPass(pass, this.renderPassConfiguration, false);
+        Boolean cached = this.shadowReceiverOverrideCache.get(terrainPass);
+        if (cached != null) {
+            return cached;
+        }
+
+        boolean shouldOverride = ActiniumShaderPackManager.getProgramSource(terrainPass, ShaderType.VERTEX) != null
                 && ActiniumShaderPackManager.getProgramSource(terrainPass, ShaderType.FRAGMENT) != null;
+        this.shadowReceiverOverrideCache.put(terrainPass, shouldOverride);
+        return shouldOverride;
     }
 }

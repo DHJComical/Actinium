@@ -13,6 +13,7 @@ final class ActiniumShadowTargets {
     @Getter
     private int colorTexture;
     private int resolution;
+    private Boolean hardwareFiltering;
 
     public void ensureSize(int resolution) {
         if (this.resolution == resolution && this.depthTextures[0] != 0) {
@@ -21,6 +22,7 @@ final class ActiniumShadowTargets {
 
         this.delete();
         this.resolution = resolution;
+        this.hardwareFiltering = null;
         this.depthTextures[0] = createDepthTexture(resolution);
         this.depthTextures[1] = createDepthTexture(resolution);
         this.colorTexture = createColorTexture(resolution);
@@ -28,6 +30,10 @@ final class ActiniumShadowTargets {
     }
 
     public void configureSampling(boolean hardwareFiltering) {
+        if (this.hardwareFiltering != null && this.hardwareFiltering == hardwareFiltering) {
+            return;
+        }
+
         int filter = hardwareFiltering ? GL11.GL_LINEAR : GL11.GL_NEAREST;
 
         for (int depthTexture : this.depthTextures) {
@@ -41,6 +47,7 @@ final class ActiniumShadowTargets {
         }
 
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+        this.hardwareFiltering = hardwareFiltering;
     }
 
     public void updatePlaceholderFromMainFramebuffer(Framebuffer mainFramebuffer) {
@@ -128,6 +135,7 @@ final class ActiniumShadowTargets {
         }
 
         this.resolution = 0;
+        this.hardwareFiltering = null;
     }
 
     private static int createDepthTexture(int resolution) {

@@ -23,7 +23,8 @@ final class ActiniumLegacyChunkShaderAdapter {
     public static String translate(ShaderType type, ActiniumTerrainPass pass, String source, int terrainDebugMode) {
         boolean fragmentShader = type == ShaderType.FRAGMENT;
         boolean shadowPass = pass == ActiniumTerrainPass.SHADOW || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
-        boolean alphaTestPass = pass == ActiniumTerrainPass.GBUFFER_CUTOUT || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
+        boolean alphaTestPass = pass == ActiniumTerrainPass.GBUFFER_CUTOUT || pass == ActiniumTerrainPass.GBUFFER_CUTOUT_MIPPED
+                || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
         int debugMode = isWorldTerrainPass(pass) ? terrainDebugMode : 0;
 
         String translated = stripLeadingDirectives(source);
@@ -82,7 +83,9 @@ final class ActiniumLegacyChunkShaderAdapter {
     }
 
     private static boolean isWorldTerrainPass(ActiniumTerrainPass pass) {
-        return pass == ActiniumTerrainPass.GBUFFER_SOLID || pass == ActiniumTerrainPass.GBUFFER_CUTOUT;
+        return pass == ActiniumTerrainPass.GBUFFER_SOLID
+                || pass == ActiniumTerrainPass.GBUFFER_CUTOUT_MIPPED
+                || pass == ActiniumTerrainPass.GBUFFER_CUTOUT;
     }
 
     private static String stripLeadingDirectives(String source) {
@@ -228,7 +231,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "            return currentPosition;",
                 "        }",
                 "        #endif",
-                "        vec3 actiniumWorldPos = gl_Vertex.xyz + actinium_ShadowCompatCameraPosition;",
+                "        vec3 actiniumWorldPos = gl_Vertex.xyz;",
                 "        float weight = float(gl_MultiTexCoord0.t < actinium_mc_midTexCoord.t);",
                 "        if (actinium_mc_Entity.x == ENTITY_UPPERGRASS) {",
                 "            weight += 1.0;",

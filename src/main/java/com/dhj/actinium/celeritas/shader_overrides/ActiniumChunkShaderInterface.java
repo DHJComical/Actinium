@@ -415,7 +415,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
         if (this.entityColor != null) {
             Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
-            this.entityColor.set(new float[]{capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w});
+            this.entityColor.set(capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w);
         }
 
         if (this.usesTerrainInputs) {
@@ -434,7 +434,6 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             ActiniumRenderPipeline.INSTANCE.bindTerrainShadowTextures();
         }
         ActiniumRenderPipeline.INSTANCE.bindTerrainPassFramebuffer(pass);
-        this.pushLegacyRuntimeState(minecraft);
         this.pushLegacyMatrices();
     }
 
@@ -489,6 +488,7 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         this.pushLegacyMatrices();
+        this.pushLegacyRuntimeState(Minecraft.getMinecraft());
     }
 
     @Override
@@ -634,7 +634,6 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.shadowProjectionInverse.set(shadowProjectionInverseMatrix);
         }
 
-        this.pushLegacyRuntimeState(Minecraft.getMinecraft());
     }
 
     private void pushLegacyRuntimeState(Minecraft minecraft) {
@@ -788,4 +787,5 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             uniforms.put(slot, uniform);
         }
     }
+
 }

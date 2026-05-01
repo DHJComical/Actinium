@@ -113,44 +113,64 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
         }
 
         boolean isShadowPass = this.renderSectionManager.isInShadowPass();
+        int previousRenderDistance = this.renderSectionManager.getRenderDistance();
+        boolean restoreRenderDistance = false;
 
-        if (!isShadowPass) {
-            this.processChunkEvents();
-
-            this.renderSectionManager.runAsyncTasks();
-
-            if (getEffectiveRenderDistance() != this.renderDistance) {
-                this.reload();
+        if (isShadowPass) {
+            int shadowRenderDistance = Math.max(1, this.getShadowEffectiveRenderDistance());
+            if (shadowRenderDistance != previousRenderDistance) {
+                this.renderSectionManager.setRenderDistance(shadowRenderDistance);
+                restoreRenderDistance = true;
             }
         }
 
-        boolean dirty = this.lastCameraState == null || !this.lastCameraState.equals(cameraState);
+        try {
+            if (!isShadowPass) {
+                this.processChunkEvents();
 
-        if (dirty) {
-            this.renderSectionManager.markGraphDirty();
-            this.lastCameraState = cameraState;
+                this.renderSectionManager.runAsyncTasks();
+
+                if (getEffectiveRenderDistance() != this.renderDistance) {
+                    this.reload();
+                }
+            }
+
+            boolean dirty = this.lastCameraState == null || !this.lastCameraState.equals(cameraState);
+
+            if (dirty) {
+                this.renderSectionManager.markGraphDirty();
+                this.lastCameraState = cameraState;
+            }
+
+            this.currentViewport = viewport;
+
+            this.renderSectionManager.runAsyncTasks();
+
+            this.renderSectionManager.updateChunks(updateChunksImmediately);
+
+            // We don't need to upload chunks during shadow, they will be uploaded on the next real frame.
+            if (!isShadowPass) {
+                this.renderSectionManager.uploadChunks();
+            }
+
+            if (this.renderSectionManager.needsUpdate() || dirty) {
+                this.renderSectionManager.update(viewport, frame, spectator);
+            }
+
+            if (updateChunksImmediately) {
+                this.renderSectionManager.uploadChunks();
+            }
+
+            this.renderSectionManager.tickVisibleRenders();
+        } finally {
+            if (restoreRenderDistance) {
+                this.renderSectionManager.setRenderDistance(previousRenderDistance);
+            }
         }
+    }
 
-        this.currentViewport = viewport;
-
-        this.renderSectionManager.runAsyncTasks();
-
-        this.renderSectionManager.updateChunks(updateChunksImmediately);
-
-        // We don't need to upload chunks during shadow, they will be uploaded on the next real frame.
-        if (!isShadowPass) {
-            this.renderSectionManager.uploadChunks();
-        }
-
-        if (this.renderSectionManager.needsUpdate() || isShadowPass) {
-            this.renderSectionManager.update(viewport, frame, spectator);
-        }
-
-        if (updateChunksImmediately) {
-            this.renderSectionManager.uploadChunks();
-        }
-
-        this.renderSectionManager.tickVisibleRenders();
+    protected int getShadowEffectiveRenderDistance() {
+        return this.getEffectiveRenderDistance();
     }
 
     private void processChunkEvents() {

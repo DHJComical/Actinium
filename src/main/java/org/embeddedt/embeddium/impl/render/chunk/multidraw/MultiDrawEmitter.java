@@ -13,6 +13,7 @@ public interface MultiDrawEmitter {
     void executeBatch(CommandList commandList, GlTessellation tessellation, GlPrimitiveType primitiveType);
     boolean isEmpty();
     int getIndexBufferSize();
+    int getCommandCount();
     void clear();
     void delete();
 }

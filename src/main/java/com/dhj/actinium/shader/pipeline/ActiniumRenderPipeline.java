@@ -256,6 +256,10 @@ public final class ActiniumRenderPipeline {
     private final Matrix4f previousGbufferProjectionMatrix = new Matrix4f();
     private final Matrix4f servedPreviousGbufferModelViewMatrix = new Matrix4f();
     private final Matrix4f servedPreviousGbufferProjectionMatrix = new Matrix4f();
+    private final Matrix4f scratchWorldStageModelViewMatrix = new Matrix4f();
+    private final Matrix4f scratchWorldStageProjectionMatrix = new Matrix4f();
+    private final Matrix4f scratchWorldStageProjectionInverseMatrix = new Matrix4f();
+    private final Matrix4f scratchManagedSkyMatrix = new Matrix4f();
     private final Matrix4f scratchShadowStabilizationMatrix = new Matrix4f();
     private final Matrix4f scratchCelestialModelViewMatrix = new Matrix4f();
     private final Vector3f scratchVector = new Vector3f();
@@ -271,6 +275,7 @@ public final class ActiniumRenderPipeline {
     @Getter
     private final Vector3d previousWorldCameraPosition = new Vector3d();
     private final Vector3d servedPreviousWorldCameraPosition = new Vector3d();
+    private final Vector3d scratchShadowViewportPosition = new Vector3d();
     @Getter
     private final float[] fogColor = new float[]{1.0f, 1.0f, 1.0f, 1.0f};
 
@@ -323,6 +328,13 @@ public final class ActiniumRenderPipeline {
     private float centerDepthSmooth;
     private int scratchCopyReadFramebuffer;
     private int scratchCopyDrawFramebuffer;
+    private final FloatBuffer scratchCapturedMatrixBuffer = GLAllocation.createDirectFloatBuffer(16);
+    private final FloatBuffer shadowTerrainProjectionBuffer = GLAllocation.createDirectFloatBuffer(16);
+    private final FloatBuffer shadowTerrainModelViewBuffer = GLAllocation.createDirectFloatBuffer(16);
+    private final FloatBuffer scratchGlMatrixBuffer = GLAllocation.createDirectFloatBuffer(16);
+    private final FloatBuffer scratchShadowObjectCoordsBuffer = GLAllocation.createDirectFloatBuffer(3);
+    private final IntBuffer scratchShadowViewportBuffer = GLAllocation.createDirectIntBuffer(16);
+
     private ActiniumRenderPipeline() {
     }
 
@@ -1413,13 +1425,15 @@ public final class ActiniumRenderPipeline {
         this.prepareWorldTargets(framebuffer);
         debugCheckGlErrors("pipeline.bindWorldStageProgram.prepareWorldTargets");
 
-        Matrix4f modelViewMatrix = new Matrix4f();
-        Matrix4f projectionMatrix = new Matrix4f();
-        Matrix4f projectionInverseMatrix = new Matrix4f();
+        Matrix4f modelViewMatrix = this.scratchWorldStageModelViewMatrix;
+        Matrix4f projectionMatrix = this.scratchWorldStageProjectionMatrix;
+        Matrix4f projectionInverseMatrix = this.scratchWorldStageProjectionInverseMatrix;
 
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
         captureMatrix(GL11.GL_PROJECTION_MATRIX, projectionMatrix);
         projectionInverseMatrix.set(projectionMatrix).invert();
+
+        boolean redirectFramebuffer = this.shouldRedirectWorldStageFramebuffer(program);
 
         if (this.activeWorldProgram != null) {
             if (this.activeWorldProgram == program) {
@@ -1431,7 +1445,11 @@ public final class ActiniumRenderPipeline {
             }
 
             if (this.worldTargets != null && this.shouldRedirectWorldStageFramebuffer(this.activeWorldProgram)) {
-                this.worldTargets.transitionWrite(this.activeWorldProgram.drawBuffers(), true);
+                if (redirectFramebuffer) {
+                    this.worldTargets.transitionWrite(this.activeWorldProgram.drawBuffers(), true);
+                } else {
+                    this.worldTargets.endWrite(framebuffer, this.activeWorldProgram.drawBuffers(), true);
+                }
                 if (this.shouldEmitVerboseDebugFrame()) {
                     this.debugLogTextureCenter("world-stage." + this.activeWorldProgram.name() + ".gaux4", this.worldTargets.getSourceGaux4Texture());
                 }
@@ -1450,7 +1468,6 @@ public final class ActiniumRenderPipeline {
         if (this.shouldEmitVerboseDebugFrame()) {
             this.debugLog("Binding world-stage program '{}' for {} with draw buffers {}", program.name(), this.currentStage, Arrays.toString(program.drawBuffers()));
         }
-        boolean redirectFramebuffer = this.shouldRedirectWorldStageFramebuffer(program);
         boolean renderColorTex1ToMain = true;
         if (redirectFramebuffer && this.worldTargets != null) {
             this.worldTargets.bindWriteFramebuffer(framebuffer, program.drawBuffers(), renderColorTex1ToMain);
@@ -1529,9 +1546,9 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        Matrix4f modelViewMatrix = new Matrix4f();
-        Matrix4f projectionMatrix = new Matrix4f();
-        Matrix4f projectionInverseMatrix = new Matrix4f();
+        Matrix4f modelViewMatrix = this.scratchWorldStageModelViewMatrix;
+        Matrix4f projectionMatrix = this.scratchWorldStageProjectionMatrix;
+        Matrix4f projectionInverseMatrix = this.scratchWorldStageProjectionInverseMatrix;
 
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
         captureMatrix(GL11.GL_PROJECTION_MATRIX, projectionMatrix);
@@ -3227,7 +3244,10 @@ public final class ActiniumRenderPipeline {
     }
 
     private boolean shouldRedirectWorldStageFramebuffer(@Nullable ActiniumWorldProgram program) {
-        return program != null && program != this.entitiesProgram;
+        return program != null
+                && program != this.entitiesProgram
+                && program != this.particlesProgram
+                && program != this.weatherProgram;
     }
 
     private void ensureTerrainInputTextures(int requiredMask) {
@@ -3448,9 +3468,8 @@ public final class ActiniumRenderPipeline {
     }
 
     private void captureManagedSkyUpPosition() {
-        Matrix4f modelViewMatrix = new Matrix4f();
-        captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
-        modelViewMatrix.transformDirection(0.0f, 100.0f, 0.0f, this.managedSkyUpPosition);
+        captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.scratchManagedSkyMatrix);
+        this.scratchManagedSkyMatrix.transformDirection(0.0f, 100.0f, 0.0f, this.managedSkyUpPosition);
     }
 
     private void captureManagedSkyCelestialState() {
@@ -3460,10 +3479,9 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        Matrix4f modelViewMatrix = new Matrix4f();
-        captureMatrix(GL11.GL_MODELVIEW_MATRIX, modelViewMatrix);
-        modelViewMatrix.transformDirection(0.0f, 100.0f, 0.0f, this.managedSkySunPosition);
-        modelViewMatrix.transformDirection(0.0f, -100.0f, 0.0f, this.managedSkyMoonPosition);
+        captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.scratchManagedSkyMatrix);
+        this.scratchManagedSkyMatrix.transformDirection(0.0f, 100.0f, 0.0f, this.managedSkySunPosition);
+        this.scratchManagedSkyMatrix.transformDirection(0.0f, -100.0f, 0.0f, this.managedSkyMoonPosition);
 
         Vector3f shadowLight = this.isShaderCoreShadowUsingSun(minecraft.getRenderPartialTicks())
                 ? this.managedSkySunPosition
@@ -3570,10 +3588,10 @@ public final class ActiniumRenderPipeline {
                 || ActiniumShaderPackManager.getProgramSource(programName, ShaderType.FRAGMENT) != null;
     }
 
-    private static void captureMatrix(int matrixType, Matrix4f destination) {
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
-        invokeGlGetFloat(matrixType, buffer);
-        destination.set(buffer);
+    private void captureMatrix(int matrixType, Matrix4f destination) {
+        this.scratchCapturedMatrixBuffer.clear();
+        invokeGlGetFloat(matrixType, this.scratchCapturedMatrixBuffer);
+        destination.set(this.scratchCapturedMatrixBuffer);
     }
 
     private void computeShadowMatrices(float partialTicks, ActiniumShaderProperties properties, int resolution) {
@@ -3669,16 +3687,16 @@ public final class ActiniumRenderPipeline {
             this.shadowTargets.ensureSize(resolution);
             this.shadowTargets.configureSampling(properties.isShadowHardwareFiltering());
         }
-        FloatBuffer previousProjection = copyFloatBuffer(ActiveRenderInfoAccessor.getProjectionMatrix());
-        FloatBuffer previousModelView = copyFloatBuffer(ActiveRenderInfoAccessor.getModelViewMatrix());
+        FloatBuffer previousProjection = ActiveRenderInfoAccessor.getProjectionMatrix();
+        FloatBuffer previousModelView = ActiveRenderInfoAccessor.getModelViewMatrix();
         Minecraft minecraft = Minecraft.getMinecraft();
         ShadowPassGlState glState = ShadowPassGlState.capture();
         int shadowFrame = nextFrameId(this.shadowVisibilityFrameCounter);
         this.shadowVisibilityFrameCounter = shadowFrame;
 
         try {
-            ActiveRenderInfoAccessor.setProjectionMatrix(toBuffer(this.shadowProjectionMatrix));
-            ActiveRenderInfoAccessor.setModelViewMatrix(toBuffer(this.shadowModelViewMatrix));
+            ActiveRenderInfoAccessor.setProjectionMatrix(writeMatrix(this.shadowProjectionMatrix, this.shadowTerrainProjectionBuffer));
+            ActiveRenderInfoAccessor.setModelViewMatrix(writeMatrix(this.shadowModelViewMatrix, this.shadowTerrainModelViewBuffer));
             ActiniumInternalShadowRenderingState.begin(
                     this.shadowModelViewMatrix,
                     this.shadowProjectionMatrix,
@@ -3714,7 +3732,7 @@ public final class ActiniumRenderPipeline {
             minecraft.entityRenderer.enableLightmap();
 
             renderer.setupTerrain(
-                    this.createShadowViewport(),
+                    this.createShadowViewport(partialTicks),
                     this.createShadowCameraState(partialTicks),
                     shadowFrame,
                     minecraft.player != null && minecraft.player.isSpectator(),
@@ -3773,21 +3791,29 @@ public final class ActiniumRenderPipeline {
         }
     }
 
-    private Viewport createShadowViewport() {
+    private Viewport createShadowViewport(float partialTicks) {
         float shadowDistance = this.getShadowTerrainRenderDistance();
-        Minecraft minecraft = Minecraft.getMinecraft();
-        Entity renderViewEntity = minecraft.getRenderViewEntity();
-        double cullY = this.shadowCameraPosition.y + (renderViewEntity != null ? renderViewEntity.getEyeHeight() : 0.0);
-        return new Viewport(new ShadowViewportFrustum(shadowDistance), new Vector3d(this.shadowCameraPosition.x, cullY, this.shadowCameraPosition.z));
+        this.scratchShadowViewportPosition.set(this.shadowCameraPosition.x, this.shadowCameraPosition.y, this.shadowCameraPosition.z);
+        Vector3f sunPosition = new Vector3f();
+        Vector3f moonPosition = new Vector3f();
+        Vector3f shadowLightVector = new Vector3f();
+        this.fillShaderCoreCelestialUniforms(this.gbufferModelViewMatrix, partialTicks, sunPosition, moonPosition, shadowLightVector);
+        return new Viewport(new ShadowViewportFrustum(
+                this.shadowProjectionMatrix,
+                this.shadowModelViewMatrix,
+                this.gbufferProjectionMatrix,
+                this.gbufferModelViewMatrix,
+                shadowLightVector,
+                shadowDistance
+        ), this.scratchShadowViewportPosition);
     }
 
     private SimpleWorldRenderer.CameraState createShadowCameraState(float partialTicks) {
         Minecraft minecraft = Minecraft.getMinecraft();
         Entity renderViewEntity = minecraft.getRenderViewEntity();
-        double cullY = this.shadowCameraPosition.y + (renderViewEntity != null ? renderViewEntity.getEyeHeight() : 0.0);
         return new SimpleWorldRenderer.CameraState(
                 this.shadowCameraPosition.x,
-                cullY,
+                this.shadowCameraPosition.y,
                 this.shadowCameraPosition.z,
                 renderViewEntity.rotationPitch,
                 renderViewEntity.rotationYaw,
@@ -3846,9 +3872,9 @@ public final class ActiniumRenderPipeline {
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
             GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
             GL11.glMatrixMode(GL11.GL_PROJECTION);
-            GL11.glLoadMatrixf(toGlMatrixBuffer(this.shadowProjectionMatrix));
+            GL11.glLoadMatrixf(this.toGlMatrixBuffer(this.shadowProjectionMatrix));
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glLoadMatrixf(toGlMatrixBuffer(this.shadowModelViewMatrix));
+            GL11.glLoadMatrixf(this.toGlMatrixBuffer(this.shadowModelViewMatrix));
             GL11.glViewport(0, 0, resolution, resolution);
             GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
             GlStateManager.enableTexture2D();
@@ -3877,10 +3903,14 @@ public final class ActiniumRenderPipeline {
             } else {
                 this.activeShadowEntityProgram = null;
             }
-            ActiveRenderInfoAccessor.setModelViewMatrix(GLAllocation.createDirectFloatBuffer(16));
-            ActiveRenderInfoAccessor.setProjectionMatrix(GLAllocation.createDirectFloatBuffer(16));
-            ActiveRenderInfoAccessor.setObjectCoords(GLAllocation.createDirectFloatBuffer(3));
-            ActiveRenderInfoAccessor.setViewportBuffer(GLAllocation.createDirectIntBuffer(16));
+            this.shadowTerrainModelViewBuffer.clear();
+            this.shadowTerrainProjectionBuffer.clear();
+            this.scratchShadowObjectCoordsBuffer.clear();
+            this.scratchShadowViewportBuffer.clear();
+            ActiveRenderInfoAccessor.setModelViewMatrix(this.shadowTerrainModelViewBuffer);
+            ActiveRenderInfoAccessor.setProjectionMatrix(this.shadowTerrainProjectionBuffer);
+            ActiveRenderInfoAccessor.setObjectCoords(this.scratchShadowObjectCoordsBuffer);
+            ActiveRenderInfoAccessor.setViewportBuffer(this.scratchShadowViewportBuffer);
             ActiveRenderInfo.updateRenderInfo(renderViewEntity, minecraft.gameSettings.thirdPersonView == 2);
             if (renderEntityShadows || renderPlayerShadow) {
                 GL11.glMatrixMode(GL11.GL_MODELVIEW);
@@ -3967,6 +3997,10 @@ public final class ActiniumRenderPipeline {
         return Math.max(16.0f, shadowDistance);
     }
 
+    public int getShadowTerrainRenderDistanceChunks() {
+        return Math.max(1, (int) (this.getShadowTerrainRenderDistance() / 16.0f));
+    }
+
     private ICamera createShadowEntityCamera(ActiniumShaderProperties properties) {
         float entityShadowDistanceMul = properties.getEntityShadowDistanceMul();
         if (entityShadowDistanceMul > 0.0f && entityShadowDistanceMul != 1.0f) {
@@ -4020,29 +4054,14 @@ public final class ActiniumRenderPipeline {
         }
     }
 
-    private static FloatBuffer toBuffer(Matrix4f matrix) {
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+    private static FloatBuffer writeMatrix(Matrix4fc matrix, FloatBuffer buffer) {
+        buffer.clear();
         matrix.get(buffer);
-        buffer.position(0);
-        buffer.limit(16);
         return buffer;
     }
 
-    private static FloatBuffer toGlMatrixBuffer(Matrix4f matrix) {
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
-        matrix.get(buffer);
-        buffer.position(0);
-        buffer.limit(16);
-        return buffer;
-    }
-
-    private static FloatBuffer copyFloatBuffer(FloatBuffer source) {
-        FloatBuffer duplicate = BufferUtils.createFloatBuffer(source.capacity());
-        FloatBuffer src = source.duplicate();
-        src.clear();
-        duplicate.put(src);
-        duplicate.flip();
-        return duplicate;
+    private FloatBuffer toGlMatrixBuffer(Matrix4fc matrix) {
+        return writeMatrix(matrix, this.scratchGlMatrixBuffer);
     }
 
     private static int[] parseDrawBuffers(String fragmentSource) {
@@ -4240,19 +4259,142 @@ public final class ActiniumRenderPipeline {
     }
 
     private static final class ShadowViewportFrustum implements Frustum {
-        private final float horizontalExtent;
-        private final float verticalExtent;
+        private static final int[][] NEIGHBORING_PLANES = {
+                {2, 3, 4, 5},
+                {2, 3, 4, 5},
+                {0, 1, 4, 5},
+                {0, 1, 4, 5},
+                {0, 1, 2, 3},
+                {0, 1, 2, 3}
+        };
+        private static final int MAX_CLIPPING_PLANES = 16;
+        private final FrustumIntersection frustum = new FrustumIntersection();
+        private final Matrix4f frustumMatrix = new Matrix4f();
+        private final Vector4f[] clippingPlanes = new Vector4f[MAX_CLIPPING_PLANES];
+        private final float maxDistance;
+        private int clippingPlaneCount;
 
-        private ShadowViewportFrustum(float shadowDistance) {
-            this.horizontalExtent = Math.max(32.0f, shadowDistance + 32.0f);
-            this.verticalExtent = Math.max(32.0f, shadowDistance + 32.0f);
+        private ShadowViewportFrustum(Matrix4fc projection,
+                                      Matrix4fc modelView,
+                                      Matrix4fc playerProjection,
+                                      Matrix4fc playerModelView,
+                                      Vector3f shadowLightVector,
+                                      float shadowDistance) {
+            this.maxDistance = Math.max(32.0f, shadowDistance + 32.0f);
+            this.frustumMatrix.set(projection).mul(modelView);
+            this.frustum.set(this.frustumMatrix, true);
+            this.buildShadowCasterPlanes(playerProjection, playerModelView, shadowLightVector);
         }
 
         @Override
         public boolean testAab(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
-            return maxX >= -this.horizontalExtent && minX <= this.horizontalExtent
-                    && maxY >= -this.verticalExtent && minY <= this.verticalExtent
-                    && maxZ >= -this.horizontalExtent && minZ <= this.horizontalExtent;
+            if (maxX < -this.maxDistance || minX > this.maxDistance
+                    || maxY < -this.maxDistance || minY > this.maxDistance
+                    || maxZ < -this.maxDistance || minZ > this.maxDistance) {
+                return false;
+            }
+
+            if (!this.testShadowCasterPlanes(minX, minY, minZ, maxX, maxY, maxZ)) {
+                return false;
+            }
+
+            return this.frustum.testAab(minX, minY, minZ, maxX, maxY, maxZ);
+        }
+
+        private void buildShadowCasterPlanes(Matrix4fc playerProjection, Matrix4fc playerModelView, Vector3f shadowLightVector) {
+            if (shadowLightVector.lengthSquared() <= 1.0e-6f) {
+                return;
+            }
+
+            Vector3f normalizedShadowLight = new Vector3f(shadowLightVector).normalize();
+            Vector4f[] basePlanes = this.createBaseClippingPlanes(playerProjection, playerModelView);
+            boolean[] backPlanes = new boolean[basePlanes.length];
+
+            for (int planeIndex = 0; planeIndex < basePlanes.length; planeIndex++) {
+                Vector4f plane = basePlanes[planeIndex];
+                float dot = plane.x() * normalizedShadowLight.x() + plane.y() * normalizedShadowLight.y() + plane.z() * normalizedShadowLight.z();
+                boolean isBackPlane = dot > 0.0f;
+                backPlanes[planeIndex] = isBackPlane;
+
+                if (isBackPlane || dot == 0.0f) {
+                    this.addPlane(new Vector4f(plane));
+                }
+            }
+
+            for (int planeIndex = 0; planeIndex < basePlanes.length; planeIndex++) {
+                if (!backPlanes[planeIndex]) {
+                    continue;
+                }
+
+                Vector4f plane = basePlanes[planeIndex];
+                for (int neighbor : NEIGHBORING_PLANES[planeIndex]) {
+                    if (!backPlanes[neighbor]) {
+                        this.addEdgePlane(plane, basePlanes[neighbor], normalizedShadowLight);
+                    }
+                }
+            }
+        }
+
+        private Vector4f[] createBaseClippingPlanes(Matrix4fc playerProjection, Matrix4fc playerModelView) {
+            Matrix4f transform = new Matrix4f(playerProjection).mul(playerModelView).transpose();
+            return new Vector4f[]{
+                    this.transformPlane(transform, -1.0f, 0.0f, 0.0f),
+                    this.transformPlane(transform, 1.0f, 0.0f, 0.0f),
+                    this.transformPlane(transform, 0.0f, -1.0f, 0.0f),
+                    this.transformPlane(transform, 0.0f, 1.0f, 0.0f),
+                    this.transformPlane(transform, 0.0f, 0.0f, -1.0f),
+                    this.transformPlane(transform, 0.0f, 0.0f, 1.0f)
+            };
+        }
+
+        private Vector4f transformPlane(Matrix4f transform, float x, float y, float z) {
+            return new Vector4f(x, y, z, 1.0f).mul(transform).normalize();
+        }
+
+        private void addPlane(Vector4f plane) {
+            if (this.clippingPlaneCount >= this.clippingPlanes.length) {
+                return;
+            }
+
+            this.clippingPlanes[this.clippingPlaneCount++] = plane;
+        }
+
+        private void addEdgePlane(Vector4f backPlane, Vector4f frontPlane, Vector3f shadowLightVector) {
+            Vector3f backNormal = new Vector3f(backPlane.x(), backPlane.y(), backPlane.z());
+            Vector3f frontNormal = new Vector3f(frontPlane.x(), frontPlane.y(), frontPlane.z());
+            Vector3f intersection = backNormal.cross(frontNormal, new Vector3f());
+
+            if (intersection.lengthSquared() <= 1.0e-6f) {
+                return;
+            }
+
+            Vector3f edgePlaneNormal = intersection.cross(shadowLightVector, new Vector3f());
+
+            if (edgePlaneNormal.lengthSquared() <= 1.0e-6f) {
+                return;
+            }
+
+            Vector3f ixb = intersection.cross(backNormal, new Vector3f()).mul(-frontPlane.w());
+            Vector3f fxi = frontNormal.cross(intersection, new Vector3f()).mul(-backPlane.w());
+            Vector3f point = ixb.add(fxi).mul(1.0f / intersection.lengthSquared());
+            float w = -edgePlaneNormal.dot(point);
+
+            this.addPlane(new Vector4f(edgePlaneNormal, w));
+        }
+
+        private boolean testShadowCasterPlanes(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+            for (int i = 0; i < this.clippingPlaneCount; i++) {
+                Vector4f plane = this.clippingPlanes[i];
+                float outsideX = plane.x() < 0.0f ? minX : maxX;
+                float outsideY = plane.y() < 0.0f ? minY : maxY;
+                float outsideZ = plane.z() < 0.0f ? minZ : maxZ;
+
+                if (Math.fma(plane.x(), outsideX, Math.fma(plane.y(), outsideY, plane.z() * outsideZ)) < -plane.w()) {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 
@@ -4405,12 +4547,14 @@ public final class ActiniumRenderPipeline {
 
     private static final class ShadowEntityCamera implements ICamera {
         private final FrustumIntersection frustum = new FrustumIntersection();
+        private final Matrix4f frustumMatrix = new Matrix4f();
         private double x;
         private double y;
         private double z;
 
         private ShadowEntityCamera(Matrix4fc projection, Matrix4fc modelView) {
-            this.frustum.set(new Matrix4f(projection).mul(modelView), true);
+            this.frustumMatrix.set(projection).mul(modelView);
+            this.frustum.set(this.frustumMatrix, true);
         }
 
         @Override
@@ -4443,6 +4587,13 @@ public final class ActiniumRenderPipeline {
     }
 
     private static final class ShadowPassGlState {
+        private static final IntBuffer SCRATCH_COLOR_MASK_BUFFER = BufferUtils.createIntBuffer(16);
+        private static final FloatBuffer SCRATCH_ALPHA_REF_BUFFER = BufferUtils.createFloatBuffer(16);
+        private static final FloatBuffer SCRATCH_LINE_WIDTH_BUFFER = BufferUtils.createFloatBuffer(16);
+        private static final FloatBuffer SCRATCH_CURRENT_COLOR_BUFFER = BufferUtils.createFloatBuffer(16);
+        private static final IntBuffer SCRATCH_POLYGON_MODE_BUFFER = BufferUtils.createIntBuffer(16);
+        private static final IntBuffer SCRATCH_SCISSOR_BOX_BUFFER = BufferUtils.createIntBuffer(16);
+
         private final int framebufferBinding;
         private final int drawBuffer;
         private final int readBuffer;
@@ -4577,18 +4728,18 @@ public final class ActiniumRenderPipeline {
             } catch (RuntimeException ignored) {
             }
 
-            IntBuffer colorMaskBuffer = BufferUtils.createIntBuffer(16);
-            invokeGlGetInteger(GL11.GL_COLOR_WRITEMASK, colorMaskBuffer);
-            FloatBuffer alphaRefBuffer = BufferUtils.createFloatBuffer(16);
-            invokeGlGetFloat(GL11.GL_ALPHA_TEST_REF, alphaRefBuffer);
-            FloatBuffer lineWidthBuffer = BufferUtils.createFloatBuffer(16);
-            invokeGlGetFloat(GL11.GL_LINE_WIDTH, lineWidthBuffer);
-            FloatBuffer currentColorBuffer = BufferUtils.createFloatBuffer(16);
-            invokeGlGetFloat(GL11.GL_CURRENT_COLOR, currentColorBuffer);
-            IntBuffer polygonModeBuffer = BufferUtils.createIntBuffer(16);
-            invokeGlGetInteger(GL11.GL_POLYGON_MODE, polygonModeBuffer);
-            IntBuffer scissorBoxBuffer = BufferUtils.createIntBuffer(16);
-            invokeGlGetInteger(GL11.GL_SCISSOR_BOX, scissorBoxBuffer);
+            SCRATCH_COLOR_MASK_BUFFER.clear();
+            invokeGlGetInteger(GL11.GL_COLOR_WRITEMASK, SCRATCH_COLOR_MASK_BUFFER);
+            SCRATCH_ALPHA_REF_BUFFER.clear();
+            invokeGlGetFloat(GL11.GL_ALPHA_TEST_REF, SCRATCH_ALPHA_REF_BUFFER);
+            SCRATCH_LINE_WIDTH_BUFFER.clear();
+            invokeGlGetFloat(GL11.GL_LINE_WIDTH, SCRATCH_LINE_WIDTH_BUFFER);
+            SCRATCH_CURRENT_COLOR_BUFFER.clear();
+            invokeGlGetFloat(GL11.GL_CURRENT_COLOR, SCRATCH_CURRENT_COLOR_BUFFER);
+            SCRATCH_POLYGON_MODE_BUFFER.clear();
+            invokeGlGetInteger(GL11.GL_POLYGON_MODE, SCRATCH_POLYGON_MODE_BUFFER);
+            SCRATCH_SCISSOR_BOX_BUFFER.clear();
+            invokeGlGetInteger(GL11.GL_SCISSOR_BOX, SCRATCH_SCISSOR_BOX_BUFFER);
             int activeTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
             int[] textureBindings2d = new int[TRACKED_TEXTURE_UNITS];
 
@@ -4612,9 +4763,9 @@ public final class ActiniumRenderPipeline {
                     GL11.glGetInteger(GL15.GL_ELEMENT_ARRAY_BUFFER_BINDING),
                     GL11.glGetInteger(GL11.GL_MATRIX_MODE),
                     GL11.glGetInteger(GL11.GL_SHADE_MODEL),
-                    polygonModeBuffer.get(0),
-                    polygonModeBuffer.get(1),
-                    lineWidthBuffer.get(0),
+                    SCRATCH_POLYGON_MODE_BUFFER.get(0),
+                    SCRATCH_POLYGON_MODE_BUFFER.get(1),
+                    SCRATCH_LINE_WIDTH_BUFFER.get(0),
                     GL11.glGetInteger(GL11.GL_DEPTH_FUNC),
                     GL11.glGetInteger(GL14.GL_BLEND_SRC_RGB),
                     GL11.glGetInteger(GL14.GL_BLEND_DST_RGB),
@@ -4631,25 +4782,25 @@ public final class ActiniumRenderPipeline {
                     GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
                     GL11.glIsEnabled(GL11.GL_SCISSOR_TEST),
                     new int[]{
-                            scissorBoxBuffer.get(0),
-                            scissorBoxBuffer.get(1),
-                            scissorBoxBuffer.get(2),
-                            scissorBoxBuffer.get(3)
+                            SCRATCH_SCISSOR_BOX_BUFFER.get(0),
+                            SCRATCH_SCISSOR_BOX_BUFFER.get(1),
+                            SCRATCH_SCISSOR_BOX_BUFFER.get(2),
+                            SCRATCH_SCISSOR_BOX_BUFFER.get(3)
                     },
                     new boolean[]{
-                            colorMaskBuffer.get(0) != 0,
-                            colorMaskBuffer.get(1) != 0,
-                            colorMaskBuffer.get(2) != 0,
-                            colorMaskBuffer.get(3) != 0
+                            SCRATCH_COLOR_MASK_BUFFER.get(0) != 0,
+                            SCRATCH_COLOR_MASK_BUFFER.get(1) != 0,
+                            SCRATCH_COLOR_MASK_BUFFER.get(2) != 0,
+                            SCRATCH_COLOR_MASK_BUFFER.get(3) != 0
                     },
                     new float[]{
-                            currentColorBuffer.get(0),
-                            currentColorBuffer.get(1),
-                            currentColorBuffer.get(2),
-                            currentColorBuffer.get(3)
+                            SCRATCH_CURRENT_COLOR_BUFFER.get(0),
+                            SCRATCH_CURRENT_COLOR_BUFFER.get(1),
+                            SCRATCH_CURRENT_COLOR_BUFFER.get(2),
+                            SCRATCH_CURRENT_COLOR_BUFFER.get(3)
                     },
                     GL11.glGetInteger(GL11.GL_ALPHA_TEST_FUNC),
-                    alphaRefBuffer.get(0),
+                    SCRATCH_ALPHA_REF_BUFFER.get(0),
                     attribStackPushed,
                     matrixStacksPushed
             );
@@ -4771,6 +4922,11 @@ public final class ActiniumRenderPipeline {
     }
 
     private static final class WorldStageGlState {
+        private static final IntBuffer SCRATCH_COLOR_MASK_BUFFER = BufferUtils.createIntBuffer(16);
+        private static final FloatBuffer SCRATCH_ALPHA_REF_BUFFER = BufferUtils.createFloatBuffer(16);
+        private static final FloatBuffer SCRATCH_CURRENT_COLOR_BUFFER = BufferUtils.createFloatBuffer(16);
+        private static final IntBuffer SCRATCH_VIEWPORT_BUFFER = BufferUtils.createIntBuffer(16);
+
         private final int framebufferBinding;
         private final int drawBuffer;
         private final int readBuffer;
@@ -4850,14 +5006,14 @@ public final class ActiniumRenderPipeline {
         }
 
         public static WorldStageGlState capture() {
-            IntBuffer colorMaskBuffer = BufferUtils.createIntBuffer(16);
-            invokeGlGetInteger(GL11.GL_COLOR_WRITEMASK, colorMaskBuffer);
-            FloatBuffer alphaRefBuffer = BufferUtils.createFloatBuffer(16);
-            invokeGlGetFloat(GL11.GL_ALPHA_TEST_REF, alphaRefBuffer);
-            FloatBuffer currentColorBuffer = BufferUtils.createFloatBuffer(16);
-            invokeGlGetFloat(GL11.GL_CURRENT_COLOR, currentColorBuffer);
-            IntBuffer viewportBuffer = BufferUtils.createIntBuffer(16);
-            invokeGlGetInteger(GL11.GL_VIEWPORT, viewportBuffer);
+            SCRATCH_COLOR_MASK_BUFFER.clear();
+            invokeGlGetInteger(GL11.GL_COLOR_WRITEMASK, SCRATCH_COLOR_MASK_BUFFER);
+            SCRATCH_ALPHA_REF_BUFFER.clear();
+            invokeGlGetFloat(GL11.GL_ALPHA_TEST_REF, SCRATCH_ALPHA_REF_BUFFER);
+            SCRATCH_CURRENT_COLOR_BUFFER.clear();
+            invokeGlGetFloat(GL11.GL_CURRENT_COLOR, SCRATCH_CURRENT_COLOR_BUFFER);
+            SCRATCH_VIEWPORT_BUFFER.clear();
+            invokeGlGetInteger(GL11.GL_VIEWPORT, SCRATCH_VIEWPORT_BUFFER);
             int activeTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
             int[] textureBindings2d = new int[TRACKED_TEXTURE_UNITS];
 
@@ -4890,24 +5046,24 @@ public final class ActiniumRenderPipeline {
                     GL11.glIsEnabled(GL11.GL_TEXTURE_2D),
                     GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
                     new boolean[]{
-                            colorMaskBuffer.get(0) != 0,
-                            colorMaskBuffer.get(1) != 0,
-                            colorMaskBuffer.get(2) != 0,
-                            colorMaskBuffer.get(3) != 0
+                            SCRATCH_COLOR_MASK_BUFFER.get(0) != 0,
+                            SCRATCH_COLOR_MASK_BUFFER.get(1) != 0,
+                            SCRATCH_COLOR_MASK_BUFFER.get(2) != 0,
+                            SCRATCH_COLOR_MASK_BUFFER.get(3) != 0
                     },
                     new float[]{
-                            currentColorBuffer.get(0),
-                            currentColorBuffer.get(1),
-                            currentColorBuffer.get(2),
-                            currentColorBuffer.get(3)
+                            SCRATCH_CURRENT_COLOR_BUFFER.get(0),
+                            SCRATCH_CURRENT_COLOR_BUFFER.get(1),
+                            SCRATCH_CURRENT_COLOR_BUFFER.get(2),
+                            SCRATCH_CURRENT_COLOR_BUFFER.get(3)
                     },
                     GL11.glGetInteger(GL11.GL_ALPHA_TEST_FUNC),
-                    alphaRefBuffer.get(0),
+                    SCRATCH_ALPHA_REF_BUFFER.get(0),
                     new int[]{
-                            viewportBuffer.get(0),
-                            viewportBuffer.get(1),
-                            viewportBuffer.get(2),
-                            viewportBuffer.get(3)
+                            SCRATCH_VIEWPORT_BUFFER.get(0),
+                            SCRATCH_VIEWPORT_BUFFER.get(1),
+                            SCRATCH_VIEWPORT_BUFFER.get(2),
+                            SCRATCH_VIEWPORT_BUFFER.get(3)
                     }
             );
         }

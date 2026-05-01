@@ -46,6 +46,9 @@ public abstract class ShaderChunkRenderer implements ChunkRenderer {
     protected @Nullable GlProgram<ChunkShaderInterface> compileProgram(ChunkShaderOptions options) {
         GlProgram<ChunkShaderInterface> program = this.programs.get(options);
 
+        if (program != null || this.programs.containsKey(options)) {
+            return program;
+        }
         if (program == null && !this.programs.containsKey(options)) {
             try {
                 program = this.createShader("blocks/block_layer_opaque", options);

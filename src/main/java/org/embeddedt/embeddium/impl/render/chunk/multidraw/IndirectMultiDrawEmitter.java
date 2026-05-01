@@ -101,6 +101,11 @@ public class IndirectMultiDrawEmitter implements MultiDrawEmitter {
     }
 
     @Override
+    public int getCommandCount() {
+        return this.numCommands;
+    }
+
+    @Override
     public void clear() {
         this.numCommands = 0;
     }

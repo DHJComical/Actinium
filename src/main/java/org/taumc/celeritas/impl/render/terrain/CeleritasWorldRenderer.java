@@ -16,6 +16,7 @@ import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
+import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import com.dhj.actinium.celeritas.ActiniumShaderProvider;
 import com.dhj.actinium.celeritas.ActiniumShaderProviderHolder;
 import org.taumc.celeritas.CeleritasVintage;
@@ -56,6 +57,11 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
     @Override
     public int getEffectiveRenderDistance() {
         return Minecraft.getMinecraft().gameSettings.renderDistanceChunks;
+    }
+
+    @Override
+    protected int getShadowEffectiveRenderDistance() {
+        return Math.max(1, ActiniumRenderPipeline.INSTANCE.getShadowTerrainRenderDistanceChunks());
     }
 
     @Override
@@ -127,7 +133,7 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
      * @return True if the entity is visible, otherwise false
      */
     public boolean isEntityVisible(Entity entity) {
-        if (!CeleritasVintage.options().performance.useEntityCulling) {
+        if (!CeleritasVintage.options().performance.useEntityCulling || this.renderSectionManager.isInShadowPass()) {
             return true;
         }
 

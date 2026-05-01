@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,6 +36,9 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
     private final ActiniumShaderProperties shaderProperties;
     private final ActiniumIdMap idMap;
     private final Map<String, String> optionOverrides;
+    private final Map<String, Optional<String>> shaderSourceCache = new HashMap<>();
+    private final Map<String, Optional<String>> programSourceCache = new HashMap<>();
+    private final Map<String, Optional<Path>> programPathCache = new HashMap<>();
 
     private ActiniumShaderPackResources(String packName, Path packPath, @Nullable FileSystem fileSystem, @Nullable Path shadersRoot,
                                         Properties configProperties, ActiniumShaderProperties shaderProperties,
@@ -150,24 +154,35 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
             return null;
         }
 
+        Optional<String> cached = this.shaderSourceCache.get(name);
+        if (cached != null) {
+            return cached.orElse(null);
+        }
+
         String[] split = name.contains(":") ? name.split(":", 2) : new String[]{"minecraft", name};
         String namespace = split[0];
         String path = split[1];
 
         if (!"actinium".equals(namespace)) {
+            this.shaderSourceCache.put(name, Optional.empty());
             return null;
         }
 
         Path directPath = this.shadersRoot.resolve(path);
         if (Files.isRegularFile(directPath)) {
-            return readUtf8(directPath);
+            String source = readUtf8(directPath);
+            this.shaderSourceCache.put(name, Optional.of(source));
+            return source;
         }
 
         Path namespacedPath = this.shadersRoot.resolve(namespace).resolve(path);
         if (Files.isRegularFile(namespacedPath)) {
-            return readUtf8(namespacedPath);
+            String source = readUtf8(namespacedPath);
+            this.shaderSourceCache.put(name, Optional.of(source));
+            return source;
         }
 
+        this.shaderSourceCache.put(name, Optional.empty());
         return null;
     }
 
@@ -191,8 +206,21 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
             return null;
         }
 
-        Path path = this.findProgramPath(programName + "." + type.fileExtension);
-        return path != null ? readShaderText(path) : null;
+        String cacheKey = programName + "." + type.fileExtension;
+        Optional<String> cached = this.programSourceCache.get(cacheKey);
+        if (cached != null) {
+            return cached.orElse(null);
+        }
+
+        Path path = this.findProgramPath(cacheKey);
+        if (path == null) {
+            this.programSourceCache.put(cacheKey, Optional.empty());
+            return null;
+        }
+
+        String source = readShaderText(path);
+        this.programSourceCache.put(cacheKey, Optional.of(source));
+        return source;
     }
 
     public @Nullable byte[] readResourceBytes(String relativePath) {
@@ -329,6 +357,11 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
     }
 
     private @Nullable Path findProgramPath(String relativePath) {
+        Optional<Path> cached = this.programPathCache.get(relativePath);
+        if (cached != null) {
+            return cached.orElse(null);
+        }
+
         for (String prefix : getDimensionPrefixes()) {
             Path candidate = null;
             if (this.shadersRoot != null) {
@@ -336,6 +369,7 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
             }
 
             if (candidate != null && Files.isRegularFile(candidate)) {
+                this.programPathCache.put(relativePath, Optional.of(candidate));
                 return candidate;
             }
         }
@@ -344,7 +378,13 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         if (this.shadersRoot != null) {
             fallback = this.shadersRoot.resolve(relativePath);
         }
-        return Files.isRegularFile(fallback) ? fallback : null;
+        if (Files.isRegularFile(fallback)) {
+            this.programPathCache.put(relativePath, Optional.of(fallback));
+            return fallback;
+        }
+
+        this.programPathCache.put(relativePath, Optional.empty());
+        return null;
     }
 
     private String readShaderText(Path path) {
@@ -498,15 +538,29 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         LinkedHashSet<String> candidates = new LinkedHashSet<>();
 
         switch (pass) {
-            case SHADOW, SHADOW_CUTOUT -> candidates.add("shadow");
+            case SHADOW -> {
+                candidates.add("shadow_solid");
+                candidates.add("shadow");
+            }
+            case SHADOW_CUTOUT -> {
+                candidates.add("shadow_cutout");
+                candidates.add("shadow");
+            }
             case GBUFFER_SOLID -> {
                 candidates.add("gbuffers_terrain");
                 candidates.add("gbuffers_terrain_solid");
                 candidates.add("gbuffers_textured_lit");
                 candidates.add("gbuffers_textured");
             }
+            case GBUFFER_CUTOUT_MIPPED -> {
+                candidates.add("gbuffers_terrain_cutout_mip");
+                candidates.add("gbuffers_terrain_cutout");
+                candidates.add("gbuffers_terrain");
+                candidates.add("gbuffers_terrain_solid");
+            }
             case GBUFFER_CUTOUT -> {
                 candidates.add("gbuffers_terrain_cutout");
+                candidates.add("gbuffers_terrain_cutout_mip");
                 candidates.add("gbuffers_terrain");
                 candidates.add("gbuffers_terrain_solid");
             }
@@ -538,10 +592,16 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
     private List<String> collectDirectiveSources() {
         LinkedHashSet<String> sources = new LinkedHashSet<>();
 
+        collectProgramSource(sources, "shadow_solid", ShaderType.VERTEX);
+        collectProgramSource(sources, "shadow_solid", ShaderType.FRAGMENT);
+        collectProgramSource(sources, "shadow_cutout", ShaderType.VERTEX);
+        collectProgramSource(sources, "shadow_cutout", ShaderType.FRAGMENT);
         collectProgramSource(sources, "shadow", ShaderType.VERTEX);
         collectProgramSource(sources, "shadow", ShaderType.FRAGMENT);
         collectProgramSource(sources, "gbuffers_terrain", ShaderType.VERTEX);
         collectProgramSource(sources, "gbuffers_terrain", ShaderType.FRAGMENT);
+        collectProgramSource(sources, "gbuffers_terrain_cutout_mip", ShaderType.VERTEX);
+        collectProgramSource(sources, "gbuffers_terrain_cutout_mip", ShaderType.FRAGMENT);
         collectProgramSource(sources, "gbuffers_terrain_cutout", ShaderType.VERTEX);
         collectProgramSource(sources, "gbuffers_terrain_cutout", ShaderType.FRAGMENT);
         collectProgramSource(sources, "gbuffers_water", ShaderType.VERTEX);

@@ -116,6 +116,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
                 setModelMatrixUniforms(shader, region, camera);
                 shader.setSectionAges(timestamp, region.getSectionLoadTimes());
+
                 this.emitter.executeBatch(commandList, tessellation, primitiveType);
             }
 
@@ -148,7 +149,6 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
         int originZ = renderRegion.getChunkZ();
 
         int indexPointerMask = pass.isSorted() ? 0xFFFFFFFF : 0;
-
         while (iterator.hasNext()) {
             int sectionIndex = iterator.nextByteAsInt();
 

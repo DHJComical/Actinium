@@ -3,8 +3,14 @@ package org.embeddedt.embeddium.impl.gl.shader.uniform;
 import org.taumc.celeritas.lwjgl.GL30;
 import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
 
+import org.lwjgl.BufferUtils;
+
+import java.nio.FloatBuffer;
+
 
 public class GlUniformFloat4v extends GlUniform<float[]> {
+    private final FloatBuffer scratchBuffer = BufferUtils.createFloatBuffer(4);
+
     public GlUniformFloat4v(int index) {
         super(index);
     }
@@ -16,5 +22,12 @@ public class GlUniformFloat4v extends GlUniform<float[]> {
         }
 
         LWJGL.glUniform4fv(this.index, value);
+    }
+
+    public void set(float x, float y, float z, float w) {
+        this.scratchBuffer.clear();
+        this.scratchBuffer.put(x).put(y).put(z).put(w);
+        this.scratchBuffer.flip();
+        LWJGL.glUniform4fv(this.index, this.scratchBuffer);
     }
 }

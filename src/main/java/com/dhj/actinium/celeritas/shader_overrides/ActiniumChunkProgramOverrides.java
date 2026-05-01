@@ -47,7 +47,7 @@ public final class ActiniumChunkProgramOverrides {
     public @Nullable GlProgram<? extends ChunkShaderInterface> getProgramOverride(TerrainRenderPass pass,
                                                                                    RenderPassConfiguration<?> configuration,
                                                                                    boolean shadowPass) {
-        ActiniumTerrainPass terrainPass = ActiniumTerrainPass.fromTerrainPass(pass, shadowPass);
+        ActiniumTerrainPass terrainPass = ActiniumTerrainPass.fromTerrainPass(pass, configuration, shadowPass);
         GlProgram<ChunkShaderInterface> program = this.programs.get(terrainPass);
 
         if (program == null && !this.programs.containsKey(terrainPass)) {

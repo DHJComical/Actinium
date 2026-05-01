@@ -75,6 +75,12 @@ final class ActiniumWorldShaderInterface {
     private final Vector3f scratchSunPosition = new Vector3f();
     private final Vector3f scratchMoonPosition = new Vector3f();
     private final Vector3f scratchShadowLightPosition = new Vector3f();
+    private boolean entityStateInitialized;
+    private int lastEntityId = Integer.MIN_VALUE;
+    private float lastEntityRed = Float.NaN;
+    private float lastEntityGreen = Float.NaN;
+    private float lastEntityBlue = Float.NaN;
+    private float lastEntityAlpha = Float.NaN;
 
     ActiniumWorldShaderInterface(ShaderBindingContext context) {
         this.texSampler = context.bindUniformIfPresent("tex", GlUniformInt::new);
@@ -333,13 +339,35 @@ final class ActiniumWorldShaderInterface {
     }
 
     public void updateEntityState() {
+        int entityId = ActiniumCapturedRenderingState.getCurrentRenderedEntity();
+        Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
+        float red = capturedEntityColor.x;
+        float green = capturedEntityColor.y;
+        float blue = capturedEntityColor.z;
+        float alpha = capturedEntityColor.w;
+
+        if (this.entityStateInitialized
+                && this.lastEntityId == entityId
+                && this.lastEntityRed == red
+                && this.lastEntityGreen == green
+                && this.lastEntityBlue == blue
+                && this.lastEntityAlpha == alpha) {
+            return;
+        }
+
+        this.entityStateInitialized = true;
+        this.lastEntityId = entityId;
+        this.lastEntityRed = red;
+        this.lastEntityGreen = green;
+        this.lastEntityBlue = blue;
+        this.lastEntityAlpha = alpha;
+
         if (this.entityId != null) {
-            this.entityId.setInt(ActiniumCapturedRenderingState.getCurrentRenderedEntity());
+            this.entityId.setInt(entityId);
         }
 
         if (this.entityColor != null) {
-            Vector4f capturedEntityColor = ActiniumCapturedRenderingState.getCurrentEntityColor();
-            this.entityColor.set(new float[]{capturedEntityColor.x, capturedEntityColor.y, capturedEntityColor.z, capturedEntityColor.w});
+            this.entityColor.set(red, green, blue, alpha);
         }
     }
 

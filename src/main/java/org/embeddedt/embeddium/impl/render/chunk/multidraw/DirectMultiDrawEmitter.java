@@ -49,6 +49,11 @@ public record DirectMultiDrawEmitter(MultiDrawBatch batch) implements MultiDrawE
     }
 
     @Override
+    public int getCommandCount() {
+        return this.batch.size();
+    }
+
+    @Override
     public boolean isEmpty() {
         return this.batch.isEmpty();
     }

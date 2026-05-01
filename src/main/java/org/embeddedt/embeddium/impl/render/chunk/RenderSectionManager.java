@@ -71,7 +71,7 @@ public abstract class RenderSectionManager {
 
     private final ChunkRenderer chunkRenderer;
 
-    private final int renderDistance;
+    private int renderDistance;
 
     protected @Nullable Vector3ic lastCameraPosition;
     protected Vector3d cameraPosition = new Vector3d();
@@ -285,7 +285,7 @@ public abstract class RenderSectionManager {
         if (this.useFogOcclusion()) {
             distance = this.getEffectiveRenderDistance();
         } else {
-            distance = this.getRenderDistance();
+            distance = this.getRenderDistanceBlocks();
         }
 
         return distance;
@@ -779,7 +779,7 @@ public abstract class RenderSectionManager {
         var alpha = color[3];
         var distance = ChunkShaderFogComponent.FOG_SERVICE.getFogCutoff();
 
-        var renderDistance = this.getRenderDistance();
+        var renderDistance = this.getRenderDistanceBlocks();
 
         // The fog must be fully opaque in order to skip rendering of chunks behind it
         if (Math.abs(alpha - 1.0f) >= 1.0E-5F) {
@@ -789,7 +789,15 @@ public abstract class RenderSectionManager {
         return Math.min(renderDistance, distance + 0.5f);
     }
 
-    private float getRenderDistance() {
+    public int getRenderDistance() {
+        return this.renderDistance;
+    }
+
+    public void setRenderDistance(int renderDistance) {
+        this.renderDistance = Math.max(1, renderDistance);
+    }
+
+    private float getRenderDistanceBlocks() {
         return this.renderDistance * 16.0f;
     }
 
@@ -958,4 +966,5 @@ public abstract class RenderSectionManager {
     public String getTickerDebugString() {
         return this.getCurrentRenderListManager().getTickerDebugString();
     }
+
 }
