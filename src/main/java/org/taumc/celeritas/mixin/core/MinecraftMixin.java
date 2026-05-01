@@ -8,6 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.taumc.celeritas.CeleritasVintage;
+import org.taumc.celeritas.impl.gui.CeleritasWindowModeController;
 
 @Mixin(Minecraft.class)
 public class MinecraftMixin {
@@ -17,6 +18,7 @@ public class MinecraftMixin {
     @Inject(method = "runTick", at = @At("HEAD"))
     private void preRender(CallbackInfo ci) {
         celeritas$renderAheadManager.startFrame(CeleritasVintage.options().advanced.cpuRenderAheadLimit);
+        CeleritasWindowModeController.synchronize((Minecraft) (Object) this);
     }
 
     @Inject(method = "runTick", at = @At("RETURN"))

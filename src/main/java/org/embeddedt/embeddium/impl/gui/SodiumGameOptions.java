@@ -11,6 +11,7 @@ import org.taumc.celeritas.api.options.structure.OptionStorage;
 import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.embeddedt.embeddium.impl.gui.options.TextProvider;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
+import org.taumc.celeritas.impl.gui.CeleritasFullscreenMode;
 
 import java.io.FileReader;
 import java.io.IOException;
@@ -30,6 +31,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
     public final AdvancedSettings advanced = new AdvancedSettings();
     public final PerformanceSettings performance = new PerformanceSettings();
     public final NotificationSettings notifications = new NotificationSettings();
+    public final WindowSettings window = new WindowSettings();
 
     private boolean readOnly;
 
@@ -105,6 +107,10 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
 
         public boolean hasClearedDonationButton = false;
         public boolean hasSeenDonationPrompt = false;
+    }
+
+    public static class WindowSettings {
+        public CeleritasFullscreenMode fullscreenMode;
     }
 
     public enum GraphicsQuality implements TextProvider {

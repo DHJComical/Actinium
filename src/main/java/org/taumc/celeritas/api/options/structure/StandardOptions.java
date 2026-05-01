@@ -4,6 +4,7 @@ import org.taumc.celeritas.api.options.OptionIdentifier;
 
 public final class StandardOptions {
     private static final String EMBEDDIUM_MOD_ID = "embeddium";
+    private static final String ACTINIUM_MOD_NAME = "actinium";
     
     public static class Group {
         public static final OptionIdentifier<Void> RENDERING = OptionIdentifier.create("minecraft", "rendering");
@@ -33,7 +34,8 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> BRIGHTNESS = OptionIdentifier.create("minecraft", "brightness");
         public static final OptionIdentifier<Void> GUI_SCALE = OptionIdentifier.create("minecraft", "gui_scale");
         public static final OptionIdentifier<Void> FULLSCREEN = OptionIdentifier.create("minecraft", "fullscreen");
-        public static final OptionIdentifier<Void> FULLSCREEN_RESOLUTION = OptionIdentifier.create("minecraft", "fullscreen_resolution");
+        public static final OptionIdentifier<Void> FULLSCREEN_MODE = OptionIdentifier.create(ACTINIUM_MOD_NAME, "fullscreen_mode");
+        public static final OptionIdentifier<Void> FULLSCREEN_RESOLUTION = OptionIdentifier.create(ACTINIUM_MOD_NAME, "fullscreen_resolution");
         public static final OptionIdentifier<Void> VSYNC = OptionIdentifier.create("minecraft", "vsync");
         public static final OptionIdentifier<Void> MAX_FRAMERATE = OptionIdentifier.create("minecraft", "max_frame_rate");
         public static final OptionIdentifier<Void> VIEW_BOBBING = OptionIdentifier.create("minecraft", "view_bobbing");

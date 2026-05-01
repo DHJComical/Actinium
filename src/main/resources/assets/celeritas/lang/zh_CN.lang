@@ -145,3 +145,7 @@ pack.actinium.select.title=选择光影包
 options.actinium.shaders.nonePresent=没有可用光影包
 options.actinium.shaders.disabled=光影包：已禁用
 options.actinium.shaders.enabled=光影包：已启用
+celeritas.options.fullscreen_mode.name=全屏方式
+celeritas.options.fullscreen_mode.tooltip=控制游戏进入全屏时使用的模式。无边框会使用覆盖显示器的无边框窗口，而不是独占全屏。
+celeritas.options.fullscreen_mode.fullscreen=全屏
+celeritas.options.fullscreen_mode.borderless=无边框

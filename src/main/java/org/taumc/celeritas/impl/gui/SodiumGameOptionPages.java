@@ -75,18 +75,16 @@ public class SodiumGameOptionPages {
                         .setName(TextComponent.translatable("options.fullscreen"))
                         .setTooltip(TextComponent.translatable("sodium.options.fullscreen.tooltip"))
                         .setControl(TickBoxControl::new)
-                        .setBinding((opts, value) -> {
-                            opts.fullScreen = value;
-
-                            Minecraft client = Minecraft.getMinecraft();
-
-                            if (client.isFullScreen() != opts.fullScreen) {
-                                client.toggleFullscreen();
-
-                                // The client might not be able to enter full-screen mode
-                                opts.fullScreen = client.isFullScreen();
-                            }
-                        }, (opts) -> opts.fullScreen)
+                        .setBinding((opts, value) -> CeleritasWindowModeController.applyFullscreenEnabled(Minecraft.getMinecraft(), value),
+                                opts -> opts.fullScreen)
+                        .build())
+                .add(OptionImpl.createBuilder(CeleritasFullscreenMode.class, sodiumOpts)
+                        .setId(StandardOptions.Option.FULLSCREEN_MODE.cast())
+                        .setName(TextComponent.translatable("celeritas.options.fullscreen_mode.name"))
+                        .setTooltip(TextComponent.translatable("celeritas.options.fullscreen_mode.tooltip"))
+                        .setControl(option -> new CyclingControl<>(option, CeleritasFullscreenMode.class))
+                        .setBinding((opts, value) -> CeleritasWindowModeController.applyMode(Minecraft.getMinecraft(), opts, value),
+                                CeleritasWindowModeController::resolveConfiguredMode)
                         .build())
                 .add(OptionImpl.createBuilder(boolean.class, vanillaOpts)
                         .setId(StandardOptions.Option.VSYNC.cast())
