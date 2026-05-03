@@ -1,6 +1,6 @@
 # Actinium Shader Pipeline Status
 
-Last updated: 2026-04-26
+Last updated: 2026-05-03
 
 This document summarizes the current Actinium shader-pipeline work, the architecture that now exists, the external projects used as references, and the known risks that should guide the next development pass.
 
@@ -10,7 +10,7 @@ Actinium is now able to run the MakeUp Ultra Fast shader pack in a usable state.
 
 The current work is not yet a complete Iris-equivalent implementation. It is a compatibility pipeline that supports enough OptiFine/Iris-style behavior for MakeUp to work, while still using selective fallbacks and guarded integration points where the full deferred renderer is not yet implemented.
 
-The current working baseline now includes the completed MakeUp shadow bring-up described below. The most important recent changes are concentrated in shadow compatibility, entity shadow semantics, and the final cleanup needed to keep the runtime stable after the shadow work.
+The current working baseline now includes the post-2026-04-26 work on per-pack option persistence, weather integration, rain splash routing, shadow/runtime controls, terrain performance recovery, TAA camera-history stabilization, and restored `prepare` metadata parsing for MakeUp's fog auxiliary path.
 
 ## Recent Progress
 
@@ -43,17 +43,32 @@ The current working baseline now includes the completed MakeUp shadow bring-up d
 - Added cloud setting override support so shader-pack `clouds=off/fast/fancy/on` can affect vanilla cloud rendering.
 - Fixed custom pack texture wrapping for `gaux2` and `noisetex`, avoiding `CLAMP_TO_EDGE` on repeating cloud/noise textures. This fixed MakeUp volumetric clouds stretching toward four directions.
 
-### Post Pipeline and Deferred Compatibility
+### Weather and Particles
+
+- Wired shader-pack `weather` and `weatherParticles` directives into runtime rendering instead of treating weather behavior as always-on vanilla logic.
+- Routed rain/snow rendering through the shader world-stage path whenever the pack exposes a weather program.
+- Routed rain splash particles through shader-aware rendering stages and added a dedicated gate for packs that disable splash particles entirely.
+
+### Pre-scene, Post Pipeline, and Atmosphere
 
 - Enabled external scene post programs and final pass support instead of hard-disabling the post chain.
 - Added sampler/unit compatibility for common OptiFine/Iris post inputs, including `colortex4..7`, `gaux1..4`, `depthtex0..2`, `shadowtex0/1`, `shadowcolor0/1`, and `noisetex`.
 - Expanded post depth target support to include `depthtex2`.
-- Adjusted `prepare` and `deferred` execution timing. The old early-world execution path is disabled; compatibility execution now happens in the post phase after the real scene exists.
-- Split `prepare` and `deferred` handling so `prepare` does not overwrite scene `colortex1`, while `deferred` can run from the current real scene and merge its outputs. This fixed the milk-white scene caused by sky/prepass data replacing world color.
+- Restored dedicated pre-scene `prepare` and `deferred` execution, with `prepare` running before terrain setup and `deferred` before water/translucent rendering.
+- Fixed metadata evaluation for macro-guarded draw-buffer directives. `defined MACRO` and `defined(MACRO)` now both resolve correctly, which restores MakeUp `prepare` outputs to `drawBuffers=[1, 7]`.
+- Restored `gaux4` fog auxiliary propagation from `prepare`, so MakeUp fog/atmosphere data now reaches later world and post stages again.
+- Kept pre-scene target merging conservative so `prepare` color data does not wash the world out with sky/prepass color.
+
+### Performance and Runtime Control
+
+- Tightened shadow pass culling and pack/runtime shadow overrides, improving compatibility with shadow distance, entity shadow distance, block-entity shadow, and hardware filtering controls.
+- Restored a large part of the lost shader-on terrain performance by trimming unnecessary terrain override work and removing expensive temporary debug probes from hot paths.
+- Kept the conservative terrain path for solid/cutout layers while preserving the shader-sensitive translucent/water integration that MakeUp currently depends on.
 
 ### TAA
 
 - Improved temporal anti-aliasing behavior against MakeUp by referencing Iris 26.1 behavior.
+- Stabilized previous-camera history uploads across terrain, world, and post programs, including integer/fractional camera-position uniforms for packs that expect split history inputs.
 - Reduced static blur, movement blur, ghosting, and camera-relative floating artifacts enough that the result is considered usable.
 - TAA still remains a compatibility-sensitive area because it depends on previous matrices, previous camera position, depth snapshots, and history buffer semantics.
 
@@ -63,6 +78,7 @@ The current working baseline now includes the completed MakeUp shadow bring-up d
 - Fixed option rows being clickable outside the visible scroll region.
 - Removed the dirt background from the in-game shader config panel so players can observe live shader effects while adjusting options.
 - Corrected shader pack selection button alignment issues.
+- Moved shader option override persistence to per-pack `<shaderpack>.txt` files stored alongside each shader pack instead of keeping all overrides in the shared config.
 
 ## Current Architecture
 
@@ -72,12 +88,12 @@ The current working baseline now includes the completed MakeUp shadow bring-up d
 
 This singleton coordinates almost all shader integration work:
 
-- Tracks render stage state: world, sky, clouds, weather, shadow, post, and final.
+- Tracks render stage state: world, sky, clouds, weather, particles, shadow, post, and final.
 - Captures camera, matrices, fog color, previous-frame data, frame counters, and TAA jitter.
 - Resolves and compiles external shader pack programs.
 - Owns world-stage targets, post targets, shadow targets, fallback textures, custom shader-pack textures, and terrain input textures.
-- Executes prepare/deferred/composite/final programs.
-- Restores OpenGL/framebuffer state after shader passes.
+- Executes pre-scene `prepare`/`deferred` programs plus scene composite/final programs.
+- Restores OpenGL/framebuffer state after shader passes and syncs persistent pre-scene outputs into later stages when required.
 - Owns the shadow pass integration for terrain and entities, including current MakeUp-focused compatibility behavior.
 
 ### Post Targets
@@ -93,6 +109,8 @@ This manages OptiFine/Iris-style post render targets:
 - ping-pong source/write textures
 - framebuffer binding for post draw buffers
 - copying scene, pre-translucent depth, and selected intermediate outputs
+
+The same target model is also reused for the dedicated pre-scene `prepare`/`deferred` capture path.
 
 Current compatibility still assumes a limited target set of 8 color targets. More advanced packs may need additional color attachments, image bindings, compute support, or more exact buffer-flip semantics.
 
@@ -115,10 +133,18 @@ This binds uniforms and samplers expected by external post programs:
 Major world-render hooks:
 
 - Begin world pass.
-- Legacy prepare/deferred hooks remain present but are disabled by pipeline guards.
+- Run `prepare` before terrain setup.
+- Run `deferred` before water/translucent rendering.
 - Capture world state and run post before first-person hand rendering.
+- Begin/end particle and weather shader stages when the active pack exposes them.
 - Run shadow pipeline before world rendering.
-- Begin/end weather stage.
+
+`src/main/java/org/taumc/celeritas/mixin/features/render/EntityRendererActiniumWeatherParticlesMixin.java`
+
+Weather-particle hook:
+
+- Intercepts `EntityRenderer.addRainParticles()`.
+- Suppresses vanilla splash particles when the active shader pack disables them.
 
 `src/main/java/org/taumc/celeritas/mixin/features/render/RenderGlobalActiniumPipelineMixin.java`
 
@@ -144,7 +170,9 @@ Cloud-mode override hook:
 Parses shader-pack metadata and directives:
 
 - `clouds`
+- `weather` / `weatherParticles`
 - shadow flags and shadow settings
+- runtime shadow tuning values such as distance multipliers and hardware filtering
 - `prepareBeforeShadow`
 - program enable/disable directives
 - custom texture declarations such as `texture.gbuffers.gaux2`
@@ -163,18 +191,23 @@ The terrain shader integration remains intentionally conservative:
 
 ### Prepare and Deferred
 
-Current behavior is intentionally not a full Iris clone:
+Current behavior is still a compatibility-oriented pre-scene implementation rather than a full Iris clone:
 
-- Early `renderPreparePipeline` and `renderDeferredPipeline` calls are guarded by `ENABLE_PRE_SCENE_PIPELINES = false`.
-- `prepare` and `deferred` are executed in the post phase through `executePreSceneProgramsInPostPhase`.
-- `prepare` output does not merge `colortex1` back into the main post targets.
-- `deferred` runs from the real scene input and can merge its draw-buffer outputs.
+- `ENABLE_PRE_SCENE_PIPELINES = true`, so `renderPreparePipeline()` runs before terrain setup and `renderDeferredPipeline()` runs before the water/translucent portion of `renderWorldPass`.
+- Each stage copies the current scene and depth into dedicated pre-scene targets, applies `prepare_pre` / `deferred_pre` flips, and executes matching programs only when those stage programs exist.
+- `prepare` can now persist both `colortex1` and `gaux4` outputs. The restored `gaux4` path feeds later world/post stages with the pack's fog auxiliary data.
+- Pre-scene outputs are merged back conservatively so scene color is not replaced by sky/prepass data, which avoids the previous milk-white world regression.
 
 Reasoning:
 
-- Running MakeUp `prepare/deferred` too early caused depth to look like sky and produced incorrect volumetric clouds and washed output.
-- Merging `prepare` `colortex1` replaced the scene with sky/prepass color and made most geometry milk-white.
-- Running `deferred` from the real scene recovered effects without reintroducing the white scene.
+- MakeUp relies on macro-guarded metadata in `prepare_fragment.glsl`; the parser now evaluates both `defined MACRO` and `defined(MACRO)` so the stage resolves to `drawBuffers=[1, 7]` instead of silently losing `gaux4`.
+- Keeping `prepare` and `deferred` ahead of the main scene stages restores fog/atmosphere behavior without reintroducing the old full-screen white scene.
+- Buffer ownership is still conservative compared with Iris, because Actinium only merges the targets that should survive into later post passes.
+
+### Shader Pack Option Overrides
+
+- Shader option overrides are now stored as `shaderpacks/<packName>.txt`.
+- Overrides are loaded per pack and the file is deleted when no overrides remain, so packs no longer share one global override bucket.
 
 ### Texture Wrapping
 
@@ -266,6 +299,7 @@ Important MakeUp files examined:
 
 MakeUp-specific findings:
 
+- `prepare_fragment.glsl` uses macro-guarded draw-buffer metadata and, in the current working path, resolves to `drawBuffers=[1, 7]`, mapping to `colortex1` and `gaux4`.
 - `deferred_fragment.glsl` writes `DRAWBUFFERS:14`, mapping to `colortex1` and `gaux1`.
 - `final_fragment.glsl` documents `gaux1` as SSR/Bloom auxiliary, `gaux2` as clouds texture, `gaux3` as exposure auxiliary, and `gaux4` as fog auxiliary.
 - `shaders.properties` declares `texture.gbuffers.gaux2` and `texture.deferred.gaux2` as cloud textures.
@@ -275,13 +309,13 @@ MakeUp-specific findings:
 
 ### Prepare/Deferred Semantics
 
-The current prepare/deferred path is a compatibility compromise. It works for the current MakeUp testing state, but may not match packs that rely on exact Iris timing:
+The current prepare/deferred path is closer to Iris than before, but it is still a compatibility compromise:
 
 - Iris runs `prepare` after shadows and `deferred` before translucents.
-- Actinium currently runs them during post compatibility execution.
-- Depth and scene inputs may not match packs expecting exact pre-translucent or pre-hand timing.
+- Actinium now runs dedicated pre-scene stages before terrain and before water/translucent rendering, which is closer for MakeUp but still not a full stage-for-stage clone.
+- Scene/depth capture and output merging are still selective, so packs that depend on exact inter-stage buffer ownership may still expose edge cases.
 
-Future work should move toward true Iris stage timing once the framebuffer state and terrain outputs are robust enough.
+Future work should continue aligning stage ordering and buffer ownership once the framebuffer state and terrain outputs are robust enough.
 
 ### Buffer Flip Semantics
 
@@ -368,13 +402,14 @@ D:\Github Desktop\Actinium\run\client\logs\latest.log
 
 ### Short Term
 
-- Commit the current working shadow fixes and keep the docs synchronized with the verified runtime state.
-- Keep testing MakeUp with high feature settings: volumetric clouds, water reflection, shadows, TAA, bloom, DOF, and volumetric light.
+- Keep the docs synchronized with the verified runtime state, especially around pre-scene programs, fog auxiliaries, and weather behavior.
+- Keep testing MakeUp with high feature settings: volumetric clouds, water reflection, shadows, TAA, bloom, DOF, volumetric light, rain/snow, splash particles, and fog transitions.
 - Add targeted debug only when a new regression appears; the latest shadow bring-up required several temporary debug paths that should stay secondary to runtime stability.
 
 ### Medium Term
 
-- Implement more Iris-like `prepare` and `deferred` timing instead of post-phase compatibility execution.
+- Continue aligning `prepare` and `deferred` ordering and buffer ownership with Iris, especially shadow-to-prepare timing and deferred scene/depth inputs.
+- Profile and reduce the remaining shader-on terrain/world-stage performance gap without reopening the unstable broad terrain redirect path.
 - Improve buffer flip tracking to more closely match Iris `CompositeRenderer` and `BufferFlipper` behavior.
 - Expand render target support beyond the legacy 8 aliases.
 - Improve shader-pack custom texture parsing, including explicit texture formats and filtering/wrap directives.

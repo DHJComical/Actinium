@@ -90,8 +90,25 @@ unimined.minecraft {
     }
 
     cleanroom {
-        if (propertyBool("use_access_transformer")) {
-            accessTransformer("${rootProject.projectDir}/src/main/resources/${propertyString("access_transformer_locations")}")
+        val cleanroomConfig = this
+        val projectAccessTransformer = if (propertyBool("use_access_transformer")) {
+            rootProject.projectDir.resolve("src/main/resources/${propertyString("access_transformer_locations")}")
+        } else {
+            null
+        }
+        if (projectAccessTransformer != null) {
+            accessTransformer(projectAccessTransformer.absolutePath)
+        }
+        project.pluginManager.withPlugin("dependencies") {
+            val developmentAccessTransformer = ActiniumUniminedHelper.prepareDevelopmentAccessTransformer(
+                project,
+                projectAccessTransformer,
+                "runtimeOnly",
+                "modRuntimeOnly"
+            )
+            if (developmentAccessTransformer != null) {
+                cleanroomConfig.accessTransformer(developmentAccessTransformer.absolutePath)
+            }
         }
         loader("0.5.6-alpha")
         runs.auth.username = property("minecraft_username").toString()
@@ -127,9 +144,6 @@ unimined.minecraft {
 apply(plugin = "dependencies")
 
 ActiniumUniminedHelper.configureProductionRemap(project)
-if (propertyBool("use_access_transformer")) {
-    ActiniumUniminedHelper.configureSourceAccessTransformers(project, "src/main/resources/${propertyString("access_transformer_locations")}")
-}
 
 val generatedMixinConfigDir = layout.buildDirectory.dir("generated/actinium/mixins")
 

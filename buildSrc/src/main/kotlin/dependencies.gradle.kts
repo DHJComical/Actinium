@@ -59,6 +59,7 @@ dependencies {
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     }
 
+    runtimeOnly("curse.maven:catalogue-vintage-1465746:7872634")
     // Example - Dependency descriptor:
     // 'com.google.code.gson:gson:2.8.6' << group: com.google.code.gson, name:gson, version:2.8.6
     // 'group:name:version:classifier' where classifier is optional
