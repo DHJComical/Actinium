@@ -21,6 +21,10 @@ final class ActiniumDirectiveProcessor {
     }
 
     public static Properties loadPropertiesFile(Path path, String logicalName, Iterable<String> directiveSources) {
+        return loadPropertiesFile(path, logicalName, directiveSources, Map.of());
+    }
+
+    public static Properties loadPropertiesFile(Path path, String logicalName, Iterable<String> directiveSources, Map<String, String> optionOverrides) {
         Properties properties = new Properties();
 
         if (!Files.isRegularFile(path)) {
@@ -29,7 +33,7 @@ final class ActiniumDirectiveProcessor {
 
         try {
             String source = Files.readString(path, StandardCharsets.UTF_8);
-            String processed = preprocess(source, collectDefines(directiveSources));
+            String processed = preprocess(source, collectDefines(directiveSources, optionOverrides));
             properties.load(new StringReader(processed));
         } catch (IOException e) {
             ActiniumShaders.logger().warn("Failed to read shader pack file {} ({})", logicalName, path, e);
@@ -120,7 +124,7 @@ final class ActiniumDirectiveProcessor {
         return output.toString();
     }
 
-    private static Map<String, String> collectDefines(Iterable<String> directiveSources) {
+    private static Map<String, String> collectDefines(Iterable<String> directiveSources, Map<String, String> optionOverrides) {
         Map<String, String> defines = new LinkedHashMap<>(STATIC_DEFINES);
 
         for (String shaderSource : directiveSources) {
@@ -130,6 +134,28 @@ final class ActiniumDirectiveProcessor {
 
             parseDefines(shaderSource, defines);
         }
+
+        optionOverrides.forEach((key, value) -> {
+            if (key == null || value == null) {
+                return;
+            }
+
+            String trimmedKey = key.trim();
+            String trimmedValue = value.trim();
+
+            if (trimmedKey.isEmpty() || trimmedKey.contains("::")) {
+                return;
+            }
+
+            if ("true".equalsIgnoreCase(trimmedValue)) {
+                defines.put(trimmedKey, "1");
+            } else if ("false".equalsIgnoreCase(trimmedValue)) {
+                defines.remove(trimmedKey);
+                defines.put(trimmedKey, "0");
+            } else if (!trimmedValue.isEmpty()) {
+                defines.put(trimmedKey, trimmedValue);
+            }
+        });
 
         return defines;
     }

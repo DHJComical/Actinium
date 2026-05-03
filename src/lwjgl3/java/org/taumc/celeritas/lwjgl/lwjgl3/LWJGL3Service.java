@@ -420,6 +420,11 @@ public record LWJGL3Service(
     }
 
     @Override
+    public void glUniform4i(int location, int v0, int v1, int v2, int v3) {
+        GL20C.glUniform4i(location, v0, v1, v2, v3);
+    }
+
+    @Override
     public void glUniform3f(int location, float v0, float v1, float v2) {
         GL20C.glUniform3f(location, v0, v1, v2);
     }
@@ -610,6 +615,11 @@ public record LWJGL3Service(
     @Override
     public void glPixelStorei(int pname, int param) {
         GL11C.glPixelStorei(pname, param);
+    }
+
+    @Override
+    public void glBindImageTexture(int unit, int texture, int level, boolean layered, int layer, int access, int format) {
+        GL42C.glBindImageTexture(unit, texture, level, layered, layer, access, format);
     }
 
     // ===================== FRAMEBUFFER OPERATIONS =====================

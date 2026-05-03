@@ -22,32 +22,46 @@ final class ActiniumPostTargets {
     public static final int TARGET_GAUX2 = 5;
     public static final int TARGET_GAUX3 = 6;
     public static final int TARGET_GAUX4 = 7;
-    public static final int TARGET_COUNT = 8;
+    public static final int TARGET_COLORTEX8 = 8;
+    public static final int TARGET_COLORTEX9 = 9;
+    public static final int TARGET_COLORTEX10 = 10;
+    public static final int TARGET_COLORTEX11 = 11;
+    public static final int TARGET_COLORTEX12 = 12;
+    public static final int TARGET_COLORTEX13 = 13;
+    public static final int TARGET_COLORTEX14 = 14;
+    public static final int TARGET_COLORTEX15 = 15;
+    public static final int TARGET_COUNT = 16;
 
     private final ColorFormat[] formats;
     private final TargetSettings[] settings;
-    private final TargetSlot[] targets = new TargetSlot[TARGET_COUNT];
+    private final TargetSlot[] targets;
     private final int framebufferId;
     private final int copyReadFramebufferId;
     private final int copyDrawFramebufferId;
     private final int clearFramebufferId;
     private final int[] depthTextures = new int[3];
-    private final int[] drawAttachmentScratch = new int[TARGET_COUNT];
-    private final IntBuffer drawBufferBuffer = BufferUtils.createIntBuffer(TARGET_COUNT);
+    private final int[] drawAttachmentScratch;
+    private final IntBuffer drawBufferBuffer;
     private final FloatBuffer clearColorBuffer = BufferUtils.createFloatBuffer(4);
 
+    private int maxColorAttachments;
+    private int maxDrawBuffers;
+    private int lastBoundAttachmentCount;
     private int width;
     private int height;
 
     ActiniumPostTargets(ColorFormat[] formats, TargetSettings[] settings) {
         this.formats = formats.clone();
         this.settings = settings.clone();
+        this.targets = new TargetSlot[this.formats.length];
+        this.drawAttachmentScratch = new int[this.targets.length];
+        this.drawBufferBuffer = BufferUtils.createIntBuffer(this.targets.length);
         this.framebufferId = GL30.glGenFramebuffers();
         this.copyReadFramebufferId = GL30.glGenFramebuffers();
         this.copyDrawFramebufferId = GL30.glGenFramebuffers();
         this.clearFramebufferId = GL30.glGenFramebuffers();
 
-        for (int i = 0; i < TARGET_COUNT; i++) {
+        for (int i = 0; i < this.targets.length; i++) {
             this.targets[i] = new TargetSlot();
         }
     }
@@ -64,7 +78,7 @@ final class ActiniumPostTargets {
             slot.delete();
         }
 
-        for (int i = 0; i < TARGET_COUNT; i++) {
+        for (int i = 0; i < this.targets.length; i++) {
             TargetSlot slot = this.targets[i];
             ColorFormat format = this.formats[Math.max(0, Math.min(i, this.formats.length - 1))];
             slot.mainTexture = createColorTexture(width, height, format);
@@ -139,6 +153,7 @@ final class ActiniumPostTargets {
         clearTargetIfRequested(TARGET_COLORTEX2);
         clearTargetIfRequested(TARGET_GAUX1);
         clearTargetIfRequested(TARGET_GAUX2);
+        clearTargetIfRequested(TARGET_GAUX3);
 
         if (worldGaux4Texture != null && worldGaux4Texture > 0) {
             this.copyTexture(worldGaux4Texture, this.targets[TARGET_GAUX4].mainTexture, this.width, this.height);
@@ -152,6 +167,7 @@ final class ActiniumPostTargets {
         clearTargetAltIfRequested(TARGET_COLORTEX2);
         clearTargetAltIfRequested(TARGET_GAUX1);
         clearTargetAltIfRequested(TARGET_GAUX2);
+        clearTargetAltIfRequested(TARGET_GAUX3);
         clearTargetAltIfRequested(TARGET_GAUX4);
 
         this.copyDepthTexture(mainFramebuffer, 0);
@@ -182,7 +198,7 @@ final class ActiniumPostTargets {
         }
 
         for (int targetIndex : targetIndices) {
-            if (targetIndex < 0 || targetIndex >= TARGET_COUNT) {
+            if (targetIndex < 0 || targetIndex >= this.targets.length) {
                 continue;
             }
 
@@ -197,7 +213,7 @@ final class ActiniumPostTargets {
     }
 
     private void prepareFramePersistentTargets() {
-        for (int targetIndex = 0; targetIndex < TARGET_COUNT; targetIndex++) {
+        for (int targetIndex = 0; targetIndex < this.targets.length; targetIndex++) {
             TargetSlot slot = this.targets[targetIndex];
 
             TargetSettings settings = this.resolveSettings(targetIndex);
@@ -239,11 +255,18 @@ final class ActiniumPostTargets {
 
     public void bindWriteFramebuffer(int[] drawBuffers) {
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.framebufferId);
+        int supportedAttachmentCount = this.getSupportedAttachmentCount();
+
+        if (drawBuffers.length > supportedAttachmentCount) {
+            throw new IllegalArgumentException("Actinium post draw buffer count " + drawBuffers.length
+                    + " exceeds supported attachment count " + supportedAttachmentCount);
+        }
 
         this.drawBufferBuffer.clear();
         int attachmentCount = 0;
 
         for (int targetIndex : drawBuffers) {
+            validateTargetIndex(targetIndex, this.targets.length);
             int attachment = GL30.GL_COLOR_ATTACHMENT0 + attachmentCount;
             int textureId = this.targets[targetIndex].getWriteTexture();
             this.drawAttachmentScratch[attachmentCount] = attachment;
@@ -252,12 +275,13 @@ final class ActiniumPostTargets {
             attachmentCount++;
         }
 
-        for (int i = attachmentCount; i < TARGET_COUNT; i++) {
+        for (int i = attachmentCount; i < Math.min(this.lastBoundAttachmentCount, supportedAttachmentCount); i++) {
             GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0 + i, GL11.GL_TEXTURE_2D, 0, 0);
         }
 
         this.drawBufferBuffer.flip();
         GL20.glDrawBuffers(this.drawBufferBuffer);
+        this.lastBoundAttachmentCount = attachmentCount;
 
         int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
         if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
@@ -272,7 +296,7 @@ final class ActiniumPostTargets {
     }
 
     public void flipTarget(int targetIndex) {
-        if (targetIndex < 0 || targetIndex >= TARGET_COUNT) {
+        if (targetIndex < 0 || targetIndex >= this.targets.length) {
             return;
         }
 
@@ -280,7 +304,7 @@ final class ActiniumPostTargets {
     }
 
     public boolean isTargetFlipped(int targetIndex) {
-        if (targetIndex < 0 || targetIndex >= TARGET_COUNT) {
+        if (targetIndex < 0 || targetIndex >= this.targets.length) {
             return false;
         }
 
@@ -288,7 +312,7 @@ final class ActiniumPostTargets {
     }
 
     public void setTargetFlipped(int targetIndex, boolean flipped) {
-        if (targetIndex < 0 || targetIndex >= TARGET_COUNT) {
+        if (targetIndex < 0 || targetIndex >= this.targets.length) {
             return;
         }
 
@@ -296,7 +320,19 @@ final class ActiniumPostTargets {
     }
 
     public int getSourceTexture(int targetIndex) {
+        if (targetIndex < 0 || targetIndex >= this.targets.length) {
+            return 0;
+        }
+
         return this.targets[targetIndex].getSourceTexture();
+    }
+
+    public int getInternalFormat(int targetIndex) {
+        if (targetIndex < 0 || targetIndex >= this.formats.length) {
+            return ColorFormat.RGBA8.internalFormat();
+        }
+
+        return this.formats[targetIndex].internalFormat();
     }
 
     public int getDepthTexture(int index) {
@@ -453,6 +489,24 @@ final class ActiniumPostTargets {
                 GL11.glDeleteTextures(textures[i]);
                 textures[i] = 0;
             }
+        }
+    }
+
+    private int getSupportedAttachmentCount() {
+        if (this.maxColorAttachments <= 0) {
+            this.maxColorAttachments = Math.max(1, GL11.glGetInteger(GL30.GL_MAX_COLOR_ATTACHMENTS));
+        }
+
+        if (this.maxDrawBuffers <= 0) {
+            this.maxDrawBuffers = Math.max(1, GL11.glGetInteger(GL20.GL_MAX_DRAW_BUFFERS));
+        }
+
+        return Math.min(Math.min(this.maxColorAttachments, this.maxDrawBuffers), this.targets.length);
+    }
+
+    private static void validateTargetIndex(int targetIndex, int targetCount) {
+        if (targetIndex < 0 || targetIndex >= targetCount) {
+            throw new IllegalArgumentException("Unsupported Actinium post draw buffer target " + targetIndex);
         }
     }
 

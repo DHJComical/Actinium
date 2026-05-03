@@ -1,6 +1,7 @@
 package org.taumc.celeritas.mixin.features.render;
 
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
+import com.llamalad7.mixinextras.sugar.Local;
 import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import com.dhj.actinium.shader.pipeline.ActiniumRenderStage;
@@ -35,8 +36,21 @@ public class RenderGlobalActiniumPipelineMixin {
 
     @Inject(method = "renderSky(FI)V", at = @At("HEAD"))
     private void actinium$beginSky(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.captureSkyStageState();
         ActiniumRenderPipeline.INSTANCE.beginManagedSky(partialTicks);
         ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.head");
+    }
+
+    @Inject(
+            method = "renderSky(FI)V",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;color(FFF)V", ordinal = 0, shift = At.Shift.BEFORE)
+    )
+    private void actinium$captureSkyColor(float partialTicks, int pass, CallbackInfo ci, @Local(ordinal = 0) net.minecraft.util.math.Vec3d skyColor) {
+        if (skyColor == null) {
+            return;
+        }
+
+        ActiniumRenderPipeline.INSTANCE.captureSkyColor((float) skyColor.x, (float) skyColor.y, (float) skyColor.z);
     }
 
     @Inject(method = "renderSky(FI)V", at = @At("RETURN"))
@@ -90,8 +104,6 @@ public class RenderGlobalActiniumPipelineMixin {
             slice = @Slice(from = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/WorldClient;getRainStrength(F)F"))
     )
     private void actinium$preCelestialRotate(float partialTicks, int pass, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.captureManagedSkyPreCelestialState(partialTicks);
-
         if (!ActiniumRenderPipeline.INSTANCE.shouldApplySunPathRotationToVanillaSky()) {
             return;
         }
@@ -119,6 +131,8 @@ public class RenderGlobalActiniumPipelineMixin {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;color(FFF)V", ordinal = 1, shift = At.Shift.AFTER)
     )
     private void actinium$preSkyList(float partialTicks, int pass, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.captureManagedSkyPreCelestialState(partialTicks);
+        ActiniumRenderPipeline.INSTANCE.refreshManagedSkyProgram(partialTicks);
         ActiniumRenderPipeline.INSTANCE.renderShaderCoreSkyHorizon();
         ActiniumRenderPipeline.INSTANCE.debugLogSkySegment("renderSky.preSkyList");
     }

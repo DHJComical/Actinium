@@ -1,7 +1,10 @@
 package com.dhj.actinium.shader.pipeline;
 
+import com.dhj.actinium.celeritas.ActiniumShaders;
+import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
 import com.dhj.actinium.shader.uniform.ActiniumCapturedRenderingState;
+import com.dhj.actinium.shader.uniform.ActiniumOptiFineUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
@@ -17,8 +20,11 @@ import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat4v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt2v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt3v;
+import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt4v;
+import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix3f;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix4f;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix3f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -32,6 +38,14 @@ final class ActiniumPostShaderInterface {
     private final @Nullable GlUniformInt colortex5Sampler;
     private final @Nullable GlUniformInt colortex6Sampler;
     private final @Nullable GlUniformInt colortex7Sampler;
+    private final @Nullable GlUniformInt colortex8Sampler;
+    private final @Nullable GlUniformInt colortex9Sampler;
+    private final @Nullable GlUniformInt colortex10Sampler;
+    private final @Nullable GlUniformInt colortex11Sampler;
+    private final @Nullable GlUniformInt colortex12Sampler;
+    private final @Nullable GlUniformInt colortex13Sampler;
+    private final @Nullable GlUniformInt colortex14Sampler;
+    private final @Nullable GlUniformInt colortex15Sampler;
     private final @Nullable GlUniformInt gcolorSampler;
     private final @Nullable GlUniformInt gdepthSampler;
     private final @Nullable GlUniformInt gdepthtexSampler;
@@ -52,6 +66,14 @@ final class ActiniumPostShaderInterface {
     private final @Nullable GlUniformInt shadowcolor0Sampler;
     private final @Nullable GlUniformInt shadowcolor1Sampler;
     private final @Nullable GlUniformInt noisetexSampler;
+    private final @Nullable GlUniformInt colorimg0Image;
+    private final @Nullable GlUniformInt colorimg1Image;
+    private final @Nullable GlUniformInt colorimg2Image;
+    private final @Nullable GlUniformInt colorimg3Image;
+    private final @Nullable GlUniformInt colorimg4Image;
+    private final @Nullable GlUniformInt colorimg5Image;
+    private final @Nullable GlUniformInt shadowcolorimg0Image;
+    private final @Nullable GlUniformInt shadowcolorimg1Image;
 
     private final @Nullable GlUniformFloat viewWidth;
     private final @Nullable GlUniformFloat viewHeight;
@@ -79,17 +101,36 @@ final class ActiniumPostShaderInterface {
     private final @Nullable GlUniformInt frameMod;
     private final @Nullable GlUniformFloat frameMod8;
     private final @Nullable GlUniformInt worldTime;
+    private final @Nullable GlUniformInt worldDay;
     private final @Nullable GlUniformInt moonPhase;
     private final @Nullable GlUniformInt isEyeInWater;
+    private final @Nullable GlUniformInt hideGUI;
     private final @Nullable GlUniformInt entityId;
+    private final @Nullable GlUniformInt blockEntityId;
+    private final @Nullable GlUniformInt heldItemId;
+    private final @Nullable GlUniformInt heldBlockLightValue;
+    private final @Nullable GlUniformInt heldItemId2;
+    private final @Nullable GlUniformInt heldBlockLightValue2;
+    private final @Nullable GlUniformInt fogMode;
+    private final @Nullable GlUniformInt fogShape;
+    private final @Nullable GlUniformInt terrainIconSize;
+    private final @Nullable GlUniformInt instanceId;
+    private final @Nullable GlUniformInt renderStage;
+    private final @Nullable GlUniformInt bossBattle;
     private final @Nullable GlUniformInt2v eyeBrightnessSmooth;
+    private final @Nullable GlUniformInt2v eyeBrightness;
+    private final @Nullable GlUniformInt2v atlasSize;
+    private final @Nullable GlUniformInt2v terrainTextureSize;
+    private final @Nullable GlUniformInt4v blendFunc;
 
+    private final @Nullable GlUniformFloat aspectRatio;
     private final @Nullable GlUniformFloat3v cameraPosition;
     private final @Nullable GlUniformInt3v cameraPositionInt;
     private final @Nullable GlUniformFloat3v cameraPositionFract;
     private final @Nullable GlUniformFloat3v sunPosition;
     private final @Nullable GlUniformFloat3v moonPosition;
     private final @Nullable GlUniformFloat3v shadowLightPosition;
+    private final @Nullable GlUniformFloat3v upPosition;
     private final @Nullable GlUniformFloat3v fogColor;
     private final @Nullable GlUniformFloat3v skyColor;
     private final @Nullable GlUniformFloat3v previousCameraPosition;
@@ -107,9 +148,29 @@ final class ActiniumPostShaderInterface {
     private final @Nullable GlUniformMatrix4f shadowModelViewInverse;
     private final @Nullable GlUniformMatrix4f shadowProjection;
     private final @Nullable GlUniformMatrix4f shadowProjectionInverse;
+    private final @Nullable GlUniformMatrix4f modelViewMatrix;
+    private final @Nullable GlUniformMatrix4f modelViewMatrixInverse;
+    private final @Nullable GlUniformMatrix4f projectionMatrix;
+    private final @Nullable GlUniformMatrix4f projectionMatrixInverse;
+    private final @Nullable GlUniformMatrix4f textureMatrix;
+    private final @Nullable GlUniformMatrix3f normalMatrix;
+    private final @Nullable GlUniformFloat4v colorModulator;
+    private final @Nullable GlUniformFloat4v spriteBounds;
+    private final @Nullable GlUniformFloat eyeAltitude;
+    private final @Nullable GlUniformFloat screenBrightness;
+    private final @Nullable GlUniformFloat wetness;
+    private final @Nullable GlUniformFloat playerMood;
+    private final @Nullable GlUniformFloat fogStart;
+    private final @Nullable GlUniformFloat fogEnd;
+    private final @Nullable GlUniformFloat fogDensity;
+    private final @Nullable GlUniformFloat sunAngle;
+    private final @Nullable GlUniformFloat shadowAngle;
     private final Vector3f scratchSunPosition = new Vector3f();
     private final Vector3f scratchMoonPosition = new Vector3f();
     private final Vector3f scratchShadowLightPosition = new Vector3f();
+    private final Vector3f scratchUpPosition = new Vector3f();
+    private final Matrix3f scratchNormalMatrix = new Matrix3f();
+    private final Vector4f scratchColorModulator = new Vector4f();
     private boolean entityStateInitialized;
     private int lastEntityId = Integer.MIN_VALUE;
     private float lastEntityRed = Float.NaN;
@@ -126,6 +187,14 @@ final class ActiniumPostShaderInterface {
         this.colortex5Sampler = context.bindUniformIfPresent("colortex5", GlUniformInt::new);
         this.colortex6Sampler = context.bindUniformIfPresent("colortex6", GlUniformInt::new);
         this.colortex7Sampler = context.bindUniformIfPresent("colortex7", GlUniformInt::new);
+        this.colortex8Sampler = context.bindUniformIfPresent("colortex8", GlUniformInt::new);
+        this.colortex9Sampler = context.bindUniformIfPresent("colortex9", GlUniformInt::new);
+        this.colortex10Sampler = context.bindUniformIfPresent("colortex10", GlUniformInt::new);
+        this.colortex11Sampler = context.bindUniformIfPresent("colortex11", GlUniformInt::new);
+        this.colortex12Sampler = context.bindUniformIfPresent("colortex12", GlUniformInt::new);
+        this.colortex13Sampler = context.bindUniformIfPresent("colortex13", GlUniformInt::new);
+        this.colortex14Sampler = context.bindUniformIfPresent("colortex14", GlUniformInt::new);
+        this.colortex15Sampler = context.bindUniformIfPresent("colortex15", GlUniformInt::new);
         this.gcolorSampler = context.bindUniformIfPresent("gcolor", GlUniformInt::new);
         this.gdepthSampler = context.bindUniformIfPresent("gdepth", GlUniformInt::new);
         this.gdepthtexSampler = context.bindUniformIfPresent("gdepthtex", GlUniformInt::new);
@@ -146,6 +215,14 @@ final class ActiniumPostShaderInterface {
         this.shadowcolor0Sampler = context.bindUniformIfPresent("shadowcolor0", GlUniformInt::new);
         this.shadowcolor1Sampler = context.bindUniformIfPresent("shadowcolor1", GlUniformInt::new);
         this.noisetexSampler = context.bindUniformIfPresent("noisetex", GlUniformInt::new);
+        this.colorimg0Image = context.bindUniformIfPresent("colorimg0", GlUniformInt::new);
+        this.colorimg1Image = context.bindUniformIfPresent("colorimg1", GlUniformInt::new);
+        this.colorimg2Image = context.bindUniformIfPresent("colorimg2", GlUniformInt::new);
+        this.colorimg3Image = context.bindUniformIfPresent("colorimg3", GlUniformInt::new);
+        this.colorimg4Image = context.bindUniformIfPresent("colorimg4", GlUniformInt::new);
+        this.colorimg5Image = context.bindUniformIfPresent("colorimg5", GlUniformInt::new);
+        this.shadowcolorimg0Image = context.bindUniformIfPresent("shadowcolorimg0", GlUniformInt::new);
+        this.shadowcolorimg1Image = context.bindUniformIfPresent("shadowcolorimg1", GlUniformInt::new);
 
         this.viewWidth = context.bindUniformIfPresent("viewWidth", GlUniformFloat::new);
         this.viewHeight = context.bindUniformIfPresent("viewHeight", GlUniformFloat::new);
@@ -168,15 +245,42 @@ final class ActiniumPostShaderInterface {
         this.centerDepthSmooth = context.bindUniformIfPresent("centerDepthSmooth", GlUniformFloat::new);
         this.ditherShift = context.bindUniformIfPresent("ditherShift", GlUniformFloat::new);
         this.softLod = context.bindUniformIfPresent("softLod", GlUniformFloat::new);
+        this.aspectRatio = context.bindUniformIfPresent("aspectRatio", GlUniformFloat::new);
+        this.eyeAltitude = context.bindUniformIfPresent("eyeAltitude", GlUniformFloat::new);
+        this.screenBrightness = context.bindUniformIfPresent("screenBrightness", GlUniformFloat::new);
+        this.wetness = context.bindUniformIfPresent("wetness", GlUniformFloat::new);
+        this.playerMood = context.bindUniformIfPresent("playerMood", GlUniformFloat::new);
+        this.fogStart = context.bindUniformIfPresent("fogStart", GlUniformFloat::new);
+        this.fogEnd = context.bindUniformIfPresent("fogEnd", GlUniformFloat::new);
+        this.fogDensity = context.bindUniformIfPresent("fogDensity", GlUniformFloat::new);
+        this.sunAngle = context.bindUniformIfPresent("sunAngle", GlUniformFloat::new);
+        this.shadowAngle = context.bindUniformIfPresent("shadowAngle", GlUniformFloat::new);
 
         this.frameCounter = context.bindUniformIfPresent("frameCounter", GlUniformInt::new);
         this.frameMod = context.bindUniformIfPresent("frameMod", GlUniformInt::new);
         this.frameMod8 = context.bindUniformIfPresent("framemod8", GlUniformFloat::new);
         this.worldTime = context.bindUniformIfPresent("worldTime", GlUniformInt::new);
+        this.worldDay = context.bindUniformIfPresent("worldDay", GlUniformInt::new);
         this.moonPhase = context.bindUniformIfPresent("moonPhase", GlUniformInt::new);
         this.isEyeInWater = context.bindUniformIfPresent("isEyeInWater", GlUniformInt::new);
+        this.hideGUI = context.bindUniformIfPresent("hideGUI", GlUniformInt::new);
         this.entityId = context.bindUniformIfPresent("entityId", GlUniformInt::new);
+        this.blockEntityId = context.bindUniformIfPresent("blockEntityId", GlUniformInt::new);
+        this.heldItemId = context.bindUniformIfPresent("heldItemId", GlUniformInt::new);
+        this.heldBlockLightValue = context.bindUniformIfPresent("heldBlockLightValue", GlUniformInt::new);
+        this.heldItemId2 = context.bindUniformIfPresent("heldItemId2", GlUniformInt::new);
+        this.heldBlockLightValue2 = context.bindUniformIfPresent("heldBlockLightValue2", GlUniformInt::new);
+        this.fogMode = context.bindUniformIfPresent("fogMode", GlUniformInt::new);
+        this.fogShape = context.bindUniformIfPresent("fogShape", GlUniformInt::new);
+        this.terrainIconSize = context.bindUniformIfPresent("terrainIconSize", GlUniformInt::new);
+        this.instanceId = context.bindUniformIfPresent("instanceId", GlUniformInt::new);
+        this.renderStage = context.bindUniformIfPresent("renderStage", GlUniformInt::new);
+        this.bossBattle = context.bindUniformIfPresent("bossBattle", GlUniformInt::new);
         this.eyeBrightnessSmooth = context.bindUniformIfPresent("eyeBrightnessSmooth", GlUniformInt2v::new);
+        this.eyeBrightness = context.bindUniformIfPresent("eyeBrightness", GlUniformInt2v::new);
+        this.atlasSize = context.bindUniformIfPresent("atlasSize", GlUniformInt2v::new);
+        this.terrainTextureSize = context.bindUniformIfPresent("terrainTextureSize", GlUniformInt2v::new);
+        this.blendFunc = context.bindUniformIfPresent("blendFunc", GlUniformInt4v::new);
 
         this.cameraPosition = context.bindUniformIfPresent("cameraPosition", GlUniformFloat3v::new);
         this.cameraPositionInt = context.bindUniformIfPresent("cameraPositionInt", GlUniformInt3v::new);
@@ -184,12 +288,15 @@ final class ActiniumPostShaderInterface {
         this.sunPosition = context.bindUniformIfPresent("sunPosition", GlUniformFloat3v::new);
         this.moonPosition = context.bindUniformIfPresent("moonPosition", GlUniformFloat3v::new);
         this.shadowLightPosition = context.bindUniformIfPresent("shadowLightPosition", GlUniformFloat3v::new);
+        this.upPosition = context.bindUniformIfPresent("upPosition", GlUniformFloat3v::new);
         this.fogColor = context.bindUniformIfPresent("fogColor", GlUniformFloat3v::new);
         this.skyColor = context.bindUniformIfPresent("skyColor", GlUniformFloat3v::new);
         this.previousCameraPosition = context.bindUniformIfPresent("previousCameraPosition", GlUniformFloat3v::new);
         this.previousCameraPositionInt = context.bindUniformIfPresent("previousCameraPositionInt", GlUniformInt3v::new);
         this.previousCameraPositionFract = context.bindUniformIfPresent("previousCameraPositionFract", GlUniformFloat3v::new);
         this.entityColor = context.bindUniformIfPresent("entityColor", GlUniformFloat4v::new);
+        this.colorModulator = context.bindUniformIfPresent("colorModulator", GlUniformFloat4v::new);
+        this.spriteBounds = context.bindUniformIfPresent("spriteBounds", GlUniformFloat4v::new);
 
         this.gbufferModelView = context.bindUniformIfPresent("gbufferModelView", GlUniformMatrix4f::new);
         this.gbufferModelViewInverse = context.bindUniformIfPresent("gbufferModelViewInverse", GlUniformMatrix4f::new);
@@ -201,6 +308,12 @@ final class ActiniumPostShaderInterface {
         this.shadowModelViewInverse = context.bindUniformIfPresent("shadowModelViewInverse", GlUniformMatrix4f::new);
         this.shadowProjection = context.bindUniformIfPresent("shadowProjection", GlUniformMatrix4f::new);
         this.shadowProjectionInverse = context.bindUniformIfPresent("shadowProjectionInverse", GlUniformMatrix4f::new);
+        this.modelViewMatrix = context.bindUniformIfPresent("modelViewMatrix", GlUniformMatrix4f::new);
+        this.modelViewMatrixInverse = context.bindUniformIfPresent("modelViewMatrixInverse", GlUniformMatrix4f::new);
+        this.projectionMatrix = context.bindUniformIfPresent("projectionMatrix", GlUniformMatrix4f::new);
+        this.projectionMatrixInverse = context.bindUniformIfPresent("projectionMatrixInverse", GlUniformMatrix4f::new);
+        this.textureMatrix = context.bindUniformIfPresent("textureMatrix", GlUniformMatrix4f::new);
+        this.normalMatrix = context.bindUniformIfPresent("normalMatrix", GlUniformMatrix3f::new);
     }
 
     public void setupState(ActiniumRenderPipeline pipeline, ActiniumPostTargets targets, float partialTicks, float frameDeltaSeconds, float frameTimeCounterSeconds, int frameIndex) {
@@ -212,6 +325,14 @@ final class ActiniumPostShaderInterface {
         bindSampler(this.colortex5Sampler, ActiniumRenderPipeline.POST_GAUX2_UNIT);
         bindSampler(this.colortex6Sampler, ActiniumRenderPipeline.POST_GAUX3_UNIT);
         bindSampler(this.colortex7Sampler, ActiniumRenderPipeline.POST_GAUX4_UNIT);
+        bindSampler(this.colortex8Sampler, ActiniumRenderPipeline.POST_COLORTEX8_UNIT);
+        bindSampler(this.colortex9Sampler, ActiniumRenderPipeline.POST_COLORTEX9_UNIT);
+        bindSampler(this.colortex10Sampler, ActiniumRenderPipeline.POST_COLORTEX10_UNIT);
+        bindSampler(this.colortex11Sampler, ActiniumRenderPipeline.POST_COLORTEX11_UNIT);
+        bindSampler(this.colortex12Sampler, ActiniumRenderPipeline.POST_COLORTEX12_UNIT);
+        bindSampler(this.colortex13Sampler, ActiniumRenderPipeline.POST_COLORTEX13_UNIT);
+        bindSampler(this.colortex14Sampler, ActiniumRenderPipeline.POST_COLORTEX14_UNIT);
+        bindSampler(this.colortex15Sampler, ActiniumRenderPipeline.POST_COLORTEX15_UNIT);
         bindSampler(this.gcolorSampler, 0);
         bindSampler(this.gdepthSampler, 1);
         bindSampler(this.gdepthtexSampler, ActiniumRenderPipeline.POST_DEPTHTEX0_UNIT);
@@ -232,6 +353,14 @@ final class ActiniumPostShaderInterface {
         bindSampler(this.shadowcolor0Sampler, ActiniumRenderPipeline.POST_SHADOW_COLOR0_UNIT);
         bindSampler(this.shadowcolor1Sampler, ActiniumRenderPipeline.POST_SHADOW_COLOR1_UNIT);
         bindSampler(this.noisetexSampler, ActiniumRenderPipeline.POST_NOISETEX_UNIT);
+        bindSampler(this.colorimg0Image, 0);
+        bindSampler(this.colorimg1Image, 1);
+        bindSampler(this.colorimg2Image, 2);
+        bindSampler(this.colorimg3Image, 3);
+        bindSampler(this.colorimg4Image, 4);
+        bindSampler(this.colorimg5Image, 5);
+        bindSampler(this.shadowcolorimg0Image, 6);
+        bindSampler(this.shadowcolorimg1Image, 7);
 
         int width = pipeline.getWidth();
         int height = pipeline.getHeight();
@@ -240,6 +369,7 @@ final class ActiniumPostShaderInterface {
         setFloat(this.viewHeight, height);
         setFloat(this.pixelSizeX, 1.0f / Math.max(1, width));
         setFloat(this.pixelSizeY, 1.0f / Math.max(1, height));
+        setFloat(this.aspectRatio, width / (float) Math.max(1, height));
         setFloat(this.aspectRatioInverse, height / (float) Math.max(1, width));
         setFloat(this.frameTime, frameDeltaSeconds);
         setFloat(this.frameTimeCounter, frameTimeCounterSeconds);
@@ -249,6 +379,12 @@ final class ActiniumPostShaderInterface {
         setFloat(this.centerDepthSmooth, pipeline.getCenterDepthSmooth());
         setFloat(this.ditherShift, pipeline.getDitherShift());
         setFloat(this.softLod, pipeline.getSoftLod());
+        setFloat(this.screenBrightness, ActiniumOptiFineUniforms.getScreenBrightness());
+        setFloat(this.fogStart, ActiniumOptiFineUniforms.getFogStart());
+        setFloat(this.fogEnd, ActiniumOptiFineUniforms.getFogEnd());
+        setFloat(this.fogDensity, ActiniumOptiFineUniforms.getFogDensity());
+        setFloat(this.sunAngle, ActiniumOptiFineUniforms.getSunAngle(Minecraft.getMinecraft().world, partialTicks));
+        setFloat(this.shadowAngle, ActiniumOptiFineUniforms.getShadowAngle(Minecraft.getMinecraft().world, partialTicks));
 
         if (this.frameCounter != null) {
             this.frameCounter.setInt(frameIndex);
@@ -259,6 +395,60 @@ final class ActiniumPostShaderInterface {
         }
 
         setFloat(this.frameMod8, pipeline.getFrameMod8());
+
+        if (this.fogMode != null) {
+            this.fogMode.setInt(ActiniumOptiFineUniforms.getFogMode());
+        }
+
+        if (this.fogShape != null) {
+            this.fogShape.setInt(ActiniumOptiFineUniforms.getFogShape());
+        }
+
+        if (this.atlasSize != null) {
+            this.atlasSize.set(ActiniumOptiFineUniforms.getAtlasWidth(), ActiniumOptiFineUniforms.getAtlasHeight());
+        }
+
+        if (this.terrainTextureSize != null) {
+            this.terrainTextureSize.set(ActiniumOptiFineUniforms.getAtlasWidth(), ActiniumOptiFineUniforms.getAtlasHeight());
+        }
+
+        if (this.terrainIconSize != null) {
+            this.terrainIconSize.setInt(ActiniumOptiFineUniforms.getTerrainIconSize());
+        }
+
+        if (this.blendFunc != null) {
+            this.blendFunc.set(
+                    ActiniumOptiFineUniforms.getBlendSrcRgb(),
+                    ActiniumOptiFineUniforms.getBlendDstRgb(),
+                    ActiniumOptiFineUniforms.getBlendSrcAlpha(),
+                    ActiniumOptiFineUniforms.getBlendDstAlpha()
+            );
+        }
+
+        if (this.instanceId != null) {
+            this.instanceId.setInt(0);
+        }
+
+        if (this.renderStage != null) {
+            this.renderStage.setInt(pipeline.getCurrentStage().ordinal());
+        }
+
+        if (this.bossBattle != null) {
+            this.bossBattle.setInt(0);
+        }
+
+        if (this.hideGUI != null) {
+            this.hideGUI.setInt(ActiniumOptiFineUniforms.isHideGui());
+        }
+
+        if (this.colorModulator != null) {
+            this.scratchColorModulator.set(ActiniumOptiFineUniforms.getCurrentColorModulator());
+            this.colorModulator.set(this.scratchColorModulator.x, this.scratchColorModulator.y, this.scratchColorModulator.z, this.scratchColorModulator.w);
+        }
+
+        if (this.spriteBounds != null) {
+            this.spriteBounds.set(0.0f, 0.0f, 1.0f, 1.0f);
+        }
 
         this.updateEntityState();
 
@@ -323,18 +513,60 @@ final class ActiniumPostShaderInterface {
                 this.eyeBrightnessSmooth.set(brightness & 0xFFFF, brightness >>> 16);
             }
 
+            if (this.eyeBrightness != null) {
+                int brightness = entity.getBrightnessForRender();
+                this.eyeBrightness.set(brightness & 0xFFFF, brightness >>> 16);
+            }
+
+            setFloat(this.eyeAltitude, ActiniumOptiFineUniforms.getEyeAltitude(entity));
+            setFloat(this.playerMood, ActiniumOptiFineUniforms.getPlayerMood(entity));
             setFloat(this.blindness, getPotionStrength(entity));
             setFloat(this.nightVision, getNightVisionStrength(entity));
 
-            if (this.skyColor != null && minecraft.world != null) {
-                Vec3d currentSkyColor = minecraft.world.getSkyColor(entity, partialTicks);
-                this.skyColor.set((float) currentSkyColor.x, (float) currentSkyColor.y, (float) currentSkyColor.z);
+            if (this.heldItemId != null) {
+                this.heldItemId.setInt(ActiniumOptiFineUniforms.getHeldItemId(entity, false));
+            }
+
+            if (this.heldBlockLightValue != null) {
+                this.heldBlockLightValue.setInt(ActiniumOptiFineUniforms.getHeldBlockLightValue(entity, false));
+            }
+
+            if (this.heldItemId2 != null) {
+                this.heldItemId2.setInt(ActiniumOptiFineUniforms.getHeldItemId(entity, true));
+            }
+
+            if (this.heldBlockLightValue2 != null) {
+                this.heldBlockLightValue2.setInt(ActiniumOptiFineUniforms.getHeldBlockLightValue(entity, true));
+            }
+
+            if (this.skyColor != null) {
+                if (pipeline.hasCapturedSkyColor()) {
+                    Vector3f capturedSkyColor = pipeline.getCapturedSkyColor();
+                    this.skyColor.set(capturedSkyColor.x, capturedSkyColor.y, capturedSkyColor.z);
+                } else if (minecraft.world != null) {
+                    Vec3d currentSkyColor = minecraft.world.getSkyColor(entity, partialTicks);
+                    this.skyColor.set((float) currentSkyColor.x, (float) currentSkyColor.y, (float) currentSkyColor.z);
+                }
             }
         }
 
         float[] fog = pipeline.getFogColor();
         if (this.fogColor != null) {
             this.fogColor.set(fog[0], fog[1], fog[2]);
+        }
+
+        if (ActiniumShaderPackManager.isDebugEnabled() && pipeline.getFrameCounter() % 60 == 0) {
+            Vector3f currentSky = pipeline.getCapturedSkyColor();
+            ActiniumShaders.logger().info(
+                    "[DEBUG] Post uniforms stage={} sky=[{}, {}, {}] fog=[{}, {}, {}]",
+                    pipeline.getCurrentStage(),
+                    currentSky.x,
+                    currentSky.y,
+                    currentSky.z,
+                    fog[0],
+                    fog[1],
+                    fog[2]
+            );
         }
 
         if (minecraft.world != null) {
@@ -364,8 +596,38 @@ final class ActiniumPostShaderInterface {
                 );
             }
 
+            if (this.upPosition != null) {
+                pipeline.fillShaderCoreUpPosition(this.scratchUpPosition);
+                this.upPosition.set(this.scratchUpPosition.x, this.scratchUpPosition.y, this.scratchUpPosition.z);
+            }
+
+            if (ActiniumShaderPackManager.isDebugEnabled()
+                    && pipeline.getFrameCounter() % 60 == 0) {
+                ActiniumShaders.logger().info(
+                        "[DEBUG] Post sky uniforms stage={} upUniformPresent={} computedUp=[{}, {}, {}] sun=[{}, {}, {}] moon=[{}, {}, {}] shadow=[{}, {}, {}]",
+                        pipeline.getCurrentStage(),
+                        this.upPosition != null,
+                        this.scratchUpPosition.x,
+                        this.scratchUpPosition.y,
+                        this.scratchUpPosition.z,
+                        this.scratchSunPosition.x,
+                        this.scratchSunPosition.y,
+                        this.scratchSunPosition.z,
+                        this.scratchMoonPosition.x,
+                        this.scratchMoonPosition.y,
+                        this.scratchMoonPosition.z,
+                        this.scratchShadowLightPosition.x,
+                        this.scratchShadowLightPosition.y,
+                        this.scratchShadowLightPosition.z
+                );
+            }
+
             if (this.worldTime != null) {
                 this.worldTime.setInt(currentWorldTime);
+            }
+
+            if (this.worldDay != null) {
+                this.worldDay.setInt(ActiniumOptiFineUniforms.getWorldDay(minecraft.world));
             }
 
             if (this.moonPhase != null) {
@@ -373,11 +635,16 @@ final class ActiniumPostShaderInterface {
             }
 
             setFloat(this.rainStrength, minecraft.world.getRainStrength(partialTicks));
+            setFloat(this.wetness, ActiniumOptiFineUniforms.getWetness(minecraft.world));
             setFloat(this.dayNightMix, ActiniumCommonUniforms.getDayNightMix(currentWorldTime));
             setFloat(this.dayMoment, currentDayMoment);
             setFloat(this.dayMixer, ActiniumCommonUniforms.getDayMixer(currentDayMoment));
             setFloat(this.nightMixer, ActiniumCommonUniforms.getNightMixer(currentDayMoment));
             setFloat(this.volumetricDayMixer, ActiniumCommonUniforms.getVolumetricDayMixer(currentDayMoment));
+        }
+
+        if (this.blockEntityId != null) {
+            this.blockEntityId.setInt(ActiniumOptiFineUniforms.getBlockEntityId());
         }
 
         setMatrix(this.gbufferModelView, pipeline.getGbufferModelViewMatrix());
@@ -390,6 +657,19 @@ final class ActiniumPostShaderInterface {
         setMatrix(this.shadowModelViewInverse, pipeline.getShadowModelViewInverseMatrix());
         setMatrix(this.shadowProjection, pipeline.getShadowProjectionMatrix());
         setMatrix(this.shadowProjectionInverse, pipeline.getShadowProjectionInverseMatrix());
+        setMatrix(this.modelViewMatrix, pipeline.getGbufferModelViewMatrix());
+        setMatrix(this.modelViewMatrixInverse, pipeline.getGbufferModelViewInverseMatrix());
+        setMatrix(this.projectionMatrix, pipeline.getGbufferProjectionMatrix());
+        setMatrix(this.projectionMatrixInverse, pipeline.getGbufferProjectionInverseMatrix());
+
+        if (this.normalMatrix != null) {
+            this.scratchNormalMatrix.set(pipeline.getGbufferModelViewInverseMatrix()).transpose();
+            this.normalMatrix.set(this.scratchNormalMatrix);
+        }
+
+        if (this.textureMatrix != null) {
+            this.textureMatrix.set(new org.joml.Matrix4f());
+        }
     }
 
     private static float getPotionStrength(Entity entity) {
@@ -467,5 +747,25 @@ final class ActiniumPostShaderInterface {
         if (uniform != null) {
             uniform.set(matrix);
         }
+    }
+
+    public boolean hasColorImage(int index) {
+        return switch (index) {
+            case 0 -> this.colorimg0Image != null;
+            case 1 -> this.colorimg1Image != null;
+            case 2 -> this.colorimg2Image != null;
+            case 3 -> this.colorimg3Image != null;
+            case 4 -> this.colorimg4Image != null;
+            case 5 -> this.colorimg5Image != null;
+            default -> false;
+        };
+    }
+
+    public boolean hasShadowColorImage(int index) {
+        return switch (index) {
+            case 0 -> this.shadowcolorimg0Image != null;
+            case 1 -> this.shadowcolorimg1Image != null;
+            default -> false;
+        };
     }
 }

@@ -10,6 +10,7 @@ import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.renderer.BufferBuilder;
+import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.GLAllocation;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
@@ -56,6 +57,9 @@ import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
+import org.taumc.celeritas.lwjgl.GL42;
+import org.taumc.celeritas.mixin.core.terrain.EntityRendererAccessor;
+import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
@@ -82,6 +86,7 @@ public final class ActiniumRenderPipeline {
     public static final int WORLD_GAUX4_UNIT = 7;
     public static final int TERRAIN_GAUX1_UNIT = 4;
     public static final int TERRAIN_GAUX2_UNIT = 5;
+    public static final int TERRAIN_GAUX3_UNIT = 6;
     public static final int TERRAIN_DEPTHTEX0_UNIT = 8;
     public static final int TERRAIN_DEPTHTEX1_UNIT = 9;
     public static final int TERRAIN_NOISETEX_UNIT = 10;
@@ -100,6 +105,14 @@ public final class ActiniumRenderPipeline {
     public static final int POST_SHADOW_COLOR0_UNIT = 13;
     public static final int POST_SHADOW_COLOR1_UNIT = 14;
     public static final int POST_NOISETEX_UNIT = 15;
+    public static final int POST_COLORTEX8_UNIT = 16;
+    public static final int POST_COLORTEX9_UNIT = 17;
+    public static final int POST_COLORTEX10_UNIT = 18;
+    public static final int POST_COLORTEX11_UNIT = 19;
+    public static final int POST_COLORTEX12_UNIT = 20;
+    public static final int POST_COLORTEX13_UNIT = 21;
+    public static final int POST_COLORTEX14_UNIT = 22;
+    public static final int POST_COLORTEX15_UNIT = 23;
     private static final int GL_STATE_MANAGER_TEXTURE_UNITS = 8;
     private static final float TAA_JITTER_SCALE = 0.35f;
     private static final float SKY_HORIZON_TOP = 16.0f;
@@ -194,8 +207,8 @@ public final class ActiniumRenderPipeline {
             "gaux3",
             "gaux4"
     };
-    private static final int TRACKED_TEXTURE_UNITS = 16;
-    private static final boolean ENABLE_PRE_SCENE_PIPELINES = false;
+    private static final int TRACKED_TEXTURE_UNITS = 24;
+    private static final boolean ENABLE_PRE_SCENE_PIPELINES = true;
     private static final boolean ENABLE_PRE_SCENE_SHADER_EXECUTION = false;
     private static final boolean ENABLE_PREPARE_SHADER_EXECUTION = true;
     private static final boolean ENABLE_DEFERRED_SHADER_EXECUTION = true;
@@ -228,12 +241,14 @@ public final class ActiniumRenderPipeline {
     private boolean shadowEntityProgramResolved;
     private boolean loggedPostProgramUse;
     private boolean loggedFinalProgramUse;
+    private boolean loggedPostImageBindingDisabled;
     @Getter
     private int frameCounter;
     private int shadowVisibilityFrameCounter;
     private long lastFrameNanos;
     @Getter
     private float frameTimeCounterSeconds;
+    @Getter
     private float currentFrameDeltaSeconds;
     @Getter
     private int width;
@@ -271,6 +286,7 @@ public final class ActiniumRenderPipeline {
     private final Vector3f scratchVector = new Vector3f();
     private final Vector3f scratchTaaOffset = new Vector3f();
     private final Vector3f managedSkyColor = new Vector3f(1.0f, 1.0f, 1.0f);
+    private final Vector3f capturedSkyColor = new Vector3f(1.0f, 1.0f, 1.0f);
     private final Vector3f managedSkyUpPosition = new Vector3f(0.0f, 100.0f, 0.0f);
     private final Vector3f managedSkySunPosition = new Vector3f(0.0f, 100.0f, 0.0f);
     private final Vector3f managedSkyMoonPosition = new Vector3f(0.0f, -100.0f, 0.0f);
@@ -282,8 +298,9 @@ public final class ActiniumRenderPipeline {
     private final Vector3d previousWorldCameraPosition = new Vector3d();
     private final Vector3d servedPreviousWorldCameraPosition = new Vector3d();
     private final Vector3d scratchShadowViewportPosition = new Vector3d();
-    @Getter
     private final float[] fogColor = new float[]{1.0f, 1.0f, 1.0f, 1.0f};
+    private final float[] clearColor = new float[]{1.0f, 1.0f, 1.0f, 1.0f};
+    private boolean fogColorInitialized;
 
     private @Nullable GlVertexArray fullscreenVertexArray;
     private int fullscreenQuadBuffer;
@@ -330,8 +347,11 @@ public final class ActiniumRenderPipeline {
     private int previousUniformFrame = Integer.MIN_VALUE;
     private boolean previousUniformInitialized;
     private boolean managedSkyCelestialStateValid;
+    private boolean fogColorCapturedFromGlBufferThisFrame;
+    private boolean skyColorCapturedThisFrame;
     @Getter
     private float centerDepthSmooth;
+    private final int[] boundPostImageUnits = new int[8];
     private int scratchCopyReadFramebuffer;
     private int scratchCopyDrawFramebuffer;
     private final FloatBuffer scratchCapturedMatrixBuffer = GLAllocation.createDirectFloatBuffer(16);
@@ -372,20 +392,27 @@ public final class ActiniumRenderPipeline {
         this.prepareProgramsExecutedThisFrame = false;
         this.deferredProgramsExecutedThisFrame = false;
         this.preTranslucentDepthCapturedThisFrame = false;
+        this.fogColorCapturedFromGlBufferThisFrame = false;
+        this.skyColorCapturedThisFrame = false;
+        this.fogColorInitialized = false;
         this.currentStage = ActiniumRenderStage.WORLD;
+        this.debugLogFogState("beginWorld", "reset");
     }
 
     public void endWorld() {
+        this.debugLogFogState("endWorld", "before-clear-stage");
         this.currentStage = ActiniumRenderStage.NONE;
     }
 
     public void beginSky() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.SKY;
+        this.debugLogFogState("beginSky", "stage-switch");
     }
 
     public void endSky() {
         if (this.currentStage == ActiniumRenderStage.SKY || this.currentStage == ActiniumRenderStage.SKY_TEXTURED) {
+            this.debugLogFogState("endSky", "stage-switch");
             this.currentStage = ActiniumRenderStage.WORLD;
         }
     }
@@ -393,14 +420,15 @@ public final class ActiniumRenderPipeline {
     public void beginSkyTextured() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.SKY_TEXTURED;
+        this.debugLogFogState("beginSkyTextured", "stage-switch");
     }
 
     public void beginManagedSky(float partialTicks) {
         this.syncReloadState();
-        this.captureManagedSkyColor(partialTicks);
         this.captureManagedSkyUpPosition();
         this.managedSkyCelestialStateValid = false;
         this.currentStage = ActiniumRenderStage.SKY_TEXTURED;
+        this.debugLogFogState("beginManagedSky", "stage-switch");
         this.bindWorldStageProgram(partialTicks);
     }
 
@@ -437,7 +465,6 @@ public final class ActiniumRenderPipeline {
     }
 
     public void captureManagedSkyPreCelestialState(float partialTicks) {
-        this.captureManagedSkyColor(partialTicks);
         this.captureManagedSkyUpPosition();
     }
 
@@ -483,10 +510,12 @@ public final class ActiniumRenderPipeline {
     public void beginWeather() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.WEATHER;
+        this.debugLogFogState("beginWeather", "stage-switch");
     }
 
     public void endWeather() {
         if (this.currentStage == ActiniumRenderStage.WEATHER) {
+            this.debugLogFogState("endWeather", "stage-switch");
             this.currentStage = ActiniumRenderStage.WORLD;
         }
     }
@@ -494,10 +523,12 @@ public final class ActiniumRenderPipeline {
     public void beginPost() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.POST;
+        this.debugLogFogState("beginPost", "stage-switch");
     }
 
     public void endPost() {
         if (this.currentStage == ActiniumRenderStage.POST) {
+            this.debugLogFogState("endPost", "stage-switch");
             this.currentStage = ActiniumRenderStage.NONE;
         }
     }
@@ -508,7 +539,17 @@ public final class ActiniumRenderPipeline {
         captureMatrix(GL11.GL_PROJECTION_MATRIX, this.gbufferProjectionMatrix);
         this.gbufferModelViewInverseMatrix.set(this.gbufferModelViewMatrix).invert();
         this.gbufferProjectionInverseMatrix.set(this.gbufferProjectionMatrix).invert();
-        System.arraycopy(ChunkShaderFogComponent.FOG_SERVICE.getFogColor(), 0, this.fogColor, 0, this.fogColor.length);
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog(
+                    "Captured world state with preserved fog color [{}, {}, {}] from {} source",
+                    this.fogColor[0],
+                    this.fogColor[1],
+                    this.fogColor[2],
+                    this.fogColorCapturedFromGlBufferThisFrame ? "GL" : "fallback"
+            );
+        }
+        this.debugLogFogState("captureWorldState", "matrix-capture");
     }
 
     private void captureInterpolatedWorldCameraPosition(float partialTicks) {
@@ -610,10 +651,9 @@ public final class ActiniumRenderPipeline {
         this.ensureRuntimeResources();
         ShadowPassGlState previousState = ShadowPassGlState.capture();
         this.beginPost();
+        this.debugLogFogState("renderPostPipeline", "entry");
 
         try {
-            this.executePreSceneProgramsInPostPhase(mainFramebuffer, partialTicks);
-
             if (this.postTargets != null) {
                 this.postTargets.ensureSize(this.width, this.height);
                 this.postTargets.copySceneTextures(mainFramebuffer, this.getWorldGaux4TextureForPost());
@@ -651,9 +691,16 @@ public final class ActiniumRenderPipeline {
         }
 
         if (this.prepareProgramsExecutedThisFrame) {
+            if (this.shouldEmitVerboseDebugFrame()) {
+                this.debugLog("Skipping prepare pre-scene stage because it already ran this frame");
+            }
             return;
         }
 
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Running prepare pre-scene stage before terrain");
+        }
+        this.debugLogFogState("renderPreparePipeline", "entry");
         this.renderPreparePrograms(partialTicks);
         this.prepareProgramsExecutedThisFrame = true;
     }
@@ -664,25 +711,33 @@ public final class ActiniumRenderPipeline {
         }
 
         if (this.deferredProgramsExecutedThisFrame) {
+            if (this.shouldEmitVerboseDebugFrame()) {
+                this.debugLog("Skipping deferred pre-scene stage because it already ran this frame");
+            }
             return;
         }
 
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Running deferred pre-scene stage before water");
+        }
+        this.debugLogFogState("renderDeferredPipeline", "entry");
         this.renderDeferredPrograms(partialTicks);
         this.deferredProgramsExecutedThisFrame = true;
     }
 
     private void renderPreparePrograms(float partialTicks) {
         this.renderPreCompositePipeline(partialTicks, this.getPreparePrograms(), "prepare", this::preparePreSceneTargetsForPrepare);
+        this.syncWorldStageGaux4FromPreSceneTargets("prepare");
     }
 
     private void renderDeferredPrograms(float partialTicks) {
-        boolean prepareExecuted = this.prepareProgramsExecutedThisFrame;
         this.renderPreCompositePipeline(
                 partialTicks,
                 this.getDeferredPrograms(),
                 "deferred",
-                mainFramebuffer -> this.preparePreSceneTargetsForDeferred(mainFramebuffer, prepareExecuted)
+                mainFramebuffer -> this.preparePreSceneTargetsForDeferred(mainFramebuffer, false)
         );
+        this.syncWorldStageGaux4FromPreSceneTargets("deferred");
     }
 
     private void renderPreCompositePipeline(float partialTicks,
@@ -759,6 +814,7 @@ public final class ActiniumRenderPipeline {
     }
 
     private void restoreMainFramebufferState(Framebuffer mainFramebuffer) {
+        debugResetGlErrors("restoreMainFramebufferState.entry");
         if (mainFramebuffer != null) {
             mainFramebuffer.bindFramebuffer(true);
             GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
@@ -782,10 +838,13 @@ public final class ActiniumRenderPipeline {
         GlStateManager.enableBlend();
         GlStateManager.enableDepth();
         GlStateManager.depthMask(true);
+        debugCheckGlErrors("restoreMainFramebufferState.exit");
     }
 
     private void restoreScreenRenderState(@Nullable Framebuffer framebuffer, int width, int height) {
+        debugResetGlErrors("restoreScreenRenderState.entry");
         this.restoreMainFramebufferState(framebuffer);
+        debugCheckGlErrors("restoreScreenRenderState.afterMainFramebuffer");
         GL11.glViewport(0, 0, Math.max(1, width), Math.max(1, height));
         GL30.glBindVertexArray(0);
         GL11.glColorMask(true, true, true, true);
@@ -804,6 +863,7 @@ public final class ActiniumRenderPipeline {
                 GlStateManager.DestFactor.ZERO
         );
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        debugCheckGlErrors("restoreScreenRenderState.exit");
     }
 
     public boolean hasShadowProgram() {
@@ -873,7 +933,11 @@ public final class ActiniumRenderPipeline {
     }
 
     public boolean shouldSuppressVanillaSkyHorizonGeometry() {
-        return false;
+        this.syncReloadState();
+        return ActiniumShaderPackManager.areShadersEnabled()
+                && this.shouldUseExternalWorldPrograms()
+                && ENABLE_EXTERNAL_SKY_BASIC_STAGE
+                && this.skyProgramAvailable;
     }
 
     public int getCloudRenderModeOverride(int currentCloudMode, int renderDistanceChunks) {
@@ -900,67 +964,65 @@ public final class ActiniumRenderPipeline {
         }
 
         Minecraft minecraft = Minecraft.getMinecraft();
-        float farDistance = Math.max(16.0f, minecraft.gameSettings.renderDistanceChunks * 16.0f);
+        float farDistance = minecraft.gameSettings.renderDistanceChunks * 16.0f;
         double xzq = farDistance * 0.9238D;
         double xzp = farDistance * 0.3826D;
         double xzn = -xzp;
         double xzm = -xzq;
-        double top = SKY_HORIZON_TOP;
+        double top = 16.0D;
         double bot = -this.worldCameraPosition.y;
 
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder bufferBuilder = tessellator.getBuffer();
-
-        GlStateManager.color(this.managedSkyColor.x, this.managedSkyColor.y, this.managedSkyColor.z, 1.0f);
+        float[] fogColor = this.getFogColor();
+        GlStateManager.color(fogColor[0], fogColor[1], fogColor[2], 1.0f);
         bufferBuilder.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION);
-
-        bufferBuilder.pos(xzn, bot, xzm).endVertex();
-        bufferBuilder.pos(xzn, top, xzm).endVertex();
-        bufferBuilder.pos(xzm, top, xzn).endVertex();
-        bufferBuilder.pos(xzm, bot, xzn).endVertex();
-
-        bufferBuilder.pos(xzm, bot, xzn).endVertex();
-        bufferBuilder.pos(xzm, top, xzn).endVertex();
-        bufferBuilder.pos(xzm, top, xzp).endVertex();
-        bufferBuilder.pos(xzm, bot, xzp).endVertex();
-
-        bufferBuilder.pos(xzm, bot, xzp).endVertex();
-        bufferBuilder.pos(xzm, top, xzp).endVertex();
-        bufferBuilder.pos(xzn, top, xzp).endVertex();
-        bufferBuilder.pos(xzn, bot, xzp).endVertex();
-
-        bufferBuilder.pos(xzn, bot, xzp).endVertex();
-        bufferBuilder.pos(xzn, top, xzp).endVertex();
-        bufferBuilder.pos(xzp, top, xzq).endVertex();
-        bufferBuilder.pos(xzp, bot, xzq).endVertex();
-
-        bufferBuilder.pos(xzp, bot, xzq).endVertex();
-        bufferBuilder.pos(xzp, top, xzq).endVertex();
-        bufferBuilder.pos(xzq, top, xzp).endVertex();
-        bufferBuilder.pos(xzq, bot, xzp).endVertex();
-
-        bufferBuilder.pos(xzq, bot, xzp).endVertex();
-        bufferBuilder.pos(xzq, top, xzp).endVertex();
-        bufferBuilder.pos(xzq, top, xzn).endVertex();
-        bufferBuilder.pos(xzq, bot, xzn).endVertex();
-
-        bufferBuilder.pos(xzq, bot, xzn).endVertex();
-        bufferBuilder.pos(xzq, top, xzn).endVertex();
-        bufferBuilder.pos(xzp, top, xzm).endVertex();
-        bufferBuilder.pos(xzp, bot, xzm).endVertex();
-
-        bufferBuilder.pos(xzp, bot, xzm).endVertex();
-        bufferBuilder.pos(xzp, top, xzm).endVertex();
-        bufferBuilder.pos(xzn, top, xzm).endVertex();
-        bufferBuilder.pos(xzn, bot, xzm).endVertex();
+        buildHorizonQuad(bufferBuilder, xzn, xzm, xzm, xzn, bot, top);
+        buildHorizonQuad(bufferBuilder, xzm, xzn, xzm, xzp, bot, top);
+        buildHorizonQuad(bufferBuilder, xzm, xzp, xzn, xzq, bot, top);
+        buildHorizonQuad(bufferBuilder, xzn, xzq, xzp, xzq, bot, top);
+        buildHorizonQuad(bufferBuilder, xzp, xzq, xzq, xzp, bot, top);
+        buildHorizonQuad(bufferBuilder, xzq, xzp, xzq, xzn, bot, top);
+        buildHorizonQuad(bufferBuilder, xzq, xzn, xzp, xzm, bot, top);
+        buildHorizonQuad(bufferBuilder, xzp, xzm, xzn, xzm, bot, top);
+        buildHorizonBottom(bufferBuilder, xzm, xzm, xzm, xzq, xzq, xzq, xzq, xzm, bot);
 
         tessellator.draw();
 
         GlStateManager.color(this.managedSkyColor.x, this.managedSkyColor.y, this.managedSkyColor.z, 1.0f);
 
         if (this.shouldEmitVerboseDebugFrame()) {
-            this.debugLog("Rendered shader-core sky horizon walls with farDistance {} and cameraY {}", farDistance, this.worldCameraPosition.y);
+            this.debugLog(
+                    "Rendered shader-core sky horizon with farDistance {} and cameraY {}",
+                    farDistance,
+                    this.worldCameraPosition.y
+            );
         }
+    }
+
+    private static void buildHorizonQuad(BufferBuilder bufferBuilder, double x1, double z1, double x2, double z2, double bot, double top) {
+        bufferBuilder.pos(x1, bot, z1).endVertex();
+        bufferBuilder.pos(x1, top, z1).endVertex();
+        bufferBuilder.pos(x2, top, z2).endVertex();
+        bufferBuilder.pos(x2, bot, z2).endVertex();
+    }
+
+    private static void buildHorizonBottom(
+            BufferBuilder bufferBuilder,
+            double x1,
+            double z1,
+            double x2,
+            double z2,
+            double x3,
+            double z3,
+            double x4,
+            double z4,
+            double bot
+    ) {
+        bufferBuilder.pos(x1, bot, z1).endVertex();
+        bufferBuilder.pos(x2, bot, z2).endVertex();
+        bufferBuilder.pos(x3, bot, z3).endVertex();
+        bufferBuilder.pos(x4, bot, z4).endVertex();
     }
 
     public void debugLogSkySegment(String segment) {
@@ -977,6 +1039,34 @@ public final class ActiniumRenderPipeline {
                 this.shouldApplySunPathRotationToVanillaSky(),
                 this.skyProgramAvailable,
                 this.postProgramAvailable
+        );
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Entity entity = minecraft.getRenderViewEntity();
+        Vec3d worldSkyColor = minecraft.world != null && entity != null
+                ? minecraft.world.getSkyColor(entity, minecraft.getRenderPartialTicks())
+                : null;
+        Vec3d worldFogColor = minecraft.world != null
+                ? minecraft.world.getFogColor(minecraft.getRenderPartialTicks())
+                : null;
+        float[] fogColor = this.getFogColor();
+        this.debugLog(
+                "Sky colors '{}' activeProgram={} capturedSky=[{}, {}, {}] managedSky=[{}, {}, {}] fog=[{}, {}, {}] clear=[{}, {}, {}] worldSky={} worldFog={}",
+                segment,
+                this.getActiveWorldProgramName(),
+                this.capturedSkyColor.x,
+                this.capturedSkyColor.y,
+                this.capturedSkyColor.z,
+                this.managedSkyColor.x,
+                this.managedSkyColor.y,
+                this.managedSkyColor.z,
+                fogColor[0],
+                fogColor[1],
+                fogColor[2],
+                this.clearColor[0],
+                this.clearColor[1],
+                this.clearColor[2],
+                worldSkyColor,
+                worldFogColor
         );
     }
 
@@ -1026,6 +1116,10 @@ public final class ActiniumRenderPipeline {
         return this.skyStageModelViewMatrix;
     }
 
+    public Matrix4fc getSkyStageProjectionMatrix() {
+        return this.skyStageProjectionMatrix;
+    }
+
     public Matrix4fc getSkyStageProjectionInverseMatrix() {
         return this.skyStageProjectionInverseMatrix;
     }
@@ -1056,8 +1150,111 @@ public final class ActiniumRenderPipeline {
         return this.managedSkyColor;
     }
 
+    public Vector3f getCapturedSkyColor() {
+        return this.capturedSkyColor;
+    }
+
+    public boolean hasCapturedSkyColor() {
+        return this.skyColorCapturedThisFrame;
+    }
+
+    public float[] getClearColor() {
+        return this.clearColor;
+    }
+
+    public float[] getFogColor() {
+        if (this.fogColorInitialized) {
+            this.debugLogFogState("getFogColor", "cached");
+            return this.fogColor;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (minecraft.world != null) {
+            Vec3d fallbackFogColor = minecraft.world.getFogColor(minecraft.getRenderPartialTicks());
+            this.setFogColor((float) fallbackFogColor.x, (float) fallbackFogColor.y, (float) fallbackFogColor.z);
+            this.debugLogFogState("getFogColor", "world-fallback");
+            return this.fogColor;
+        }
+
+        EntityRenderer entityRenderer = minecraft.entityRenderer;
+        if (entityRenderer != null) {
+            EntityRendererAccessor accessor = (EntityRendererAccessor) (Object) entityRenderer;
+            this.setFogColor(accessor.celeritas$getFogColorRed(), accessor.celeritas$getFogColorGreen(), accessor.celeritas$getFogColorBlue());
+            this.debugLogFogState("getFogColor", "entity-renderer-fallback");
+        }
+
+        this.debugLogFogState("getFogColor", "final");
+        return this.fogColor;
+    }
+
+    public void captureFogColor(float red, float green, float blue) {
+        this.captureFallbackFogColor(red, green, blue, "legacy");
+    }
+
+    public void captureGlFogColor(float red, float green, float blue) {
+        this.setFogColor(red, green, blue);
+        this.fogColorCapturedFromGlBufferThisFrame = true;
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Captured GL fog color [{}, {}, {}] during {}", red, green, blue, this.currentStage);
+        }
+        this.debugLogFogState("captureGlFogColor", "gl-buffer");
+    }
+
+    public void captureFallbackFogColor(float red, float green, float blue, String source) {
+        if (this.fogColorCapturedFromGlBufferThisFrame) {
+            if (this.shouldEmitVerboseDebugFrame()) {
+                this.debugLog(
+                        "Skipped fallback fog color [{}, {}, {}] from {} because GL fog is already authoritative",
+                        red,
+                        green,
+                        blue,
+                        source
+                );
+            }
+            return;
+        }
+
+        this.setFogColor(red, green, blue);
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Captured fallback fog color [{}, {}, {}] from {}", red, green, blue, source);
+        }
+        this.debugLogFogState("captureFallbackFogColor", source);
+    }
+
+    private void setFogColor(float red, float green, float blue) {
+        this.fogColor[0] = red;
+        this.fogColor[1] = green;
+        this.fogColor[2] = blue;
+        this.fogColor[3] = 1.0f;
+        this.fogColorInitialized = true;
+    }
+
+    public void captureSkyColor(float red, float green, float blue) {
+        this.capturedSkyColor.set(red, green, blue);
+        this.managedSkyColor.set(red, green, blue);
+        this.skyColorCapturedThisFrame = true;
+    }
+
+    public void captureClearColor(float red, float green, float blue, float alpha) {
+        this.clearColor[0] = red;
+        this.clearColor[1] = green;
+        this.clearColor[2] = blue;
+        this.clearColor[3] = alpha;
+        this.debugLogFogState("captureClearColor", "clear-buffer");
+    }
+
+    public @Nullable String getActiveWorldProgramName() {
+        return this.activeWorldProgram != null ? this.activeWorldProgram.name() : null;
+    }
+
     public Vector3f getManagedSkySunPosition() {
         return this.managedSkySunPosition;
+    }
+
+    public Vector3f getManagedSkyUpPosition() {
+        return this.managedSkyUpPosition;
     }
 
     public Vector3f getManagedSkyMoonPosition() {
@@ -1184,6 +1381,7 @@ public final class ActiniumRenderPipeline {
     public void renderShadowPass(float partialTicks) {
         this.syncReloadState();
         this.captureInterpolatedWorldCameraPosition(partialTicks);
+        this.debugLogFogState("renderShadowPass", "entry");
 
         if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasShadowProgram()) {
             return;
@@ -1233,6 +1431,11 @@ public final class ActiniumRenderPipeline {
         return celestialAngle < 0.75f ? celestialAngle + 0.25f : celestialAngle - 0.75f;
     }
 
+    public float getShaderCoreShadowAngle(float partialTicks) {
+        float shadowAngle = this.getShaderCoreSunAngle(partialTicks);
+        return this.isShaderCoreShadowUsingSun(partialTicks) ? shadowAngle : shadowAngle - 0.5f;
+    }
+
     public boolean isShaderCoreShadowUsingSun(float partialTicks) {
         return this.getShaderCoreSunAngle(partialTicks) <= 0.5f;
     }
@@ -1257,13 +1460,32 @@ public final class ActiniumRenderPipeline {
         }
     }
 
+    public void fillShaderCoreUpPosition(Vector3f upPosition) {
+        this.scratchCelestialModelViewMatrix.set(this.gbufferModelViewMatrix)
+                .rotateY((float) Math.toRadians(-90.0f));
+        this.scratchCelestialModelViewMatrix.transformDirection(0.0f, 100.0f, 0.0f, upPosition);
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog(
+                    "Computed shader-core up position stage={} result=[{}, {}, {}]",
+                    this.currentStage,
+                    upPosition.x,
+                    upPosition.y,
+                    upPosition.z
+            );
+        }
+    }
+
     public void bindTerrainShadowTextures() {
-        int shadowTex0 = this.shadowTargets != null ? this.shadowTargets.getDepthTexture(0) : 0;
-        int shadowTex1 = this.shadowTargets != null ? this.shadowTargets.getDepthTexture(1) : 0;
-        int shadowColor0 = this.shadowTargets != null ? this.shadowTargets.getColorTexture() : 0;
+        int white = this.whiteTexture != null ? this.whiteTexture : 0;
+        int shadowTex0 = this.getGbuffersTextureOverride("shadowtex0", this.shadowTargets != null ? this.shadowTargets.getDepthTexture(0) : white);
+        int shadowTex1 = this.getGbuffersTextureOverride("shadowtex1", this.shadowTargets != null ? this.shadowTargets.getDepthTexture(1) : white);
+        int shadowColor0 = this.getGbuffersTextureOverride("shadowcolor0", this.shadowTargets != null ? this.shadowTargets.getColorTexture(0) : white);
+        int shadowColor1 = this.getGbuffersTextureOverride("shadowcolor1", this.shadowTargets != null ? this.shadowTargets.getColorTexture(1) : white);
         bindTexture(TERRAIN_SHADOW_TEX0_UNIT, shadowTex0);
         bindTexture(TERRAIN_SHADOW_TEX1_UNIT, shadowTex1);
         bindTexture(TERRAIN_SHADOW_COLOR0_UNIT, shadowColor0);
+        bindTexture(POST_SHADOW_COLOR1_UNIT, shadowColor1);
         setActiveTextureUnit(0);
     }
 
@@ -1344,29 +1566,56 @@ public final class ActiniumRenderPipeline {
     }
 
     public void bindTerrainInputTextures() {
-        int gaux1Texture = this.terrainGaux1Texture != null ? this.terrainGaux1Texture : 0;
-        int gaux2Texture = this.getGbuffersTextureOverride("gaux2", this.terrainGaux2Texture);
+        int white = this.whiteTexture != null ? this.whiteTexture : 0;
+        int normalsTexture = this.getGbuffersTextureOverride("normals", white);
+        int specularTexture = this.getGbuffersTextureOverride("specular", white);
+        int gaux1Texture = this.getGbuffersTextureOverride("gaux1", this.terrainGaux1Texture != null ? this.terrainGaux1Texture : white);
+        int gaux2Texture = this.getGbuffersTextureOverride("gaux2", this.terrainGaux2Texture != null ? this.terrainGaux2Texture : white);
+        int gaux3Texture = this.getGbuffersTextureOverride("gaux3", white);
         int depthtex0Texture = this.terrainDepthTexture0 != null ? this.terrainDepthTexture0 : 0;
         int depthtex1Texture = this.terrainDepthTexture1 != null ? this.terrainDepthTexture1 : 0;
         int noiseTextureId = this.getGbuffersTextureOverride("noisetex", this.noiseTexture);
 
+        bindTexture(2, normalsTexture);
+        bindTexture(3, specularTexture);
         bindTexture(TERRAIN_GAUX1_UNIT, gaux1Texture);
         bindTexture(TERRAIN_GAUX2_UNIT, gaux2Texture);
+        bindTexture(TERRAIN_GAUX3_UNIT, gaux3Texture);
         bindTexture(TERRAIN_DEPTHTEX0_UNIT, depthtex0Texture);
         bindTexture(TERRAIN_DEPTHTEX1_UNIT, depthtex1Texture);
         bindTexture(TERRAIN_NOISETEX_UNIT, noiseTextureId);
+        bindTexture(POST_COLORTEX8_UNIT, this.getGbuffersTextureOverride("colortex8", white));
+        bindTexture(POST_COLORTEX9_UNIT, this.getGbuffersTextureOverride("colortex9", white));
+        bindTexture(POST_COLORTEX10_UNIT, this.getGbuffersTextureOverride("colortex10", white));
+        bindTexture(POST_COLORTEX11_UNIT, this.getGbuffersTextureOverride("colortex11", white));
+        bindTexture(POST_COLORTEX12_UNIT, this.getGbuffersTextureOverride("colortex12", white));
+        bindTexture(POST_COLORTEX13_UNIT, this.getGbuffersTextureOverride("colortex13", white));
+        bindTexture(POST_COLORTEX14_UNIT, this.getGbuffersTextureOverride("colortex14", white));
+        bindTexture(POST_COLORTEX15_UNIT, this.getGbuffersTextureOverride("colortex15", white));
         setActiveTextureUnit(0);
     }
 
     public void unbindTerrainInputTextures() {
+        unbindTexture(POST_COLORTEX15_UNIT);
+        unbindTexture(POST_COLORTEX14_UNIT);
+        unbindTexture(POST_COLORTEX13_UNIT);
+        unbindTexture(POST_COLORTEX12_UNIT);
+        unbindTexture(POST_COLORTEX11_UNIT);
+        unbindTexture(POST_COLORTEX10_UNIT);
+        unbindTexture(POST_COLORTEX9_UNIT);
+        unbindTexture(POST_COLORTEX8_UNIT);
         unbindTexture(TERRAIN_NOISETEX_UNIT);
         unbindTexture(TERRAIN_DEPTHTEX1_UNIT);
         unbindTexture(TERRAIN_DEPTHTEX0_UNIT);
+        unbindTexture(TERRAIN_GAUX3_UNIT);
         unbindTexture(TERRAIN_GAUX2_UNIT);
         unbindTexture(TERRAIN_GAUX1_UNIT);
+        unbindTexture(3);
+        unbindTexture(2);
     }
 
     public void unbindTerrainShadowTextures() {
+        unbindTexture(POST_SHADOW_COLOR1_UNIT);
         unbindTexture(TERRAIN_SHADOW_COLOR0_UNIT);
         unbindTexture(TERRAIN_SHADOW_TEX1_UNIT);
         unbindTexture(TERRAIN_SHADOW_TEX0_UNIT);
@@ -1437,6 +1686,7 @@ public final class ActiniumRenderPipeline {
         int textureId = this.worldTargets != null
                 ? this.worldTargets.getSourceGaux4TextureOrDefault(this.whiteTexture)
                 : this.whiteTexture != null ? this.whiteTexture : 0;
+        textureId = this.getGbuffersTextureOverride("gaux4", textureId);
         bindTexture(WORLD_GAUX4_UNIT, textureId);
         setActiveTextureUnit(0);
     }
@@ -1447,6 +1697,7 @@ public final class ActiniumRenderPipeline {
 
     public void bindWorldStageProgram(float partialTicks) {
         this.syncReloadState();
+        this.debugLogFogState("bindWorldStageProgram", "entry");
 
         if (!ActiniumShaderPackManager.areShadersEnabled()) {
             return;
@@ -1491,7 +1742,7 @@ public final class ActiniumRenderPipeline {
         if (this.activeWorldProgram != null) {
             if (this.activeWorldProgram == program) {
                 program.program().bind();
-                program.program().getInterface().setupState(this, modelViewMatrix, projectionInverseMatrix);
+                program.program().getInterface().setupState(this, modelViewMatrix, projectionMatrix, projectionInverseMatrix);
                 this.bindWorldStageTextures();
                 debugCheckGlErrors("world-stage.refreshProgram:" + program.name());
                 return;
@@ -1529,7 +1780,7 @@ public final class ActiniumRenderPipeline {
         this.activeWorldProgram = program;
         program.program().bind();
         debugCheckGlErrors("world-stage.bindProgram:" + program.name());
-        program.program().getInterface().setupState(this, modelViewMatrix, projectionInverseMatrix);
+        program.program().getInterface().setupState(this, modelViewMatrix, projectionMatrix, projectionInverseMatrix);
         this.bindWorldStageTextures();
         debugCheckGlErrors("world-stage.bindTextures:" + program.name());
     }
@@ -1609,7 +1860,7 @@ public final class ActiniumRenderPipeline {
 
         this.activeEntityWorldProgram = program;
         program.program().bind();
-        program.program().getInterface().setupState(this, modelViewMatrix, projectionInverseMatrix);
+        program.program().getInterface().setupState(this, modelViewMatrix, projectionMatrix, projectionInverseMatrix);
         this.bindWorldStageTextures();
         debugCheckGlErrors("world-stage.bindPerEntity:" + program.name());
     }
@@ -1633,9 +1884,13 @@ public final class ActiniumRenderPipeline {
 
     private void executePostPrograms(List<ActiniumPostProgram> programs, ActiniumPostTargets targets, float partialTicks) {
         for (ActiniumPostProgram program : programs) {
+            debugResetGlErrors("post." + program.name() + ".preMipmap");
             this.preparePostMipmappedInputs(targets, program.mipmappedBuffers());
+            debugCheckGlErrors("post." + program.name() + ".prepareMipmaps");
             targets.bindWriteFramebuffer(program.drawBuffers());
+            debugCheckGlErrors("post." + program.name() + ".bindWriteFramebuffer");
             GL11.glViewport(0, 0, this.width, this.height);
+            debugCheckGlErrors("post." + program.name() + ".viewport");
             this.renderFullscreenProgram(program.program(), targets, partialTicks, program.name());
             this.applyPostProgramFlips(targets, program);
             this.debugLogPostStage(program.name());
@@ -1652,21 +1907,26 @@ public final class ActiniumRenderPipeline {
             this.debugLogTextureSamples("final.input.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
         }
 
+        debugResetGlErrors("final.prep.entry");
         this.prepareMainFramebufferForFinalPass(mainFramebuffer);
+        debugCheckGlErrors("final.prep.mainFramebuffer");
         this.debugLogRenderState("final.prep.after");
 
         if (program != null) {
             this.preparePostMipmappedInputs(this.finalProgramMipmappedBuffers);
+            debugCheckGlErrors("final.prepareMipmaps");
             this.renderFullscreenProgram(program, partialTicks, "final");
             this.applyFinalProgramFlips();
             this.debugLogFramebufferCenter("final.mainFramebuffer", mainFramebuffer.framebufferObject, GL30.GL_COLOR_ATTACHMENT0);
             this.debugLogFramebufferSamples("final.mainFramebuffer", mainFramebuffer.framebufferObject, GL30.GL_COLOR_ATTACHMENT0);
             this.finishMainFramebufferFinalPass();
+            debugCheckGlErrors("final.finish");
             return;
         }
 
         this.renderBlitFallback(mainFramebuffer, partialTicks);
         this.finishMainFramebufferFinalPass();
+        debugCheckGlErrors("final.finish");
     }
 
     private void renderBlitFallback(Framebuffer mainFramebuffer, float partialTicks) {
@@ -1738,9 +1998,8 @@ public final class ActiniumRenderPipeline {
     }
 
     private boolean shouldMergePrepareTarget(int drawBuffer) {
-        // Prepare runs in a compatibility path after the world is already
-        // rendered, so its colortex1 output does not match Iris's intended
-        // timing. Keep only auxiliary writes from prepare.
+        // Prepare seeds the scene early; colortex1 is the scene bootstrap and
+        // is overwritten by the later world/post scene copy.
         return drawBuffer != ActiniumPostTargets.TARGET_COLORTEX1;
     }
 
@@ -1826,7 +2085,8 @@ public final class ActiniumRenderPipeline {
         GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
         GL11.glViewport(0, 0, this.width, this.height);
         GL11.glColorMask(true, true, true, true);
-        GlStateManager.clearColor(this.fogColor[0], this.fogColor[1], this.fogColor[2], 1.0f);
+        float[] fogColor = this.getFogColor();
+        GlStateManager.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0f);
         GlStateManager.clear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
         GlStateManager.disableAlpha();
         GlStateManager.disableBlend();
@@ -1851,6 +2111,8 @@ public final class ActiniumRenderPipeline {
     }
 
     private void renderFullscreenProgram(GlProgram<ActiniumPostShaderInterface> program, ActiniumPostTargets targets, float partialTicks, @Nullable String textureStage) {
+        String stageLabel = textureStage != null ? textureStage : "blit";
+        debugResetGlErrors("fullscreen." + stageLabel + ".entry");
         GlStateManager.disableAlpha();
         GlStateManager.disableBlend();
         GlStateManager.disableFog();
@@ -1862,20 +2124,30 @@ public final class ActiniumRenderPipeline {
         GL11.glColorMask(true, true, true, true);
 
         program.bind();
+        debugCheckGlErrors("fullscreen." + stageLabel + ".bindProgram");
         program.getInterface().setupState(this, targets, partialTicks, this.currentFrameDeltaSeconds, this.frameTimeCounterSeconds, this.frameCounter);
+        debugCheckGlErrors("fullscreen." + stageLabel + ".setupState");
         this.activePostTextureStage = textureStage;
         this.bindPipelineTextures(targets);
-        this.debugLogRenderState("fullscreen." + (textureStage != null ? textureStage : "blit") + ".beforeDraw");
+        debugCheckGlErrors("fullscreen." + stageLabel + ".bindTextures");
+        this.bindPipelineImageTargets(program.getInterface(), targets, stageLabel);
+        debugCheckGlErrors("fullscreen." + stageLabel + ".bindImages");
+        this.debugLogRenderState("fullscreen." + stageLabel + ".beforeDraw");
 
         if (this.fullscreenVertexArray != null) {
             GL30.glBindVertexArray(this.fullscreenVertexArray.handle());
         }
         GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
         GL30.glBindVertexArray(0);
+        debugCheckGlErrors("fullscreen." + stageLabel + ".draw");
 
+        this.unbindPipelineImageTargets();
+        debugCheckGlErrors("fullscreen." + stageLabel + ".unbindImages");
         this.unbindPipelineTextures();
+        debugCheckGlErrors("fullscreen." + stageLabel + ".unbindTextures");
         this.activePostTextureStage = null;
         program.unbind();
+        debugCheckGlErrors("fullscreen." + stageLabel + ".unbindProgram");
 
         GlStateManager.depthMask(true);
         GlStateManager.enableDepth();
@@ -1898,9 +2170,84 @@ public final class ActiniumRenderPipeline {
             this.bindPipelineTextureAliases(POST_GAUX4_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4), "gaux4", "colortex7");
             bindTexture(POST_DEPTHTEX1_UNIT, targets.getDepthTexture(1));
             bindTexture(POST_DEPTHTEX2_UNIT, targets.getDepthTexture(2));
-            this.bindPipelineTextureAliases(POST_SHADOW_COLOR0_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture() : this.whiteTexture, "shadowcolor0", "shadowcolor");
-            this.bindPipelineTextureAliases(POST_SHADOW_COLOR1_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture() : this.whiteTexture, "shadowcolor1");
+            this.bindPipelineTextureAliases(POST_SHADOW_COLOR0_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture(0) : this.whiteTexture, "shadowcolor0", "shadowcolor");
+            this.bindPipelineTextureAliases(POST_SHADOW_COLOR1_UNIT, this.shadowTargets != null ? this.shadowTargets.getColorTexture(1) : this.whiteTexture, "shadowcolor1");
             this.bindPipelineTextureAliases(POST_NOISETEX_UNIT, this.noiseTexture, "noisetex");
+            this.bindPipelineTextureAliases(POST_COLORTEX8_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX8), "colortex8");
+            this.bindPipelineTextureAliases(POST_COLORTEX9_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX9), "colortex9");
+            this.bindPipelineTextureAliases(POST_COLORTEX10_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX10), "colortex10");
+            this.bindPipelineTextureAliases(POST_COLORTEX11_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX11), "colortex11");
+            this.bindPipelineTextureAliases(POST_COLORTEX12_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX12), "colortex12");
+            this.bindPipelineTextureAliases(POST_COLORTEX13_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX13), "colortex13");
+            this.bindPipelineTextureAliases(POST_COLORTEX14_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX14), "colortex14");
+            this.bindPipelineTextureAliases(POST_COLORTEX15_UNIT, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX15), "colortex15");
+        }
+    }
+
+    private void bindPipelineImageTargets(ActiniumPostShaderInterface shaderInterface, ActiniumPostTargets targets, String stageLabel) {
+        if (!LWJGL.isOpenGLVersionSupported(4, 2)) {
+            return;
+        }
+
+        int boundCount = 0;
+
+        for (int imageIndex = 0; imageIndex <= 5; imageIndex++) {
+            if (!shaderInterface.hasColorImage(imageIndex)) {
+                continue;
+            }
+
+            int targetIndex = switch (imageIndex) {
+                case 0 -> ActiniumPostTargets.TARGET_COLORTEX0;
+                case 1 -> ActiniumPostTargets.TARGET_COLORTEX1;
+                case 2 -> ActiniumPostTargets.TARGET_COLORTEX2;
+                case 3 -> ActiniumPostTargets.TARGET_COLORTEX3;
+                case 4 -> ActiniumPostTargets.TARGET_GAUX1;
+                case 5 -> ActiniumPostTargets.TARGET_GAUX2;
+                default -> -1;
+            };
+
+            int textureId = targets.getSourceTexture(targetIndex);
+            int format = targets.getInternalFormat(targetIndex);
+            this.boundPostImageUnits[imageIndex] = textureId;
+            LWJGL.glBindImageTexture(imageIndex, textureId, 0, false, 0, GL42.GL_READ_WRITE, format);
+            boundCount++;
+        }
+
+        if (shaderInterface.hasShadowColorImage(0)) {
+            int shadowTexture = this.shadowTargets != null ? this.shadowTargets.getColorTexture(0) : 0;
+            this.boundPostImageUnits[6] = shadowTexture;
+            LWJGL.glBindImageTexture(6, shadowTexture, 0, false, 0, GL42.GL_READ_WRITE, GL11.GL_RGBA8);
+            boundCount++;
+        }
+
+        if (shaderInterface.hasShadowColorImage(1)) {
+            int shadowTexture = this.shadowTargets != null ? this.shadowTargets.getColorTexture(1) : 0;
+            this.boundPostImageUnits[7] = shadowTexture;
+            LWJGL.glBindImageTexture(7, shadowTexture, 0, false, 0, GL42.GL_READ_WRITE, GL11.GL_RGBA8);
+            boundCount++;
+        }
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            if (boundCount > 0) {
+                this.debugLog(
+                        "Bound {} post image target(s) for '{}' with colorimg0-5/shadowcolorimg0-1 declaration filtering",
+                        boundCount,
+                        stageLabel
+                );
+            } else {
+                this.debugLog("No post image uniforms declared for '{}'; skipping image bindings", stageLabel);
+            }
+        }
+    }
+
+    private void unbindPipelineImageTargets() {
+        if (!LWJGL.isOpenGLVersionSupported(4, 2)) {
+            return;
+        }
+
+        for (int unit = 0; unit < this.boundPostImageUnits.length; unit++) {
+            LWJGL.glBindImageTexture(unit, 0, 0, false, 0, GL42.GL_READ_WRITE, GL11.GL_RGBA8);
+            this.boundPostImageUnits[unit] = 0;
         }
     }
 
@@ -1921,11 +2268,47 @@ public final class ActiniumRenderPipeline {
     }
 
     private void bindWorldStageTextures() {
+        int white = this.whiteTexture != null ? this.whiteTexture : 0;
         int gaux4Texture = this.worldTargets != null
                 ? this.worldTargets.getSourceGaux4TextureOrDefault(this.whiteTexture)
-                : this.whiteTexture != null ? this.whiteTexture : 0;
-        bindTexture(WORLD_GAUX4_UNIT, gaux4Texture);
-        this.bindTerrainShadowTextures();
+                : white;
+        int shadowTex0 = this.shadowTargets != null ? this.shadowTargets.getDepthTexture(0) : white;
+        int shadowTex1 = this.shadowTargets != null ? this.shadowTargets.getDepthTexture(1) : white;
+        int shadowColor0 = this.shadowTargets != null ? this.shadowTargets.getColorTexture(0) : white;
+        int shadowColor1 = this.shadowTargets != null ? this.shadowTargets.getColorTexture(1) : white;
+
+        this.bindWorldStageTextureAliases(2, white, "normals");
+        this.bindWorldStageTextureAliases(3, white, "specular");
+        this.bindWorldStageTextureAliases(TERRAIN_GAUX1_UNIT, white, "gaux1", "colortex4");
+        this.bindWorldStageTextureAliases(TERRAIN_GAUX2_UNIT, white, "gaux2", "colortex5");
+        this.bindWorldStageTextureAliases(WORLD_GAUX4_UNIT, gaux4Texture, "gaux4", "colortex7");
+        this.bindWorldStageTextureAliases(POST_GAUX3_UNIT, white, "gaux3", "colortex6");
+        this.bindWorldStageTextureAliases(TERRAIN_NOISETEX_UNIT, this.noiseTexture, "noisetex");
+        this.bindWorldStageTextureAliases(TERRAIN_SHADOW_TEX0_UNIT, shadowTex0, "shadowtex0", "watershadow", "shadow");
+        this.bindWorldStageTextureAliases(TERRAIN_SHADOW_TEX1_UNIT, shadowTex1, "shadowtex1");
+        this.bindWorldStageTextureAliases(TERRAIN_SHADOW_COLOR0_UNIT, shadowColor0, "shadowcolor0", "shadowcolor");
+        this.bindWorldStageTextureAliases(POST_SHADOW_COLOR1_UNIT, shadowColor1, "shadowcolor1");
+        this.bindWorldStageTextureAliases(POST_COLORTEX8_UNIT, white, "colortex8");
+        this.bindWorldStageTextureAliases(POST_COLORTEX9_UNIT, white, "colortex9");
+        this.bindWorldStageTextureAliases(POST_COLORTEX10_UNIT, white, "colortex10");
+        this.bindWorldStageTextureAliases(POST_COLORTEX11_UNIT, white, "colortex11");
+        this.bindWorldStageTextureAliases(POST_COLORTEX12_UNIT, white, "colortex12");
+        this.bindWorldStageTextureAliases(POST_COLORTEX13_UNIT, white, "colortex13");
+        this.bindWorldStageTextureAliases(POST_COLORTEX14_UNIT, white, "colortex14");
+        this.bindWorldStageTextureAliases(POST_COLORTEX15_UNIT, white, "colortex15");
+        setActiveTextureUnit(0);
+    }
+
+    private void bindWorldStageTextureAliases(int unit, @Nullable Integer fallbackTexture, String... samplerNames) {
+        for (String samplerName : samplerNames) {
+            int overrideTexture = this.getGbuffersTextureOverride(samplerName, null);
+            if (overrideTexture > 0) {
+                bindTexture(unit, overrideTexture);
+                return;
+            }
+        }
+
+        bindTexture(unit, fallbackTexture != null ? fallbackTexture : 0);
     }
 
     private void unbindPipelineTextures() {
@@ -1944,7 +2327,9 @@ public final class ActiniumRenderPipeline {
         }
 
         for (int targetIndex : mipmappedBuffers) {
+            debugResetGlErrors("post.mipmaps.target" + targetIndex + ".entry");
             this.generateTextureMipmaps(targets.getSourceTexture(targetIndex), false);
+            debugCheckGlErrors("post.mipmaps.target" + targetIndex + ".generate");
         }
     }
 
@@ -2033,6 +2418,15 @@ public final class ActiniumRenderPipeline {
         ActiniumShaderProperties properties = ActiniumShaderPackManager.getActiveShaderProperties();
         String relativePath = properties.getStageTexturePath(stageName, samplerName);
 
+        if (relativePath == null) {
+            for (String alias : getSamplerAliases(samplerName)) {
+                relativePath = properties.getStageTexturePath(stageName, alias);
+                if (relativePath != null) {
+                    break;
+                }
+            }
+        }
+
         if (relativePath == null && "composite".equals(stageName)) {
             relativePath = properties.getStageTexturePath("final", samplerName);
         }
@@ -2055,6 +2449,25 @@ public final class ActiniumRenderPipeline {
                 key -> this.loadPackTexture(stageName, samplerName, resolvedPath)
         );
         return textureId != null && textureId > 0 ? textureId : fallbackTexture != null ? fallbackTexture : 0;
+    }
+
+    private static String[] getSamplerAliases(String samplerName) {
+        return switch (samplerName) {
+            case "gaux1" -> new String[]{"colortex4"};
+            case "gaux2" -> new String[]{"colortex5"};
+            case "gaux3" -> new String[]{"colortex6"};
+            case "gaux4" -> new String[]{"colortex7"};
+            case "colortex4" -> new String[]{"gaux1"};
+            case "colortex5" -> new String[]{"gaux2"};
+            case "colortex6" -> new String[]{"gaux3"};
+            case "colortex7" -> new String[]{"gaux4"};
+            case "shadow" -> new String[]{"shadowtex0", "watershadow"};
+            case "watershadow" -> new String[]{"shadowtex0", "shadow"};
+            case "shadowtex0" -> new String[]{"shadow", "watershadow"};
+            case "shadowcolor" -> new String[]{"shadowcolor0"};
+            case "shadowcolor0" -> new String[]{"shadowcolor"};
+            default -> new String[0];
+        };
     }
 
     private int loadPackTexture(String stageName, String samplerName, String relativePath) {
@@ -2322,8 +2735,29 @@ public final class ActiniumRenderPipeline {
     }
 
     private void unbindWorldStageTextures() {
-        unbindTexture(WORLD_GAUX4_UNIT);
-        this.unbindTerrainShadowTextures();
+        for (int unit : new int[]{
+                POST_COLORTEX15_UNIT,
+                POST_COLORTEX14_UNIT,
+                POST_COLORTEX13_UNIT,
+                POST_COLORTEX12_UNIT,
+                POST_COLORTEX11_UNIT,
+                POST_COLORTEX10_UNIT,
+                POST_COLORTEX9_UNIT,
+                POST_COLORTEX8_UNIT,
+                POST_SHADOW_COLOR1_UNIT,
+                TERRAIN_SHADOW_COLOR0_UNIT,
+                TERRAIN_SHADOW_TEX1_UNIT,
+                TERRAIN_SHADOW_TEX0_UNIT,
+                TERRAIN_NOISETEX_UNIT,
+                POST_GAUX3_UNIT,
+                WORLD_GAUX4_UNIT,
+                TERRAIN_GAUX2_UNIT,
+                TERRAIN_GAUX1_UNIT,
+                3,
+                2
+        }) {
+            unbindTexture(unit);
+        }
     }
 
     private List<ActiniumPostProgram> getPreScenePrograms() {
@@ -2668,7 +3102,15 @@ public final class ActiniumRenderPipeline {
                 ActiniumPostTargets.ColorFormat.RGBA16F,
                 ActiniumPostTargets.ColorFormat.R8,
                 ActiniumPostTargets.ColorFormat.R16F,
-                ActiniumPostTargets.ColorFormat.RGBA16F
+                ActiniumPostTargets.ColorFormat.RGBA16F,
+                ActiniumPostTargets.ColorFormat.RGBA8,
+                ActiniumPostTargets.ColorFormat.RGBA8,
+                ActiniumPostTargets.ColorFormat.RGBA8,
+                ActiniumPostTargets.ColorFormat.RGBA8,
+                ActiniumPostTargets.ColorFormat.RGBA8,
+                ActiniumPostTargets.ColorFormat.RGBA8,
+                ActiniumPostTargets.ColorFormat.RGBA8,
+                ActiniumPostTargets.ColorFormat.RGBA8
         };
     }
 
@@ -2694,6 +3136,14 @@ public final class ActiniumRenderPipeline {
         return new ActiniumPostTargets.TargetSettings[]{
                 new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 1.0f),
                 new ActiniumPostTargets.TargetSettings(true, 1.0f, 1.0f, 1.0f, 1.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
+                new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
                 new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
                 new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
                 new ActiniumPostTargets.TargetSettings(true, 0.0f, 0.0f, 0.0f, 0.0f),
@@ -3269,6 +3719,19 @@ public final class ActiniumRenderPipeline {
         String resolvedVertexSource = ShaderParser.parseShader(vertexSource, this::resolveShaderSource, ShaderConstants.EMPTY);
         String resolvedFragmentSource = ShaderParser.parseShader(fragmentSource, this::resolveShaderSource, ShaderConstants.EMPTY);
         int[] drawBuffers = this.resolveWorldStageDrawBuffers(stage, resolvedFragmentSource);
+        if (ActiniumShaderPackManager.isDebugEnabled()
+                && (stage == ActiniumWorldStage.SKY || stage == ActiniumWorldStage.SKY_TEXTURED)) {
+            this.debugLog(
+                    "Sky shader source hints '{}' vertex[upVector={}, upPosition={}, gbufferModelView[1]={}] fragment[upVector={}, upPosition={}, gbufferModelView[1]={}]",
+                    programName,
+                    resolvedVertexSource.contains("upVector"),
+                    resolvedVertexSource.contains("upPosition"),
+                    resolvedVertexSource.contains("gbufferModelView[1]"),
+                    resolvedFragmentSource.contains("upVector"),
+                    resolvedFragmentSource.contains("upPosition"),
+                    resolvedFragmentSource.contains("gbufferModelView[1]")
+            );
+        }
         List<GlShader> shaders = new ArrayList<>(2);
         shaders.add(new GlShader(ShaderType.VERTEX, "actinium:world/" + programName + "." + ShaderType.VERTEX.fileExtension, resolvedVertexSource));
         shaders.add(new GlShader(ShaderType.FRAGMENT, "actinium:world/" + programName + "." + ShaderType.FRAGMENT.fileExtension, resolvedFragmentSource));
@@ -3378,28 +3841,16 @@ public final class ActiniumRenderPipeline {
         debugCheckGlErrors("pipeline.prepareWorldTargets.ensureSize");
 
         if (!this.worldTargetsPrepared) {
-            float clearRed = this.fogColor[0];
-            float clearGreen = this.fogColor[1];
-            float clearBlue = this.fogColor[2];
-
-            if (ActiniumShaderPackManager.areShadersEnabled()) {
-                Minecraft minecraft = Minecraft.getMinecraft();
-                Entity entity = minecraft.getRenderViewEntity();
-
-                if (minecraft.world != null && entity != null) {
-                    Vec3d skyColor = minecraft.world.getSkyColor(entity, minecraft.getRenderPartialTicks());
-                    this.managedSkyColor.set((float) skyColor.x, (float) skyColor.y, (float) skyColor.z);
-                    clearRed = this.managedSkyColor.x;
-                    clearGreen = this.managedSkyColor.y;
-                    clearBlue = this.managedSkyColor.z;
-                }
-            }
+            float[] fogColor = this.getFogColor();
+            float clearRed = fogColor[0];
+            float clearGreen = fogColor[1];
+            float clearBlue = fogColor[2];
 
             this.worldTargets.beginFrame(framebuffer, clearRed, clearGreen, clearBlue, 1.0f);
             debugCheckGlErrors("pipeline.prepareWorldTargets.beginFrame");
             this.worldTargetsPrepared = true;
             if (this.shouldEmitVerboseDebugFrame()) {
-                this.debugLog("Prepared world-stage MRT targets for {}x{} with sky clear color [{}, {}, {}]", this.width, this.height, clearRed, clearGreen, clearBlue);
+                this.debugLog("Prepared world-stage MRT targets for {}x{} with fog clear color [{}, {}, {}]", this.width, this.height, clearRed, clearGreen, clearBlue);
             }
         }
     }
@@ -3514,7 +3965,29 @@ public final class ActiniumRenderPipeline {
         return textureId > 0 ? textureId : null;
     }
 
+    private void syncWorldStageGaux4FromPreSceneTargets(String stageName) {
+        if (this.worldTargets == null || this.preSceneTargets == null) {
+            return;
+        }
+
+        int sourceTexture = this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4);
+        int destinationTexture = this.worldTargets.getSourceGaux4Texture();
+        if (sourceTexture <= 0 || destinationTexture <= 0 || sourceTexture == destinationTexture) {
+            return;
+        }
+
+        this.copyTexture(sourceTexture, destinationTexture);
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLogTextureCenter("world-stage." + stageName + ".gaux4", this.worldTargets.getSourceGaux4Texture());
+        }
+    }
+
     private void captureManagedSkyColor(float partialTicks) {
+        if (this.skyColorCapturedThisFrame) {
+            this.managedSkyColor.set(this.capturedSkyColor);
+            return;
+        }
+
         Minecraft minecraft = Minecraft.getMinecraft();
         Entity entity = minecraft.getRenderViewEntity();
 
@@ -3523,12 +3996,22 @@ public final class ActiniumRenderPipeline {
         }
 
         Vec3d skyColor = minecraft.world.getSkyColor(entity, partialTicks);
-        this.managedSkyColor.set((float) skyColor.x, (float) skyColor.y, (float) skyColor.z);
+        this.captureSkyColor((float) skyColor.x, (float) skyColor.y, (float) skyColor.z);
     }
 
     private void captureManagedSkyUpPosition() {
         captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.scratchManagedSkyMatrix);
         this.scratchManagedSkyMatrix.transformDirection(0.0f, 100.0f, 0.0f, this.managedSkyUpPosition);
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog(
+                    "Captured managed sky up position stage={} result=[{}, {}, {}]",
+                    this.currentStage,
+                    this.managedSkyUpPosition.x,
+                    this.managedSkyUpPosition.y,
+                    this.managedSkyUpPosition.z
+            );
+        }
     }
 
     private void captureManagedSkyCelestialState() {
@@ -3547,6 +4030,22 @@ public final class ActiniumRenderPipeline {
                 : this.managedSkyMoonPosition;
         this.managedSkyShadowLightPosition.set(shadowLight);
         this.managedSkyCelestialStateValid = true;
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog(
+                    "Captured managed sky celestial state stage={} sun=[{}, {}, {}] moon=[{}, {}, {}] shadow=[{}, {}, {}]",
+                    this.currentStage,
+                    this.managedSkySunPosition.x,
+                    this.managedSkySunPosition.y,
+                    this.managedSkySunPosition.z,
+                    this.managedSkyMoonPosition.x,
+                    this.managedSkyMoonPosition.y,
+                    this.managedSkyMoonPosition.z,
+                    this.managedSkyShadowLightPosition.x,
+                    this.managedSkyShadowLightPosition.y,
+                    this.managedSkyShadowLightPosition.z
+            );
+        }
     }
 
     private void copyTexture(int sourceTexture, @Nullable Integer destinationTexture) {
@@ -3622,6 +4121,45 @@ public final class ActiniumRenderPipeline {
         }
 
         ActiniumShaders.logger().info("[DEBUG] " + message, args);
+    }
+
+    public void debugLogFogState(String label, String source) {
+        if (!this.shouldEmitVerboseDebugFrame()) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        EntityRenderer entityRenderer = minecraft.entityRenderer;
+        float entityFogRed = Float.NaN;
+        float entityFogGreen = Float.NaN;
+        float entityFogBlue = Float.NaN;
+        if (entityRenderer != null) {
+            EntityRendererAccessor accessor = (EntityRendererAccessor) (Object) entityRenderer;
+            entityFogRed = accessor.celeritas$getFogColorRed();
+            entityFogGreen = accessor.celeritas$getFogColorGreen();
+            entityFogBlue = accessor.celeritas$getFogColorBlue();
+        }
+
+        Vec3d worldFog = minecraft.world != null ? minecraft.world.getFogColor(minecraft.getRenderPartialTicks()) : null;
+        this.debugLog(
+                "Fog state '{}' source={} stage={} initialized={} capturedGL={} fog=[{}, {}, {}] clear=[{}, {}, {}] entity=[{}, {}, {}] worldFog={} entityRendererPresent={}",
+                label,
+                source,
+                this.currentStage,
+                this.fogColorInitialized,
+                this.fogColorCapturedFromGlBufferThisFrame,
+                this.fogColor[0],
+                this.fogColor[1],
+                this.fogColor[2],
+                this.clearColor[0],
+                this.clearColor[1],
+                this.clearColor[2],
+                entityFogRed,
+                entityFogGreen,
+                entityFogBlue,
+                worldFog,
+                entityRenderer != null
+        );
     }
 
     private static int nextFrameId(int current) {
@@ -3799,17 +4337,19 @@ public final class ActiniumRenderPipeline {
                     properties.isShadowPlayer(),
                     properties.isShadowBlockEntities()
             );
-            this.shadowTargets.beginWrite();
+            int[] shadowDrawBuffers = this.resolveShadowDrawBuffers();
+            this.shadowTargets.beginWrite(shadowDrawBuffers);
             if (ActiniumShaderPackManager.isDebugEnabled() && this.shouldEmitVerboseDebugFrame()) {
                 int framebufferStatus = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
                 this.debugLog(
-                        "Shadow terrain framebuffer status={} ({}) resolution={} camera=({}, {}, {})",
+                        "Shadow terrain framebuffer status={} ({}) resolution={} camera=({}, {}, {}) drawBuffers={}",
                         framebufferStatusName(framebufferStatus),
                         framebufferStatus,
                         resolution,
                         this.shadowCameraPosition.x,
                         this.shadowCameraPosition.y,
-                        this.shadowCameraPosition.z
+                        this.shadowCameraPosition.z,
+                        Arrays.toString(shadowDrawBuffers)
                 );
             }
             RenderDevice.enterManagedCode();
@@ -4057,6 +4597,10 @@ public final class ActiniumRenderPipeline {
         try {
             GlProgram.Builder builder = GlProgram.builder("actinium:shadow/entity");
             shaders.forEach(builder::attachShader);
+            int[] shadowDrawBuffers = this.resolveShadowDrawBuffers();
+            for (int i = 0; i < shadowDrawBuffers.length; i++) {
+                builder.bindFragmentData("fragColor" + i, i);
+            }
             this.shadowEntityProgram = builder.link(ActiniumShadowShaderInterface::new);
             this.debugLog("Compiled external shader pack entity shadow program");
             return this.shadowEntityProgram;
@@ -4073,9 +4617,35 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        this.debugLogTextureSamples(label + ".color", this.shadowTargets.getColorTexture(), resolution, resolution);
+        this.debugLogTextureSamples(label + ".color0", this.shadowTargets.getColorTexture(0), resolution, resolution);
+        this.debugLogTextureSamples(label + ".color1", this.shadowTargets.getColorTexture(1), resolution, resolution);
         this.debugLogDepthTextureSample(label + ".depth0", this.shadowTargets.getDepthTexture(0), resolution, resolution);
         this.debugLogDepthTextureSample(label + ".depth1", this.shadowTargets.getDepthTexture(1), resolution, resolution);
+    }
+
+    private int[] resolveShadowDrawBuffers() {
+        String fragmentSource = ActiniumShaderPackManager.getProgramSource("shadow", ShaderType.FRAGMENT);
+
+        if (fragmentSource == null) {
+            return new int[]{0};
+        }
+
+        ProgramMetadata metadata = ProgramMetadata.parse(this.resolveShaderForMetadata(fragmentSource));
+        int[] drawBuffers = metadata.drawBuffers();
+
+        if (ActiniumShaderPackManager.isDebugEnabled()) {
+            this.debugLog(
+                    "Resolved shadow program metadata: drawBuffers={}, mipmappedBuffers={}",
+                    Arrays.toString(drawBuffers),
+                    Arrays.toString(metadata.mipmappedBuffers())
+            );
+        }
+
+        if (drawBuffers.length == 0) {
+            return new int[]{0};
+        }
+
+        return drawBuffers;
     }
 
     private float getShadowTerrainRenderDistance() {
@@ -5475,6 +6045,14 @@ public final class ActiniumRenderPipeline {
                 }
             }
 
+            if ("shadowcolor0".equals(bufferName) || "shadowcolor".equals(bufferName)) {
+                return POST_SHADOW_COLOR0_UNIT;
+            }
+
+            if ("shadowcolor1".equals(bufferName)) {
+                return POST_SHADOW_COLOR1_UNIT;
+            }
+
             for (int i = 0; i < LEGACY_RENDER_TARGET_NAMES.length; i++) {
                 if (LEGACY_RENDER_TARGET_NAMES[i].equals(bufferName)) {
                     return i;
@@ -5543,8 +6121,16 @@ public final class ActiniumRenderPipeline {
                 return !evaluateExpression(trimmed.substring(1), defines);
             }
 
-            if (trimmed.startsWith("defined(") && trimmed.endsWith(")")) {
-                return defines.containsKey(trimmed.substring("defined(".length(), trimmed.length() - 1).trim());
+            if (trimmed.startsWith("defined")) {
+                String definedTarget = trimmed.substring("defined".length()).trim();
+
+                if (!definedTarget.isEmpty()) {
+                    definedTarget = trimOuterParentheses(definedTarget);
+
+                    if (!definedTarget.isEmpty() && isIdentifier(definedTarget)) {
+                        return defines.containsKey(definedTarget);
+                    }
+                }
             }
 
             for (String operator : new String[]{"==", "!=", ">=", "<=", ">", "<"}) {
@@ -5630,6 +6216,26 @@ public final class ActiniumRenderPipeline {
             String trimmed = trimOuterParentheses(token.trim());
             String resolved = defines.get(trimmed);
             return resolved != null ? resolved.trim() : trimmed;
+        }
+
+        private static boolean isIdentifier(String value) {
+            if (value.isEmpty()) {
+                return false;
+            }
+
+            char first = value.charAt(0);
+            if (!(Character.isLetter(first) || first == '_')) {
+                return false;
+            }
+
+            for (int i = 1; i < value.length(); i++) {
+                char c = value.charAt(i);
+                if (!(Character.isLetterOrDigit(c) || c == '_')) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static String trimOuterParentheses(String value) {

@@ -6,6 +6,7 @@ import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import com.dhj.actinium.shader.uniform.ActiniumCapturedRenderingState;
 import com.dhj.actinium.shader.uniform.ActiniumCommonUniforms;
+import com.dhj.actinium.shader.uniform.ActiniumOptiFineUniforms;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
@@ -75,6 +76,11 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformFloat irisFogStart;
     private final @Nullable GlUniformFloat irisFogEnd;
     private final @Nullable GlUniformFloat irisCurrentAlphaTest;
+    private final @Nullable GlUniformInt legacyFogMode;
+    private final @Nullable GlUniformInt legacyFogShape;
+    private final @Nullable GlUniformFloat legacyFogDensity;
+    private final @Nullable GlUniformFloat legacyFogStart;
+    private final @Nullable GlUniformFloat legacyFogEnd;
 
     private final @Nullable GlUniformMatrix4f gbufferModelView;
     private final @Nullable GlUniformMatrix4f gbufferModelViewInverse;
@@ -124,17 +130,39 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
     private final @Nullable GlUniformFloat darknessFactor;
     private final @Nullable GlUniformFloat darknessLightFactor;
     private final @Nullable GlUniformInt2v eyeBrightnessSmooth;
+    private final @Nullable GlUniformFloat alphaTestRef;
+    private final @Nullable GlUniformFloat3v modelOffset;
     private final @Nullable GlUniformInt texSampler;
+    private final @Nullable GlUniformInt gtextureSampler;
     private final @Nullable GlUniformInt lightmapSampler;
+    private final @Nullable GlUniformInt normalsSampler;
+    private final @Nullable GlUniformInt specularSampler;
+    private final @Nullable GlUniformInt shadowSampler;
+    private final @Nullable GlUniformInt watershadowSampler;
     private final @Nullable GlUniformInt gaux1Sampler;
     private final @Nullable GlUniformInt gaux2Sampler;
+    private final @Nullable GlUniformInt gaux3Sampler;
     private final @Nullable GlUniformInt gaux4Sampler;
+    private final @Nullable GlUniformInt colortex4Sampler;
+    private final @Nullable GlUniformInt colortex5Sampler;
+    private final @Nullable GlUniformInt colortex6Sampler;
+    private final @Nullable GlUniformInt colortex7Sampler;
+    private final @Nullable GlUniformInt colortex8Sampler;
+    private final @Nullable GlUniformInt colortex9Sampler;
+    private final @Nullable GlUniformInt colortex10Sampler;
+    private final @Nullable GlUniformInt colortex11Sampler;
+    private final @Nullable GlUniformInt colortex12Sampler;
+    private final @Nullable GlUniformInt colortex13Sampler;
+    private final @Nullable GlUniformInt colortex14Sampler;
+    private final @Nullable GlUniformInt colortex15Sampler;
     private final @Nullable GlUniformInt depthtex0Sampler;
     private final @Nullable GlUniformInt depthtex1Sampler;
     private final @Nullable GlUniformInt noisetexSampler;
     private final @Nullable GlUniformInt shadowtex0Sampler;
     private final @Nullable GlUniformInt shadowtex1Sampler;
+    private final @Nullable GlUniformInt shadowcolorSampler;
     private final @Nullable GlUniformInt shadowcolor0Sampler;
+    private final @Nullable GlUniformInt shadowcolor1Sampler;
     private final @Nullable GlUniformInt entityId;
     private final @Nullable GlUniformFloat4v entityColor;
 
@@ -192,6 +220,11 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.irisFogStart = context.bindUniformIfPresent("iris_FogStart", GlUniformFloat::new);
         this.irisFogEnd = context.bindUniformIfPresent("iris_FogEnd", GlUniformFloat::new);
         this.irisCurrentAlphaTest = context.bindUniformIfPresent("iris_currentAlphaTest", GlUniformFloat::new);
+        this.legacyFogMode = context.bindUniformIfPresent("fogMode", GlUniformInt::new);
+        this.legacyFogShape = context.bindUniformIfPresent("fogShape", GlUniformInt::new);
+        this.legacyFogDensity = context.bindUniformIfPresent("fogDensity", GlUniformFloat::new);
+        this.legacyFogStart = context.bindUniformIfPresent("fogStart", GlUniformFloat::new);
+        this.legacyFogEnd = context.bindUniformIfPresent("fogEnd", GlUniformFloat::new);
 
         this.gbufferModelView = context.bindUniformIfPresent("gbufferModelView", GlUniformMatrix4f::new);
         this.gbufferModelViewInverse = context.bindUniformIfPresent("gbufferModelViewInverse", GlUniformMatrix4f::new);
@@ -241,17 +274,39 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         this.darknessFactor = context.bindUniformIfPresent("darknessFactor", GlUniformFloat::new);
         this.darknessLightFactor = context.bindUniformIfPresent("darknessLightFactor", GlUniformFloat::new);
         this.eyeBrightnessSmooth = context.bindUniformIfPresent("eyeBrightnessSmooth", GlUniformInt2v::new);
+        this.alphaTestRef = context.bindUniformIfPresent("alphaTestRef", GlUniformFloat::new);
+        this.modelOffset = context.bindUniformIfPresent("modelOffset", GlUniformFloat3v::new);
         this.texSampler = context.bindUniformIfPresent("tex", GlUniformInt::new);
+        this.gtextureSampler = context.bindUniformIfPresent("gtexture", GlUniformInt::new);
         this.lightmapSampler = context.bindUniformIfPresent("lightmap", GlUniformInt::new);
+        this.normalsSampler = context.bindUniformIfPresent("normals", GlUniformInt::new);
+        this.specularSampler = context.bindUniformIfPresent("specular", GlUniformInt::new);
+        this.shadowSampler = context.bindUniformIfPresent("shadow", GlUniformInt::new);
+        this.watershadowSampler = context.bindUniformIfPresent("watershadow", GlUniformInt::new);
         this.gaux1Sampler = context.bindUniformIfPresent("gaux1", GlUniformInt::new);
         this.gaux2Sampler = context.bindUniformIfPresent("gaux2", GlUniformInt::new);
+        this.gaux3Sampler = context.bindUniformIfPresent("gaux3", GlUniformInt::new);
         this.gaux4Sampler = context.bindUniformIfPresent("gaux4", GlUniformInt::new);
+        this.colortex4Sampler = context.bindUniformIfPresent("colortex4", GlUniformInt::new);
+        this.colortex5Sampler = context.bindUniformIfPresent("colortex5", GlUniformInt::new);
+        this.colortex6Sampler = context.bindUniformIfPresent("colortex6", GlUniformInt::new);
+        this.colortex7Sampler = context.bindUniformIfPresent("colortex7", GlUniformInt::new);
+        this.colortex8Sampler = context.bindUniformIfPresent("colortex8", GlUniformInt::new);
+        this.colortex9Sampler = context.bindUniformIfPresent("colortex9", GlUniformInt::new);
+        this.colortex10Sampler = context.bindUniformIfPresent("colortex10", GlUniformInt::new);
+        this.colortex11Sampler = context.bindUniformIfPresent("colortex11", GlUniformInt::new);
+        this.colortex12Sampler = context.bindUniformIfPresent("colortex12", GlUniformInt::new);
+        this.colortex13Sampler = context.bindUniformIfPresent("colortex13", GlUniformInt::new);
+        this.colortex14Sampler = context.bindUniformIfPresent("colortex14", GlUniformInt::new);
+        this.colortex15Sampler = context.bindUniformIfPresent("colortex15", GlUniformInt::new);
         this.depthtex0Sampler = context.bindUniformIfPresent("depthtex0", GlUniformInt::new);
         this.depthtex1Sampler = context.bindUniformIfPresent("depthtex1", GlUniformInt::new);
         this.noisetexSampler = context.bindUniformIfPresent("noisetex", GlUniformInt::new);
         this.shadowtex0Sampler = context.bindUniformIfPresent("shadowtex0", GlUniformInt::new);
         this.shadowtex1Sampler = context.bindUniformIfPresent("shadowtex1", GlUniformInt::new);
+        this.shadowcolorSampler = context.bindUniformIfPresent("shadowcolor", GlUniformInt::new);
         this.shadowcolor0Sampler = context.bindUniformIfPresent("shadowcolor0", GlUniformInt::new);
+        this.shadowcolor1Sampler = context.bindUniformIfPresent("shadowcolor1", GlUniformInt::new);
         this.entityId = context.bindUniformIfPresent("entityId", GlUniformInt::new);
         this.entityColor = context.bindUniformIfPresent("entityColor", GlUniformFloat4v::new);
 
@@ -308,8 +363,32 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.irisFogEnd.set(ChunkShaderFogComponent.FOG_SERVICE.getFogEnd());
         }
 
+        if (this.legacyFogMode != null) {
+            this.legacyFogMode.setInt(ActiniumOptiFineUniforms.getFogMode());
+        }
+
+        if (this.legacyFogShape != null) {
+            this.legacyFogShape.setInt(ActiniumOptiFineUniforms.getFogShape());
+        }
+
+        if (this.legacyFogDensity != null) {
+            this.legacyFogDensity.set(ChunkShaderFogComponent.FOG_SERVICE.getFogDensity());
+        }
+
+        if (this.legacyFogStart != null) {
+            this.legacyFogStart.set(ChunkShaderFogComponent.FOG_SERVICE.getFogStart());
+        }
+
+        if (this.legacyFogEnd != null) {
+            this.legacyFogEnd.set(ChunkShaderFogComponent.FOG_SERVICE.getFogEnd());
+        }
+
         if (this.irisCurrentAlphaTest != null) {
             this.irisCurrentAlphaTest.set(this.defaultAlphaTest);
+        }
+
+        if (this.alphaTestRef != null) {
+            this.alphaTestRef.set(this.defaultAlphaTest);
         }
 
         if (this.legacyFogColor != null) {
@@ -317,10 +396,16 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
         }
 
         Minecraft minecraft = Minecraft.getMinecraft();
+        ActiniumRenderPipeline pipeline = ActiniumRenderPipeline.INSTANCE;
 
-        if (this.legacySkyColor != null && minecraft.world != null && minecraft.getRenderViewEntity() != null) {
-            Vec3d currentSkyColor = minecraft.world.getSkyColor(minecraft.getRenderViewEntity(), minecraft.getRenderPartialTicks());
-            this.legacySkyColor.set((float) currentSkyColor.x, (float) currentSkyColor.y, (float) currentSkyColor.z);
+        if (this.legacySkyColor != null) {
+            if (pipeline.hasCapturedSkyColor()) {
+                Vector3f capturedSkyColor = pipeline.getCapturedSkyColor();
+                this.legacySkyColor.set(capturedSkyColor.x, capturedSkyColor.y, capturedSkyColor.z);
+            } else if (minecraft.world != null && minecraft.getRenderViewEntity() != null) {
+                Vec3d currentSkyColor = minecraft.world.getSkyColor(minecraft.getRenderViewEntity(), minecraft.getRenderPartialTicks());
+                this.legacySkyColor.set((float) currentSkyColor.x, (float) currentSkyColor.y, (float) currentSkyColor.z);
+            }
         }
 
         Framebuffer framebuffer = minecraft.getFramebuffer();
@@ -388,8 +473,28 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.texSampler.setInt(0);
         }
 
+        if (this.gtextureSampler != null) {
+            this.gtextureSampler.setInt(0);
+        }
+
         if (this.lightmapSampler != null) {
             this.lightmapSampler.setInt(1);
+        }
+
+        if (this.normalsSampler != null) {
+            this.normalsSampler.setInt(2);
+        }
+
+        if (this.specularSampler != null) {
+            this.specularSampler.setInt(3);
+        }
+
+        if (this.shadowSampler != null) {
+            this.shadowSampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_TEX0_UNIT);
+        }
+
+        if (this.watershadowSampler != null) {
+            this.watershadowSampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_TEX0_UNIT);
         }
 
         bindVanillaTerrainTextures(minecraft);
@@ -402,8 +507,60 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.gaux2Sampler.setInt(ActiniumRenderPipeline.TERRAIN_GAUX2_UNIT);
         }
 
+        if (this.gaux3Sampler != null) {
+            this.gaux3Sampler.setInt(ActiniumRenderPipeline.TERRAIN_GAUX3_UNIT);
+        }
+
         if (this.gaux4Sampler != null) {
             this.gaux4Sampler.setInt(ActiniumRenderPipeline.WORLD_GAUX4_UNIT);
+        }
+
+        if (this.colortex4Sampler != null) {
+            this.colortex4Sampler.setInt(ActiniumRenderPipeline.TERRAIN_GAUX1_UNIT);
+        }
+
+        if (this.colortex5Sampler != null) {
+            this.colortex5Sampler.setInt(ActiniumRenderPipeline.TERRAIN_GAUX2_UNIT);
+        }
+
+        if (this.colortex6Sampler != null) {
+            this.colortex6Sampler.setInt(ActiniumRenderPipeline.TERRAIN_GAUX3_UNIT);
+        }
+
+        if (this.colortex7Sampler != null) {
+            this.colortex7Sampler.setInt(ActiniumRenderPipeline.WORLD_GAUX4_UNIT);
+        }
+
+        if (this.colortex8Sampler != null) {
+            this.colortex8Sampler.setInt(ActiniumRenderPipeline.POST_COLORTEX8_UNIT);
+        }
+
+        if (this.colortex9Sampler != null) {
+            this.colortex9Sampler.setInt(ActiniumRenderPipeline.POST_COLORTEX9_UNIT);
+        }
+
+        if (this.colortex10Sampler != null) {
+            this.colortex10Sampler.setInt(ActiniumRenderPipeline.POST_COLORTEX10_UNIT);
+        }
+
+        if (this.colortex11Sampler != null) {
+            this.colortex11Sampler.setInt(ActiniumRenderPipeline.POST_COLORTEX11_UNIT);
+        }
+
+        if (this.colortex12Sampler != null) {
+            this.colortex12Sampler.setInt(ActiniumRenderPipeline.POST_COLORTEX12_UNIT);
+        }
+
+        if (this.colortex13Sampler != null) {
+            this.colortex13Sampler.setInt(ActiniumRenderPipeline.POST_COLORTEX13_UNIT);
+        }
+
+        if (this.colortex14Sampler != null) {
+            this.colortex14Sampler.setInt(ActiniumRenderPipeline.POST_COLORTEX14_UNIT);
+        }
+
+        if (this.colortex15Sampler != null) {
+            this.colortex15Sampler.setInt(ActiniumRenderPipeline.POST_COLORTEX15_UNIT);
         }
 
         if (this.depthtex0Sampler != null) {
@@ -426,8 +583,16 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             this.shadowtex1Sampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_TEX1_UNIT);
         }
 
+        if (this.shadowcolorSampler != null) {
+            this.shadowcolorSampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_COLOR0_UNIT);
+        }
+
         if (this.shadowcolor0Sampler != null) {
             this.shadowcolor0Sampler.setInt(ActiniumRenderPipeline.TERRAIN_SHADOW_COLOR0_UNIT);
+        }
+
+        if (this.shadowcolor1Sampler != null) {
+            this.shadowcolor1Sampler.setInt(ActiniumRenderPipeline.POST_SHADOW_COLOR1_UNIT);
         }
 
         if (this.entityId != null) {
@@ -571,6 +736,10 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
 
         if (this.irisRegionOffset != null) {
             this.irisRegionOffset.set(x, y, z);
+        }
+
+        if (this.modelOffset != null) {
+            this.modelOffset.set(x, y, z);
         }
     }
 

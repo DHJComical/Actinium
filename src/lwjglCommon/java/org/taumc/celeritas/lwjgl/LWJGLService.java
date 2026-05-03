@@ -85,6 +85,7 @@ public interface LWJGLService {
     void glUniform1fv(int location, FloatBuffer value);
     void glUniform2i(int location, int v0, int v1);
     void glUniform3i(int location, int v0, int v1, int v2);
+    void glUniform4i(int location, int v0, int v1, int v2, int v3);
     void glUniform3f(int location, float v0, float v1, float v2);
     void glUniform3fv(int location, FloatBuffer value);
     void glUniform3fv(int location, float[] value);
@@ -134,6 +135,7 @@ public interface LWJGLService {
     int glGetTexLevelParameteri(int target, int level, int pname);
     void glCopyTexSubImage2D(int target, int level, int xoffset, int yoffset, int x, int y, int width, int height);
     void glPixelStorei(int pname, int param);
+    void glBindImageTexture(int unit, int texture, int level, boolean layered, int layer, int access, int format);
 
     // ===================== FRAMEBUFFER OPERATIONS =====================
 

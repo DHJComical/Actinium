@@ -52,6 +52,16 @@ public class TextureAtlasMixin implements TextureMapExtension {
         return this.celeritas$quadTree.find(x, y);
     }
 
+    @Override
+    public int celeritas$getAtlasWidth() {
+        return this.celeritas$width;
+    }
+
+    @Override
+    public int celeritas$getAtlasHeight() {
+        return this.celeritas$height;
+    }
+
     @ModifyExpressionValue(method = "updateAnimations", at = @At(value = "INVOKE", target = "Ljava/util/List;iterator()Ljava/util/Iterator;"))
     private Iterator<TextureAtlasSprite> getFilteredIterator(Iterator<TextureAtlasSprite> iterator) {
         if (CeleritasVintage.options().performance.animateOnlyVisibleTextures) {

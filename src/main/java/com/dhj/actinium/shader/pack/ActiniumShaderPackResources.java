@@ -99,7 +99,7 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
             throw new IOException("Could not locate shaders directory in " + pack.name());
         }
 
-        Properties configProperties = readPropertiesFile(shadersRoot.resolve("config.txt"), "config.txt");
+        Properties configProperties = readPropertiesFile(shadersRoot.resolve("config.txt"), "config.txt", List.of(), optionOverrides);
         ActiniumShaderPackResources parserResources = new ActiniumShaderPackResources(
                 pack.name(),
                 packPath,
@@ -113,14 +113,15 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         List<String> directiveSources = parserResources.collectDirectiveSources();
         Map<String, String> rawShaderProperties = readRawPropertiesEntries(shadersRoot.resolve("shaders.properties"));
         ActiniumShaderProperties shaderProperties = ActiniumShaderProperties.parse(
-                readPropertiesFile(shadersRoot.resolve("shaders.properties"), "shaders.properties", directiveSources),
+                readPropertiesFile(shadersRoot.resolve("shaders.properties"), "shaders.properties", directiveSources, optionOverrides),
                 rawShaderProperties,
                 directiveSources
         );
         shaderProperties.applyRuntimeOverrides(optionOverrides);
-        Properties blockProperties = readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties", directiveSources);
-        Properties entityProperties = readDimensionAwareProperties(shadersRoot, "entity.properties", directiveSources);
-        ActiniumIdMap idMap = ActiniumIdMap.parse(blockProperties, entityProperties);
+        Properties blockProperties = readPropertiesFile(shadersRoot.resolve("block.properties"), "block.properties", directiveSources, optionOverrides);
+        Properties entityProperties = readDimensionAwareProperties(shadersRoot, "entity.properties", directiveSources, optionOverrides);
+        Properties itemProperties = readPropertiesFile(shadersRoot.resolve("item.properties"), "item.properties", directiveSources, optionOverrides);
+        ActiniumIdMap idMap = ActiniumIdMap.parse(blockProperties, entityProperties, itemProperties);
 
         return new ActiniumShaderPackResources(pack.name(), packPath, fileSystem, shadersRoot, configProperties, shaderProperties, idMap, optionOverrides);
     }
@@ -302,20 +303,24 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
     }
 
     private static Properties readPropertiesFile(Path path, String logicalName) {
-        return readPropertiesFile(path, logicalName, List.of());
+        return readPropertiesFile(path, logicalName, List.of(), Map.of());
     }
 
     private static Properties readPropertiesFile(Path path, String logicalName, Iterable<String> directiveSources) {
-        return ActiniumDirectiveProcessor.loadPropertiesFile(path, logicalName, directiveSources);
+        return readPropertiesFile(path, logicalName, directiveSources, Map.of());
     }
 
-    private static Properties readDimensionAwareProperties(Path shadersRoot, String logicalName, Iterable<String> directiveSources) {
+    private static Properties readPropertiesFile(Path path, String logicalName, Iterable<String> directiveSources, Map<String, String> optionOverrides) {
+        return ActiniumDirectiveProcessor.loadPropertiesFile(path, logicalName, directiveSources, optionOverrides);
+    }
+
+    private static Properties readDimensionAwareProperties(Path shadersRoot, String logicalName, Iterable<String> directiveSources, Map<String, String> optionOverrides) {
         Properties merged = new Properties();
-        merged.putAll(readPropertiesFile(shadersRoot.resolve(logicalName), logicalName, directiveSources));
+        merged.putAll(readPropertiesFile(shadersRoot.resolve(logicalName), logicalName, directiveSources, optionOverrides));
 
         for (String prefix : getDimensionPrefixes()) {
             Path overridePath = shadersRoot.resolve(prefix).resolve(logicalName);
-            merged.putAll(readPropertiesFile(overridePath, prefix + "/" + logicalName, directiveSources));
+            merged.putAll(readPropertiesFile(overridePath, prefix + "/" + logicalName, directiveSources, optionOverrides));
         }
 
         return merged;

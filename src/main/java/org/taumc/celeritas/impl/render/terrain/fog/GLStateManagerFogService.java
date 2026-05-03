@@ -4,8 +4,8 @@ import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.pack.ActiniumShaderProperties;
 import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.GlStateManager;
+import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
 import org.embeddedt.embeddium.impl.render.chunk.fog.FogService;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
 
@@ -53,8 +53,9 @@ public class GLStateManagerFogService implements FogService {
 
     @Override
     public float[] getFogColor() {
-        EntityRenderer entityRenderer = Minecraft.getMinecraft().entityRenderer;
-        return new float[]{entityRenderer.fogColorRed, entityRenderer.fogColorGreen, entityRenderer.fogColorBlue, 1.0F};
+        float[] fog = ActiniumRenderPipeline.INSTANCE.getFogColor();
+        ActiniumRenderPipeline.INSTANCE.debugLogFogState("GLStateManagerFogService.getFogColor", "read");
+        return fog;
     }
 
     @Override

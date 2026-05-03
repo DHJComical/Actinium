@@ -7,4 +7,8 @@ public interface TextureMapExtension {
     QuadTree<TextureAtlasSprite> celeritas$getQuadTree();
 
     TextureAtlasSprite celeritas$findFromUV(float u, float v);
+
+    int celeritas$getAtlasWidth();
+
+    int celeritas$getAtlasHeight();
 }

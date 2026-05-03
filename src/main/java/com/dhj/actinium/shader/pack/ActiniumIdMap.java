@@ -26,29 +26,38 @@ import java.util.Properties;
 import java.util.Set;
 
 public final class ActiniumIdMap {
-    public static final ActiniumIdMap EMPTY = new ActiniumIdMap(new Reference2ObjectOpenHashMap<>(), Collections.emptyMap(), new Object2IntOpenHashMap<>());
+    public static final ActiniumIdMap EMPTY = new ActiniumIdMap(new Reference2ObjectOpenHashMap<>(), Collections.emptyMap(), new Object2IntOpenHashMap<>(), new Object2IntOpenHashMap<>());
 
     private final Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches;
     private final Map<Block, ActiniumBlockRenderLayer> blockTypeIds;
     private final Object2IntMap<ActiniumNamespacedId> entityIds;
+    private final Object2IntMap<ActiniumNamespacedId> itemIds;
 
     private ActiniumIdMap(Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches,
                           Map<Block, ActiniumBlockRenderLayer> blockTypeIds,
-                          Object2IntMap<ActiniumNamespacedId> entityIds) {
+                          Object2IntMap<ActiniumNamespacedId> entityIds,
+                          Object2IntMap<ActiniumNamespacedId> itemIds) {
         this.blockMetaMatches = blockMetaMatches;
         this.blockTypeIds = blockTypeIds;
         this.entityIds = entityIds;
+        this.itemIds = itemIds;
     }
 
     public static ActiniumIdMap parse(Properties properties) {
-        return parse(properties, new Properties());
+        return parse(properties, new Properties(), new Properties());
     }
 
     public static ActiniumIdMap parse(Properties blockProperties, Properties entityProperties) {
+        return parse(blockProperties, entityProperties, new Properties());
+    }
+
+    public static ActiniumIdMap parse(Properties blockProperties, Properties entityProperties, Properties itemProperties) {
         Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches = new Reference2ObjectOpenHashMap<>();
         Map<Block, ActiniumBlockRenderLayer> blockTypeIds = new HashMap<>();
         Object2IntMap<ActiniumNamespacedId> entityIds = new Object2IntOpenHashMap<>();
+        Object2IntMap<ActiniumNamespacedId> itemIds = new Object2IntOpenHashMap<>();
         entityIds.defaultReturnValue(-1);
+        itemIds.defaultReturnValue(-1);
 
         blockProperties.forEach((keyObject, valueObject) -> {
             String key = keyObject.toString();
@@ -73,7 +82,16 @@ public final class ActiniumIdMap {
             }
         });
 
-        return new ActiniumIdMap(blockMetaMatches, blockTypeIds, entityIds);
+        itemProperties.forEach((keyObject, valueObject) -> {
+            String key = keyObject.toString();
+            String value = valueObject.toString();
+
+            if (key.startsWith("item.")) {
+                parseItemEntry(key.substring("item.".length()), value, itemIds);
+            }
+        });
+
+        return new ActiniumIdMap(blockMetaMatches, blockTypeIds, entityIds, itemIds);
     }
 
     public @Nullable Reference2ObjectMap<Block, Int2IntMap> getBlockMetaMatches() {
@@ -86,6 +104,10 @@ public final class ActiniumIdMap {
 
     public @Nullable Object2IntMap<ActiniumNamespacedId> getEntityIds() {
         return this.entityIds.isEmpty() ? null : this.entityIds;
+    }
+
+    public @Nullable Object2IntMap<ActiniumNamespacedId> getItemIds() {
+        return this.itemIds.isEmpty() ? null : this.itemIds;
     }
 
     private static void parseBlockEntry(String idString, String value, Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches) {
@@ -166,6 +188,24 @@ public final class ActiniumIdMap {
             }
 
             entityIds.put(new ActiniumNamespacedId(token), intId);
+        }
+    }
+
+    private static void parseItemEntry(String idString, String value, Object2IntMap<ActiniumNamespacedId> itemIds) {
+        int intId;
+
+        try {
+            intId = Integer.parseInt(idString);
+        } catch (NumberFormatException ignored) {
+            return;
+        }
+
+        for (String token : parseIdentifierList(value)) {
+            if (token.isEmpty() || token.contains("=")) {
+                continue;
+            }
+
+            itemIds.put(new ActiniumNamespacedId(token), intId);
         }
     }
 

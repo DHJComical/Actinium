@@ -15,7 +15,6 @@ final class ActiniumLegacyChunkShaderAdapter {
     private static final Pattern TEX_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+tex\\s*;\\s*$");
     private static final Pattern LIGHTMAP_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+lightmap\\s*;\\s*$");
     private static final Pattern SHADOW_CASTING_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+SHADOW_CASTING\\b.*$");
-    private static final Pattern FOG_ACTIVE_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+FOG_ACTIVE\\b.*$");
     private static final Pattern GL_FRAG_DATA = Pattern.compile("gl_FragData\\s*\\[\\s*(\\d+)\\s*\\]");
     private ActiniumLegacyChunkShaderAdapter() {
     }
@@ -31,10 +30,6 @@ final class ActiniumLegacyChunkShaderAdapter {
 
         if (!shadowPass && !shouldPreserveWorldShadowCasting(pass)) {
             translated = SHADOW_CASTING_DEFINE.matcher(translated).replaceAll("// Actinium legacy compat: SHADOW_CASTING disabled");
-        }
-
-        if (!shadowPass) {
-            translated = FOG_ACTIVE_DEFINE.matcher(translated).replaceAll("// Actinium legacy compat: FOG_ACTIVE disabled");
         }
 
         translated = MAIN_DECLARATION.matcher(translated).replaceFirst("void actinium_pack_main()");
@@ -72,10 +67,9 @@ final class ActiniumLegacyChunkShaderAdapter {
             return source;
         }
 
-        String processed = shouldPreserveWorldShadowCasting(pass)
+        return shouldPreserveWorldShadowCasting(pass)
                 ? source
                 : SHADOW_CASTING_DEFINE.matcher(source).replaceAll("// Actinium legacy compat: SHADOW_CASTING disabled");
-        return FOG_ACTIVE_DEFINE.matcher(processed).replaceAll("// Actinium legacy compat: FOG_ACTIVE disabled");
     }
 
     private static boolean shouldPreserveWorldShadowCasting(ActiniumTerrainPass pass) {
@@ -116,6 +110,10 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "uniform mat4 u_ModelViewMatrix;",
                 "uniform vec3 u_RegionOffset;",
                 "uniform mat3 iris_NormalMatrix;",
+                "uniform float iris_FogDensity;",
+                "uniform float iris_FogStart;",
+                "uniform float iris_FogEnd;",
+                "uniform vec4 iris_FogColor;",
                 shadowCompatUniforms,
                 "",
                 "out float actinium_FogFragCoord;",
@@ -138,6 +136,20 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "vec4 actinium_at_tangent;",
                 "vec4 actinium_at_midBlock;",
                 "vec3 actinium_iris_Normal;",
+                "struct actinium_FogParameters {",
+                "    vec4 color;",
+                "    float density;",
+                "    float start;",
+                "    float end;",
+                "    float scale;",
+                "};",
+                "actinium_FogParameters actinium_gl_Fog = actinium_FogParameters(",
+                "    iris_FogColor,",
+                "    iris_FogDensity,",
+                "    iris_FogStart,",
+                "    iris_FogEnd,",
+                "    1.0 / max(iris_FogEnd - iris_FogStart, 0.0001)",
+                ");",
                 "",
                 "vec4 _actinium_getVertexPosition() {",
                 "    return vec4(_vert_position + u_RegionOffset + _get_draw_translation(_draw_id), 1.0);",
@@ -162,6 +174,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "#define gl_ModelViewMatrix actinium_gl_ModelViewMatrix",
                 "#define gl_ModelViewProjectionMatrix actinium_gl_ModelViewProjectionMatrix",
                 "#define gl_TextureMatrix actinium_gl_TextureMatrix",
+                "#define gl_Fog actinium_gl_Fog",
                 "#define gl_FogFragCoord actinium_FogFragCoord",
                 "#define ftransform() actinium_ftransform()",
                 "#define chunkOffset u_RegionOffset",
@@ -295,6 +308,26 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "out vec4 fragColor6;",
                 "out vec4 fragColor7;",
                 "",
+                "struct actinium_FogParameters {",
+                "    vec4 color;",
+                "    float density;",
+                "    float start;",
+                "    float end;",
+                "    float scale;",
+                "};",
+                "uniform float iris_FogDensity;",
+                "uniform float iris_FogStart;",
+                "uniform float iris_FogEnd;",
+                "uniform vec4 iris_FogColor;",
+                "actinium_FogParameters actinium_gl_Fog = actinium_FogParameters(",
+                "    iris_FogColor,",
+                "    iris_FogDensity,",
+                "    iris_FogStart,",
+                "    iris_FogEnd,",
+                "    1.0 / max(iris_FogEnd - iris_FogStart, 0.0001)",
+                ");",
+                "",
+                "#define gl_Fog actinium_gl_Fog",
                 "#define gl_FogFragCoord actinium_FogFragCoord",
                 "#define gl_FragColor fragColor0",
                 "",
