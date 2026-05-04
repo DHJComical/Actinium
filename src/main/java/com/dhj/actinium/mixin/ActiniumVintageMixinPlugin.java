@@ -1,4 +1,4 @@
-package org.taumc.celeritas.mixin;
+package com.dhj.actinium.mixin;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -10,8 +10,8 @@ import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -20,12 +20,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
+public class ActiniumVintageMixinPlugin implements IMixinConfigPlugin {
     public static final Logger LOGGER = LogManager.getLogger("CeleritasMixins");
 
     @Override
     public void onLoad(String mixinPackage) {
-        LOGGER.info("Loaded Celeritas mixin plugin");
+        LOGGER.info("Loaded Actinium mixin plugin");
     }
 
     @Override
@@ -46,7 +46,7 @@ public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
         try {
             String className = baseFolder.relativize(path).toString().replace('/', '.').replace('\\', '.');
             return className.substring(0, className.length() - 6);
-        } catch (RuntimeException e) {
+        } catch(RuntimeException e) {
             throw new IllegalStateException("Error relativizing " + path + " to " + baseFolder, e);
         }
     }
@@ -61,7 +61,7 @@ public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
     }
 
     private static boolean hasStaticMixinEntries() {
-        try (var stream = CeleritasVintageMixinPlugin.class.getResourceAsStream("/mixins.celeritas.json")) {
+        try (var stream = ActiniumVintageMixinPlugin.class.getResourceAsStream("/mixins.celeritas.json")) {
             if (stream == null) {
                 return false;
             }
@@ -81,9 +81,9 @@ public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
     private static List<String> discoverMixins() {
         List<Path> rootPaths = new ArrayList<>();
 
-        rootPaths.addAll(Stream.of("org.taumc.celeritas.mixin")
+        rootPaths.addAll(Stream.of("com.dhj.actinium.mixin", "org.taumc.celeritas.mixin")
                 .flatMap(str -> {
-                    URL url = CeleritasVintageMixinPlugin.class.getResource("/" + str.replace('.', '/'));
+                    URL url = ActiniumVintageMixinPlugin.class.getResource("/" + str.replace('.', '/'));
                     if (url == null) {
                         return Stream.empty();
                     }
@@ -97,13 +97,14 @@ public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
 
         if (rootPaths.isEmpty()) {
             try {
-                URI uri = Objects.requireNonNull(CeleritasVintageMixinPlugin.class.getResource("/mixins.celeritas.json")).toURI();
+                URI uri = Objects.requireNonNull(ActiniumVintageMixinPlugin.class.getResource("/mixins.celeritas.json")).toURI();
                 FileSystem fs;
                 try {
                     fs = FileSystems.getFileSystem(uri);
                 } catch (FileSystemNotFoundException var11) {
                     fs = FileSystems.newFileSystem(uri, Collections.emptyMap());
                 }
+                rootPaths.add(fs.getPath("com", "dhj", "actinium", "mixin").toAbsolutePath());
                 rootPaths.add(fs.getPath("org", "taumc", "celeritas", "mixin").toAbsolutePath());
             } catch(Exception e) {
                 LOGGER.error("Error finding mixins", e);

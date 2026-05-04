@@ -1,4 +1,4 @@
-package org.taumc.celeritas.mixin.features.render.tileentity;
+package com.dhj.actinium.mixin.features.render.tileentity;
 
 import com.dhj.actinium.shader.uniform.ActiniumCapturedRenderingState;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;

@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "plugin": "com.dhj.actinium.mixin.ActiniumVintageMixinPlugin",
+  "package": "com.dhj.actinium.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "client": [
+    "core.terrain.BufferBuilderMixin",
+    "features.render.EntityRendererActiniumColorStateMixin",
+    "features.render.EntityRendererActiniumPipelineMixin",
+    "features.render.EntityRendererActiniumWeatherParticlesMixin",
+    "features.render.GameSettingsActiniumCloudMixin",
+    "features.render.RenderActiniumShadowMixin",
+    "features.render.RenderGlobalActiniumPipelineMixin",
+    "features.render.RenderManagerActiniumEntityStateMixin",
+    "features.render.tileentity.TileEntityRenderDispatcherMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
