@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 public final class ActiniumShaderPackResources implements AutoCloseable {
@@ -38,7 +40,9 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
     private final Map<String, String> optionOverrides;
     private final Map<String, Optional<String>> shaderSourceCache = new HashMap<>();
     private final Map<String, Optional<String>> programSourceCache = new HashMap<>();
+    private final Map<String, int[]> programDrawBuffersCache = new HashMap<>();
     private final Map<String, Optional<Path>> programPathCache = new HashMap<>();
+    private static final Pattern DRAW_BUFFERS_PATTERN = Pattern.compile("/\\*\\s*(DRAWBUFFERS|RENDERTARGETS)\\s*:\\s*([^*]*?)\\s*\\*/");
 
     private ActiniumShaderPackResources(String packName, Path packPath, @Nullable FileSystem fileSystem, @Nullable Path shadersRoot,
                                         Properties configProperties, ActiniumShaderProperties shaderProperties,
@@ -200,6 +204,25 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         }
 
         return null;
+    }
+
+    public int[] readProgramDrawBuffers(ActiniumTerrainPass pass) {
+        String cacheKey = pass.getName();
+        int[] cached = this.programDrawBuffersCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        String source = this.readProgramSource(pass, ShaderType.FRAGMENT);
+        if (source == null || source.isBlank()) {
+            int[] fallback = new int[]{1};
+            this.programDrawBuffersCache.put(cacheKey, fallback);
+            return fallback;
+        }
+
+        int[] drawBuffers = parseDrawBuffers(source);
+        this.programDrawBuffersCache.put(cacheKey, drawBuffers);
+        return drawBuffers;
     }
 
     public @Nullable String readProgramSource(String programName, ShaderType type) {
@@ -642,5 +665,51 @@ public final class ActiniumShaderPackResources implements AutoCloseable {
         } catch (IOException e) {
             throw new RuntimeException("Failed to read shader source " + path, e);
         }
+    }
+
+    static int[] parseDrawBuffers(String fragmentSource) {
+        String drawBufferDirective = null;
+        String renderTargetsDirective = null;
+        int drawBufferLocation = -1;
+        int renderTargetsLocation = -1;
+        int location = 0;
+
+        for (String rawLine : fragmentSource.split("\\R")) {
+            Matcher matcher = DRAW_BUFFERS_PATTERN.matcher(rawLine);
+            while (matcher.find()) {
+                String type = matcher.group(1);
+                String directive = matcher.group(2).trim();
+                int directiveLocation = location + matcher.start();
+
+                if ("DRAWBUFFERS".equals(type) && directiveLocation >= drawBufferLocation) {
+                    drawBufferDirective = directive;
+                    drawBufferLocation = directiveLocation;
+                } else if ("RENDERTARGETS".equals(type) && directiveLocation >= renderTargetsLocation) {
+                    renderTargetsDirective = directive;
+                    renderTargetsLocation = directiveLocation;
+                }
+            }
+
+            location += rawLine.length() + 1;
+        }
+
+        String appliedDirective;
+        if (drawBufferLocation > renderTargetsLocation) {
+            appliedDirective = drawBufferDirective;
+        } else if (renderTargetsLocation >= 0) {
+            appliedDirective = renderTargetsDirective;
+        } else {
+            appliedDirective = drawBufferDirective;
+        }
+
+        if (appliedDirective == null || appliedDirective.isEmpty()) {
+            return new int[]{1};
+        }
+
+        int[] drawBuffers = new int[appliedDirective.length()];
+        for (int i = 0; i < appliedDirective.length(); i++) {
+            drawBuffers[i] = appliedDirective.charAt(i) - '0';
+        }
+        return drawBuffers;
     }
 }

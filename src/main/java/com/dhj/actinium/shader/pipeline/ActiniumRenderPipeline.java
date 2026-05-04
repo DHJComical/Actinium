@@ -1,6 +1,7 @@
 package com.dhj.actinium.shader.pipeline;
 
 import com.dhj.actinium.celeritas.ActiniumShaders;
+import com.dhj.actinium.celeritas.shader_overrides.ActiniumTerrainPass;
 import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import com.dhj.actinium.shader.pack.ActiniumShaderProperties;
 import com.dhj.actinium.shader.pack.ActiniumShaderPackResources;
@@ -4677,6 +4678,17 @@ public final class ActiniumRenderPipeline {
     }
 
     private int[] resolveTerrainPassDrawBuffers(TerrainRenderPass pass) {
+        if (pass == null) {
+            return new int[]{ActiniumPostTargets.TARGET_COLORTEX1};
+        }
+
+        if (pass.isReverseOrder()) {
+            ActiniumShaderPackResources resources = ActiniumShaderPackManager.getActivePackResources();
+            if (resources != null) {
+                return resources.readProgramDrawBuffers(ActiniumTerrainPass.GBUFFER_TRANSLUCENT);
+            }
+        }
+
         return new int[]{ActiniumPostTargets.TARGET_COLORTEX1, ActiniumPostTargets.TARGET_GAUX4};
     }
 
