@@ -21,4 +21,14 @@ class ActiniumShaderPackResourcesTest {
     void parseDrawBuffersDefaultsToColortex1() {
         assertArrayEquals(new int[]{1}, ActiniumShaderPackResources.parseDrawBuffers("#version 120\nvoid main() {}"));
     }
+
+    @Test
+    void parseDrawBuffersLetsLaterDirectiveWin() {
+        String shader = """
+                /* RENDERTARGETS:17 */
+                /* DRAWBUFFERS:234 */
+                """;
+
+        assertArrayEquals(new int[]{2, 3, 4}, ActiniumShaderPackResources.parseDrawBuffers(shader));
+    }
 }
