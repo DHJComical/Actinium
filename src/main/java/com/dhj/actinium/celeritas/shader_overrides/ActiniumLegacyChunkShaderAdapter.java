@@ -1,75 +1,55 @@
 package com.dhj.actinium.celeritas.shader_overrides;
 
+import com.dhj.actinium.shader.transform.ActiniumGlslTransformUtils;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
+import org.taumc.glsl.ShaderParser;
+import org.taumc.glsl.Transformer;
 
-import java.util.regex.Matcher;
+import java.util.HashSet;
 import java.util.regex.Pattern;
 
 final class ActiniumLegacyChunkShaderAdapter {
-    private static final Pattern VERSION_DIRECTIVE = Pattern.compile("(?m)^\\s*#version\\s+.+$");
-    private static final Pattern EXTENSION_DIRECTIVE = Pattern.compile("(?m)^\\s*#extension\\s+.+$");
-    private static final Pattern MAIN_DECLARATION = Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*\\)");
-    private static final Pattern MC_ENTITY_DECLARATION = Pattern.compile("(?m)^\\s*(attribute|in)\\s+vec4\\s+mc_Entity\\s*;\\s*$");
-    private static final Pattern MC_MID_TEX_DECLARATION = Pattern.compile("(?m)^\\s*(attribute|in)\\s+vec2\\s+mc_midTexCoord\\s*;\\s*$");
-    private static final Pattern AT_TANGENT_DECLARATION = Pattern.compile("(?m)^\\s*(attribute|in)\\s+vec4\\s+at_tangent\\s*;\\s*$");
-    private static final Pattern TEX_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+tex\\s*;\\s*$");
-    private static final Pattern LIGHTMAP_DECLARATION = Pattern.compile("(?m)^\\s*uniform\\s+sampler2D\\s+lightmap\\s*;\\s*$");
-    private static final Pattern SHADOW_CASTING_DEFINE = Pattern.compile("(?m)^\\s*#define\\s+SHADOW_CASTING\\b.*$");
-    private static final Pattern GL_FRAG_DATA = Pattern.compile("gl_FragData\\s*\\[\\s*(\\d+)\\s*\\]");
+    private static final Pattern VERSION_PATTERN = Pattern.compile("(?m)^\\s*#version\\s+.+$");
+
     private ActiniumLegacyChunkShaderAdapter() {
     }
 
     public static String translate(ShaderType type, ActiniumTerrainPass pass, String source, int terrainDebugMode) {
         boolean fragmentShader = type == ShaderType.FRAGMENT;
         boolean shadowPass = pass == ActiniumTerrainPass.SHADOW || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
-        boolean alphaTestPass = pass == ActiniumTerrainPass.GBUFFER_CUTOUT || pass == ActiniumTerrainPass.GBUFFER_CUTOUT_MIPPED
+        boolean alphaTestPass = pass == ActiniumTerrainPass.GBUFFER_CUTOUT
+                || pass == ActiniumTerrainPass.GBUFFER_CUTOUT_MIPPED
                 || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
         int debugMode = isWorldTerrainPass(pass) ? terrainDebugMode : 0;
 
-        String translated = stripLeadingDirectives(source);
+        String parseableSource = ActiniumGlslTransformUtils.replaceTexture(source);
+        ShaderParser.ParsedShader parsed = ShaderParser.parseShader(parseableSource);
+        Transformer transformer = new Transformer(parsed.full());
 
-        if (!shadowPass && !shouldPreserveWorldShadowCasting(pass)) {
-            translated = SHADOW_CASTING_DEFINE.matcher(translated).replaceAll("// Actinium legacy compat: SHADOW_CASTING disabled");
-        }
-
-        translated = MAIN_DECLARATION.matcher(translated).replaceFirst("void actinium_pack_main()");
-        translated = MC_ENTITY_DECLARATION.matcher(translated).replaceAll("");
-        translated = MC_MID_TEX_DECLARATION.matcher(translated).replaceAll("");
-        translated = AT_TANGENT_DECLARATION.matcher(translated).replaceAll("");
-        translated = TEX_DECLARATION.matcher(translated).replaceAll("");
-        translated = LIGHTMAP_DECLARATION.matcher(translated).replaceAll("");
-        translated = translated.replace("attribute ", "in ");
-        translated = translated.replace("varying ", fragmentShader ? "in " : "out ");
-        translated = translated.replace("mc_Entity", "actinium_mc_Entity");
-        translated = translated.replace("mc_midTexCoord", "actinium_mc_midTexCoord");
-        translated = translated.replace("texture2D(", "texture(");
-        translated = translated.replace("texture2DLod(", "textureLod(");
-        translated = translated.replace("shadow2D(", "actinium_shadow2D(");
-        translated = replaceIdentifier(translated, "tex", "u_BlockTex");
-        translated = replaceIdentifier(translated, "lightmap", "u_LightTex");
+        transformer.renameFunctionCall(ActiniumGlslTransformUtils.TEXTURE_RENAMES);
+        transformer.renameFunctionCall("shadow2D", "actinium_shadow2D");
+        transformer.rename("mc_Entity", "actinium_mc_Entity");
+        transformer.rename("mc_midTexCoord", "actinium_mc_midTexCoord");
 
         if (fragmentShader) {
-            translated = replaceFragDataOutputs(translated);
-            translated = translated.replace("gl_FragColor", "fragColor0");
+            transformer.rename("gl_FragColor", "fragColor0");
+            transformer.renameArray("gl_FragData", "fragColor", new HashSet<>());
         }
+
+        String pre = VERSION_PATTERN.matcher(ActiniumGlslTransformUtils.getFormattedShader(parsed.pre(), "")).replaceFirst("").trim();
+        String header = (fragmentShader ? fragmentPreamble(alphaTestPass) : vertexPreamble(shadowPass)) + (pre.isEmpty() ? "" : pre + "\n");
+        String translated = ActiniumGlslTransformUtils.getFormattedShader(parsed.full(), header);
+        translated = ActiniumGlslTransformUtils.restoreReservedWords(translated);
+        translated = postProcessTranslatedSource(type, pass, translated);
 
         if (fragmentShader) {
-            return fragmentPreamble(alphaTestPass) + translated + fragmentFooter(debugMode);
+            return translated + fragmentFooter(debugMode);
         }
-
-        return vertexPreamble(shadowPass) + translated + vertexFooter(shadowPass);
+        return translated + vertexFooter(shadowPass);
     }
 
     public static String postProcessParsedSource(ActiniumTerrainPass pass, String source) {
-        boolean shadowPass = pass == ActiniumTerrainPass.SHADOW || pass == ActiniumTerrainPass.SHADOW_CUTOUT;
-
-        if (shadowPass) {
-            return source;
-        }
-
-        return shouldPreserveWorldShadowCasting(pass)
-                ? source
-                : SHADOW_CASTING_DEFINE.matcher(source).replaceAll("// Actinium legacy compat: SHADOW_CASTING disabled");
+        return source;
     }
 
     private static boolean shouldPreserveWorldShadowCasting(ActiniumTerrainPass pass) {
@@ -82,9 +62,14 @@ final class ActiniumLegacyChunkShaderAdapter {
                 || pass == ActiniumTerrainPass.GBUFFER_CUTOUT;
     }
 
-    private static String stripLeadingDirectives(String source) {
-        String stripped = VERSION_DIRECTIVE.matcher(source).replaceFirst("");
-        return EXTENSION_DIRECTIVE.matcher(stripped).replaceAll("");
+    private static String postProcessTranslatedSource(ShaderType type, ActiniumTerrainPass pass, String source) {
+        if (!shouldPreserveWorldShadowCasting(pass) && pass != ActiniumTerrainPass.SHADOW && pass != ActiniumTerrainPass.SHADOW_CUTOUT) {
+            source = source.replace("#define SHADOW_CASTING", "// Actinium legacy compat: SHADOW_CASTING disabled");
+        }
+        if (type == ShaderType.FRAGMENT) {
+            source = source.replace("gl_FragColor", "fragColor0");
+        }
+        return source;
     }
 
     private static String vertexPreamble(boolean shadowPass) {
@@ -203,8 +188,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "    actinium_pack_main();",
                 shadowCompatCall,
                 "}",
-                ""
-        );
+                "");
     }
 
     private static String vertexFooter(boolean shadowPass) {
@@ -269,8 +253,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "    #endif",
                 "    return currentPosition;",
                 "}",
-                ""
-        );
+                "");
     }
 
     private static String fragmentPreamble(boolean alphaTestPass) {
@@ -337,8 +320,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "vec4 actinium_shadow2D(sampler2DShadow samplerState, vec3 coord) {",
                 "    return vec4(texture(samplerState, coord), 0.0, 0.0, 1.0);",
                 "}",
-                ""
-        );
+                "");
     }
 
     private static String fragmentFooter(int terrainDebugMode) {
@@ -429,23 +411,6 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "    actinium_apply_legacy_alpha_test();",
                 debugBlock,
                 "}",
-                ""
-        );
-    }
-
-    private static String replaceFragDataOutputs(String source) {
-        Matcher matcher = GL_FRAG_DATA.matcher(source);
-        StringBuilder buffer = new StringBuilder(source.length());
-
-        while (matcher.find()) {
-            matcher.appendReplacement(buffer, "fragColor" + matcher.group(1));
-        }
-
-        matcher.appendTail(buffer);
-        return buffer.toString();
-    }
-
-    private static String replaceIdentifier(String source, String oldName, String newName) {
-        return source.replaceAll("\\b" + Pattern.quote(oldName) + "\\b", newName);
+                "");
     }
 }

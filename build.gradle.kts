@@ -48,16 +48,17 @@ java {
     }
 }
 
+val contain by configurations.creating
+val modCompileOnly by configurations.creating
+val modRuntimeOnly by configurations.creating
+
 configurations {
-    val contain by creating
     implementation {
         extendsFrom(contain)
     }
-    val modCompileOnly by creating
     compileOnly {
         extendsFrom(modCompileOnly)
     }
-    val modRuntimeOnly by creating
     runtimeOnly {
         extendsFrom(modRuntimeOnly)
     }
@@ -80,6 +81,14 @@ repositories {
     maven("https://api.modrinth.com/maven")
     maven("https://nexus.gtnewhorizons.com/repository/public/")
     mavenLocal()
+}
+
+dependencies {
+    add(contain.name, "org.taumc:glsl-transformation-lib:0.2.0-32.g7dd88a4-GTNH") {
+        isTransitive = false
+        exclude(module = "antlr4")
+    }
+    add(contain.name, "org.antlr:antlr4-runtime:4.13.2")
 }
 
 unimined.minecraft {

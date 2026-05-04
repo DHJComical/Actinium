@@ -1,15 +1,15 @@
 package com.dhj.actinium.shader.pipeline;
 
+import com.dhj.actinium.shader.transform.ActiniumGlslTransformUtils;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
+import org.taumc.glsl.ShaderParser;
+import org.taumc.glsl.Transformer;
 
-import java.util.regex.Matcher;
+import java.util.HashSet;
 import java.util.regex.Pattern;
 
 final class ActiniumLegacyFullscreenShaderAdapter {
-    private static final Pattern VERSION_DIRECTIVE = Pattern.compile("(?m)^\\s*#version\\s+.+$");
-    private static final Pattern EXTENSION_DIRECTIVE = Pattern.compile("(?m)^\\s*#extension\\s+.+$");
-    private static final Pattern MAIN_DECLARATION = Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*\\)");
-    private static final Pattern GL_FRAG_DATA = Pattern.compile("gl_FragData\\s*\\[\\s*(\\d+)\\s*\\]");
+    private static final Pattern VERSION_PATTERN = Pattern.compile("(?m)^\\s*#version\\s+.+$");
 
     private ActiniumLegacyFullscreenShaderAdapter() {
     }
@@ -17,25 +17,18 @@ final class ActiniumLegacyFullscreenShaderAdapter {
     public static String translate(ShaderType type, String source) {
         boolean fragmentShader = type == ShaderType.FRAGMENT;
 
-        String translated = stripLeadingDirectives(source);
-        translated = MAIN_DECLARATION.matcher(translated).replaceFirst("void actinium_pack_main()");
-        translated = translated.replace("attribute ", "in ");
-        translated = translated.replace("varying ", fragmentShader ? "in " : "out ");
-        translated = translated.replace("texture2D(", "texture(");
-        translated = translated.replace("texture2DLod(", "textureLod(");
-        translated = translated.replace("shadow2D(", "actinium_shadow2D(");
+        String parseableSource = ActiniumGlslTransformUtils.replaceTexture(source);
+        ShaderParser.ParsedShader parsed = ShaderParser.parseShader(parseableSource);
+        Transformer transformer = new Transformer(parsed.full());
+        transformer.renameFunctionCall(ActiniumGlslTransformUtils.TEXTURE_RENAMES);
+        transformer.renameFunctionCall("shadow2D", "actinium_shadow2D");
+        transformer.rename("gl_FragColor", "fragColor0");
+        transformer.renameArray("gl_FragData", "fragColor", new HashSet<>());
 
-        if (fragmentShader) {
-            translated = replaceFragDataOutputs(translated);
-            translated = translated.replace("gl_FragColor", "fragColor0");
-        }
-
-        return (fragmentShader ? fragmentPreamble() : vertexPreamble()) + translated;
-    }
-
-    private static String stripLeadingDirectives(String source) {
-        String stripped = VERSION_DIRECTIVE.matcher(source).replaceFirst("");
-        return EXTENSION_DIRECTIVE.matcher(stripped).replaceAll("");
+        String pre = VERSION_PATTERN.matcher(ActiniumGlslTransformUtils.getFormattedShader(parsed.pre(), "")).replaceFirst("").trim();
+        String header = (fragmentShader ? fragmentPreamble() : vertexPreamble()) + (pre.isEmpty() ? "" : pre + "\n");
+        String translated = ActiniumGlslTransformUtils.getFormattedShader(parsed.full(), header);
+        return ActiniumGlslTransformUtils.restoreReservedWords(translated);
     }
 
     private static String vertexPreamble() {
@@ -85,8 +78,7 @@ final class ActiniumLegacyFullscreenShaderAdapter {
                 "    actinium_TexCoord0 = actinium_gl_TexCoord[0];",
                 "    actinium_TexCoord1 = actinium_gl_TexCoord[1];",
                 "}",
-                ""
-        );
+                "");
     }
 
     private static String fragmentPreamble() {
@@ -122,19 +114,6 @@ final class ActiniumLegacyFullscreenShaderAdapter {
                 "    actinium_gl_TexCoord[1] = actinium_TexCoord1;",
                 "    actinium_pack_main();",
                 "}",
-                ""
-        );
-    }
-
-    private static String replaceFragDataOutputs(String source) {
-        Matcher matcher = GL_FRAG_DATA.matcher(source);
-        StringBuilder buffer = new StringBuilder(source.length());
-
-        while (matcher.find()) {
-            matcher.appendReplacement(buffer, "fragColor" + matcher.group(1));
-        }
-
-        matcher.appendTail(buffer);
-        return buffer.toString();
+                "");
     }
 }
