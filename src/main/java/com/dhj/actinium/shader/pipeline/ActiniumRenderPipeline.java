@@ -215,6 +215,7 @@ public final class ActiniumRenderPipeline {
     private static final boolean ENABLE_EXTERNAL_SCENE_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_FINAL_PIPELINE = true;
     private static final boolean ENABLE_EXTERNAL_TERRAIN_REDIRECT = false;
+    private static final boolean ENABLE_EXTERNAL_TRANSLUCENT_TERRAIN_REDIRECT = true;
     private static final boolean ENABLE_EXTERNAL_SKY_BASIC_STAGE = true;
     private static final boolean ENABLE_EXTERNAL_SKY_TEXTURED_STAGE = true;
     private static final boolean ENABLE_EXTERNAL_CLOUDS_STAGE = false;
@@ -1715,7 +1716,7 @@ public final class ActiniumRenderPipeline {
 
         this.ensureRuntimeResources();
         debugCheckGlErrors("pipeline.prepareTerrainInputs.ensureRuntimeResources");
-        if (ENABLE_EXTERNAL_TERRAIN_REDIRECT && this.hasPostProgram()) {
+        if (this.shouldUseExternalTranslucentTerrainRedirect() && this.hasPostProgram()) {
             this.prepareWorldTargets(framebuffer);
             debugCheckGlErrors("pipeline.prepareTerrainInputs.prepareWorldTargets");
         }
@@ -1803,7 +1804,7 @@ public final class ActiniumRenderPipeline {
     public void bindTerrainPassFramebuffer(TerrainRenderPass pass) {
         this.syncReloadState();
 
-        if (!ENABLE_EXTERNAL_TERRAIN_REDIRECT) {
+        if (!this.shouldUseExternalTerrainRedirect(pass)) {
             return;
         }
 
@@ -1838,7 +1839,7 @@ public final class ActiniumRenderPipeline {
     public void unbindTerrainPassFramebuffer(TerrainRenderPass pass) {
         this.syncReloadState();
 
-        if (!ENABLE_EXTERNAL_TERRAIN_REDIRECT) {
+        if (!this.shouldUseExternalTerrainRedirect(pass)) {
             return;
         }
 
@@ -1899,7 +1900,7 @@ public final class ActiniumRenderPipeline {
                 worldGaux4,
                 this.terrainInputsPreparedMask,
                 this.preTranslucentDepthCapturedThisFrame,
-                ENABLE_EXTERNAL_TERRAIN_REDIRECT
+                this.shouldUseExternalTerrainRedirect(pass)
         );
         this.debugLogPipelineOverwriteRisk("terrain-translucent-" + stage, true);
         this.debugLogPipelineSnapshot("terrain.translucent." + stage, framebuffer);
@@ -3201,7 +3202,7 @@ public final class ActiniumRenderPipeline {
         this.debugLog(
                 "Pipeline snapshot '{}' flags: terrainRedirect={}, worldTargetsPrepared={}, prepareRan={}, deferredRan={}, preTransDepthCaptured={}, sceneProgramsResolved={}, finalProgramResolved={}",
                 label,
-                ENABLE_EXTERNAL_TERRAIN_REDIRECT,
+                this.shouldUseExternalTranslucentTerrainRedirect(),
                 this.worldTargetsPrepared,
                 this.prepareProgramsExecutedThisFrame,
                 this.deferredProgramsExecutedThisFrame,
@@ -3240,12 +3241,28 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        if (!ENABLE_EXTERNAL_TERRAIN_REDIRECT) {
+        if (!this.shouldUseExternalTranslucentTerrainRedirect()) {
             this.debugLog(
                     "Pipeline risk '{}': external scene/final post stages are active while terrain redirect is disabled; translucent terrain drawn to the main framebuffer can be overwritten by later fullscreen passes",
                     label
             );
         }
+    }
+
+    private boolean shouldUseExternalTerrainRedirect(TerrainRenderPass pass) {
+        if (pass == null) {
+            return false;
+        }
+
+        if (ENABLE_EXTERNAL_TERRAIN_REDIRECT) {
+            return true;
+        }
+
+        return this.shouldUseExternalTranslucentTerrainRedirect() && pass.isReverseOrder();
+    }
+
+    private boolean shouldUseExternalTranslucentTerrainRedirect() {
+        return ENABLE_EXTERNAL_TRANSLUCENT_TERRAIN_REDIRECT;
     }
 
     private boolean shouldEmitVerboseDebugFrame() {

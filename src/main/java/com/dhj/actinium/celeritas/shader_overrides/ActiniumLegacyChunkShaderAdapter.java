@@ -26,10 +26,16 @@ final class ActiniumLegacyChunkShaderAdapter {
         ShaderParser.ParsedShader parsed = ShaderParser.parseShader(parseableSource);
         Transformer transformer = new Transformer(parsed.full());
 
+        transformer.rename("main", "actinium_pack_main");
+        transformer.removeVariable("mc_Entity");
+        transformer.removeVariable("mc_midTexCoord");
+        transformer.removeVariable("at_tangent");
         transformer.renameFunctionCall(ActiniumGlslTransformUtils.TEXTURE_RENAMES);
         transformer.renameFunctionCall("shadow2D", "actinium_shadow2D");
         transformer.rename("mc_Entity", "actinium_mc_Entity");
         transformer.rename("mc_midTexCoord", "actinium_mc_midTexCoord");
+        transformer.rename("tex", "u_BlockTex");
+        transformer.rename("lightmap", "u_LightTex");
 
         if (fragmentShader) {
             transformer.rename("gl_FragColor", "fragColor0");
@@ -66,6 +72,8 @@ final class ActiniumLegacyChunkShaderAdapter {
         if (!shouldPreserveWorldShadowCasting(pass) && pass != ActiniumTerrainPass.SHADOW && pass != ActiniumTerrainPass.SHADOW_CUTOUT) {
             source = source.replace("#define SHADOW_CASTING", "// Actinium legacy compat: SHADOW_CASTING disabled");
         }
+        source = source.replace("attribute ", "in ");
+        source = source.replace("varying ", type == ShaderType.FRAGMENT ? "in " : "out ");
         if (type == ShaderType.FRAGMENT) {
             source = source.replace("gl_FragColor", "fragColor0");
         }
@@ -117,7 +125,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "         0.03125, 0.03125, 0.03125, 1.0),",
                 "    mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0));",
                 "vec4 actinium_mc_Entity;",
-                "vec2 actinium_mc_midTexCoord;",
+                "vec4 actinium_mc_midTexCoord;",
                 "vec4 actinium_at_tangent;",
                 "vec4 actinium_at_midBlock;",
                 "vec3 actinium_iris_Normal;",
@@ -181,7 +189,7 @@ final class ActiniumLegacyChunkShaderAdapter {
                 "    actinium_gl_ModelViewMatrix = u_ModelViewMatrix;",
                 "    actinium_gl_ModelViewProjectionMatrix = u_ProjectionMatrix * u_ModelViewMatrix;",
                 "    actinium_mc_Entity = vec4(actinium_EntityData.x, actinium_EntityData.y, 0.0, 0.0);",
-                "    actinium_mc_midTexCoord = actinium_MidTexCoord;",
+                "    actinium_mc_midTexCoord = vec4(actinium_MidTexCoord, 0.0, 1.0);",
                 "    actinium_at_tangent = actinium_Tangent;",
                 "    actinium_at_midBlock = actinium_MidBlock;",
                 "    actinium_iris_Normal = actinium_normal;",
