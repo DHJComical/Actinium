@@ -219,6 +219,7 @@ public final class ActiniumRenderPipeline {
     private static final boolean ENABLE_EXTERNAL_SKY_TEXTURED_STAGE = true;
     private static final boolean ENABLE_EXTERNAL_CLOUDS_STAGE = false;
     private static final boolean ENABLE_EXTERNAL_ENTITIES_STAGE = false;
+    private static final float DEFERRED_SKY_DEPTH_THRESHOLD = 0.9999f;
     private static final float FOCUS_DEPTH_SKY_THRESHOLD = 0.999999f;
     private static final int FOCUS_DEPTH_SAMPLE_RADIUS = 1;
     private static final int TERRAIN_INPUT_GAUX1 = 1;
@@ -328,6 +329,8 @@ public final class ActiniumRenderPipeline {
     private @Nullable GlProgram<ActiniumPostShaderInterface> blitProgram;
     private @Nullable GlProgram<ActiniumPostShaderInterface> sceneDepthPackProgram;
     private @Nullable GlProgram<ActiniumPostShaderInterface> firstPersonDepthMergeProgram;
+    private @Nullable GlProgram<ActiniumPostShaderInterface> deferredSkyPackProgram;
+    private @Nullable GlProgram<ActiniumPostShaderInterface> deferredSkyMergeProgram;
     private @Nullable Integer whiteTexture;
     private @Nullable Integer noiseTexture;
     private @Nullable Integer terrainGaux2Texture;
@@ -782,6 +785,10 @@ public final class ActiniumRenderPipeline {
                     }
                 }
                 this.applyExplicitPreFlips(this.postTargets, "composite_pre");
+
+                if (this.deferredProgramsExecutedThisFrame) {
+                    this.mergeDeferredSkyIntoScene(this.postTargets, partialTicks);
+                }
 
                 if (!this.centerDepthCapturedThisFrame) {
                     if (!this.preTranslucentDepthCapturedThisFrame) {
@@ -2356,6 +2363,24 @@ public final class ActiniumRenderPipeline {
         targets.flipTarget(ActiniumPostTargets.TARGET_COLORTEX1);
     }
 
+    private void mergeDeferredSkyIntoScene(ActiniumPostTargets targets, float partialTicks) {
+        if (this.preSceneTargets == null) {
+            return;
+        }
+
+        GlProgram<ActiniumPostShaderInterface> packProgram = this.getDeferredSkyPackProgram();
+        targets.bindWriteFramebuffer(new int[]{ActiniumPostTargets.TARGET_COLORTEX8});
+        GL11.glViewport(0, 0, this.width, this.height);
+        this.renderFullscreenProgram(packProgram, this.preSceneTargets, partialTicks, "actinium_pack_deferred_sky");
+        targets.flipTarget(ActiniumPostTargets.TARGET_COLORTEX8);
+
+        GlProgram<ActiniumPostShaderInterface> mergeProgram = this.getDeferredSkyMergeProgram();
+        targets.bindWriteFramebuffer(new int[]{ActiniumPostTargets.TARGET_COLORTEX1});
+        GL11.glViewport(0, 0, this.width, this.height);
+        this.renderFullscreenProgram(mergeProgram, targets, partialTicks, "actinium_merge_deferred_sky");
+        targets.flipTarget(ActiniumPostTargets.TARGET_COLORTEX1);
+    }
+
     private void mergeFirstPersonDepthIntoSceneDepth(ActiniumPostTargets targets, float partialTicks) {
         this.ensurePostCompositeScratchDepthTexture();
 
@@ -3484,6 +3509,54 @@ public final class ActiniumRenderPipeline {
         return this.firstPersonDepthMergeProgram;
     }
 
+    private GlProgram<ActiniumPostShaderInterface> getDeferredSkyPackProgram() {
+        if (this.deferredSkyPackProgram != null) {
+            return this.deferredSkyPackProgram;
+        }
+
+        String fragmentSource = String.join("\n",
+                "#version 330 core",
+                "uniform sampler2D colortex1;",
+                "uniform sampler2D depthtex0;",
+                "in vec2 texcoord;",
+                "out vec4 fragColor0;",
+                "void main() {",
+                "    vec3 deferredScene = texture(colortex1, texcoord).rgb;",
+                "    float sceneDepth = texture(depthtex0, texcoord).r;",
+                "    float skyMask = step(" + DEFERRED_SKY_DEPTH_THRESHOLD + ", sceneDepth);",
+                "    fragColor0 = vec4(deferredScene, skyMask);",
+                "}",
+                ""
+        );
+
+        this.deferredSkyPackProgram = this.createProgram("actinium_internal_pack_deferred_sky", defaultVertexSource(), fragmentSource, new int[]{0});
+        return this.deferredSkyPackProgram;
+    }
+
+    private GlProgram<ActiniumPostShaderInterface> getDeferredSkyMergeProgram() {
+        if (this.deferredSkyMergeProgram != null) {
+            return this.deferredSkyMergeProgram;
+        }
+
+        String fragmentSource = String.join("\n",
+                "#version 330 core",
+                "uniform sampler2D colortex1;",
+                "uniform sampler2D colortex8;",
+                "in vec2 texcoord;",
+                "out vec4 fragColor0;",
+                "void main() {",
+                "    vec4 currentScene = texture(colortex1, texcoord);",
+                "    vec4 deferredSky = texture(colortex8, texcoord);",
+                "    vec3 mergedColor = mix(currentScene.rgb, deferredSky.rgb, deferredSky.a);",
+                "    fragColor0 = vec4(mergedColor, currentScene.a);",
+                "}",
+                ""
+        );
+
+        this.deferredSkyMergeProgram = this.createProgram("actinium_internal_merge_deferred_sky", defaultVertexSource(), fragmentSource, new int[]{0});
+        return this.deferredSkyMergeProgram;
+    }
+
     private GlProgram<ActiniumPostShaderInterface> createProgram(String programName, @Nullable String vertexSource, String fragmentSource, int[] drawBuffers) {
         List<GlShader> shaders = new ArrayList<>(2);
         boolean legacyProgram = this.isLegacyPackProgram((vertexSource != null ? vertexSource : "") + "\n" + fragmentSource);
@@ -3971,6 +4044,16 @@ public final class ActiniumRenderPipeline {
         if (this.firstPersonDepthMergeProgram != null) {
             this.firstPersonDepthMergeProgram.delete();
             this.firstPersonDepthMergeProgram = null;
+        }
+
+        if (this.deferredSkyPackProgram != null) {
+            this.deferredSkyPackProgram.delete();
+            this.deferredSkyPackProgram = null;
+        }
+
+        if (this.deferredSkyMergeProgram != null) {
+            this.deferredSkyMergeProgram.delete();
+            this.deferredSkyMergeProgram = null;
         }
 
         if (this.shadowEntityProgram != null) {
