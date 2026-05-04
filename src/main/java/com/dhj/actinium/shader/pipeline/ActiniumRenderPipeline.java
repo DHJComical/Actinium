@@ -219,6 +219,8 @@ public final class ActiniumRenderPipeline {
     private static final boolean ENABLE_EXTERNAL_SKY_TEXTURED_STAGE = true;
     private static final boolean ENABLE_EXTERNAL_CLOUDS_STAGE = false;
     private static final boolean ENABLE_EXTERNAL_ENTITIES_STAGE = false;
+    private static final float FOCUS_DEPTH_SKY_THRESHOLD = 0.999999f;
+    private static final int FOCUS_DEPTH_SAMPLE_RADIUS = 1;
     private static final int TERRAIN_INPUT_GAUX1 = 1;
     private static final int TERRAIN_INPUT_GAUX2 = 1 << 1;
     private static final int TERRAIN_INPUT_DEPTHTEX0 = 1 << 2;
@@ -227,6 +229,7 @@ public final class ActiniumRenderPipeline {
     private int observedReloadVersion = -1;
     @Getter
     private ActiniumRenderStage currentStage = ActiniumRenderStage.NONE;
+    private ActiniumRenderStage postReturnStage = ActiniumRenderStage.NONE;
     private boolean shadowProgramAvailable;
     private boolean skyProgramAvailable;
     private boolean particleProgramAvailable;
@@ -323,14 +326,19 @@ public final class ActiniumRenderPipeline {
     private int[] finalProgramMipmappedBuffers = new int[0];
     private Map<Integer, Boolean> finalProgramExplicitFlips = Collections.emptyMap();
     private @Nullable GlProgram<ActiniumPostShaderInterface> blitProgram;
+    private @Nullable GlProgram<ActiniumPostShaderInterface> sceneDepthPackProgram;
+    private @Nullable GlProgram<ActiniumPostShaderInterface> firstPersonDepthMergeProgram;
     private @Nullable Integer whiteTexture;
     private @Nullable Integer noiseTexture;
     private @Nullable Integer terrainGaux2Texture;
     private @Nullable Integer terrainGaux1Texture;
     private @Nullable Integer terrainDepthTexture0;
     private @Nullable Integer terrainDepthTexture1;
+    private @Nullable Integer postCompositeScratchDepthTexture;
     private int terrainInputTextureWidth = -1;
     private int terrainInputTextureHeight = -1;
+    private int postCompositeScratchDepthTextureWidth = -1;
+    private int postCompositeScratchDepthTextureHeight = -1;
     private final Map<String, Integer> packTextureCache = new HashMap<>();
     private @Nullable String activePostTextureStage;
     private List<ActiniumPostProgram> preScenePrograms = Collections.emptyList();
@@ -339,6 +347,7 @@ public final class ActiniumRenderPipeline {
     private boolean prepareProgramsExecutedThisFrame;
     private boolean deferredProgramsExecutedThisFrame;
     private boolean preTranslucentDepthCapturedThisFrame;
+    private boolean postPipelineDeferredForFirstPersonThisFrame;
     private int terrainInputsPreparedFrame = Integer.MIN_VALUE;
     private int terrainInputsPreparedFramebufferTexture = -1;
     private int terrainInputsPreparedWidth = -1;
@@ -349,6 +358,7 @@ public final class ActiniumRenderPipeline {
     private boolean managedSkyCelestialStateValid;
     private boolean fogColorCapturedFromGlBufferThisFrame;
     private boolean skyColorCapturedThisFrame;
+    private boolean centerDepthCapturedThisFrame;
     @Getter
     private float centerDepthSmooth;
     private final int[] boundPostImageUnits = new int[8];
@@ -358,6 +368,7 @@ public final class ActiniumRenderPipeline {
     private final FloatBuffer shadowTerrainProjectionBuffer = GLAllocation.createDirectFloatBuffer(16);
     private final FloatBuffer shadowTerrainModelViewBuffer = GLAllocation.createDirectFloatBuffer(16);
     private final FloatBuffer scratchGlMatrixBuffer = GLAllocation.createDirectFloatBuffer(16);
+    private final FloatBuffer scratchFocusDepthBuffer = BufferUtils.createFloatBuffer((FOCUS_DEPTH_SAMPLE_RADIUS * 2 + 1) * (FOCUS_DEPTH_SAMPLE_RADIUS * 2 + 1));
     private final FloatBuffer scratchShadowObjectCoordsBuffer = GLAllocation.createDirectFloatBuffer(3);
     private final IntBuffer scratchShadowViewportBuffer = GLAllocation.createDirectIntBuffer(16);
 
@@ -392,8 +403,10 @@ public final class ActiniumRenderPipeline {
         this.prepareProgramsExecutedThisFrame = false;
         this.deferredProgramsExecutedThisFrame = false;
         this.preTranslucentDepthCapturedThisFrame = false;
+        this.postPipelineDeferredForFirstPersonThisFrame = false;
         this.fogColorCapturedFromGlBufferThisFrame = false;
         this.skyColorCapturedThisFrame = false;
+        this.centerDepthCapturedThisFrame = false;
         this.fogColorInitialized = false;
         this.currentStage = ActiniumRenderStage.WORLD;
         this.debugLogFogState("beginWorld", "reset");
@@ -402,6 +415,41 @@ public final class ActiniumRenderPipeline {
     public void endWorld() {
         this.debugLogFogState("endWorld", "before-clear-stage");
         this.currentStage = ActiniumRenderStage.NONE;
+    }
+
+    public void finalizeWorldBeforeHand() {
+        if (this.currentStage != ActiniumRenderStage.WORLD) {
+            return;
+        }
+
+        this.captureWorldState();
+        this.captureCenterDepthFromMainFramebuffer("finalizeWorldBeforeHand");
+        this.debugLogFrameStageSummary("finalizeWorldBeforeHand");
+        this.debugLogProjectionSnapshot("finalizeWorldBeforeHand.currentProjection", this.gbufferProjectionMatrix);
+        this.prepareDeferredPostForFirstPerson();
+        this.endWorld();
+    }
+
+    public void finalizeWorldAfterHand(float partialTicks) {
+        if (this.postPipelineDeferredForFirstPersonThisFrame) {
+            this.debugLogFrameStageSummary("finalizeWorldAfterHand.deferredPost");
+            this.renderPostPipeline(partialTicks);
+            return;
+        }
+
+        if (this.currentStage != ActiniumRenderStage.WORLD) {
+            return;
+        }
+
+        this.captureWorldState();
+        this.captureCenterDepthFromMainFramebuffer("finalizeWorldAfterHand");
+        this.debugLogFrameStageSummary("finalizeWorldAfterHand.immediatePost");
+        this.debugLogProjectionSnapshot("finalizeWorldAfterHand.currentProjection", this.gbufferProjectionMatrix);
+        this.endWorld();
+
+        if (this.hasPostProgram()) {
+            this.renderPostPipeline(partialTicks);
+        }
     }
 
     public void beginSky() {
@@ -522,6 +570,7 @@ public final class ActiniumRenderPipeline {
 
     public void beginPost() {
         this.syncReloadState();
+        this.postReturnStage = this.currentStage;
         this.currentStage = ActiniumRenderStage.POST;
         this.debugLogFogState("beginPost", "stage-switch");
     }
@@ -529,7 +578,8 @@ public final class ActiniumRenderPipeline {
     public void endPost() {
         if (this.currentStage == ActiniumRenderStage.POST) {
             this.debugLogFogState("endPost", "stage-switch");
-            this.currentStage = ActiniumRenderStage.NONE;
+            this.currentStage = this.postReturnStage;
+            this.postReturnStage = ActiniumRenderStage.NONE;
         }
     }
 
@@ -612,22 +662,10 @@ public final class ActiniumRenderPipeline {
         this.preTranslucentDepthCapturedThisFrame = true;
     }
 
-    public void captureSkyStageState() {
-        this.syncReloadState();
-        captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.skyStageModelViewMatrix);
-        captureMatrix(GL11.GL_PROJECTION_MATRIX, this.skyStageProjectionMatrix);
-        this.skyStageModelViewInverseMatrix.set(this.skyStageModelViewMatrix).invert();
-        this.skyStageProjectionInverseMatrix.set(this.skyStageProjectionMatrix).invert();
-    }
+    private void prepareDeferredPostForFirstPerson() {
+        this.postPipelineDeferredForFirstPersonThisFrame = false;
 
-    public void renderPostPipeline(float partialTicks) {
-        this.syncReloadState();
-
-        if (!ENABLE_EXTERNAL_SCENE_PIPELINE && !ENABLE_EXTERNAL_FINAL_PIPELINE) {
-            return;
-        }
-
-        if (!ActiniumShaderPackManager.areShadersEnabled()) {
+        if (!ActiniumShaderPackManager.areShadersEnabled() || !this.hasPostProgram()) {
             return;
         }
 
@@ -640,11 +678,78 @@ public final class ActiniumRenderPipeline {
 
         this.width = Math.max(1, mainFramebuffer.framebufferWidth);
         this.height = Math.max(1, mainFramebuffer.framebufferHeight);
+        this.ensureRuntimeResources();
+
+        if (this.postTargets == null) {
+            return;
+        }
+
+        this.postTargets.ensureSize(this.width, this.height);
+
+        if (!this.preTranslucentDepthCapturedThisFrame) {
+            this.postTargets.copyPreTranslucentDepth(mainFramebuffer);
+        }
+
+        // Preserve world depth before vanilla clears it for the hand pass.
+        this.postTargets.copyCurrentDepth(mainFramebuffer, 0);
+        this.postTargets.copyCurrentDepth(mainFramebuffer, 2);
+        this.postPipelineDeferredForFirstPersonThisFrame = true;
+        this.debugLogFrameStageSummary("prepareDeferredPostForFirstPerson");
+        this.debugLogDepthTextureSample("prepareDeferredPostForFirstPerson.depth0", this.postTargets.getDepthTexture(0), this.width, this.height);
+        this.debugLogDepthTextureSample("prepareDeferredPostForFirstPerson.depth1", this.postTargets.getDepthTexture(1), this.width, this.height);
+        this.debugLogDepthTextureSample("prepareDeferredPostForFirstPerson.depth2", this.postTargets.getDepthTexture(2), this.width, this.height);
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Deferred scene post until after first-person rendering");
+        }
+    }
+
+    public void captureSkyStageState() {
+        this.syncReloadState();
+        captureMatrix(GL11.GL_MODELVIEW_MATRIX, this.skyStageModelViewMatrix);
+        captureMatrix(GL11.GL_PROJECTION_MATRIX, this.skyStageProjectionMatrix);
+        this.skyStageModelViewInverseMatrix.set(this.skyStageModelViewMatrix).invert();
+        this.skyStageProjectionInverseMatrix.set(this.skyStageProjectionMatrix).invert();
+    }
+
+    public void renderPostPipeline(float partialTicks) {
+        this.syncReloadState();
+        boolean deferredPostAfterFirstPerson = this.postPipelineDeferredForFirstPersonThisFrame;
+
+        if (!ENABLE_EXTERNAL_SCENE_PIPELINE && !ENABLE_EXTERNAL_FINAL_PIPELINE) {
+            if (deferredPostAfterFirstPerson) {
+                this.postPipelineDeferredForFirstPersonThisFrame = false;
+            }
+            return;
+        }
+
+        if (!ActiniumShaderPackManager.areShadersEnabled()) {
+            if (deferredPostAfterFirstPerson) {
+                this.postPipelineDeferredForFirstPersonThisFrame = false;
+            }
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer mainFramebuffer = minecraft.getFramebuffer();
+
+        if (mainFramebuffer == null || mainFramebuffer.framebufferTexture <= 0) {
+            if (deferredPostAfterFirstPerson) {
+                this.postPipelineDeferredForFirstPersonThisFrame = false;
+            }
+            return;
+        }
+
+        this.width = Math.max(1, mainFramebuffer.framebufferWidth);
+        this.height = Math.max(1, mainFramebuffer.framebufferHeight);
 
         List<ActiniumPostProgram> scenePrograms = this.getScenePrograms();
         GlProgram<ActiniumPostShaderInterface> finalProgram = this.getFinalProgram();
 
         if (scenePrograms.isEmpty() && finalProgram == null) {
+            if (deferredPostAfterFirstPerson) {
+                this.postPipelineDeferredForFirstPersonThisFrame = false;
+            }
             return;
         }
 
@@ -652,13 +757,23 @@ public final class ActiniumRenderPipeline {
         ShadowPassGlState previousState = ShadowPassGlState.capture();
         this.beginPost();
         this.debugLogFogState("renderPostPipeline", "entry");
+        this.debugLogFrameStageSummary(deferredPostAfterFirstPerson ? "renderPostPipeline.deferred" : "renderPostPipeline.direct");
+        this.debugLogProjectionSnapshot("renderPostPipeline.currentProjection", this.gbufferProjectionMatrix);
+        this.debugLogProjectionSnapshot("renderPostPipeline.previousProjection", this.getPreviousGbufferProjectionMatrix());
         this.debugLogPipelineOverwriteRisk("scene-post-entry", !scenePrograms.isEmpty() || finalProgram != null);
 
         try {
             this.debugLogPipelineSnapshot("scene-post.before-copy", mainFramebuffer);
             if (this.postTargets != null) {
                 this.postTargets.ensureSize(this.width, this.height);
-                this.postTargets.copySceneTextures(mainFramebuffer, this.getWorldGaux4TextureForPost());
+                if (deferredPostAfterFirstPerson) {
+                    this.postTargets.copySceneColors(mainFramebuffer, this.getWorldGaux4TextureForPost());
+                    this.postTargets.copyCurrentDepth(mainFramebuffer, 0);
+                    this.mergeFirstPersonDepthIntoSceneDepth(this.postTargets, partialTicks);
+                    this.debugLogDepthTextureSample("renderPostPipeline.deferred.mergedDepth0", this.postTargets.getDepthTexture(0), this.width, this.height);
+                } else {
+                    this.postTargets.copySceneTextures(mainFramebuffer, this.getWorldGaux4TextureForPost());
+                }
                 if (this.hasPreSceneResults()) {
                     int[] preSceneOutputTargets = this.collectPreSceneOutputTargets();
                     this.postTargets.copyTargetsFrom(this.preSceneTargets, preSceneOutputTargets);
@@ -668,12 +783,15 @@ public final class ActiniumRenderPipeline {
                 }
                 this.applyExplicitPreFlips(this.postTargets, "composite_pre");
 
-                if (!this.preTranslucentDepthCapturedThisFrame) {
-                    this.postTargets.copyPreTranslucentDepth(mainFramebuffer);
+                if (!this.centerDepthCapturedThisFrame) {
+                    if (!this.preTranslucentDepthCapturedThisFrame) {
+                        this.postTargets.copyPreTranslucentDepth(mainFramebuffer);
+                    }
+                    this.updateCenterDepthSmooth(this.postTargets.getDepthTexture(0));
                 }
 
+                this.packSceneDepthIntoColortex1(this.postTargets, partialTicks);
                 this.debugLogPreSceneTargets();
-                this.updateCenterDepthSmooth();
             }
             this.debugLogPipelineSnapshot("scene-post.after-copy", mainFramebuffer);
             this.executeScenePrograms(scenePrograms, partialTicks);
@@ -684,6 +802,9 @@ public final class ActiniumRenderPipeline {
             ActiniumShaders.logger().warn("Failed to execute Actinium shader pack post pipeline; disabling external post programs until the next shader reload", e);
             this.disableExternalProgramsUntilReload();
         } finally {
+            if (deferredPostAfterFirstPerson) {
+                this.postPipelineDeferredForFirstPersonThisFrame = false;
+            }
             previousState.restore(mainFramebuffer, this.width, this.height);
             this.restoreScreenRenderState(mainFramebuffer, this.width, this.height);
             this.endPost();
@@ -1321,10 +1442,12 @@ public final class ActiniumRenderPipeline {
         this.servedPreviousGbufferModelViewMatrix.set(this.previousGbufferModelViewMatrix);
         this.servedPreviousGbufferProjectionMatrix.set(this.previousGbufferProjectionMatrix);
         this.servedPreviousWorldCameraPosition.set(this.previousWorldCameraPosition);
+        this.debugLogProjectionSnapshot("previousUniform.servedProjection", this.servedPreviousGbufferProjectionMatrix);
 
         this.previousGbufferModelViewMatrix.set(this.gbufferModelViewMatrix);
         this.previousGbufferProjectionMatrix.set(this.gbufferProjectionMatrix);
         this.previousWorldCameraPosition.set(this.worldCameraPosition);
+        this.debugLogProjectionSnapshot("previousUniform.nextProjection", this.previousGbufferProjectionMatrix);
     }
 
     public Matrix4f getTemporalJitteredProjection(Matrix4fc source, Matrix4f destination) {
@@ -2225,6 +2348,95 @@ public final class ActiniumRenderPipeline {
         GlStateManager.enableAlpha();
     }
 
+    private void packSceneDepthIntoColortex1(ActiniumPostTargets targets, float partialTicks) {
+        GlProgram<ActiniumPostShaderInterface> program = this.getSceneDepthPackProgram();
+        targets.bindWriteFramebuffer(new int[]{ActiniumPostTargets.TARGET_COLORTEX1});
+        GL11.glViewport(0, 0, this.width, this.height);
+        this.renderFullscreenProgram(program, targets, partialTicks, "actinium_pack_scene_depth");
+        targets.flipTarget(ActiniumPostTargets.TARGET_COLORTEX1);
+    }
+
+    private void mergeFirstPersonDepthIntoSceneDepth(ActiniumPostTargets targets, float partialTicks) {
+        this.ensurePostCompositeScratchDepthTexture();
+
+        if (this.postCompositeScratchDepthTexture == null || this.postCompositeScratchDepthTexture <= 0) {
+            return;
+        }
+
+        GlProgram<ActiniumPostShaderInterface> program = this.getFirstPersonDepthMergeProgram();
+        this.renderDepthOnlyFullscreenProgram(program, targets, partialTicks, this.postCompositeScratchDepthTexture, "actinium_merge_first_person_depth");
+        targets.copyDepthTextureToSlot(this.postCompositeScratchDepthTexture, 0);
+    }
+
+    private void renderDepthOnlyFullscreenProgram(
+            GlProgram<ActiniumPostShaderInterface> program,
+            ActiniumPostTargets targets,
+            float partialTicks,
+            int destinationDepthTexture,
+            String stageLabel
+    ) {
+        this.ensureScratchCopyFramebuffers();
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawBuffer = GL11.glGetInteger(GL11.GL_DRAW_BUFFER);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, this.scratchCopyDrawFramebuffer);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, destinationDepthTexture, 0);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
+            GL11.glDrawBuffer(GL11.GL_NONE);
+            GL11.glReadBuffer(GL11.GL_NONE);
+
+            int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+            if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                throw new RuntimeException("Incomplete Actinium depth merge framebuffer: " + status);
+            }
+
+            debugResetGlErrors("depth-only." + stageLabel + ".entry");
+            GlStateManager.disableAlpha();
+            GlStateManager.disableBlend();
+            GlStateManager.disableFog();
+            GlStateManager.disableLighting();
+            GlStateManager.disableCull();
+            GlStateManager.enableDepth();
+            GlStateManager.depthMask(true);
+            GlStateManager.depthFunc(GL11.GL_ALWAYS);
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            GL11.glColorMask(false, false, false, false);
+            GL11.glViewport(0, 0, this.width, this.height);
+
+            program.bind();
+            program.getInterface().setupState(this, targets, partialTicks, this.currentFrameDeltaSeconds, this.frameTimeCounterSeconds, this.frameCounter);
+            this.activePostTextureStage = stageLabel;
+            this.bindPipelineTextures(targets);
+
+            if (this.fullscreenVertexArray != null) {
+                GL30.glBindVertexArray(this.fullscreenVertexArray.handle());
+            }
+
+            GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+            GL30.glBindVertexArray(0);
+        } finally {
+            this.unbindPipelineTextures();
+            this.activePostTextureStage = null;
+            program.unbind();
+            GL11.glColorMask(true, true, true, true);
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
+            GlStateManager.depthMask(true);
+            GlStateManager.disableDepth();
+            GlStateManager.enableBlend();
+            GlStateManager.enableAlpha();
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, 0, 0);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glDrawBuffer(previousDrawBuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+        }
+    }
+
     private void bindPipelineTextures(ActiniumPostTargets targets) {
         if (targets != null) {
             this.bindPipelineTextureAliases(0, targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0), "colortex0", "gcolor");
@@ -2613,12 +2825,22 @@ public final class ActiniumRenderPipeline {
             return;
         }
 
-        int depthTexture = this.postTargets.getDepthTexture(0);
+        this.updateCenterDepthSmooth(this.postTargets.getDepthTexture(0));
+    }
+
+    private void updateCenterDepthSmooth(int depthTexture) {
         if (depthTexture <= 0) {
             return;
         }
 
-        float currentDepth = this.readDepthTextureCenter(depthTexture);
+        this.updateCenterDepthSmooth(this.readDepthTextureCenter(depthTexture));
+    }
+
+    private void updateCenterDepthSmooth(float currentDepth) {
+        if (!(currentDepth > 0.0f) || Float.isNaN(currentDepth)) {
+            return;
+        }
+
         if (this.centerDepthSmooth == 0.0f) {
             this.centerDepthSmooth = currentDepth;
             return;
@@ -2626,6 +2848,23 @@ public final class ActiniumRenderPipeline {
 
         float blend = 0.15f;
         this.centerDepthSmooth += (currentDepth - this.centerDepthSmooth) * blend;
+    }
+
+    private void captureCenterDepthFromMainFramebuffer(String label) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer mainFramebuffer = minecraft.getFramebuffer();
+
+        if (mainFramebuffer == null || this.width <= 0 || this.height <= 0) {
+            return;
+        }
+
+        float focusDepth = this.readFramebufferFocusDepth(mainFramebuffer, this.width, this.height);
+        this.updateCenterDepthSmooth(focusDepth);
+        this.centerDepthCapturedThisFrame = true;
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Focus depth '{}' sampled={}", label, focusDepth);
+        }
     }
 
     private float readDepthTextureCenter(int depthTexture) {
@@ -2644,6 +2883,55 @@ public final class ActiniumRenderPipeline {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
             GL11.glReadBuffer(previousReadBuffer);
             GL30.glDeleteFramebuffers(framebuffer);
+        }
+    }
+
+    private float readFramebufferFocusDepth(Framebuffer framebuffer, int width, int height) {
+        int sampleDiameter = FOCUS_DEPTH_SAMPLE_RADIUS * 2 + 1;
+        int sampleX = Math.max(0, Math.min(width - sampleDiameter, width / 2 - FOCUS_DEPTH_SAMPLE_RADIUS));
+        int sampleY = Math.max(0, Math.min(height - sampleDiameter, height / 2 - FOCUS_DEPTH_SAMPLE_RADIUS));
+        int sampleCount = sampleDiameter * sampleDiameter;
+        FloatBuffer samples = this.scratchFocusDepthBuffer;
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+
+        try {
+            framebuffer.bindFramebuffer(true);
+            samples.clear();
+            GL11.glReadPixels(sampleX, sampleY, sampleDiameter, sampleDiameter, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, samples);
+
+            float centerDepth = 1.0f;
+            float closestDepth = 1.0f;
+
+            for (int row = 0; row < sampleDiameter; row++) {
+                for (int column = 0; column < sampleDiameter; column++) {
+                    float depth = samples.get();
+
+                    if (row == FOCUS_DEPTH_SAMPLE_RADIUS && column == FOCUS_DEPTH_SAMPLE_RADIUS) {
+                        centerDepth = depth;
+                    }
+
+                    if (depth < closestDepth) {
+                        closestDepth = depth;
+                    }
+                }
+            }
+
+            float focusDepth = closestDepth < FOCUS_DEPTH_SKY_THRESHOLD ? closestDepth : centerDepth;
+
+            if (this.shouldEmitVerboseDebugFrame()) {
+                this.debugLog(
+                        "Focus depth neighborhood center={} closest={} chosen={}",
+                        centerDepth,
+                        closestDepth,
+                        focusDepth
+                );
+            }
+
+            return focusDepth;
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
         }
     }
 
@@ -2899,7 +3187,55 @@ public final class ActiniumRenderPipeline {
     }
 
     private boolean shouldEmitVerboseDebugFrame() {
-        return ActiniumShaderPackManager.isDebugEnabled() && this.frameCounter % 60 == 0;
+        return ActiniumShaderPackManager.isDebugEnabled();
+    }
+
+    private void debugLogFrameStageSummary(String label) {
+        if (!ActiniumShaderPackManager.isDebugEnabled()) {
+            return;
+        }
+
+        this.debugLog(
+                "{} frame={} stage={} shadersEnabled={} shadowProgram={} skyProgram={} particleProgram={} weatherProgram={} postProgram={} deferredPost={} taaActive={} taaOffset=[{}, {}] centerDepthSmooth={} viewport={}x{} camera=[{}, {}, {}]",
+                label,
+                this.frameCounter,
+                this.currentStage,
+                ActiniumShaderPackManager.areShadersEnabled(),
+                this.shadowProgramAvailable,
+                this.skyProgramAvailable,
+                this.particleProgramAvailable,
+                this.weatherProgramAvailable,
+                this.postProgramAvailable,
+                this.postPipelineDeferredForFirstPersonThisFrame,
+                this.isTemporalAntiAliasingActive(),
+                this.getTaaOffsetX(),
+                this.getTaaOffsetY(),
+                this.centerDepthSmooth,
+                this.width,
+                this.height,
+                this.worldCameraPosition.x,
+                this.worldCameraPosition.y,
+                this.worldCameraPosition.z
+        );
+    }
+
+    private void debugLogProjectionSnapshot(String label, Matrix4fc matrix) {
+        if (!ActiniumShaderPackManager.isDebugEnabled()) {
+            return;
+        }
+
+        this.debugLog(
+                "{} m00={} m11={} m20={} m21={} m22={} m23={} m32={} m33={}",
+                label,
+                matrix.m00(),
+                matrix.m11(),
+                matrix.m20(),
+                matrix.m21(),
+                matrix.m22(),
+                matrix.m23(),
+                matrix.m32(),
+                matrix.m33()
+        );
     }
 
     private void unbindWorldStageTextures() {
@@ -3103,6 +3439,51 @@ public final class ActiniumRenderPipeline {
         return this.blitProgram;
     }
 
+    private GlProgram<ActiniumPostShaderInterface> getSceneDepthPackProgram() {
+        if (this.sceneDepthPackProgram != null) {
+            return this.sceneDepthPackProgram;
+        }
+
+        String fragmentSource = String.join("\n",
+                "#version 330 core",
+                "uniform sampler2D colortex1;",
+                "uniform sampler2D depthtex0;",
+                "in vec2 texcoord;",
+                "out vec4 fragColor0;",
+                "void main() {",
+                "    vec4 sceneColor = texture(colortex1, texcoord);",
+                "    float sceneDepth = texture(depthtex0, texcoord).r;",
+                "    fragColor0 = vec4(sceneColor.rgb, sceneDepth);",
+                "}",
+                ""
+        );
+
+        this.sceneDepthPackProgram = this.createProgram("actinium_internal_pack_scene_depth", defaultVertexSource(), fragmentSource, new int[]{0});
+        return this.sceneDepthPackProgram;
+    }
+
+    private GlProgram<ActiniumPostShaderInterface> getFirstPersonDepthMergeProgram() {
+        if (this.firstPersonDepthMergeProgram != null) {
+            return this.firstPersonDepthMergeProgram;
+        }
+
+        String fragmentSource = String.join("\n",
+                "#version 330 core",
+                "uniform sampler2D depthtex0;",
+                "uniform sampler2D depthtex2;",
+                "in vec2 texcoord;",
+                "void main() {",
+                "    float handDepth = texture(depthtex0, texcoord).r;",
+                "    float worldDepth = texture(depthtex2, texcoord).r;",
+                "    gl_FragDepth = min(handDepth, worldDepth);",
+                "}",
+                ""
+        );
+
+        this.firstPersonDepthMergeProgram = this.createProgram("actinium_internal_merge_first_person_depth", defaultVertexSource(), fragmentSource, new int[0]);
+        return this.firstPersonDepthMergeProgram;
+    }
+
     private GlProgram<ActiniumPostShaderInterface> createProgram(String programName, @Nullable String vertexSource, String fragmentSource, int[] drawBuffers) {
         List<GlShader> shaders = new ArrayList<>(2);
         boolean legacyProgram = this.isLegacyPackProgram((vertexSource != null ? vertexSource : "") + "\n" + fragmentSource);
@@ -3297,6 +3678,15 @@ public final class ActiniumRenderPipeline {
             }
         }
 
+        if (this.isShaderOptionEnabled("DOF")) {
+            formats[ActiniumPostTargets.TARGET_COLORTEX1] = ActiniumPostTargets.ColorFormat.RGBA16F;
+            formats[ActiniumPostTargets.TARGET_COLORTEX3] = ActiniumPostTargets.ColorFormat.RGBA16F;
+
+            if (ActiniumShaderPackManager.isDebugEnabled()) {
+                this.debugLog("Forced DOF post target formats: colortex1=RGBA16F, colortex3=RGBA16F");
+            }
+        }
+
         return formats;
     }
 
@@ -3466,6 +3856,19 @@ public final class ActiniumRenderPipeline {
         };
     }
 
+    private boolean isShaderOptionEnabled(String optionName) {
+        String value = ActiniumShaderPackManager.getEffectiveOptionValue(optionName);
+
+        if (value == null) {
+            return false;
+        }
+
+        return switch (value.trim().toLowerCase(Locale.ROOT)) {
+            case "1", "true", "on", "yes" -> true;
+            default -> false;
+        };
+    }
+
     private void syncReloadState() {
         int reloadVersion = ActiniumShaderPackManager.getReloadVersion();
 
@@ -3560,6 +3963,16 @@ public final class ActiniumRenderPipeline {
             this.blitProgram = null;
         }
 
+        if (this.sceneDepthPackProgram != null) {
+            this.sceneDepthPackProgram.delete();
+            this.sceneDepthPackProgram = null;
+        }
+
+        if (this.firstPersonDepthMergeProgram != null) {
+            this.firstPersonDepthMergeProgram.delete();
+            this.firstPersonDepthMergeProgram = null;
+        }
+
         if (this.shadowEntityProgram != null) {
             this.shadowEntityProgram.delete();
             this.shadowEntityProgram = null;
@@ -3580,6 +3993,7 @@ public final class ActiniumRenderPipeline {
         this.prepareProgramsExecutedThisFrame = false;
         this.deferredProgramsExecutedThisFrame = false;
         this.preTranslucentDepthCapturedThisFrame = false;
+        this.postPipelineDeferredForFirstPersonThisFrame = false;
         this.terrainInputsPreparedFrame = Integer.MIN_VALUE;
         this.terrainInputsPreparedFramebufferTexture = -1;
         this.terrainInputsPreparedWidth = -1;
@@ -3661,6 +4075,11 @@ public final class ActiniumRenderPipeline {
             this.terrainDepthTexture1 = null;
         }
 
+        if (this.postCompositeScratchDepthTexture != null) {
+            GL11.glDeleteTextures(this.postCompositeScratchDepthTexture);
+            this.postCompositeScratchDepthTexture = null;
+        }
+
         if (this.scratchCopyReadFramebuffer != 0) {
             GL30.glDeleteFramebuffers(this.scratchCopyReadFramebuffer);
             this.scratchCopyReadFramebuffer = 0;
@@ -3673,6 +4092,8 @@ public final class ActiniumRenderPipeline {
 
         this.terrainInputTextureWidth = -1;
         this.terrainInputTextureHeight = -1;
+        this.postCompositeScratchDepthTextureWidth = -1;
+        this.postCompositeScratchDepthTextureHeight = -1;
 
         for (Integer textureId : this.packTextureCache.values()) {
             if (textureId != null && textureId > 0) {
@@ -3787,6 +4208,7 @@ public final class ActiniumRenderPipeline {
         GlStateManager.enableCull();
         GL11.glCullFace(GL11.GL_BACK);
         GL11.glFrontFace(GL11.GL_CCW);
+        this.debugLogFrameStageSummary("prepareFirstPersonRenderState");
     }
 
     private void releaseActiveWorldStageState() {
@@ -4270,6 +4692,27 @@ public final class ActiniumRenderPipeline {
         } finally {
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture);
             GL11.glReadBuffer(previousReadBuffer);
+        }
+    }
+
+    private void ensurePostCompositeScratchDepthTexture() {
+        if (this.width <= 0 || this.height <= 0) {
+            return;
+        }
+
+        if (this.postCompositeScratchDepthTexture != null
+                && (this.postCompositeScratchDepthTextureWidth != this.width
+                || this.postCompositeScratchDepthTextureHeight != this.height)) {
+            GL11.glDeleteTextures(this.postCompositeScratchDepthTexture);
+            this.postCompositeScratchDepthTexture = null;
+            this.postCompositeScratchDepthTextureWidth = -1;
+            this.postCompositeScratchDepthTextureHeight = -1;
+        }
+
+        if (this.postCompositeScratchDepthTexture == null) {
+            this.postCompositeScratchDepthTexture = createDepthTexture(this.width, this.height);
+            this.postCompositeScratchDepthTextureWidth = this.width;
+            this.postCompositeScratchDepthTextureHeight = this.height;
         }
     }
 

@@ -136,6 +136,17 @@ final class ActiniumPostTargets {
     }
 
     public void copySceneTextures(Framebuffer mainFramebuffer, @Nullable Integer worldGaux4Texture) {
+        this.copySceneColors(mainFramebuffer, worldGaux4Texture);
+
+        if (this.width <= 0 || this.height <= 0) {
+            return;
+        }
+
+        this.copyDepthTexture(mainFramebuffer, 0);
+        this.copyDepthTexture(mainFramebuffer, 2);
+    }
+
+    public void copySceneColors(Framebuffer mainFramebuffer, @Nullable Integer worldGaux4Texture) {
         if (this.width <= 0 || this.height <= 0) {
             return;
         }
@@ -169,9 +180,6 @@ final class ActiniumPostTargets {
         clearTargetAltIfRequested(TARGET_GAUX2);
         clearTargetAltIfRequested(TARGET_GAUX3);
         clearTargetAltIfRequested(TARGET_GAUX4);
-
-        this.copyDepthTexture(mainFramebuffer, 0);
-        this.copyDepthTexture(mainFramebuffer, 2);
     }
 
     public void copyPreTranslucentDepth(Framebuffer mainFramebuffer) {
@@ -190,6 +198,23 @@ final class ActiniumPostTargets {
         this.copyDepthTexture(mainFramebuffer, 0);
         this.copyDepthTexture(mainFramebuffer, 1);
         this.copyDepthTexture(mainFramebuffer, 2);
+    }
+
+    public void copyCurrentDepth(Framebuffer mainFramebuffer, int index) {
+        if (this.width <= 0 || this.height <= 0) {
+            return;
+        }
+
+        this.copyDepthTexture(mainFramebuffer, index);
+    }
+
+    public void copyDepthTextureToSlot(int sourceTexture, int index) {
+        if (this.width <= 0 || this.height <= 0 || sourceTexture <= 0) {
+            return;
+        }
+
+        int resolvedIndex = Math.max(0, Math.min(index, this.depthTextures.length - 1));
+        this.copyDepthTexture(sourceTexture, this.depthTextures[resolvedIndex], this.width, this.height);
     }
 
     public void copyTargetsFrom(@Nullable ActiniumPostTargets other, int[] targetIndices) {

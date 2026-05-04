@@ -49,11 +49,7 @@ public class EntityRendererActiniumPipelineMixin {
             )
     )
     private void actinium$finalizeWorldPassBeforeHand(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        ActiniumRenderPipeline.INSTANCE.captureWorldState();
-        ActiniumRenderPipeline.INSTANCE.endWorld();
-        if (ActiniumRenderPipeline.INSTANCE.hasPostProgram()) {
-            ActiniumRenderPipeline.INSTANCE.renderPostPipeline(partialTicks);
-        }
+        ActiniumRenderPipeline.INSTANCE.finalizeWorldBeforeHand();
     }
 
     @Inject(
@@ -66,6 +62,23 @@ public class EntityRendererActiniumPipelineMixin {
     )
     private void actinium$prepareFirstPersonState(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         ActiniumRenderPipeline.INSTANCE.prepareFirstPersonRenderState();
+    }
+
+    @Inject(
+            method = "renderWorldPass",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/EntityRenderer;renderHand(FI)V",
+                    shift = At.Shift.AFTER
+            )
+    )
+    private void actinium$finalizeWorldPassAfterHand(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.finalizeWorldAfterHand(partialTicks);
+    }
+
+    @Inject(method = "renderWorldPass", at = @At("TAIL"))
+    private void actinium$finalizeWorldPassAtTail(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        ActiniumRenderPipeline.INSTANCE.finalizeWorldAfterHand(partialTicks);
     }
 
     @Inject(
