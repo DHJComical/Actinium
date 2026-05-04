@@ -230,7 +230,10 @@ public final class ActiniumRenderPipeline {
     private int observedReloadVersion = -1;
     @Getter
     private ActiniumRenderStage currentStage = ActiniumRenderStage.NONE;
+    @Getter
+    private ActiniumPipelinePhase currentPhase = ActiniumPipelinePhase.NONE;
     private ActiniumRenderStage postReturnStage = ActiniumRenderStage.NONE;
+    private ActiniumPipelinePhase postReturnPhase = ActiniumPipelinePhase.NONE;
     private boolean shadowProgramAvailable;
     private boolean skyProgramAvailable;
     private boolean particleProgramAvailable;
@@ -378,6 +381,19 @@ public final class ActiniumRenderPipeline {
     private ActiniumRenderPipeline() {
     }
 
+    private void transitionPhase(ActiniumPipelinePhase nextPhase) {
+        if (this.currentPhase == nextPhase) {
+            return;
+        }
+
+        ActiniumPipelinePhase previousPhase = this.currentPhase;
+        this.currentPhase = nextPhase;
+
+        if (this.shouldEmitVerboseDebugFrame()) {
+            this.debugLog("Pipeline phase transition {} -> {}", previousPhase, nextPhase);
+        }
+    }
+
     public void beginWorld(float partialTicks) {
         this.syncReloadState();
         Minecraft minecraft = Minecraft.getMinecraft();
@@ -412,12 +428,14 @@ public final class ActiniumRenderPipeline {
         this.centerDepthCapturedThisFrame = false;
         this.fogColorInitialized = false;
         this.currentStage = ActiniumRenderStage.WORLD;
+        this.transitionPhase(ActiniumPipelinePhase.WORLD);
         this.debugLogFogState("beginWorld", "reset");
     }
 
     public void endWorld() {
         this.debugLogFogState("endWorld", "before-clear-stage");
         this.currentStage = ActiniumRenderStage.NONE;
+        this.transitionPhase(ActiniumPipelinePhase.NONE);
     }
 
     public void finalizeWorldBeforeHand() {
@@ -458,6 +476,7 @@ public final class ActiniumRenderPipeline {
     public void beginSky() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.SKY;
+        this.transitionPhase(ActiniumPipelinePhase.SKY);
         this.debugLogFogState("beginSky", "stage-switch");
     }
 
@@ -465,12 +484,14 @@ public final class ActiniumRenderPipeline {
         if (this.currentStage == ActiniumRenderStage.SKY || this.currentStage == ActiniumRenderStage.SKY_TEXTURED) {
             this.debugLogFogState("endSky", "stage-switch");
             this.currentStage = ActiniumRenderStage.WORLD;
+            this.transitionPhase(ActiniumPipelinePhase.WORLD);
         }
     }
 
     public void beginSkyTextured() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.SKY_TEXTURED;
+        this.transitionPhase(ActiniumPipelinePhase.SKY_TEXTURED);
         this.debugLogFogState("beginSkyTextured", "stage-switch");
     }
 
@@ -479,6 +500,7 @@ public final class ActiniumRenderPipeline {
         this.captureManagedSkyUpPosition();
         this.managedSkyCelestialStateValid = false;
         this.currentStage = ActiniumRenderStage.SKY_TEXTURED;
+        this.transitionPhase(ActiniumPipelinePhase.SKY_TEXTURED);
         this.debugLogFogState("beginManagedSky", "stage-switch");
         this.bindWorldStageProgram(partialTicks);
     }
@@ -528,39 +550,46 @@ public final class ActiniumRenderPipeline {
     public void beginClouds() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.CLOUDS;
+        this.transitionPhase(ActiniumPipelinePhase.CLOUDS);
     }
 
     public void beginEntities() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.ENTITIES;
+        this.transitionPhase(ActiniumPipelinePhase.ENTITIES);
     }
 
     public void beginParticles() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.PARTICLES;
+        this.transitionPhase(ActiniumPipelinePhase.PARTICLES);
     }
 
     public void endEntities() {
         if (this.currentStage == ActiniumRenderStage.ENTITIES) {
             this.currentStage = ActiniumRenderStage.WORLD;
+            this.transitionPhase(ActiniumPipelinePhase.WORLD);
         }
     }
 
     public void endParticles() {
         if (this.currentStage == ActiniumRenderStage.PARTICLES) {
             this.currentStage = ActiniumRenderStage.WORLD;
+            this.transitionPhase(ActiniumPipelinePhase.WORLD);
         }
     }
 
     public void endClouds() {
         if (this.currentStage == ActiniumRenderStage.CLOUDS) {
             this.currentStage = ActiniumRenderStage.WORLD;
+            this.transitionPhase(ActiniumPipelinePhase.WORLD);
         }
     }
 
     public void beginWeather() {
         this.syncReloadState();
         this.currentStage = ActiniumRenderStage.WEATHER;
+        this.transitionPhase(ActiniumPipelinePhase.WEATHER);
         this.debugLogFogState("beginWeather", "stage-switch");
     }
 
@@ -568,13 +597,16 @@ public final class ActiniumRenderPipeline {
         if (this.currentStage == ActiniumRenderStage.WEATHER) {
             this.debugLogFogState("endWeather", "stage-switch");
             this.currentStage = ActiniumRenderStage.WORLD;
+            this.transitionPhase(ActiniumPipelinePhase.WORLD);
         }
     }
 
     public void beginPost() {
         this.syncReloadState();
         this.postReturnStage = this.currentStage;
+        this.postReturnPhase = this.currentPhase;
         this.currentStage = ActiniumRenderStage.POST;
+        this.transitionPhase(ActiniumPipelinePhase.POST);
         this.debugLogFogState("beginPost", "stage-switch");
     }
 
@@ -583,6 +615,8 @@ public final class ActiniumRenderPipeline {
             this.debugLogFogState("endPost", "stage-switch");
             this.currentStage = this.postReturnStage;
             this.postReturnStage = ActiniumRenderStage.NONE;
+            this.transitionPhase(this.postReturnPhase);
+            this.postReturnPhase = ActiniumPipelinePhase.NONE;
         }
     }
 
@@ -1544,7 +1578,9 @@ public final class ActiniumRenderPipeline {
         int resolution = chooseShadowResolution(properties);
         this.ensureRuntimeResources();
         this.computeShadowMatrices(partialTicks, properties, resolution);
+        ActiniumPipelinePhase previousPhase = this.currentPhase;
         this.renderingShadowPass = true;
+        this.transitionPhase(ActiniumPipelinePhase.SHADOW);
         try {
             if (!this.renderShadowTerrainPass(properties, resolution, partialTicks)) {
                 if (this.shadowTargets != null) {
@@ -1554,6 +1590,7 @@ public final class ActiniumRenderPipeline {
             }
         } finally {
             this.renderingShadowPass = false;
+            this.transitionPhase(previousPhase);
         }
 
         ActiniumInternalShadowRenderingState.update(this.shadowModelViewMatrix, this.shadowProjectionMatrix);
@@ -3952,6 +3989,7 @@ public final class ActiniumRenderPipeline {
         this.observedReloadVersion = reloadVersion;
         this.deleteRuntimeResources();
         this.currentStage = ActiniumRenderStage.NONE;
+        this.transitionPhase(ActiniumPipelinePhase.NONE);
         this.shadowProgramAvailable = hasAnyStageProgram("shadow");
         this.skyProgramAvailable = hasAnyStageProgram(SKY_PROGRAMS);
         this.particleProgramAvailable = hasAnyStageProgram(PARTICLE_PROGRAMS);
@@ -4257,6 +4295,7 @@ public final class ActiniumRenderPipeline {
     public void resetVanillaRenderState() {
         this.releaseActiveWorldStageState();
         this.currentStage = ActiniumRenderStage.NONE;
+        this.transitionPhase(ActiniumPipelinePhase.NONE);
         this.worldTargetsPrepared = false;
 
         Minecraft minecraft = Minecraft.getMinecraft();
