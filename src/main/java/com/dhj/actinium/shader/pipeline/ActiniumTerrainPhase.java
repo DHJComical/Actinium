@@ -34,11 +34,30 @@ final class ActiniumTerrainPhase {
             return new int[]{ActiniumPostTargets.TARGET_COLORTEX1};
         }
 
-        if (pass.isReverseOrder() && resources != null) {
-            return resources.readProgramDrawBuffers(ActiniumTerrainPass.GBUFFER_TRANSLUCENT);
+        if (resources != null) {
+            ActiniumTerrainPass terrainPass = resolveTerrainProgram(pass);
+            return resources.readProgramDrawBuffers(terrainPass);
         }
 
         return new int[]{ActiniumPostTargets.TARGET_COLORTEX1, ActiniumPostTargets.TARGET_GAUX4};
+    }
+
+    private static ActiniumTerrainPass resolveTerrainProgram(TerrainRenderPass pass) {
+        String passName = pass.name();
+
+        if (pass.isReverseOrder() || "translucent".equals(passName)) {
+            return ActiniumTerrainPass.GBUFFER_TRANSLUCENT;
+        }
+
+        if ("cutout".equals(passName)) {
+            return ActiniumTerrainPass.GBUFFER_CUTOUT;
+        }
+
+        if ("cutout_mipped".equals(passName)) {
+            return ActiniumTerrainPass.GBUFFER_CUTOUT_MIPPED;
+        }
+
+        return ActiniumTerrainPass.GBUFFER_SOLID;
     }
 
     static boolean shouldLogPass(@Nullable TerrainRenderPass pass) {

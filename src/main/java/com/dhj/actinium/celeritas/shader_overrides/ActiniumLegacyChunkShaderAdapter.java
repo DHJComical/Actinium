@@ -76,6 +76,8 @@ final class ActiniumLegacyChunkShaderAdapter {
         source = source.replace("varying ", type == ShaderType.FRAGMENT ? "in " : "out ");
         if (type == ShaderType.FRAGMENT) {
             source = source.replace("gl_FragColor", "fragColor0");
+        } else {
+            source = source.replace("gl_MultiTexCoord3", "actinium_mc_midTexCoord");
         }
         return source;
     }
