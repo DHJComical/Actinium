@@ -221,15 +221,17 @@ public final class ActiniumChunkProgramOverrides {
     }
 
     private String patchExternalWaterFragment(String shaderSource) {
-        if (!shaderSource.contains("sun_reflection(") || !shaderSource.contains("#if SUN_REFLECTION == 1")) {
-            return shaderSource;
+        String patchedSource = shaderSource;
+
+        if (patchedSource.contains("sun_reflection(") && patchedSource.contains("#if SUN_REFLECTION == 1")) {
+            if (ActiniumShaderPackManager.isDebugEnabled()) {
+                ActiniumShaders.logger().info("Patching external water fragment shader to disable duplicated SUN_REFLECTION contribution");
+            }
+
+            patchedSource = patchedSource.replace("#if SUN_REFLECTION == 1", "#if 0 /* Actinium: avoid duplicated water sun reflection */");
         }
 
-        if (ActiniumShaderPackManager.isDebugEnabled()) {
-            ActiniumShaders.logger().info("Patching external water fragment shader to disable duplicated SUN_REFLECTION contribution");
-        }
-
-        return shaderSource.replace("#if SUN_REFLECTION == 1", "#if 0 /* Actinium: avoid duplicated water sun reflection */");
+        return patchedSource;
     }
 
     private String resolveShaderSource(String path) {

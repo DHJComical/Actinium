@@ -652,8 +652,10 @@ public final class ActiniumRenderPipeline {
         ShadowPassGlState previousState = ShadowPassGlState.capture();
         this.beginPost();
         this.debugLogFogState("renderPostPipeline", "entry");
+        this.debugLogPipelineOverwriteRisk("scene-post-entry", !scenePrograms.isEmpty() || finalProgram != null);
 
         try {
+            this.debugLogPipelineSnapshot("scene-post.before-copy", mainFramebuffer);
             if (this.postTargets != null) {
                 this.postTargets.ensureSize(this.width, this.height);
                 this.postTargets.copySceneTextures(mainFramebuffer, this.getWorldGaux4TextureForPost());
@@ -673,8 +675,11 @@ public final class ActiniumRenderPipeline {
                 this.debugLogPreSceneTargets();
                 this.updateCenterDepthSmooth();
             }
+            this.debugLogPipelineSnapshot("scene-post.after-copy", mainFramebuffer);
             this.executeScenePrograms(scenePrograms, partialTicks);
+            this.debugLogPipelineSnapshot("scene-post.after-scene-programs", mainFramebuffer);
             this.renderFinalPass(mainFramebuffer, finalProgram, partialTicks);
+            this.debugLogPipelineSnapshot("scene-post.after-final", mainFramebuffer);
         } catch (RuntimeException e) {
             ActiniumShaders.logger().warn("Failed to execute Actinium shader pack post pipeline; disabling external post programs until the next shader reload", e);
             this.disableExternalProgramsUntilReload();
@@ -701,7 +706,9 @@ public final class ActiniumRenderPipeline {
             this.debugLog("Running prepare pre-scene stage before terrain");
         }
         this.debugLogFogState("renderPreparePipeline", "entry");
+        this.debugLogMainFramebufferSnapshot("prepare.pipeline.before");
         this.renderPreparePrograms(partialTicks);
+        this.debugLogMainFramebufferSnapshot("prepare.pipeline.after");
         this.prepareProgramsExecutedThisFrame = true;
     }
 
@@ -721,7 +728,9 @@ public final class ActiniumRenderPipeline {
             this.debugLog("Running deferred pre-scene stage before water");
         }
         this.debugLogFogState("renderDeferredPipeline", "entry");
+        this.debugLogMainFramebufferSnapshot("deferred.pipeline.before");
         this.renderDeferredPrograms(partialTicks);
+        this.debugLogMainFramebufferSnapshot("deferred.pipeline.after");
         this.deferredProgramsExecutedThisFrame = true;
     }
 
@@ -764,6 +773,7 @@ public final class ActiniumRenderPipeline {
         this.beginPost();
 
         try {
+            this.debugLogPipelineSnapshot(stageName + ".pipeline.before-init", mainFramebuffer);
             if (this.preSceneTargets != null) {
                 initializer.initialize(mainFramebuffer);
                 this.applyExplicitPreFlips(this.preSceneTargets, stageName + "_pre");
@@ -772,12 +782,14 @@ public final class ActiniumRenderPipeline {
                 this.debugLogTextureCenter(stageName + ".entry.colortex1", this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
                 this.debugLogTextureCenter(stageName + ".entry.gaux4", this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
             }
+            this.debugLogPipelineSnapshot(stageName + ".pipeline.after-init", mainFramebuffer);
 
             if (this.shouldExecutePreSceneShaders(stageName) && this.preSceneTargets != null) {
                 this.executePostPrograms(programs, this.preSceneTargets, partialTicks);
             } else if (this.shouldEmitVerboseDebugFrame()) {
                 this.debugLog("Skipping pre-scene shader execution for '{}' while keeping pre-pass buffer initialization active", stageName);
             }
+            this.debugLogPipelineSnapshot(stageName + ".pipeline.after-exec", mainFramebuffer);
         } catch (RuntimeException e) {
             ActiniumShaders.logger().warn("Failed to execute Actinium shader pack {} pipeline; disabling external post programs until the next shader reload", stageName, e);
             this.disableExternalProgramsUntilReload();
@@ -1695,6 +1707,55 @@ public final class ActiniumRenderPipeline {
         unbindTexture(WORLD_GAUX4_UNIT);
     }
 
+    public void debugLogTerrainPassState(String stage, TerrainRenderPass pass) {
+        if (!this.shouldEmitVerboseDebugFrame() || pass == null || !"translucent".equals(pass.name())) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer framebuffer = minecraft.getFramebuffer();
+        int mainTexture = framebuffer != null ? framebuffer.framebufferTexture : 0;
+        int preSceneGaux1 = this.preSceneTargets != null ? this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX1) : 0;
+        int postGaux1 = this.postTargets != null ? this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX1) : 0;
+        int worldGaux4 = this.worldTargets != null ? this.worldTargets.getSourceGaux4Texture() : 0;
+
+        this.debugLog(
+                "Terrain translucent debug '{}' mainTex={}, terrainGaux1={}, terrainGaux2={}, depthtex0={}, depthtex1={}, preSceneGaux1={}, postGaux1={}, worldGaux4={}, preparedMask={}, preTransDepthCaptured={}, redirectEnabled={}",
+                stage,
+                mainTexture,
+                this.terrainGaux1Texture,
+                this.terrainGaux2Texture,
+                this.terrainDepthTexture0,
+                this.terrainDepthTexture1,
+                preSceneGaux1,
+                postGaux1,
+                worldGaux4,
+                this.terrainInputsPreparedMask,
+                this.preTranslucentDepthCapturedThisFrame,
+                ENABLE_EXTERNAL_TERRAIN_REDIRECT
+        );
+        this.debugLogPipelineOverwriteRisk("terrain-translucent-" + stage, true);
+        this.debugLogPipelineSnapshot("terrain.translucent." + stage, framebuffer);
+
+        this.debugLogRenderState("terrain.translucent." + stage);
+
+        if (framebuffer != null && framebuffer.framebufferTexture > 0) {
+            this.width = Math.max(1, framebuffer.framebufferWidth);
+            this.height = Math.max(1, framebuffer.framebufferHeight);
+            this.debugLogTextureCenter("terrain.translucent." + stage + ".mainFramebuffer", framebuffer.framebufferTexture);
+            this.debugLogTextureSamples("terrain.translucent." + stage + ".mainFramebuffer", framebuffer.framebufferTexture);
+        }
+
+        this.debugLogTextureCenter("terrain.translucent." + stage + ".terrainGaux1", this.terrainGaux1Texture != null ? this.terrainGaux1Texture : 0);
+        this.debugLogTextureSamples("terrain.translucent." + stage + ".terrainGaux1", this.terrainGaux1Texture != null ? this.terrainGaux1Texture : 0);
+        this.debugLogDepthTextureSample("terrain.translucent." + stage + ".depthtex0", this.terrainDepthTexture0 != null ? this.terrainDepthTexture0 : 0, this.width, this.height);
+        this.debugLogDepthTextureSample("terrain.translucent." + stage + ".depthtex1", this.terrainDepthTexture1 != null ? this.terrainDepthTexture1 : 0, this.width, this.height);
+        this.debugLogTextureCenter("terrain.translucent." + stage + ".preSceneGaux1", preSceneGaux1);
+        this.debugLogTextureSamples("terrain.translucent." + stage + ".preSceneGaux1", preSceneGaux1);
+        this.debugLogTextureCenter("terrain.translucent." + stage + ".postGaux1", postGaux1);
+        this.debugLogTextureSamples("terrain.translucent." + stage + ".postGaux1", postGaux1);
+    }
+
     public void bindWorldStageProgram(float partialTicks) {
         this.syncReloadState();
         this.debugLogFogState("bindWorldStageProgram", "entry");
@@ -1884,6 +1945,7 @@ public final class ActiniumRenderPipeline {
 
     private void executePostPrograms(List<ActiniumPostProgram> programs, ActiniumPostTargets targets, float partialTicks) {
         for (ActiniumPostProgram program : programs) {
+            this.debugLogPostStageBoundary(program.name(), "before", targets);
             debugResetGlErrors("post." + program.name() + ".preMipmap");
             this.preparePostMipmappedInputs(targets, program.mipmappedBuffers());
             debugCheckGlErrors("post." + program.name() + ".prepareMipmaps");
@@ -1894,6 +1956,7 @@ public final class ActiniumRenderPipeline {
             this.renderFullscreenProgram(program.program(), targets, partialTicks, program.name());
             this.applyPostProgramFlips(targets, program);
             this.debugLogPostStage(program.name());
+            this.debugLogPostStageBoundary(program.name(), "after", targets);
         }
     }
 
@@ -1902,6 +1965,7 @@ public final class ActiniumRenderPipeline {
     }
 
     private void renderFinalPass(Framebuffer mainFramebuffer, @Nullable GlProgram<ActiniumPostShaderInterface> program, float partialTicks) {
+        this.debugLogPipelineSnapshot("final.before", mainFramebuffer);
         this.debugLogRenderState("final.prep.before");
         if (this.postTargets != null) {
             this.debugLogTextureSamples("final.input.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
@@ -1921,12 +1985,14 @@ public final class ActiniumRenderPipeline {
             this.debugLogFramebufferSamples("final.mainFramebuffer", mainFramebuffer.framebufferObject, GL30.GL_COLOR_ATTACHMENT0);
             this.finishMainFramebufferFinalPass();
             debugCheckGlErrors("final.finish");
+            this.debugLogPipelineSnapshot("final.after", mainFramebuffer);
             return;
         }
 
         this.renderBlitFallback(mainFramebuffer, partialTicks);
         this.finishMainFramebufferFinalPass();
         debugCheckGlErrors("final.finish");
+        this.debugLogPipelineSnapshot("final.after-blit", mainFramebuffer);
     }
 
     private void renderBlitFallback(Framebuffer mainFramebuffer, float partialTicks) {
@@ -2004,7 +2070,11 @@ public final class ActiniumRenderPipeline {
     }
 
     private boolean shouldMergeDeferredTarget(int drawBuffer) {
-        return true;
+        // Deferred runs before translucent terrain. Its auxiliary outputs should
+        // feed later stages, but its scene-color targets must not replace the
+        // fully rendered scene captured after water has already drawn.
+        return drawBuffer != ActiniumPostTargets.TARGET_COLORTEX0
+                && drawBuffer != ActiniumPostTargets.TARGET_COLORTEX1;
     }
 
     private boolean shouldExecutePreSceneShaders(String stageName) {
@@ -2356,9 +2426,23 @@ public final class ActiniumRenderPipeline {
 
         int colortex1 = this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1);
         int gaux3 = this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX3);
+        int gaux4 = this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4);
         this.debugLogTextureCenter(programName + ".colortex1", colortex1);
         this.debugLogTextureCenter(programName + ".gaux3", gaux3);
+        this.debugLogTextureCenter(programName + ".gaux4", gaux4);
         this.debugLogTextureSamples(programName + ".colortex1", colortex1);
+    }
+
+    private void debugLogPostStageBoundary(String programName, String boundary, ActiniumPostTargets targets) {
+        if (!ActiniumShaderPackManager.isDebugEnabled() || !this.shouldEmitVerboseDebugFrame() || targets == null) {
+            return;
+        }
+
+        this.debugLog("Post stage '{}' {} draw snapshot", programName, boundary);
+        this.debugLogTextureCenter("post." + programName + "." + boundary + ".colortex0", targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX0));
+        this.debugLogTextureCenter("post." + programName + "." + boundary + ".colortex1", targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+        this.debugLogTextureCenter("post." + programName + "." + boundary + ".gaux4", targets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
+        this.debugLogTextureSamples("post." + programName + "." + boundary + ".colortex1", targets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
     }
 
     private void debugLogTextureCenter(String label, int textureId) {
@@ -2711,9 +2795,11 @@ public final class ActiniumRenderPipeline {
         invokeGlGetInteger(GL11.GL_VIEWPORT, viewport);
         IntBuffer scissor = BufferUtils.createIntBuffer(16);
         invokeGlGetInteger(GL11.GL_SCISSOR_BOX, scissor);
+        IntBuffer colorMask = BufferUtils.createIntBuffer(16);
+        invokeGlGetInteger(GL11.GL_COLOR_WRITEMASK, colorMask);
 
         this.debugLog(
-                "Render state '{}' fb={}, draw={}, read={}, program={}, vao={}, viewport=[{}, {}, {}, {}], scissorEnabled={}, scissor=[{}, {}, {}, {}], blend={}, depth={}, alpha={}, cull={}",
+                "Render state '{}' fb={}, draw={}, read={}, program={}, vao={}, viewport=[{}, {}, {}, {}], scissorEnabled={}, scissor=[{}, {}, {}, {}], blend={}, depth={}, depthMask={}, alpha={}, cull={}, colorMask=[{}, {}, {}, {}]",
                 label,
                 GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
                 GL11.glGetInteger(GL11.GL_DRAW_BUFFER),
@@ -2725,9 +2811,91 @@ public final class ActiniumRenderPipeline {
                 scissor.get(0), scissor.get(1), scissor.get(2), scissor.get(3),
                 GL11.glIsEnabled(GL11.GL_BLEND),
                 GL11.glIsEnabled(GL11.GL_DEPTH_TEST),
+                GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
                 GL11.glIsEnabled(GL11.GL_ALPHA_TEST),
-                GL11.glIsEnabled(GL11.GL_CULL_FACE)
+                GL11.glIsEnabled(GL11.GL_CULL_FACE),
+                colorMask.get(0),
+                colorMask.get(1),
+                colorMask.get(2),
+                colorMask.get(3)
         );
+    }
+
+    private void debugLogMainFramebufferSnapshot(String label) {
+        if (!this.shouldEmitVerboseDebugFrame()) {
+            return;
+        }
+
+        Minecraft minecraft = Minecraft.getMinecraft();
+        Framebuffer framebuffer = minecraft.getFramebuffer();
+        if (framebuffer == null || framebuffer.framebufferTexture <= 0) {
+            return;
+        }
+
+        this.width = Math.max(1, framebuffer.framebufferWidth);
+        this.height = Math.max(1, framebuffer.framebufferHeight);
+        this.debugLogTextureCenter(label + ".mainFramebuffer", framebuffer.framebufferTexture);
+        this.debugLogTextureSamples(label + ".mainFramebuffer", framebuffer.framebufferTexture);
+    }
+
+    private void debugLogPipelineSnapshot(String label, @Nullable Framebuffer mainFramebuffer) {
+        if (!ActiniumShaderPackManager.isDebugEnabled() || !this.shouldEmitVerboseDebugFrame()) {
+            return;
+        }
+
+        if (mainFramebuffer != null && mainFramebuffer.framebufferTexture > 0) {
+            this.width = Math.max(1, mainFramebuffer.framebufferWidth);
+            this.height = Math.max(1, mainFramebuffer.framebufferHeight);
+        }
+
+        this.debugLog(
+                "Pipeline snapshot '{}' flags: terrainRedirect={}, worldTargetsPrepared={}, prepareRan={}, deferredRan={}, preTransDepthCaptured={}, sceneProgramsResolved={}, finalProgramResolved={}",
+                label,
+                ENABLE_EXTERNAL_TERRAIN_REDIRECT,
+                this.worldTargetsPrepared,
+                this.prepareProgramsExecutedThisFrame,
+                this.deferredProgramsExecutedThisFrame,
+                this.preTranslucentDepthCapturedThisFrame,
+                this.sceneProgramsResolved,
+                this.finalProgramResolved
+        );
+
+        if (mainFramebuffer != null && mainFramebuffer.framebufferTexture > 0) {
+            this.debugLogTextureCenter(label + ".mainFramebuffer", mainFramebuffer.framebufferTexture);
+            this.debugLogTextureSamples(label + ".mainFramebuffer", mainFramebuffer.framebufferTexture);
+        }
+
+        if (this.worldTargets != null) {
+            this.debugLogTextureCenter(label + ".world.colortex1", this.worldTargets.getSourceColorTexture());
+            this.debugLogTextureCenter(label + ".world.gaux4", this.worldTargets.getSourceGaux4Texture());
+        }
+
+        if (this.preSceneTargets != null) {
+            this.debugLogTextureCenter(label + ".pre.colortex1", this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+            this.debugLogTextureCenter(label + ".pre.gaux4", this.preSceneTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
+            this.debugLogDepthTextureSample(label + ".pre.depth0", this.preSceneTargets.getDepthTexture(0), this.width, this.height);
+            this.debugLogDepthTextureSample(label + ".pre.depth1", this.preSceneTargets.getDepthTexture(1), this.width, this.height);
+        }
+
+        if (this.postTargets != null) {
+            this.debugLogTextureCenter(label + ".post.colortex1", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_COLORTEX1));
+            this.debugLogTextureCenter(label + ".post.gaux4", this.postTargets.getSourceTexture(ActiniumPostTargets.TARGET_GAUX4));
+            this.debugLogDepthTextureSample(label + ".post.depth0", this.postTargets.getDepthTexture(0), this.width, this.height);
+            this.debugLogDepthTextureSample(label + ".post.depth1", this.postTargets.getDepthTexture(1), this.width, this.height);
+        }
+    }
+
+    private void debugLogPipelineOverwriteRisk(String label, boolean postPipelineActive) {
+        if (!ActiniumShaderPackManager.isDebugEnabled() || !this.shouldEmitVerboseDebugFrame() || !postPipelineActive) {
+            return;
+        }
+
+        if (!ENABLE_EXTERNAL_TERRAIN_REDIRECT) {
+            this.debugLog(
+                    "Pipeline risk '{}': external scene/final post stages are active while terrain redirect is disabled; translucent terrain drawn to the main framebuffer can be overwritten by later fullscreen passes",
+                    label
+            );
+        }
     }
 
     private boolean shouldEmitVerboseDebugFrame() {

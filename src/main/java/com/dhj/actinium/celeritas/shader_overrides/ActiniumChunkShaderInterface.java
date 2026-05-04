@@ -620,12 +620,14 @@ final class ActiniumChunkShaderInterface implements ChunkShaderInterface {
             ActiniumRenderPipeline.INSTANCE.bindTerrainShadowTextures();
         }
         ActiniumRenderPipeline.INSTANCE.bindTerrainPassFramebuffer(pass);
+        ActiniumRenderPipeline.INSTANCE.debugLogTerrainPassState("before-draw", pass);
         this.pushLegacyMatrices();
     }
 
     @Override
     public void restoreState() {
         if (this.currentPass != null) {
+            ActiniumRenderPipeline.INSTANCE.debugLogTerrainPassState("after-draw", this.currentPass);
             ActiniumRenderPipeline.INSTANCE.unbindTerrainPassFramebuffer(this.currentPass);
             this.currentPass = null;
         }

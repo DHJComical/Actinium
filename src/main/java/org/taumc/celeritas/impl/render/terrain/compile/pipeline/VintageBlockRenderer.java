@@ -218,11 +218,19 @@ public class VintageBlockRenderer {
 
         Block block = this.currentState.getBlock();
         byte lightValue = (byte) this.currentState.getLightValue(this.currentBlockAccess, pos);
+        boolean isFluid = this.currentState.getMaterial() == net.minecraft.block.material.Material.WATER
+                || this.currentState.getMaterial() == net.minecraft.block.material.Material.LAVA;
         int blockId = Block.getIdFromBlock(block);
-        short renderType = ActiniumExtendedDataHelper.BLOCK_RENDER_TYPE;
+        short renderType = isFluid
+                ? ActiniumExtendedDataHelper.FLUID_RENDER_TYPE
+                : ActiniumExtendedDataHelper.BLOCK_RENDER_TYPE;
 
         this.blockRenderContext.set(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, blockId, renderType, lightValue);
-        encoder.prepareToRenderBlock(this.blockRenderContext, block, this.currentMetadata, renderType, lightValue);
+        if (isFluid) {
+            encoder.prepareToRenderFluid(this.blockRenderContext, block, lightValue);
+        } else {
+            encoder.prepareToRenderBlock(this.blockRenderContext, block, this.currentMetadata, renderType, lightValue);
+        }
         this.usedContextEncoders.add(encoder);
     }
 
