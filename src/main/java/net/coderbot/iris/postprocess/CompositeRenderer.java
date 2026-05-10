@@ -8,6 +8,7 @@ import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import lombok.Getter;
 import net.coderbot.iris.features.FeatureFlags;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.gl.framebuffer.ViewportData;
@@ -121,9 +122,11 @@ public class CompositeRenderer {
 			final ProgramDirectives directives = source.getDirectives();
 
 			Map<PatchShaderType, String> transformed = getTransformed(source, transformFutures, i, stageName);
+			pass.sourceName = source.getName();
 			pass.program = createProgramFromTransformed(source, transformed, flipped, flippedAtLeastOnceSnapshot, context.shadowTargetsSupplier());
 			pass.computes = createComputes(computes[i], flipped, flippedAtLeastOnceSnapshot, context.shadowTargetsSupplier());
 			final int[] drawBuffers = directives.getDrawBuffers();
+            IrisGlDebug.logFullscreenProgram(this.textureStage.name(), pass.sourceName, pass.program.getProgramId(), drawBuffers);
 
 			final GlFramebuffer framebuffer = renderTargets.createColorFramebuffer(flipped, drawBuffers);
 
@@ -216,6 +219,7 @@ public class CompositeRenderer {
 		int[] drawBuffers;
 		int viewWidth;
 		int viewHeight;
+		String sourceName;
 		Program program;
 		ComputeProgram[] computes;
 		GlFramebuffer framebuffer;
@@ -245,6 +249,7 @@ public class CompositeRenderer {
 	}
 
 	public void renderAll() {
+        IrisGlDebug.check("composite:start");
         GLStateManager.disableBlend();
         GLStateManager.disableAlphaTest();
 
@@ -264,6 +269,7 @@ public class CompositeRenderer {
 
 			if (ranCompute) {
 				RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT);
+                IrisGlDebug.check("composite:compute-barrier");
 			}
 
 			Program.unbind();
@@ -273,6 +279,7 @@ public class CompositeRenderer {
 			}
 
 			if (!renderPass.mipmappedBuffers.isEmpty()) {
+                IrisGlDebug.markStage("composite:mipmap");
 				GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
 
 				for (int index : renderPass.mipmappedBuffers) {
@@ -286,20 +293,31 @@ public class CompositeRenderer {
 			final float viewportY = renderPass.viewHeight * renderPass.viewportScale.viewportY();
 			GLStateManager.glViewport((int) viewportX, (int) viewportY, (int) scaledWidth, (int) scaledHeight);
 
+            IrisGlDebug.markStage("composite:draw");
 			renderPass.framebuffer.bind();
+            IrisGlDebug.check("composite:bind-fbo");
 			renderPass.program.use();
+            IrisGlDebug.check("composite:use-program");
 
             this.customUniforms.push(renderPass.program);
+            IrisGlDebug.check("composite:uniforms");
+            IrisGlDebug.logFullscreenPassState(this.textureStage.name(), renderPass.sourceName, renderPass.program.getProgramId(), renderPass.drawBuffers, renderPass.stageReadsFromAlt, this.renderTargets);
+            IrisGlDebug.logFullscreenSamplerSamples(this.textureStage.name(), renderPass.sourceName, renderPass.program.getProgramId());
 			FullScreenQuadRenderer.uploadCompositeMatrices();
+            IrisGlDebug.check("composite:matrices");
 
 			FullScreenQuadRenderer.INSTANCE.renderQuad();
+            IrisGlDebug.check("composite:render-quad");
+            IrisGlDebug.logCurrentFramebufferSamples("composite:" + renderPass.sourceName, renderPass.drawBuffers.length);
 		}
 
 		FullScreenQuadRenderer.end();
 
+        IrisGlDebug.check("composite:end");
 		// Make sure to reset the viewport to how it was before... Otherwise weird issues could occur.
 		// Also bind the "main" framebuffer if it isn't already bound.
         MinecraftFramebufferHelper.bindMainFramebuffer(true);
+        IrisGlDebug.check("composite:restore-main");
 		ProgramUniforms.clearActiveUniforms();
 		ProgramSamplers.clearActiveSamplers();
 		GLStateManager.glUseProgram(0);

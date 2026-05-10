@@ -28,6 +28,7 @@ import org.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
 import com.dhj.actinium.celeritas.ShaderProvider;
 import com.dhj.actinium.celeritas.ShaderProviderHolder;
+import net.coderbot.iris.debug.IrisGlDebug;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.task.ChunkBuilderMeshingTask;
@@ -208,6 +209,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
         @Override
         protected void end(TerrainRenderPass pass) {
             if (this.usingActiniumProgram && this.actiniumProgram != null) {
+                IrisGlDebug.logCurrentFramebufferSamples("terrain:" + pass.name(), 1);
                 this.actiniumProgram.getInterface().restoreState();
                 this.actiniumProgram.unbind();
                 this.actiniumProgram = null;

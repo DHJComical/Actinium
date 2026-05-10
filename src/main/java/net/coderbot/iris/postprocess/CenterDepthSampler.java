@@ -3,6 +3,7 @@ package net.coderbot.iris.postprocess;
 import com.google.common.collect.ImmutableSet;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.gl.program.Program;
@@ -55,6 +56,7 @@ public class CenterDepthSampler {
 	}
 
 	public void sampleCenterDepth() {
+        IrisGlDebug.check("center-depth:start");
 		if ((hasFirstSample && (!everRetrieved)) || destroyed) {
 			// If the shaderpack isn't reading center depth values, don't bother sampling it
 			// This improves performance with most shaderpacks
@@ -64,20 +66,25 @@ public class CenterDepthSampler {
 		hasFirstSample = true;
 
 		this.framebuffer.bind();
+        IrisGlDebug.check("center-depth:bind-fbo");
 		this.program.use();
+        IrisGlDebug.check("center-depth:use-program");
 
 		GLStateManager.glViewport(0, 0, 1, 1);
 
 		FullScreenQuadRenderer.INSTANCE.render();
+        IrisGlDebug.check("center-depth:render");
 
 		ProgramUniforms.clearActiveUniforms();
 		ProgramSamplers.clearActiveSamplers();
 
 		// The API contract of DepthCopyStrategy claims it can only copy depth, however the 2 non-stencil methods used are entirely capable of copying color as of now.
 		DepthCopyStrategy.fastest(false).copy(this.framebuffer, texture, null, altTexture, 1, 1);
+        IrisGlDebug.check("center-depth:copy");
 
 		//Reset viewport
         MinecraftFramebufferHelper.bindMainFramebuffer(true);
+        IrisGlDebug.check("center-depth:restore-main");
 	}
 
 	public void setupColorTexture(int texture, InternalTextureFormat format) {

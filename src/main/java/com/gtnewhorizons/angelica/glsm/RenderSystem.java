@@ -97,14 +97,17 @@ public final class RenderSystem {
         GL11.glCopyTexImage2D(target, level, internalFormat, x, y, width, height, border);
     }
     public static void copyTexSubImage2D(int texture, int target, int level, int xoffset, int yoffset, int x, int y, int width, int height) {
+        bindTexture(texture, target);
         GL11.glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
     }
     public static void blitFramebuffer(int src, int dst, int x0, int y0, int x1, int y1, int dx0, int dy0, int dx1, int dy1, int mask, int filter) {
+        GLStateManager.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, src);
+        GLStateManager.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, dst);
         GL30.glBlitFramebuffer(x0, y0, x1, y1, dx0, dy0, dx1, dy1, mask, filter);
     }
     public static void generateMipmaps(int texture, int target) { bindTexture(texture, target); GL30.glGenerateMipmap(target); }
     public static void memoryBarrier(int barriers) { GL42.glMemoryBarrier(barriers); }
-    public static void bindBuffer(int target, int buffer) { GL15.glBindBuffer(target, buffer); }
+    public static void bindBuffer(int target, int buffer) { GLStateManager.glBindBuffer(target, buffer); }
     public static int createBuffers() { return GL15.glGenBuffers(); }
     public static void deleteBuffers(int buffer) { GL15.glDeleteBuffers(buffer); }
     public static void bindBufferBase(int target, int index, int buffer) { GL30.glBindBufferBase(target, index, buffer); }
@@ -131,14 +134,14 @@ public final class RenderSystem {
     public static void dispatchCompute(Vector3i workGroups) { GL43.glDispatchCompute(workGroups.x, workGroups.y, workGroups.z); }
     public static void dispatchComputeIndirect(long offset) { GL43.glDispatchComputeIndirect(offset); }
     public static void bindSamplerToUnit(int textureUnit, int sampler) { GL33.glBindSampler(textureUnit, sampler); }
-    public static void bindTextureToUnit(int target, int unit, int texture) { GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit); GL11.glBindTexture(target, texture); }
+    public static void bindTextureToUnit(int target, int unit, int texture) { GLStateManager.glBindTextureToUnit(target, unit, texture); }
     public static void destroySampler(int sampler) { GL33.glDeleteSamplers(sampler); }
     public static int genSampler() { return GL33.glGenSamplers(); }
     public static void samplerParameteri(int sampler, int pname, int param) { GL33.glSamplerParameteri(sampler, pname, param); }
     public static void bindImageTexture(int unit, int texture, int level, boolean layered, int layer, int access, int format) {
         GL42.glBindImageTexture(unit, texture, level, layered, layer, access, format);
     }
-    public static void bindTexture(int texture, int target) { GL11.glBindTexture(target, texture); }
+    public static void bindTexture(int texture, int target) { GLStateManager.glBindTexture(target, texture); }
     public static int getTexLevelParameteri(int texture, int level, int pname) { bindTexture(texture, GL11.GL_TEXTURE_2D); return GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, level, pname); }
     public static void texImage1D(int texture, int target, int level, int internalFormat, int width, int border, int format, int type, ByteBuffer pixels) {
         bindTexture(texture, target);
@@ -155,11 +158,11 @@ public final class RenderSystem {
     }
     public static int createFramebuffer() { return GL30.glGenFramebuffers(); }
     public static void framebufferTexture2D(int fb, int fbtarget, int attachment, int target, int texture, int level) {
-        GL30.glBindFramebuffer(fbtarget, fb);
+        GLStateManager.glBindFramebuffer(fbtarget, fb);
         GL30.glFramebufferTexture2D(fbtarget, attachment, target, texture, level);
     }
     public static void drawBuffers(int framebuffer, IntBuffer buffers) {
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
+        GLStateManager.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
         GL20.glDrawBuffers(buffers);
     }
     public static void detachShader(int program, int shader) { GL20.glDetachShader(program, shader); }
@@ -169,23 +172,23 @@ public final class RenderSystem {
         GL40.glBlendFuncSeparatei(index, srcRgb, dstRgb, srcAlpha, dstAlpha);
     }
     public static void readBuffer(int framebuffer, int buffer) {
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
+        GLStateManager.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebuffer);
         GL11.glReadBuffer(buffer);
     }
     public static boolean supportsTesselation() { return true; }
     private static final FloatBuffer PROJECTION_MATRIX_BUFFER = org.lwjgl.BufferUtils.createFloatBuffer(16);
     public static void setupProjectionMatrix(Matrix4f matrix) {
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPushMatrix();
+        GLStateManager.glMatrixMode(GL11.GL_PROJECTION);
+        GLStateManager.glPushMatrix();
         PROJECTION_MATRIX_BUFFER.clear();
         matrix.get(PROJECTION_MATRIX_BUFFER);
-        GL11.glLoadMatrixf(PROJECTION_MATRIX_BUFFER);
-        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GLStateManager.glLoadMatrix(PROJECTION_MATRIX_BUFFER);
+        GLStateManager.glMatrixMode(GL11.GL_MODELVIEW);
     }
     public static void restoreProjectionMatrix() {
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPopMatrix();
-        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GLStateManager.glMatrixMode(GL11.GL_PROJECTION);
+        GLStateManager.glPopMatrix();
+        GLStateManager.glMatrixMode(GL11.GL_MODELVIEW);
     }
     public static void drawArraysIndirect(int mode, long indirect) { }
 }

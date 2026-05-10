@@ -19,6 +19,7 @@
     "features.iris.LayerEndermanEyesIrisMixin",
     "features.iris.LayerSpiderEyesIrisMixin",
     "features.iris.LocaleIrisMixin",
+    "features.iris.MinecraftGlDebugMixin",
     "features.iris.ParticleItemPickupIrisMixin",
     "features.iris.RenderEntityItemIrisMixin",
     "features.iris.RenderDragonIrisMixin",

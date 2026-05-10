@@ -15,6 +15,7 @@ import net.coderbot.iris.block_rendering.BlockMaterialMapping;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.coderbot.iris.celeritas.CeleritasTerrainPipeline;
 import net.coderbot.iris.compat.dh.DHCompat;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.features.FeatureFlags;
 import net.coderbot.iris.gbuffer_overrides.matching.InputAvailability;
 import net.coderbot.iris.gbuffer_overrides.matching.ProgramTable;
@@ -1468,26 +1469,34 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	@Override
 	public void beginHand() {
+        IrisGlDebug.check("level:begin-hand:start");
 		// We need to copy the current depth texture so that depthtex2 can contain the depth values for
 		// all non-translucent content without the hand, as required.
 		renderTargets.copyPreHandDepth();
+        IrisGlDebug.check("level:begin-hand:copy-depth");
 	}
 
 	@Override
 	public void beginTranslucents() {
+        IrisGlDebug.check("level:begin-translucents:start");
 		isBeforeTranslucent = false;
 
 		// We need to copy the current depth texture so that depthtex1 can contain the depth values for
 		// all non-translucent content, as required.
 		renderTargets.copyPreTranslucentDepth();
+        IrisGlDebug.check("level:begin-translucents:copy-depth");
 
 
 		// needed to remove blend mode overrides and similar
 		beginPass(null);
+        IrisGlDebug.check("level:begin-translucents:begin-pass-null");
 
 		isRenderingFullScreenPass = true;
 
+        IrisGlDebug.beginFramebufferSamplePhase("deferred-after-terrain");
 		deferredRenderer.renderAll();
+        IrisGlDebug.endFramebufferSamplePhase();
+		IrisGlDebug.check("level:begin-translucents:deferred");
 
 		GLStateManager.enableBlend();
 		GLStateManager.enableAlphaTest();
@@ -1506,10 +1515,12 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	@Override
 	public void renderShadows(EntityRenderer levelRenderer, Camera playerCamera) {
+        IrisGlDebug.check("level:shadows:start");
 		if (shouldRenderPrepareBeforeShadow) {
 			isRenderingFullScreenPass = true;
 
 			prepareRenderer.renderAll();
+            IrisGlDebug.check("level:shadows:prepare-before");
 
 			isRenderingFullScreenPass = false;
 		}
@@ -1517,11 +1528,14 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		if (shadowRenderer != null) {
 			isRenderingShadow = true;
 			matchPass();  // Ensure shadow shader is bound for entity rendering
+            IrisGlDebug.check("level:shadows:match-pass");
 
 			shadowRenderer.renderShadows(levelRenderer, playerCamera);
+            IrisGlDebug.check("level:shadows:render");
 
 			// needed to remove blend mode overrides and similar
 			beginPass(null);
+            IrisGlDebug.check("level:shadows:begin-pass-null");
 			isRenderingShadow = false;
 		}
 
@@ -1529,9 +1543,11 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			isRenderingFullScreenPass = true;
 
 			prepareRenderer.renderAll();
+            IrisGlDebug.check("level:shadows:prepare-after");
 
 			isRenderingFullScreenPass = false;
 		}
+        IrisGlDebug.check("level:shadows:end");
 	}
 
 	@Override
@@ -1556,6 +1572,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	@Override
 	public void beginLevelRendering() {
+        IrisGlDebug.markStage("level:begin");
 		isRenderingFullScreenPass = false;
 		isRenderingWorld = true;
 		isBeforeTranslucent = true;
@@ -1616,6 +1633,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	@Override
 	public void finalizeLevelRendering() {
+        IrisGlDebug.check("level:finalize:start");
 		checkWorld();
 
 		if (!isRenderingWorld) {
@@ -1624,6 +1642,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		}
 
 		beginPass(null);
+        IrisGlDebug.check("level:finalize:begin-pass-null");
 
 		isRenderingWorld = false;
 		phase = WorldRenderingPhase.NONE;
@@ -1631,12 +1650,19 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 		isRenderingFullScreenPass = true;
 
+        IrisGlDebug.check("level:finalize:before-center-depth");
 		centerDepthSampler.sampleCenterDepth();
+        IrisGlDebug.check("level:finalize:center-depth");
 
+        IrisGlDebug.check("level:finalize:before-composite");
+        IrisGlDebug.beginFramebufferSamplePhase("finalize-after-terrain");
 		compositeRenderer.renderAll();
+        IrisGlDebug.check("level:finalize:before-final");
 		finalPassRenderer.renderFinalPass();
+        IrisGlDebug.endFramebufferSamplePhase();
 
 		isRenderingFullScreenPass = false;
+        IrisGlDebug.check("level:finalized");
 	}
 
 	@Override

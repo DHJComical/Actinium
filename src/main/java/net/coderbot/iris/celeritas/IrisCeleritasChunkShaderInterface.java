@@ -2,6 +2,7 @@ package net.coderbot.iris.celeritas;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.blending.BufferBlendOverride;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
@@ -29,6 +30,8 @@ import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL20;
 
 import java.util.List;
 
@@ -45,6 +48,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
     private final GlUniformMatrix3f uniformNormalMatrix;
     @Nullable
     private final GlUniformFloat3v uniformRegionOffset;
+    private final int handle;
 
     // Iris program state
     private final ProgramUniforms irisProgramUniforms;
@@ -63,6 +67,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
     private final Matrix3f normalMatrix = new Matrix3f();
 
     public IrisCeleritasChunkShaderInterface(int handle, ShaderBindingContext context, CeleritasTerrainPipeline pipeline, boolean isShadowPass, BlendModeOverride blendModeOverride, List<BufferBlendOverride> bufferBlendOverrides, CustomUniforms customUniforms) {
+        this.handle = handle;
         this.uniformModelViewMatrix = context.bindUniformIfPresent("iris_ModelViewMatrix", GlUniformMatrix4f::new);
         this.uniformModelViewMatrixInverse = context.bindUniformIfPresent("iris_ModelViewMatrixInverse", GlUniformMatrix4f::new);
         this.uniformProjectionMatrix = context.bindUniformIfPresent("iris_ProjectionMatrix", GlUniformMatrix4f::new);
@@ -116,6 +121,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         }
 
         customUniforms.push(this);
+        IrisGlDebug.logCeleritasTerrainState(pass.name(), this.handle);
     }
 
     @Override
@@ -126,6 +132,18 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
 
         ProgramUniforms.clearActiveUniforms();
         ProgramSamplers.clearActiveSamplers();
+
+        // Celeritas VAO setup leaves buffer bindings live. Vanilla entity rendering still
+        // uses fixed-function client pointers, which NVIDIA treats as VBO offsets if an
+        // array buffer is bound and can crash in glDrawArrays during shadow entity renders.
+        GLStateManager.glBindVertexArray(0);
+        GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
+        GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
+
+        for (int attribute = 0; attribute <= 14; attribute++) {
+            GL20.glDisableVertexAttribArray(attribute);
+        }
     }
 
     @Override

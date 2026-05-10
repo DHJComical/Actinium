@@ -7,6 +7,7 @@ import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import net.coderbot.iris.features.FeatureFlags;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.gl.image.GlImage;
@@ -96,10 +97,12 @@ public class FinalPassRenderer {
 			final ProgramDirectives directives = source.getDirectives();
 
 			final Map<PatchShaderType, String> transformed = getTransformed(source, precomputedTransformFuture, stageName);
+			pass.sourceName = source.getName();
 			pass.program = createProgramFromTransformed(source, transformed, flippedBuffers, flippedAtLeastOnce, context.shadowTargetsSupplier());
 			pass.computes = createComputes(pack.getFinalCompute(), flippedBuffers, flippedAtLeastOnce, context.shadowTargetsSupplier());
 			pass.stageReadsFromAlt = flippedBuffers;
 			pass.mipmappedBuffers = directives.getMipmappedBuffers();
+            IrisGlDebug.logFullscreenProgram("FINAL", pass.sourceName, pass.program.getProgramId(), directives.getDrawBuffers());
 
 			return pass;
 		}).orElse(null);
@@ -173,6 +176,7 @@ public class FinalPassRenderer {
 		ComputeProgram[] computes;
 		ImmutableSet<Integer> stageReadsFromAlt;
 		ImmutableSet<Integer> mipmappedBuffers;
+		String sourceName;
 
 		private void destroy() {
 			this.program.destroy();
@@ -188,6 +192,7 @@ public class FinalPassRenderer {
 	}
 
 	public void renderFinalPass() {
+        IrisGlDebug.check("final:start");
         GLStateManager.disableBlend();
         GLStateManager.disableAlphaTest();
         GLStateManager.glDepthMask(false);
@@ -216,22 +221,29 @@ public class FinalPassRenderer {
 		}
 
 		if (this.finalPass != null) {
+            IrisGlDebug.markStage("final:draw");
 			// If there is a final pass, we use the shader-based full screen quad rendering pathway instead of just copying the color buffer.
 
 			colorHolder.bind();
+            IrisGlDebug.check("final:bind-color-holder");
             GLStateManager.glViewport(0, 0, baseWidth, baseHeight);
 
 			FullScreenQuadRenderer.INSTANCE.begin();
+            IrisGlDebug.check("final:quad-begin");
 
 			for (ComputeProgram computeProgram : finalPass.computes) {
 				if (computeProgram != null) {
                     computeProgram.use();
+                    IrisGlDebug.check("final:compute-use");
                     this.customUniforms.push(computeProgram);
+                    IrisGlDebug.check("final:compute-uniforms");
 					computeProgram.dispatch(baseWidth, baseHeight);
+                    IrisGlDebug.check("final:compute-dispatch");
 				}
 			}
 
 			RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT);
+            IrisGlDebug.check("final:memory-barrier");
 
 			if (!finalPass.mipmappedBuffers.isEmpty()) {
 				GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
@@ -242,14 +254,23 @@ public class FinalPassRenderer {
 			}
 
 			finalPass.program.use();
+            IrisGlDebug.check("final:use-program");
 
             this.customUniforms.push(finalPass.program);
+            IrisGlDebug.check("final:uniforms");
+            IrisGlDebug.logFullscreenPassState("FINAL", finalPass.sourceName, finalPass.program.getProgramId(), new int[] {0}, finalPass.stageReadsFromAlt, this.renderTargets);
+            IrisGlDebug.logFullscreenSamplerSamples("FINAL", finalPass.sourceName, finalPass.program.getProgramId());
 			FullScreenQuadRenderer.uploadCompositeMatrices();
+            IrisGlDebug.check("final:matrices");
 
 			FullScreenQuadRenderer.INSTANCE.renderQuad();
+            IrisGlDebug.check("final:render-quad");
+            IrisGlDebug.logCurrentFramebufferSamples("final:" + finalPass.sourceName, 1);
 
 			FullScreenQuadRenderer.end();
+            IrisGlDebug.check("final:quad-end");
 		} else {
+            IrisGlDebug.markStage("final:copy");
 			// If there are no passes, we somehow need to transfer the content of the Iris color render targets into
 			// the main Minecraft framebuffer.
 			//
@@ -261,8 +282,10 @@ public class FinalPassRenderer {
 			// We could have used a shader here, but it should be about the same performance either way:
 			// https://stackoverflow.com/a/23994979/18166885
 			this.baseline.bindAsReadBuffer();
+            IrisGlDebug.check("final:bind-baseline-read");
 
 			RenderSystem.copyTexSubImage2D(main.framebufferTexture, GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, baseWidth, baseHeight);
+            IrisGlDebug.check("final:copy-main");
 		}
 
 		GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
@@ -273,6 +296,7 @@ public class FinalPassRenderer {
 		}
 
 		for (SwapPass swapPass : swapPasses) {
+            IrisGlDebug.markStage("final:swap");
 			// NB: We need to use bind(), not bindAsReadBuffer()... Previously we used bindAsReadBuffer() here which
 			//     broke TAA on many packs and on many drivers.
 			//
@@ -282,14 +306,18 @@ public class FinalPassRenderer {
 			//
 			// Also note that RenderTargets already calls readBuffer(0) for us.
 			swapPass.from.bind();
+            IrisGlDebug.check("final:swap-bind");
 
 			GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, swapPass.targetTexture);
             GLStateManager.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 0, 0, swapPass.width, swapPass.height);
+            IrisGlDebug.check("final:swap-copy");
 		}
 
 		// Make sure to reset the viewport to how it was before... Otherwise weird issues could occur.
 		// Also bind the "main" framebuffer if it isn't already bound.
+        IrisGlDebug.check("final:before-restore-main");
         MinecraftFramebufferHelper.restoreMainFramebuffer(true);
+        IrisGlDebug.check("final:restore-main");
 		ProgramUniforms.clearActiveUniforms();
 		ProgramSamplers.clearActiveSamplers();
 		GLStateManager.glUseProgram(0);
@@ -302,6 +330,7 @@ public class FinalPassRenderer {
 		}
 
 		GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
+        IrisGlDebug.markStage("final:end");
 	}
 
 	public void recalculateSwapPassSize() {

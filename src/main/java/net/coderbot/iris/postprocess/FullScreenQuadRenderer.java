@@ -29,6 +29,8 @@ public class FullScreenQuadRenderer {
 		GLStateManager.glEnableVertexAttribArray(0);
 		GLStateManager.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, 20, 12L);
 		GLStateManager.glEnableVertexAttribArray(1);
+		GLStateManager.glVertexAttribPointer(2, 2, GL11.GL_FLOAT, false, 20, 12L);
+		GLStateManager.glEnableVertexAttribArray(2);
 		GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
 		GLStateManager.glBindVertexArray(0);
 	}

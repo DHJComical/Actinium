@@ -10,6 +10,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.client.MinecraftForgeClient;
+import com.gtnewhorizons.angelica.rendering.RenderingState;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
@@ -21,7 +22,6 @@ import com.dhj.actinium.celeritas.ShaderProvider;
 import com.dhj.actinium.celeritas.ShaderProviderHolder;
 import net.coderbot.iris.pipeline.ShadowRenderer;
 import org.taumc.celeritas.CeleritasVintage;
-import org.taumc.celeritas.mixin.core.terrain.ActiveRenderInfoAccessor;
 
 import java.util.*;
 
@@ -70,7 +70,7 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
         if (this.renderSectionManager != null && this.renderSectionManager.isInShadowPass()) {
             return new ChunkRenderMatrices(ShadowRenderer.PROJECTION, ShadowRenderer.MODELVIEW);
         }
-        return new ChunkRenderMatrices(ActiveRenderInfoAccessor.getProjectionMatrix(), ActiveRenderInfoAccessor.getModelViewMatrix());
+        return new ChunkRenderMatrices(RenderingState.INSTANCE.getProjectionMatrix(), RenderingState.INSTANCE.getModelViewMatrix());
     }
 
     @Override

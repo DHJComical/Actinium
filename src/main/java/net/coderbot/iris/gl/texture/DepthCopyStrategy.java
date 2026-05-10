@@ -77,10 +77,6 @@ public interface DepthCopyStrategy {
 	}
 
 	static DepthCopyStrategy fastest(boolean combinedStencilRequired) {
-		if (GLStateManager.capabilities.GL_ARB_copy_image) {
-			return new Gl43CopyImage();
-		}
-
 		if (combinedStencilRequired) {
 			return new Gl30BlitFbCombinedDepthStencil();
 		} else {

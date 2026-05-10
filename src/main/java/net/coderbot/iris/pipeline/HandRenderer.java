@@ -8,6 +8,7 @@ import com.gtnewhorizons.angelica.rendering.RenderingState;
 import com.dhj.actinium.celeritas.BlockRenderLayer;
 import lombok.Getter;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.block.Block;
@@ -100,6 +101,7 @@ public class HandRenderer {
     }
 
     public void renderSolid(float tickDelta, Camera camera, RenderGlobal gameRenderer, WorldRenderingPipeline pipeline) {
+        IrisGlDebug.check("hand-solid:entry");
         if (!canRender(camera, gameRenderer) || !IrisApi.getInstance().isShaderPackInUse()) {
             return;
         }
@@ -108,6 +110,7 @@ public class HandRenderer {
         ACTIVE = true;
 
         pipeline.setPhase(WorldRenderingPhase.HAND_SOLID);
+        IrisGlDebug.check("hand-solid:set-phase");
 
         GLStateManager.glPushMatrix();
         GLStateManager.glDepthMask(true); // actually write to the depth buffer, it's normally disabled at this point
@@ -122,6 +125,7 @@ public class HandRenderer {
 
         mc.entityRenderer.enableLightmap();
         mc.entityRenderer.itemRenderer.renderItemInFirstPerson(tickDelta);
+        IrisGlDebug.check("hand-solid:render-item");
         mc.entityRenderer.disableLightmap();
 
         GLStateManager.defaultBlendFunc();
@@ -135,12 +139,14 @@ public class HandRenderer {
         renderingSolid = false;
 
         pipeline.setPhase(WorldRenderingPhase.NONE);
+        IrisGlDebug.check("hand-solid:end");
 
         ACTIVE = false;
     }
 
     // TODO: RenderType
     public void renderTranslucent(float tickDelta, Camera camera, RenderGlobal gameRenderer, WorldRenderingPipeline pipeline) {
+        IrisGlDebug.check("hand-translucent:entry");
         if (!canRender(camera, gameRenderer) || !isAnyHandTranslucent() || !IrisApi.getInstance().isShaderPackInUse()) {
             return;
         }
@@ -149,6 +155,7 @@ public class HandRenderer {
         ACTIVE = true;
 
         pipeline.setPhase(WorldRenderingPhase.HAND_TRANSLUCENT);
+        IrisGlDebug.check("hand-translucent:set-phase");
 
         GLStateManager.glPushMatrix();
 
@@ -160,6 +167,7 @@ public class HandRenderer {
 
         mc.entityRenderer.enableLightmap();
         mc.entityRenderer.itemRenderer.renderItemInFirstPerson(tickDelta);
+        IrisGlDebug.check("hand-translucent:render-item");
         mc.entityRenderer.disableLightmap();
 
         GLStateManager.glPopMatrix();
@@ -169,6 +177,7 @@ public class HandRenderer {
         Minecraft.getMinecraft().profiler.endSection();
 
         pipeline.setPhase(WorldRenderingPhase.NONE);
+        IrisGlDebug.check("hand-translucent:end");
 
         ACTIVE = false;
     }

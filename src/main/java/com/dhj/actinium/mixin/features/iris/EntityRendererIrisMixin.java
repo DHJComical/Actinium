@@ -4,7 +4,9 @@ import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.coderbot.iris.compat.dh.DHCompat;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.program.Program;
 import net.coderbot.iris.pipeline.HandRenderer;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
@@ -52,6 +54,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/culling/ClippingHelperImpl;getInstance()Lnet/minecraft/client/renderer/culling/ClippingHelper;", shift = At.Shift.AFTER)
     )
     private void actinium$beginIrisWorld(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("mixin:begin-world:entry");
         if (!Iris.enabled) {
             return;
         }
@@ -66,7 +69,10 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         Program.unbind();
 
         WorldRenderingPipeline pipeline = Iris.getPipelineManager().preparePipeline(Iris.getCurrentDimensionName());
+        BlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
+        IrisGlDebug.check("mixin:begin-world:prepared");
         pipeline.beginLevelRendering();
+        IrisGlDebug.check("mixin:begin-world:done");
     }
 
     @Inject(
@@ -92,6 +98,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V")
     )
     private void actinium$renderIrisShadows(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("mixin:shadows:entry");
         if (!Iris.enabled) {
             return;
         }
@@ -99,6 +106,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
         if (pipeline != null) {
             pipeline.renderShadows((EntityRenderer) (Object) this, Camera.INSTANCE);
+            IrisGlDebug.check("mixin:shadows:done");
         }
     }
 
@@ -107,6 +115,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;dispatchRenderLast(Lnet/minecraft/client/renderer/RenderGlobal;F)V", remap = false)
     )
     private void actinium$finalizeIrisWorld(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("mixin:finalize:entry");
         if (!Iris.enabled) {
             return;
         }
@@ -116,11 +125,15 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
             return;
         }
 
+        IrisGlDebug.check("mixin:finalize:before-hand-translucent");
         HandRenderer.INSTANCE.renderTranslucent(partialTicks, Camera.INSTANCE, this.mc.renderGlobal, pipeline);
+        IrisGlDebug.check("mixin:finalize:after-hand-translucent");
         this.mc.profiler.endStartSection("iris_final");
         pipeline.finalizeLevelRendering();
+        IrisGlDebug.check("mixin:finalize:after-pipeline");
         Program.unbind();
         GLStateManager.glDepthMask(true);
+        IrisGlDebug.check("mixin:finalize:done");
     }
 
     @Inject(
