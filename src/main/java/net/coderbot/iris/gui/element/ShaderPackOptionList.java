@@ -93,14 +93,13 @@ public class ShaderPackOptionList extends IrisGuiSlot {
     }
     @Override
     public boolean mouseReleased( int mouseX, int mouseY, int button) {
-        final int relativeY = mouseY - this.top - this.headerPadding + (int) this.amountScrolled - 4;
-        final int index = relativeY / this.slotHeight;
+        boolean handled = super.mouseReleased(mouseX, mouseY, button);
 
-        if (index < 0 || index >= this.entries.size())
-            return false;
+        for (BaseEntry entry : this.entries) {
+            handled |= entry.mouseReleased(mouseX, mouseY, button);
+        }
 
-        final BaseEntry entry = this.entries.get(index);
-        return entry.mouseReleased(mouseX, mouseY, button);
+        return handled;
     }
 
     @Override

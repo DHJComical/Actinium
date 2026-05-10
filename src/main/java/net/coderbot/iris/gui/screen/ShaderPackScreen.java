@@ -305,6 +305,29 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
         }
     }
 
+    @Override
+    public void handleMouseInput() throws IOException {
+        super.handleMouseInput();
+
+        if (this.guiHidden) {
+            return;
+        }
+
+        int wheelDelta = Mouse.getEventDWheel();
+        if (wheelDelta == 0) {
+            return;
+        }
+
+        int mouseX = Mouse.getEventX() * this.width / this.mc.displayWidth;
+        int mouseY = this.height - Mouse.getEventY() * this.height / this.mc.displayHeight - 1;
+
+        if (optionMenuOpen && this.shaderOptionList != null) {
+            this.shaderOptionList.mouseScrolled(mouseX, mouseY, wheelDelta);
+        } else {
+            this.shaderPackList.mouseScrolled(mouseX, mouseY, wheelDelta);
+        }
+    }
+
 
     @Override
     protected void actionPerformed(GuiButton guiButton) {

@@ -37,6 +37,13 @@ public class LocaleIrisMixin {
         }
     }
 
+    @Inject(method = "hasKey(Ljava/lang/String;)Z", at = @At("HEAD"), cancellable = true)
+    private void actinium$hasShaderpackLanguageEntry(String key, CallbackInfoReturnable<Boolean> cir) {
+        if (this.actinium$lookupShaderpackEntry(key) != null) {
+            cir.setReturnValue(true);
+        }
+    }
+
     @Inject(method = "loadLocaleDataFiles(Lnet/minecraft/client/resources/IResourceManager;Ljava/util/List;)V", at = @At("HEAD"))
     private void actinium$trackLanguageCodes(IResourceManager resourceManager, List<String> languageList, CallbackInfo ci) {
         actinium$languageCodes.clear();
@@ -60,6 +67,9 @@ public class LocaleIrisMixin {
         for (String code : actinium$languageCodes) {
             Map<String, String> translations = languageMap.getTranslations(code);
             if (translations == null) {
+                translations = languageMap.getTranslations(actinium$normalizeShaderpackLanguageCode(code));
+            }
+            if (translations == null) {
                 continue;
             }
 
@@ -69,6 +79,17 @@ public class LocaleIrisMixin {
             }
         }
 
-        return null;
+        Map<String, String> fallback = languageMap.getTranslations("en_US");
+        return fallback == null ? null : fallback.get(key);
+    }
+
+    @Unique
+    private static String actinium$normalizeShaderpackLanguageCode(String code) {
+        int separator = code.indexOf('_');
+        if (separator < 0 || separator == code.length() - 1) {
+            return code;
+        }
+
+        return code.substring(0, separator).toLowerCase(java.util.Locale.ROOT) + "_" + code.substring(separator + 1).toUpperCase(java.util.Locale.ROOT);
     }
 }

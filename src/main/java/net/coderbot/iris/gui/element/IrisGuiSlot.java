@@ -66,6 +66,7 @@ public abstract class IrisGuiSlot extends GuiSlot {
         if (mouseButton == 0 && mouseX >= scrollBarX && mouseX <= scrollBarX + 6) {
             scrolling = true;
             this.initialClickY = mouseY;
+            handled = true;
         } else if (mouseButton == 0 || mouseButton == 1) {
             final int index = relativeY / this.slotHeight;
 
@@ -88,10 +89,21 @@ public abstract class IrisGuiSlot extends GuiSlot {
         return false;
     }
 
+    public boolean mouseScrolled(int mouseX, int mouseY, int wheelDelta) {
+        if (!this.getEnabled() || wheelDelta == 0 || mouseX <= this.left || mouseX >= this.right || mouseY <= this.top || mouseY >= this.bottom) {
+            return false;
+        }
+
+        this.amountScrolled += (wheelDelta > 0 ? -1 : 1) * this.slotHeight / 2.0f;
+        this.bindAmountScrolled();
+        this.initialClickY = -2;
+        return true;
+    }
+
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         if (this.scrolling) {
-            this.amountScrolled -= (mouseY - this.initialClickY);
+            this.amountScrolled += (mouseY - this.initialClickY);
             this.initialClickY = mouseY;
         }
 

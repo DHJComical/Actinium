@@ -55,7 +55,13 @@ public class ElementRowEntry extends BaseEntry {
 
     @Override
     public boolean mouseReleased(int mouseX, int mouseY, int button) {
-        return this.widgets.get(getHoveredWidget(mouseX)).mouseReleased(mouseX, mouseY, button);
+        boolean handled = false;
+
+        for (AbstractElementWidget<?> widget : this.widgets) {
+            handled |= widget.mouseReleased(mouseX, mouseY, button);
+        }
+
+        return handled;
     }
 
 }
