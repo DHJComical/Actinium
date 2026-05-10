@@ -11,6 +11,7 @@ import com.gtnewhorizons.angelica.rendering.RenderingState;
 import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompat;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.gui.option.IrisVideoSettings;
 import net.coderbot.iris.layer.GbufferPrograms;
@@ -488,14 +489,35 @@ public class ShadowRenderer {
 
 	// Saved RenderManager position for shadow pass
     private double savedRenderPosX, savedRenderPosY, savedRenderPosZ;
+    private double savedViewerPosX, savedViewerPosY, savedViewerPosZ;
 
     private void setupEntityShadowState(MatrixStack modelView, double cameraX, double cameraY, double cameraZ) {
         RenderManager renderManager = Minecraft.getMinecraft().getRenderManager();
         savedRenderPosX = renderManager.renderPosX;
         savedRenderPosY = renderManager.renderPosY;
         savedRenderPosZ = renderManager.renderPosZ;
+        savedViewerPosX = renderManager.viewerPosX;
+        savedViewerPosY = renderManager.viewerPosY;
+        savedViewerPosZ = renderManager.viewerPosZ;
 
         renderManager.setRenderPosition(cameraX, cameraY, cameraZ);
+        renderManager.viewerPosX = cameraX;
+        renderManager.viewerPosY = cameraY;
+        renderManager.viewerPosZ = cameraZ;
+
+        IrisGlDebug.logShadowEntityState(
+            "setup",
+            cameraX,
+            cameraY,
+            cameraZ,
+            renderManager.renderPosX,
+            renderManager.renderPosY,
+            renderManager.renderPosZ,
+            renderManager.viewerPosX,
+            renderManager.viewerPosY,
+            renderManager.viewerPosZ,
+            renderedEntitiesList.size()
+        );
 
         GLStateManager.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
         GLStateManager.glPolygonOffset(1.0f, 1.0f);
@@ -512,7 +534,11 @@ public class ShadowRenderer {
         GLStateManager.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
         GLStateManager.glPolygonOffset(0.0f, 0.0f);
 
-        Minecraft.getMinecraft().getRenderManager().setRenderPosition(savedRenderPosX, savedRenderPosY, savedRenderPosZ);
+        RenderManager renderManager = Minecraft.getMinecraft().getRenderManager();
+        renderManager.setRenderPosition(savedRenderPosX, savedRenderPosY, savedRenderPosZ);
+        renderManager.viewerPosX = savedViewerPosX;
+        renderManager.viewerPosY = savedViewerPosY;
+        renderManager.viewerPosZ = savedViewerPosZ;
     }
 
 	private void renderPlayerEntity(EntityRenderer levelRenderer, Frustum frustum, Object bufferSource, MatrixStack modelView, double cameraX, double cameraY, double cameraZ, float tickDelta) {

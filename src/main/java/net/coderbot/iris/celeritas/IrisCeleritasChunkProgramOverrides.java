@@ -2,6 +2,7 @@ package net.coderbot.iris.celeritas;
 
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.debug.IrisGlDebug;
+import net.coderbot.iris.gl.blending.AlphaTestOverride;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.blending.BufferBlendOverride;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
@@ -86,12 +87,13 @@ public class IrisCeleritasChunkProgramOverrides {
             }
 
             final CeleritasTerrainPipeline.PassInfo passInfo = pipeline.getPassInfo(pass);
+            final AlphaTestOverride alphaTestOverride = passInfo.alphaTestOverride();
             final BlendModeOverride blendOverride = passInfo.blendModeOverride();
             final List<BufferBlendOverride> bufferOverrides = passInfo.bufferBlendOverrides();
 
             return builder.link(context -> {
                 IrisGlDebug.logCeleritasProgram(pass.getName(), ((GlObject) context).handle(), vertexType.getVertexFormat().getAttributes());
-                return new IrisCeleritasChunkShaderInterface(((GlObject) context).handle(), context, pipeline, pass.isShadow(), blendOverride, bufferOverrides, pipeline.getCustomUniforms());
+                return new IrisCeleritasChunkShaderInterface(((GlObject) context).handle(), context, pipeline, pass.isShadow(), alphaTestOverride, blendOverride, bufferOverrides, pipeline.getCustomUniforms());
             });
         } finally {
             vertShader.delete();

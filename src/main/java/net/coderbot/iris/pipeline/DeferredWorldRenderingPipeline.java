@@ -783,7 +783,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	}
 
 	private void matchPass() {
-		if (!isRenderingWorld || isRenderingFullScreenPass || isPostChain || !isMainBound) {
+		if (!isRenderingWorld || isRenderingFullScreenPass || isPostChain || (!isMainBound && !isRenderingShadow)) {
 			return;
 		}
 		
@@ -791,6 +791,16 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		final Pass matched = table.match(condition, inputs);
 		
 		beginPass(matched);
+        IrisGlDebug.logPipelineMatch(
+                "match-pass",
+                getPhase().name(),
+                condition.name(),
+                isRenderingShadow,
+                isMainBound,
+                isRenderingWorld,
+                isRenderingFullScreenPass,
+                isPostChain,
+                matched != null && matched.getProgram() != null ? matched.getProgram().getProgramId() : -1);
 	}
 
 	public void beginPass(Pass pass) {

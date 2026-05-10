@@ -13,6 +13,7 @@ import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
+import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -30,6 +31,9 @@ public final class IrisGlDebug {
     private static final Set<String> LOGGED_FULLSCREEN_STATES = ConcurrentHashMap.newKeySet();
     private static final Map<String, Integer> FRAMEBUFFER_SAMPLE_COUNTS = new ConcurrentHashMap<>();
     private static final Map<String, Integer> TEXTURE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> MATERIAL_SAMPLE_COUNTS = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> ENTITY_PHASE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
+    private static long lastShadowEntityLogTime;
     private static String lastStage = "startup";
     private static String framebufferSamplePhase;
     private static long lastLogTime;
@@ -173,9 +177,12 @@ public final class IrisGlDebug {
         float viewHeight = getFloatUniform(program, "viewHeight");
         float pixelSizeX = getFloatUniform(program, "pixelSizeX");
         float pixelSizeY = getFloatUniform(program, "pixelSizeY");
+        float alphaTest = getFloatUniform(program, "iris_currentAlphaTest");
+        String textureMatrix = getMatrixUniform(program, "iris_TextureMatrix");
+        String lightmapTextureMatrix = getMatrixUniform(program, "iris_LightmapTextureMatrix");
 
         LOGGER.info(
-            "celeritas-state pass={} program={} currentProgram={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} viewport=[{},{},{},{}] activeTex={} samplers[tex={}, lightmap={}, shadow0={}, shadow1={}, shadowColor0={}] textures[0={}, 1={}, 2={}, 3={}] values[frameMod={}, frameCounter={}, viewWidth={}, viewHeight={}, pixelSizeX={}, pixelSizeY={}]",
+            "celeritas-state pass={} program={} currentProgram={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} viewport=[{},{},{},{}] activeTex={} samplers[tex={}, lightmap={}, shadow0={}, shadow1={}, shadowColor0={}] textures[0={}, 1={}, 2={}, 3={}] values[frameMod={}, frameCounter={}, viewWidth={}, viewHeight={}, pixelSizeX={}, pixelSizeY={}, alphaTest={}] matrices[tex={}, lightmap={}]",
             passName,
             program,
             GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
@@ -203,10 +210,161 @@ public final class IrisGlDebug {
             viewWidth,
             viewHeight,
             pixelSizeX,
-            pixelSizeY
+            pixelSizeY,
+            alphaTest,
+            textureMatrix,
+            lightmapTextureMatrix
         );
 
         GL13.glActiveTexture(GL13.GL_TEXTURE0 + activeTexture);
+    }
+
+    public static void logTerrainMaterialSample(String source, int blockId, int renderType, int lightValue, int localX, int localY, int localZ, float u, float v) {
+        String label = source + ":" + blockId + ":" + renderType;
+        int count = MATERIAL_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        LOGGER.info(
+            "terrain-material source={} count={} blockId={} renderType={} lightValue={} local=[{},{},{}] uv=[{},{}]",
+            source,
+            count,
+            blockId,
+            renderType,
+            lightValue,
+            localX,
+            localY,
+            localZ,
+            u,
+            v
+        );
+    }
+
+    public static void logShadowEntityState(String stage, double cameraX, double cameraY, double cameraZ, double renderPosX, double renderPosY, double renderPosZ, double viewerPosX, double viewerPosY, double viewerPosZ, int entityCount) {
+        long now = System.currentTimeMillis();
+        if (now - lastShadowEntityLogTime < 1000L) {
+            return;
+        }
+        lastShadowEntityLogTime = now;
+
+        VIEWPORT.clear();
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+
+        LOGGER.info(
+            "shadow-entity-state stage={} camera=[{},{},{}] renderPos=[{},{},{}] viewerPos=[{},{},{}] entities={} modelviewDepth={} projectionDepth={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            cameraX,
+            cameraY,
+            cameraZ,
+            renderPosX,
+            renderPosY,
+            renderPosZ,
+            viewerPosX,
+            viewerPosY,
+            viewerPosZ,
+            entityCount,
+            GL11.glGetInteger(GL11.GL_MODELVIEW_STACK_DEPTH),
+            GL11.glGetInteger(GL11.GL_PROJECTION_STACK_DEPTH),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            VIEWPORT.get(0),
+            VIEWPORT.get(1),
+            VIEWPORT.get(2),
+            VIEWPORT.get(3)
+        );
+    }
+
+    public static void logShadowEntityDraw(String entityType, double x, double y, double z, float yaw, float partialTicks) {
+        String label = entityType + ":" + GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 6) {
+            return;
+        }
+
+        LOGGER.info(
+            "shadow-entity-draw entity={} count={} relative=[{},{},{}] yaw={} partialTicks={} program={} fb={} modelview={} projection={}",
+            entityType,
+            count,
+            x,
+            y,
+            z,
+            yaw,
+            partialTicks,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            getMatrixModeMatrix(GL11.GL_MODELVIEW_MATRIX),
+            getMatrixModeMatrix(GL11.GL_PROJECTION_MATRIX)
+        );
+    }
+
+    public static void logEntityPhase(String entityType, String previousPhase, boolean beganEntityPhase, String uniformModelView, String uniformProjection) {
+        String label = entityType + ":" + previousPhase + ":" + beganEntityPhase;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        LOGGER.info(
+            "entity-phase entity={} count={} previousPhase={} beganEntityPhase={} program={} fb={} viewport=[{},{},{},{}] uniforms[modelView={}, projection={}]",
+            entityType,
+            count,
+            previousPhase,
+            beganEntityPhase,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight(),
+            uniformModelView,
+            uniformProjection
+        );
+    }
+
+    public static void logPipelineMatch(String stage, String phase, String condition, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain, int program) {
+        String label = stage + ":" + phase + ":" + condition + ":" + shadow + ":" + mainBound + ":" + program;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        LOGGER.info(
+            "pipeline-match stage={} count={} phase={} condition={} shadow={} mainBound={} world={} fullscreen={} postChain={} program={} currentProgram={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            count,
+            phase,
+            condition,
+            shadow,
+            mainBound,
+            renderingWorld,
+            fullscreen,
+            postChain,
+            program,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
+    private static int currentViewportX() {
+        VIEWPORT.clear();
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+        return VIEWPORT.get(0);
+    }
+
+    private static int currentViewportY() {
+        return VIEWPORT.get(1);
+    }
+
+    private static int currentViewportWidth() {
+        return VIEWPORT.get(2);
+    }
+
+    private static int currentViewportHeight() {
+        return VIEWPORT.get(3);
     }
 
     public static void logFullscreenProgram(String stageName, String sourceName, int program, int[] drawBuffers) {
@@ -407,6 +565,61 @@ public final class IrisGlDebug {
         }
 
         return GL20.glGetUniformf(program, location);
+    }
+
+    private static String getMatrixUniform(int program, String name) {
+        int location = GL20.glGetUniformLocation(program, name);
+        if (location < 0) {
+            return "missing";
+        }
+
+        FloatBuffer values = BufferUtils.createFloatBuffer(16);
+        GL20.glGetUniformfv(program, location, values);
+        return String.format(
+            java.util.Locale.ROOT,
+            "[%.6f,%.6f,%.6f,%.6f|%.6f,%.6f,%.6f,%.6f|%.6f,%.6f,%.6f,%.6f|%.6f,%.6f,%.6f,%.6f]",
+            values.get(0),
+            values.get(1),
+            values.get(2),
+            values.get(3),
+            values.get(4),
+            values.get(5),
+            values.get(6),
+            values.get(7),
+            values.get(8),
+            values.get(9),
+            values.get(10),
+            values.get(11),
+            values.get(12),
+            values.get(13),
+            values.get(14),
+            values.get(15)
+        );
+    }
+
+    private static String getMatrixModeMatrix(int pname) {
+        FloatBuffer values = BufferUtils.createFloatBuffer(16);
+        GL11.glGetFloatv(pname, values);
+        return String.format(
+            java.util.Locale.ROOT,
+            "[%.4f,%.4f,%.4f,%.4f|%.4f,%.4f,%.4f,%.4f|%.4f,%.4f,%.4f,%.4f|%.4f,%.4f,%.4f,%.4f]",
+            values.get(0),
+            values.get(1),
+            values.get(2),
+            values.get(3),
+            values.get(4),
+            values.get(5),
+            values.get(6),
+            values.get(7),
+            values.get(8),
+            values.get(9),
+            values.get(10),
+            values.get(11),
+            values.get(12),
+            values.get(13),
+            values.get(14),
+            values.get(15)
+        );
     }
 
     private static int getBoundTexture2D(int unit) {

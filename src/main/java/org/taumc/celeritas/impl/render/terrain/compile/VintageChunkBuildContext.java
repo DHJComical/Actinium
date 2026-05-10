@@ -7,6 +7,7 @@ import com.dhj.actinium.celeritas.vertices.BlockRenderContext;
 import com.dhj.actinium.celeritas.vertices.ContextAwareChunkVertexEncoder;
 import com.dhj.actinium.vertices.ExtendedDataHelper;
 import lombok.Getter;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -249,6 +250,17 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
                 quadContext.blockStateId(),
                 quadContext.renderType(),
                 quadContext.lightValue()
+        );
+        IrisGlDebug.logTerrainMaterialSample(
+                "vanilla-fallback",
+                quadContext.blockStateId(),
+                quadContext.renderType(),
+                quadContext.lightValue(),
+                quadContext.localPosX(),
+                quadContext.localPosY(),
+                quadContext.localPosZ(),
+                0.0f,
+                0.0f
         );
         encoder.prepareToRenderVanilla(this.vanillaBlockRenderContext);
         return encoder;

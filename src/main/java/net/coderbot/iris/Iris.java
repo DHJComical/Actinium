@@ -1,6 +1,7 @@
 package net.coderbot.iris;
 
 import com.google.common.base.Throwables;
+import com.dhj.actinium.celeritas.buffer.ShaderMaterialOverrideState;
 import com.dhj.actinium.celeritas.ShaderProviderHolder;
 import com.dhj.actinium.config.ActiniumConfig;
 import com.gtnewhorizons.angelica.proxy.ClientProxy;
@@ -925,6 +926,8 @@ public class Iris {
         final Int2IntMap metaMap = blockMetaMatches.get(block);
         final int blockId = metaMap != null ? metaMap.get(meta) : -1;
 
+        ShaderMaterialOverrideState.setBlockId(blockId);
+
         if (Tessellator.getInstance() instanceof StateAwareTessellator tess)
             tess.angelica$setShaderOverrideBlockId((short) blockId);
     }
@@ -932,6 +935,7 @@ public class Iris {
     public static void resetShaderMaterialOverride() {
         if (!enabled)
             return;
+        ShaderMaterialOverrideState.clear();
         if (Tessellator.getInstance() instanceof StateAwareTessellator tess)
             tess.angelica$setShaderOverrideBlockId((short) -1);
     }

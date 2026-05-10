@@ -33,6 +33,21 @@ public final class VanillaQuadContext {
         return this.blockStateId;
     }
 
+    public VanillaQuadContext withBlockStateId(int blockStateId) {
+        if (this.blockStateId == blockStateId) {
+            return this;
+        }
+
+        return new VanillaQuadContext(
+                this.localPosX,
+                this.localPosY,
+                this.localPosZ,
+                blockStateId,
+                this.renderType,
+                this.lightValue
+        );
+    }
+
     public short renderType() {
         return this.renderType;
     }

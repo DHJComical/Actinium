@@ -1,6 +1,7 @@
 package com.dhj.actinium.mixin.core.terrain;
 
 import com.dhj.actinium.celeritas.buffer.BufferBuilderExtension;
+import com.dhj.actinium.celeritas.buffer.ShaderMaterialOverrideState;
 import com.dhj.actinium.celeritas.buffer.VanillaQuadContext;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.vertex.VertexFormat;
@@ -39,15 +40,23 @@ public class BufferBuilderMixin implements BufferBuilderExtension {
     @Inject(method = "addVertexData", at = @At("TAIL"))
     private void actinium$addVertexData(int[] vertexData, CallbackInfo ci) {
         if (this.actinium$activeQuadContext != null) {
-            this.actinium$quadContexts.add(this.actinium$activeQuadContext);
+            this.actinium$quadContexts.add(this.actinium$snapshotQuadContext());
         }
     }
 
     @Inject(method = "endVertex", at = @At("TAIL"))
     private void actinium$endVertex(CallbackInfo ci) {
         if (this.actinium$activeQuadContext != null && this.drawMode == GL11.GL_QUADS && (this.vertexCount & 3) == 0) {
-            this.actinium$quadContexts.add(this.actinium$activeQuadContext);
+            this.actinium$quadContexts.add(this.actinium$snapshotQuadContext());
         }
+    }
+
+    @Unique
+    private VanillaQuadContext actinium$snapshotQuadContext() {
+        int shaderOverrideBlockId = ShaderMaterialOverrideState.getBlockId();
+        return shaderOverrideBlockId >= 0
+                ? this.actinium$activeQuadContext.withBlockStateId(shaderOverrideBlockId)
+                : this.actinium$activeQuadContext;
     }
 
     @Override

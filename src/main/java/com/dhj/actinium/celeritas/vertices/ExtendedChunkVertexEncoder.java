@@ -5,6 +5,7 @@ import net.minecraft.block.Block;
 import com.dhj.actinium.vertices.ExtendedDataHelper;
 import com.dhj.actinium.vertices.NormalHelper;
 import com.dhj.actinium.vertices.views.QuadView;
+import net.coderbot.iris.debug.IrisGlDebug;
 import org.embeddedt.embeddium.api.util.NormI8;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
@@ -74,6 +75,19 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
         this.baseEncoder.write(ptr, material, vertex, sectionIndex);
 
         LWJGL.memPutInt(ptr + MC_ENTITY_OFFSET, ((ctx.blockId + 1) << 1) | (ctx.renderType & 1));
+        if (this.vertexCount == 1) {
+            IrisGlDebug.logTerrainMaterialSample(
+                    "encoder",
+                    ctx.blockId,
+                    ctx.renderType,
+                    ctx.lightValue,
+                    ctx.localPosX,
+                    ctx.localPosY,
+                    ctx.localPosZ,
+                    vertex.u,
+                    vertex.v
+            );
+        }
 
         int midBlock = ExtendedDataHelper.computeMidBlock(vertex.x, vertex.y, vertex.z, ctx.localPosX, ctx.localPosY, ctx.localPosZ);
         LWJGL.memPutInt(ptr + MID_BLOCK_OFFSET, midBlock);

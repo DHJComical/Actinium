@@ -5,6 +5,9 @@ import com.google.common.primitives.Ints;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.gl.blending.AlphaTest;
+import net.coderbot.iris.gl.blending.AlphaTestFunction;
+import net.coderbot.iris.gl.blending.AlphaTestOverride;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.blending.BufferBlendOverride;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
@@ -48,6 +51,7 @@ public class CeleritasTerrainPipeline {
     public static final class PassInfo {
         private final EnumMap<PatchShaderType, Optional<String>> sources = new EnumMap<>(PatchShaderType.class);
         private GlFramebuffer framebuffer;
+        private AlphaTestOverride alphaTestOverride;
         private BlendModeOverride blendModeOverride;
         private List<BufferBlendOverride> bufferBlendOverrides;
         private float alphaReference;
@@ -143,6 +147,9 @@ public class CeleritasTerrainPipeline {
                 case GBUFFER_CUTOUT, SHADOW_CUTOUT -> 0.1f;
                 default -> 0.0f;
             };
+            passInfo.alphaTestOverride = passInfo.alphaReference > 0.0f
+                    ? new AlphaTestOverride(new AlphaTest(AlphaTestFunction.GREATER, passInfo.alphaReference))
+                    : null;
         }
 
         // Process and apply shader sources
