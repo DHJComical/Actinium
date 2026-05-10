@@ -40,7 +40,6 @@ public final class ActiniumUniminedHelper {
                 public Unit invoke(Object mixin) {
                     invokeMethod(mixin, "enableBaseMixin");
                     invokeMethod(mixin, "enableMixinExtra");
-                    invokeMethod(mixin, "disableRefmap");
                     return Unit.INSTANCE;
                 }
             });

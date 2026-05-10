@@ -1,7 +1,5 @@
 package org.embeddedt.embeddium.impl.render.chunk;
 
-import com.dhj.actinium.celeritas.ActiniumShaders;
-import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import org.embeddedt.embeddium.impl.gl.array.GlVertexArray;
@@ -93,8 +91,6 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             this.configureShaderInterface(shader);
 
             long timestamp = System.nanoTime();
-            int translucentRegionCount = 0;
-            int translucentCommandCount = 0;
 
             while (iterator.hasNext()) {
                 ChunkRenderList renderList = iterator.next();
@@ -112,11 +108,6 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
                     continue;
                 }
 
-                if (ActiniumShaderPackManager.isDebugEnabled() && renderPass.isReverseOrder()) {
-                    translucentRegionCount++;
-                    translucentCommandCount += this.emitter.getCommandCount();
-                }
-
                 if (!renderPass.isSorted()) {
                    getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, this.emitter.getIndexBufferSize());
                 }
@@ -131,16 +122,6 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
             this.currentVertexFormat = null;
             this.currentRenderPass = null;
-
-            if (ActiniumShaderPackManager.isDebugEnabled() && renderPass.isReverseOrder()) {
-                ActiniumShaders.logger().info(
-                        "[DEBUG] Translucent terrain draw summary: pass='{}', regionsWithCommands={}, totalCommands={}, primitiveType={}",
-                        renderPass.name(),
-                        translucentRegionCount,
-                        translucentCommandCount,
-                        primitiveType
-                );
-            }
 
             GLDebug.popGroup();
         }

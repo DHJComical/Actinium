@@ -1,108 +1,135 @@
 # Actinium 开发计划
 
-最后更新：2026-05-04
+最后更新：2026-05-05（基于 `ffa0e1d` 代码阅读）
 
 ---
 
 ## 当前状态
 
-MakeUp Ultra Fast 9.4c 在 Cleanroom Loader 环境下可用，核心管线（gbuffers → shadow → prepare → deferred → composite → final）已完整跑通。当前实现是兼容优先的保守方案，部分路径尚未对齐 Iris 标准。
+MakeUp Ultra Fast 9.4c 在 Cleanroom Loader 环境下稳定运行。核心管线
+（gbuffers → shadow → prepare → deferred → composite → final）已完整跑通。
+本轮冲刺完成了 mc_midTexCoord 修复、translucent redirect 开启、drawBuffers 动态解析、
+测试基线建立、TerrainPhase 拆分、GlStateGuard 提取共六项任务，所有架构目标也已完成。
+
+下一个里程碑：**第一个第二光影包（BSL 或 Complementary）可运行**。
 
 ---
 
-## 立刻（当前冲刺）
+## 立刻
 
-优先级最高，阻塞后续兼容测试的问题。
-
-**修复 mc_midTexCoord 正则，覆盖 vec4 声明**
-
-当前 `MC_MID_TEX_DECLARATION` 只匹配 `vec2`，BSL 使用 `vec4` 声明，导致声明残留、编译报错。将正则中的类型匹配改为 `\S+`，preamble 注入类型升为 `vec4`，赋值时补零扩展为 `vec4(MidTexCoord, 0.0, 1.0)`。
-
-**开启 JUnit，建立 GLSL 变换测试基线**
-
-在 `gradle.properties` 中设置 `enable_junit_testing=true`，为 `ActiniumLegacyChunkShaderAdapter.translate()` 的核心变换路径写第一批单元测试。mc_midTexCoord 修复作为第一个用例，防止回归。后续每次修改变换逻辑都同步补测试。
-
-**拆分 ENABLE_EXTERNAL_TERRAIN_REDIRECT，单独开启 translucent**
-
-当前整个 terrain redirect 开关关闭。新增 `ENABLE_EXTERNAL_TRANSLUCENT_TERRAIN_REDIRECT = true`，solid/cutout 保持关闭。`bindTerrainPassFramebuffer` 和 `unbindTerrainPassFramebuffer` 按 pass 类型分支判断，让 `gbuffers_water` 正式进入 shader 管线。
-
-**drawBuffers 从硬编码改为按 program 动态解析**
-
-`resolveTerrainPassDrawBuffers` 当前硬编码返回 `[colortex1, gaux4]`，BSL 和 Complementary 的 `/* DRAWBUFFERS:XX */` 各不相同。在编译阶段解析每个 program 的 drawBuffers 声明，存入 program 元数据，运行时按 pass 查表返回。
-
----
-
-## 中期（BSL / Complementary 兼容前）
+### 待完成
 
 **用 BSL 或 Complementary 跑第一次兼容测试**
 
-以 BSL 为目标，记录出错的 program 和阶段，建立第二个光影包的问题清单。每修复一个问题同步补测试，防止 MakeUp 回归。
+所有基础设施已就绪，这是现在唯一阻塞兼容性扩展的事。拿 BSL 8.x 或 Complementary
+Reimagined 放进 `shaderpacks/`，记录所有出错的 program 和阶段，建立问题清单。
+BSL 与 MakeUp 的主要差异点：`vec4 mc_midTexCoord`（已修复）、更多 drawBuffers
+组合、`colortex8+` 写入路径、更复杂的 `prepare` 链。
 
-**实现光影包 GLSL 快照测试**
+**补全 MakeUp 高设置场景的手动验证**
 
-将每个光影包关键 program 经过 `translate()` 后的 GLSL 源码作为快照文件提交进 git。每次修改变换逻辑后自动对比快照，变化必须主动确认才能更新。MakeUp 和 BSL 各建一份快照基线。
-
-**拆分 ActiniumTerrainPhase**
-
-将 terrain redirect 的绑定/解绑/drawBuffers 逻辑从 `ActiniumRenderPipeline`（当前 6281 行）移入独立的 `ActiniumTerrainPhase` 类。RenderPipeline 只做调用，便于后续单独测试和修改 terrain 逻辑。
-
-**提取 ActiniumGlStateGuard**
-
-GL 状态保存/恢复逻辑散落在 RenderPipeline 各处，是状态泄漏的主要来源。提取为实现 `AutoCloseable` 的独立类，用 try-with-resources 包裹每个 pass，彻底消除 FBO、texture unit、blend/depth 状态的意外泄漏。
-
-**prepare / deferred 时序继续向 Iris 标准靠拢**
-
-当前实现是兼容折中：`prepare` 在 terrain 前运行，`deferred` 在半透明前运行，buffer ownership 保守。逐步推进：shadow-to-prepare 时机对齐、deferred 的 scene/depth 输入更精确、buffer ownership 更接近 Iris `CompositeRenderer` 的逐阶段语义。
+文档指出以下场景尚未系统验证：体积云、水面反射、DOF、volumetric light、
+雨雪粒子、飞溅粒子、雾过渡。BSL 测试前应确认这些在 MakeUp 上无回归，
+避免把旧问题混入新包的问题清单。
 
 **建立兼容性矩阵文档**
 
-在 `docs/` 中维护光影包 × 功能的验证矩阵（terrain / shadow / composite / deferred / TAA / 天气 / 粒子）。每次发版前必须手动跑一遍已标 ✅ 的组合，明确哪些是承诺支持、哪些是 known limitation。
+在 `docs/compat-matrix.md` 里按光影包 × 功能维度记录验证状态，
+明确哪些组合是承诺支持、哪些是 known limitation。格式参考：
+
+| 光影包 | 版本 | terrain | shadow | composite | deferred | TAA | 天气 | 最后验证 |
+|--------|------|:-------:|:------:|:---------:|:--------:|:---:|:----:|---------|
+| MakeUp Ultra Fast | 9.4c | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ffa0e1d |
+| BSL Shaders | — | ❓ | ❓ | ❓ | ❓ | ❓ | ❓ | 未测 |
+| Complementary | — | ❓ | ❓ | ❓ | ❓ | ❓ | ❓ | 未测 |
+
+### 本轮冲刺已完成
+
+- `ffa0e1d` mc_midTexCoord 正则修复（vec2/vec4 均覆盖）+ ActiniumTerrainPhaseTest 109 行
+- `3ae5e17` translucent terrain redirect 拆分开启（`ENABLE_EXTERNAL_TRANSLUCENT_TERRAIN_REDIRECT = true`）
+- `95a1a0e` drawBuffers 动态解析（`ActiniumShaderPackResources.readProgramDrawBuffers()`）
+- `ab9b203` JUnit 测试基线（5 个测试文件，GlslTransformUtils 快照测试）
+- `3df6a5d` ActiniumTerrainPhase 拆分 + ActiniumGlStateGuard 提取（340 行）
+- `74c74d7` GLSL 变换迁移到 Maven AST 管线（glsl-transformation-lib）
+- `e566a0d` 显式阶段状态机（ActiniumPipelinePhase 10 个阶段 + transitionPhase）
+- `424b5ff` Actinium Mixin 归入 `com/dhj/actinium`，上游文件完全隔离
 
 ---
 
-## 长期（管线稳定后）
+## 中期
+
+BSL 兼容测试过程中同步推进。
+
+**prepare / deferred 时序继续向 Iris 标准靠拢**
+
+当前实现是保守折中：`prepare` 在 terrain setup 前执行，`deferred` 在半透明前执行，
+buffer ownership 不够精确。需要推进的方向：shadow-to-prepare 时机对齐、
+deferred 的 scene/depth 输入更精确、buffer ownership 逐阶段化。
+文档明确指出这是中期目标。
+
+**buffer flip 语义统一**
+
+`explicitFlips` 机制已实现，`flipWrittenTargets` 也存在，但有两处手动
+`flipTarget` 调用（第 2356 行 colortex1、第 2368 行 colortex8）游离在
+统一机制之外，属于潜在的 ping-pong 错误来源。需要把所有 flip 路径收拢到
+`flipWrittenTargets` 一套逻辑里，向 Iris `BufferFlipper` 对齐。
+
+**开光影后的 terrain/world-stage 性能分析**
+
+`ENABLE_EXTERNAL_TERRAIN_REDIRECT = false` 保证了稳定性，但 translucent redirect
+开启后引入了额外的 FBO 切换和 blit 开销。需要量化这个开销，找出热路径，
+在不重新打开不稳定 solid redirect 的前提下优化。
+
+**RenderPipeline 进一步拆分**
+
+TerrainPhase 拆出后 RenderPipeline 仍有 6479 行。可沿 phase 边界继续拆分：
+shadow 渲染逻辑（约 1500 行，第 1537 行附近）、post program 调度（composite/deferred 链路）。
+每次拆分跟着功能改动顺手做，不单独开大重构。
+
+**补全测试覆盖**
+
+当前覆盖薄弱的区域：`ActiniumLegacyFullscreenShaderAdapterTest` 只有 2 个用例，
+`gl_FragData` 索引替换、`ftransform` 消除、多 varying 场景均未覆盖；
+`ActiniumShaderPropertiesTest` 的 `explicitFlips` 解析、profile 切换未覆盖。
+BSL 测试过程中发现的每个 bug 应同步补测试用例，防止回归。
+
+---
+
+## 长期
+
+管线稳定、第二个光影包跑通后推进。
 
 **solid / cutout terrain 完整 gbuffer 路径**
 
-接通外部 terrain program，提供 material/normal/specular data。当前保守方案回避了大量回归，待 translucent redirect 稳定、测试覆盖足够后推进。需要与 Celeritas 的 chunk vertex format 对齐。
+`ENABLE_EXTERNAL_TERRAIN_REDIRECT` 目前硬编码 `false`。开启需要：material/normal/specular
+data 接入 Celeritas vertex format、solid terrain FBO attachment 路径验证、
+与现有 translucent redirect 的共存测试。不要在 BSL 兼容完成前触碰这个开关。
 
-**colortex8+ render target 支持**
+**colortex8–15 完整写入路径**
 
-突破当前 8 个 color target（`colortex0~3` + `gaux1~4`）的限制，支持 `colortex8` 以上的 target，覆盖更多现代光影包的需求。涉及 `ActiniumPostTargets` 的 FBO 分配和 `ActiniumWorldTargets` 的 sampler 绑定。
-
-**改进 buffer flip 语义**
-
-当前基础 flip 可用，复杂多 pass 光影包存在从 ping-pong 错误一侧读取 stale data 的风险。参考 Iris `BufferFlipper` 实现更精确的 flip tracking，修复 history target 在 TAA 场景下的边界问题。
+当前状态：`PostTargets` 已定义全部 16 个常量，`PostShaderInterface` 已绑定 colortex8
+sampler（第 190、328 行），`RenderPipeline` 已做 `bindPipelineTextureAliases`（第 2476–2483 行）——
+读和采样已可用，但 gbuffers 阶段往 colortex8+ 写入的 FBO color attachment 路径尚未实现。
+比"完全没做"近很多，是中等规模的补全工作。
 
 **VintageHorizons 兼容层**
 
-检测 VintageHorizons 是否加载，参考现代 Distant Horizons + Iris 协议实现 `dh_terrain` / `dh_water` program 接入。VintageHorizons 当前明确不兼容任何 shader mod，需要与上游协商接口或通过 Mixin 注入 LOD 渲染调用点。
+代码里已有 `SOFT_LOD_UNIFORM_PATTERN`（第 138–139 行）处理 `softLod` uniform 注入。
+正式实现需要：检测 VintageHorizons 是否加载、参考现代 DH + Iris 协议实现
+`dh_terrain` / `dh_water` program、与 `VintageRenderSectionManager` 的渲染调用对接。
 
 **uniform 懒更新**
 
-`ActiniumOptiFineUniforms` 当前每帧无条件上传所有 uniform。为变化频率低的 uniform（`viewWidth`、`viewHeight`、投影矩阵等）引入 dirty flag，只在值变化时调用 `glUniform*`，减少多 program 场景下的无效 GPU 通信开销。
+`GlUniform` 基类目前无 dirty flag，每帧无条件上传所有 uniform。
+多 program 场景下开销可测量。低优先级，稳定后优化。
 
----
+**compute shader / image load store**
 
-## 架构（持续推进）
-
-这些改动没有硬截止，但越早做、上游同步和后续维护越省力。
-
-**把 Actinium 新增类严格归入 com/dhj/actinium**
-
-当前 `org/taumc/celeritas/` 下混有 Actinium 新增的 Mixin（如 `EntityRendererActiniumColorStateMixin`）和上游 Celeritas 的文件。目标：`org/taumc/celeritas/` 只放从上游同步的文件，一字不改；所有 Actinium 新增行为通过 Mixin 注入，放在 `com/dhj/actinium/` 下。这样 `git diff origin/upstream` 就能精确看到两者的差异，cherry-pick 上游修复不再需要人肉 diff。
-
-**RenderPipeline 显式阶段状态机**
-
-当前管线阶段流转靠布尔开关和运行时 if，没有显式建模。引入 `ActiniumPipelinePhase` 枚举和 `transition()` 方法，非法转换（如在 SHADOW 阶段触发 COMPOSITE）在转换时自动捕获，phase exit/enter 负责清理和初始化，替代散落各处的手动状态保存。
-
-**GLSL 变换从正则迁移到 glsl-transformation-lib**
-
-当前 `ActiniumLegacyChunkShaderAdapter` 用正则和字符串替换做 GLSL 变换，对边界情况（注释内的声明、宏保护的代码块、多行声明）处理脆弱。迁移到 `glsl-transformation-lib`（embeddedt 开发，已在 Angelica 中使用），基于 AST 做结构化变换，稳健性和可维护性大幅提升。
+依赖 OpenGL 4.3+，1.12.2 生态硬件覆盖率是瓶颈。优先级最低，暂不排期。
 
 ---
 
 ## 不在计划内
 
-- **Compute shader / image load store**：依赖 OpenGL 4.3+，1.12.2 生态的硬件兼容性有限，暂不支持
-- **Nothirium 兼容**：与 Celeritas 的 chunk 渲染架构互斥，不支持
+- **Nothirium 兼容**：与 Celeritas chunk 渲染架构互斥，不支持
+- **compute / image load store**：GL 4.3+ 依赖，硬件覆盖率不足，暂不支持

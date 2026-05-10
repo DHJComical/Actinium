@@ -1,9 +1,16 @@
 package org.taumc.celeritas.mixin.core.terrain;
 
 import com.llamalad7.mixinextras.sugar.Local;
-import com.dhj.actinium.shadows.ActiniumInternalShadowRenderingState;
-import com.dhj.actinium.shadows.ActiniumShadowRenderingState;
-import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
+import com.dhj.actinium.shadows.InternalShadowRenderingState;
+import com.dhj.actinium.shadows.ShadowRenderingState;
+import com.gtnewhorizons.angelica.compat.mojang.Camera;
+import net.coderbot.iris.Iris;
+import net.coderbot.iris.layer.GbufferPrograms;
+import net.coderbot.iris.pipeline.HandRenderer;
+import net.coderbot.iris.pipeline.WorldRenderingPhase;
+import net.coderbot.iris.pipeline.WorldRenderingPipeline;
+import net.coderbot.iris.uniforms.CapturedRenderingState;
+import net.coderbot.iris.uniforms.EntityIdHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.multiplayer.WorldClient;
@@ -115,6 +122,25 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
      */
     @Overwrite
     public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
+        WorldRenderingPipeline pipeline = null;
+        if (Iris.enabled) {
+            pipeline = Iris.getPipelineManager().getPipelineNullable();
+            if (pipeline != null) {
+                if (blockLayerIn == BlockRenderLayer.SOLID) {
+                    pipeline.setPhase(WorldRenderingPhase.TERRAIN_SOLID);
+                } else if (blockLayerIn == BlockRenderLayer.CUTOUT_MIPPED) {
+                    pipeline.setPhase(WorldRenderingPhase.TERRAIN_CUTOUT_MIPPED);
+                } else if (blockLayerIn == BlockRenderLayer.CUTOUT) {
+                    pipeline.setPhase(WorldRenderingPhase.TERRAIN_CUTOUT);
+                } else if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
+                    if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+                        this.actinium$beginIrisTranslucents(pipeline, (float) partialTicks);
+                    }
+                    pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
+                }
+            }
+        }
+
         RenderDevice.enterManagedCode();
 
         RenderHelper.disableStandardItemLighting();
@@ -130,15 +156,16 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
         try {
-            if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
-                ActiniumRenderPipeline.INSTANCE.capturePreTranslucentDepth();
-            }
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
         } finally {
             RenderDevice.exitManagedCode();
         }
 
         this.mc.entityRenderer.disableLightmap();
+
+        if (pipeline != null) {
+            pipeline.setPhase(WorldRenderingPhase.NONE);
+        }
 
         return 1;
     }
@@ -193,11 +220,18 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
 
     @Inject(method = "renderEntities", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderHelper;enableStandardItemLighting()V", shift = At.Shift.AFTER, ordinal = 1), cancellable = true)
     public void sodium$renderTileEntities(Entity entity, ICamera camera, float partialTicks, CallbackInfo ci, @Local(ordinal = 0) int pass) {
-        boolean renderShadowBlockEntities = !ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()
-                || ActiniumInternalShadowRenderingState.shouldRenderShadowBlockEntities();
+        boolean renderShadowBlockEntities = !ShadowRenderingState.areShadowsCurrentlyBeingRendered()
+                || InternalShadowRenderingState.shouldRenderShadowBlockEntities();
 
         if (renderShadowBlockEntities) {
+            if (Iris.enabled) {
+                GbufferPrograms.beginBlockEntities();
+                GbufferPrograms.setBlockEntityDefaults();
+            }
             this.renderer.renderBlockEntities(new CeleritasWorldRenderer.TileEntityRenderContext(damagedBlocks, partialTicks));
+            if (Iris.enabled) {
+                GbufferPrograms.endBlockEntities();
+            }
         }
 
         /*
@@ -222,6 +256,13 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         this.mc.entityRenderer.disableLightmap();
         this.mc.profiler.endSection();
         ci.cancel();
+    }
+
+    private void actinium$beginIrisTranslucents(WorldRenderingPipeline pipeline, float partialTicks) {
+        pipeline.beginHand();
+        HandRenderer.INSTANCE.renderSolid(partialTicks, Camera.INSTANCE, this.mc.renderGlobal, pipeline);
+        this.mc.profiler.endStartSection("iris_pre_translucent");
+        pipeline.beginTranslucents();
     }
 
     /**
@@ -258,48 +299,62 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         // Apply entity distance scaling
         Entity.setRenderDistanceWeight(MathHelper.clamp((double)this.mc.gameSettings.renderDistanceChunks / 8.0D, 1.0D, 2.5D) * 1);
 
-        for(Entity entity : celeritas$collectedEntities[pass]) {
-            if (!this.actinium$shouldRenderShadowEntity(entity, renderViewEntity)) {
-                continue;
-            }
+        boolean irisEntities = Iris.enabled && Iris.getPipelineManager().getPipelineNullable() != null;
+        if (irisEntities) {
+            GbufferPrograms.beginEntities();
+        }
+        try {
+            for(Entity entity : celeritas$collectedEntities[pass]) {
+                if (!this.actinium$shouldRenderShadowEntity(entity, renderViewEntity)) {
+                    continue;
+                }
 
-            // Do regular vanilla checks for visibility
-            if(!this.renderManager.shouldRender(entity, camera, renderViewX, renderViewY, renderViewZ) && !entity.isRidingOrBeingRiddenBy(player)) {
-                continue;
-            }
+                // Do regular vanilla checks for visibility
+                if(!this.renderManager.shouldRender(entity, camera, renderViewX, renderViewY, renderViewZ) && !entity.isRidingOrBeingRiddenBy(player)) {
+                    continue;
+                }
 
-            // Check if any corners of the bounding box are in a visible subchunk
-            if(!CeleritasWorldRenderer.instance().isEntityVisible(entity)) {
-                continue;
-            }
+                // Check if any corners of the bounding box are in a visible subchunk
+                if(!CeleritasWorldRenderer.instance().isEntityVisible(entity)) {
+                    continue;
+                }
 
-            boolean isSleeping = renderViewEntity instanceof EntityLivingBase && ((EntityLivingBase) renderViewEntity).isPlayerSleeping();
+                boolean isSleeping = renderViewEntity instanceof EntityLivingBase && ((EntityLivingBase) renderViewEntity).isPlayerSleeping();
 
-            if ((entity != renderViewEntity || this.mc.gameSettings.thirdPersonView != 0 || isSleeping)
-                    && (entity.posY < 0.0D || entity.posY >= 256.0D || this.world.isBlockLoaded(entityBlockPos.setPos(entity))))
-            {
-                ++this.countEntitiesRendered;
-                this.renderManager.renderEntityStatic(entity, partialTicks, false);
-
-                if (this.isOutlineActive(entity, renderViewEntity, camera))
+                if ((entity != renderViewEntity || this.mc.gameSettings.thirdPersonView != 0 || isSleeping)
+                        && (entity.posY < 0.0D || entity.posY >= 256.0D || this.world.isBlockLoaded(entityBlockPos.setPos(entity))))
                 {
-                    outlineEntityList.add(entity);
-                }
+                    ++this.countEntitiesRendered;
+                    if (irisEntities) {
+                        CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
+                    }
+                    this.renderManager.renderEntityStatic(entity, partialTicks, false);
 
-                if (this.renderManager.isRenderMultipass(entity)) {
-                    multipassEntityList.add(entity);
+                    if (this.isOutlineActive(entity, renderViewEntity, camera))
+                    {
+                        outlineEntityList.add(entity);
+                    }
+
+                    if (this.renderManager.isRenderMultipass(entity)) {
+                        multipassEntityList.add(entity);
+                    }
                 }
+            }
+        } finally {
+            if (irisEntities) {
+                CapturedRenderingState.INSTANCE.setCurrentEntity(-1);
+                GbufferPrograms.endEntities();
             }
         }
     }
 
     private boolean actinium$shouldRenderShadowEntity(Entity entity, Entity renderViewEntity) {
-        if (!ActiniumShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+        if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             return true;
         }
 
-        boolean renderEntities = ActiniumInternalShadowRenderingState.shouldRenderShadowEntities();
-        boolean renderPlayer = ActiniumInternalShadowRenderingState.shouldRenderShadowPlayer();
+        boolean renderEntities = InternalShadowRenderingState.shouldRenderShadowEntities();
+        boolean renderPlayer = InternalShadowRenderingState.shouldRenderShadowPlayer();
         boolean playerEntity = entity == renderViewEntity
                 || (this.mc.player != null && entity.isRidingOrBeingRiddenBy(this.mc.player));
 

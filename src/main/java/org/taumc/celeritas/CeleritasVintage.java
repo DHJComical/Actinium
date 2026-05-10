@@ -3,7 +3,6 @@ package org.taumc.celeritas;
 import com.mojang.realmsclient.gui.ChatFormatting;
 
 import java.lang.management.ManagementFactory;
-import java.util.ArrayList;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
@@ -13,14 +12,13 @@ import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.ModContainer;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLConstructionEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import com.dhj.actinium.shader.ActiniumShaderEntrypoint;
+import net.coderbot.iris.Iris;
 import org.embeddedt.embeddium.impl.common.util.MathUtil;
 import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
@@ -38,7 +36,8 @@ public class CeleritasVintage {
     @EventHandler
     public void onConstruct(FMLConstructionEvent event) {
         GLRenderDevice.VANILLA_STATE_RESETTER = () -> OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0);
-        ActiniumShaderEntrypoint.initialize();
+        Iris.INSTANCE.onEarlyInitialize();
+        Iris.onRenderSystemInit();
         VERSION = Loader.instance().getIndexedModList().get(MODID).getVersion();
         MinecraftForge.EVENT_BUS.register(this);
     }
@@ -48,6 +47,8 @@ public class CeleritasVintage {
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
         }
+        Iris.INSTANCE.fmlInitEvent();
+        MinecraftForge.EVENT_BUS.register(Iris.INSTANCE);
 
     }
 

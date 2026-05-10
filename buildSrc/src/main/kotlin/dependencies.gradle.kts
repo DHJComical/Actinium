@@ -45,6 +45,8 @@ dependencies {
     compileOnly("org.ow2.asm:asm-tree:$asmVersion")
     compileOnly("org.ow2.asm:asm-util:$asmVersion")
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("org.anarres:jcpp:1.4.14")
+    "contain"("org.anarres:jcpp:1.4.14")
 
     "modImplementation"("zone.rong:mixinbooter:10.5")
     "modCompileOnly"("maven.modrinth:fluidlogged-api:3.0.6")
@@ -60,6 +62,7 @@ dependencies {
     }
 
     runtimeOnly("curse.maven:catalogue-vintage-1465746:7872634")
+    compileOnly("maven.modrinth:DistantHorizonsApi:5.1.0")
     // Example - Dependency descriptor:
     // 'com.google.code.gson:gson:2.8.6' << group: com.google.code.gson, name:gson, version:2.8.6
     // 'group:name:version:classifier' where classifier is optional

@@ -1,13 +1,11 @@
 package org.taumc.celeritas.impl.render.terrain.compile;
 
-import com.dhj.actinium.block_rendering.ActiniumBlockRenderingSettings;
-import com.dhj.actinium.celeritas.ActiniumShaders;
-import com.dhj.actinium.celeritas.buffer.ActiniumBufferBuilderExtension;
-import com.dhj.actinium.celeritas.buffer.ActiniumVanillaQuadContext;
+import com.dhj.actinium.block_rendering.BlockRenderingSettings;
+import com.dhj.actinium.celeritas.buffer.BufferBuilderExtension;
+import com.dhj.actinium.celeritas.buffer.VanillaQuadContext;
 import com.dhj.actinium.celeritas.vertices.BlockRenderContext;
 import com.dhj.actinium.celeritas.vertices.ContextAwareChunkVertexEncoder;
-import com.dhj.actinium.shader.pack.ActiniumShaderPackManager;
-import com.dhj.actinium.vertices.ActiniumExtendedDataHelper;
+import com.dhj.actinium.vertices.ExtendedDataHelper;
 import lombok.Getter;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -58,9 +56,6 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     private final LightDataCache lightDataCache;
     private final boolean useRenderPassOptimization;
     private final BlockRenderContext vanillaBlockRenderContext = new BlockRenderContext();
-    private static boolean loggedVanillaWaterMapping;
-    private static boolean loggedVanillaWaterQuad;
-    private static boolean loggedVanillaTranslucentCopySummary;
 
     public VintageChunkBuildContext(WorldClient world, RenderPassConfiguration renderPassConfiguration) {
         super(renderPassConfiguration);
@@ -105,7 +100,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             bufferBuilder.finishDrawing();
             used[i] = false;
             ByteBuffer rawBuffer = bufferBuilder.getByteBuffer();
-            List<ActiniumVanillaQuadContext> quadContexts = bufferBuilder instanceof ActiniumBufferBuilderExtension extension
+            List<VanillaQuadContext> quadContexts = bufferBuilder instanceof BufferBuilderExtension extension
                     ? extension.actinium$consumeQuadContexts()
                     : Collections.emptyList();
             var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(LAYERS[i]);
@@ -114,26 +109,17 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     }
 
     public void beginVanillaBlockRender(BufferBuilder buffer, BlockPos pos, IBlockState state) {
-        if (!(buffer instanceof ActiniumBufferBuilderExtension extension)) {
+        if (!(buffer instanceof BufferBuilderExtension extension)) {
             return;
         }
 
         int metadata = state.getBlock().getMetaFromState(state);
-        int shaderBlockId = ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(state.getBlock(), metadata);
+        int shaderBlockId = BlockRenderingSettings.INSTANCE.getBlockStateId(state.getBlock(), metadata);
         short renderType = state.getMaterial() == net.minecraft.block.material.Material.WATER
-                ? ActiniumExtendedDataHelper.FLUID_RENDER_TYPE
-                : ActiniumExtendedDataHelper.BLOCK_RENDER_TYPE;
+                ? ExtendedDataHelper.FLUID_RENDER_TYPE
+                : ExtendedDataHelper.BLOCK_RENDER_TYPE;
 
-        if (!loggedVanillaWaterMapping && renderType == ActiniumExtendedDataHelper.FLUID_RENDER_TYPE && ActiniumShaderPackManager.isDebugEnabled()) {
-            loggedVanillaWaterMapping = true;
-            ActiniumShaders.logger().info("[DEBUG] Vanilla water shader block mapping: block='{}', metadata={}, shaderBlockId={}, renderType={}",
-                    Block.REGISTRY.getNameForObject(state.getBlock()),
-                    metadata,
-                    shaderBlockId,
-                    renderType);
-        }
-
-        extension.actinium$setActiveQuadContext(new ActiniumVanillaQuadContext(
+        extension.actinium$setActiveQuadContext(new VanillaQuadContext(
                 pos.getX() & 15,
                 pos.getY() & 15,
                 pos.getZ() & 15,
@@ -144,22 +130,22 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     }
 
     public void beginVanillaFluidRender(BufferBuilder buffer, BlockPos pos, IBlockState state) {
-        if (!(buffer instanceof ActiniumBufferBuilderExtension extension)) {
+        if (!(buffer instanceof BufferBuilderExtension extension)) {
             return;
         }
 
-        extension.actinium$setActiveQuadContext(new ActiniumVanillaQuadContext(
+        extension.actinium$setActiveQuadContext(new VanillaQuadContext(
                 pos.getX() & 15,
                 pos.getY() & 15,
                 pos.getZ() & 15,
-                ActiniumBlockRenderingSettings.INSTANCE.getBlockStateId(state.getBlock(), state.getBlock().getMetaFromState(state)),
-                ActiniumExtendedDataHelper.FLUID_RENDER_TYPE,
+                BlockRenderingSettings.INSTANCE.getBlockStateId(state.getBlock(), state.getBlock().getMetaFromState(state)),
+                ExtendedDataHelper.FLUID_RENDER_TYPE,
                 (byte) state.getLightValue(this.worldSlice, pos)
         ));
     }
 
     public void endVanillaRender(BufferBuilder buffer) {
-        if (buffer instanceof ActiniumBufferBuilderExtension extension) {
+        if (buffer instanceof BufferBuilderExtension extension) {
             extension.actinium$setActiveQuadContext(null);
         }
     }
@@ -171,7 +157,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         for (int i = 0; i < LAYERS.length; i++) {
             if (this.usedWorldRenderers[i]) {
                 this.worldRenderers[i].finishDrawing();
-                if (this.worldRenderers[i] instanceof ActiniumBufferBuilderExtension extension) {
+                if (this.worldRenderers[i] instanceof BufferBuilderExtension extension) {
                     extension.actinium$consumeQuadContexts();
                 }
                 this.usedWorldRenderers[i] = false;
@@ -204,22 +190,12 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         BLOCK_VERTEX_FORMAT_SIZE = size;
     }
 
-    private void copyBlockData(ByteBuffer source, ChunkBuildBuffers buffers, Material material, List<ActiniumVanillaQuadContext> quadContexts) {
+    private void copyBlockData(ByteBuffer source, ChunkBuildBuffers buffers, Material material, List<VanillaQuadContext> quadContexts) {
         int vsize = BLOCK_VERTEX_FORMAT_SIZE;
         int numQuads = source.limit() / (vsize * 4);
         long ptr = LWJGL.memAddress(source);
         var quad = ChunkVertexEncoder.Vertex.uninitializedQuad();
         var animatedSpritesList = ((MinecraftBuiltRenderSectionData<TextureAtlasSprite, TileEntity>)buffers.getSectionContextBundle()).animatedSprites;
-
-        if (!loggedVanillaTranslucentCopySummary && material == this.renderPassConfiguration.defaultTranslucentMaterial()) {
-            loggedVanillaTranslucentCopySummary = true;
-            ActiniumShaders.logger().info(
-                    "[DEBUG] Vanilla translucent quad copy summary: sourcePass='{}', numQuads={}, quadContexts={}",
-                    material.pass,
-                    numQuads,
-                    quadContexts.size()
-            );
-        }
 
         for(int q = 0; q < numQuads; q++) {
             float uSum = 0, vSum = 0;
@@ -247,29 +223,10 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
                 vertex.trueNormal = trueNormal;
             }
             ModelQuadFacing facing = QuadUtil.findNormalFace(trueNormal);
-            ActiniumVanillaQuadContext quadContext = q < quadContexts.size() ? quadContexts.get(q) : null;
-            boolean isFluidQuad = quadContext != null && quadContext.renderType() == ActiniumExtendedDataHelper.FLUID_RENDER_TYPE;
+            VanillaQuadContext quadContext = q < quadContexts.size() ? quadContexts.get(q) : null;
+            boolean isFluidQuad = quadContext != null && quadContext.renderType() == ExtendedDataHelper.FLUID_RENDER_TYPE;
             Material optimizedMaterial = selectMaterial(material, sprite);
             Material correctMaterial = isFluidQuad ? material : optimizedMaterial;
-
-            if (isFluidQuad && !loggedVanillaWaterQuad) {
-                loggedVanillaWaterQuad = true;
-                String spriteName = sprite != null ? sprite.getIconName() : "<null>";
-                ActiniumShaders.logger().info(
-                        "[DEBUG] Vanilla water quad conversion: sourcePass='{}', optimizedPass='{}', finalPass='{}', sprite='{}', blockStateId={}, renderType={}, lightValue={}, vertexLight=[0x{}, 0x{}, 0x{}, 0x{}]",
-                        material.pass,
-                        optimizedMaterial.pass,
-                        correctMaterial.pass,
-                        spriteName,
-                        quadContext.blockStateId(),
-                        quadContext.renderType(),
-                        quadContext.lightValue() & 0xFF,
-                        Integer.toHexString(quad[0].light),
-                        Integer.toHexString(quad[1].light),
-                        Integer.toHexString(quad[2].light),
-                        Integer.toHexString(quad[3].light)
-                );
-            }
 
             ChunkModelBuilder builder = buffers.get(correctMaterial);
             ContextAwareChunkVertexEncoder encoder = this.prepareVanillaEncoder(builder, quadContext);
@@ -280,7 +237,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         }
     }
 
-    private ContextAwareChunkVertexEncoder prepareVanillaEncoder(ChunkModelBuilder builder, ActiniumVanillaQuadContext quadContext) {
+    private ContextAwareChunkVertexEncoder prepareVanillaEncoder(ChunkModelBuilder builder, VanillaQuadContext quadContext) {
         if (!(builder.getEncoder() instanceof ContextAwareChunkVertexEncoder encoder) || quadContext == null) {
             return null;
         }

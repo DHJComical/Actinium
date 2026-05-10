@@ -12,7 +12,6 @@ import net.minecraft.crash.CrashReportCategory;
 import net.minecraft.init.Blocks;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.EnumBlockRenderType;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ReportedException;
@@ -32,9 +31,9 @@ import org.embeddedt.embeddium.impl.render.chunk.occlusion.VisibilityEncoding;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.util.task.CancellationToken;
 import org.joml.Vector3d;
-import com.dhj.actinium.celeritas.ActiniumBlockRenderLayer;
-import com.dhj.actinium.celeritas.ActiniumShaderProvider;
-import com.dhj.actinium.celeritas.ActiniumShaderProviderHolder;
+import com.dhj.actinium.celeritas.BlockRenderLayer;
+import com.dhj.actinium.celeritas.ShaderProvider;
+import com.dhj.actinium.celeritas.ShaderProviderHolder;
 import org.taumc.celeritas.impl.compat.fluidlogged.FluidloggedCompat;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.world.WorldSlice;
@@ -83,8 +82,8 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
         var slice = WORLD_SLICE_LOCAL_GENERATOR.generateWrapper(buildContext.getWorldSlice());
 
         var dispatcher = Minecraft.getMinecraft().getBlockRendererDispatcher();
-        ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
-        Map<net.minecraft.block.Block, ActiniumBlockRenderLayer> blockTypeIds =
+        ShaderProvider provider = ShaderProviderHolder.getProvider();
+        Map<net.minecraft.block.Block, BlockRenderLayer> blockTypeIds =
                 provider != null && provider.isShadersEnabled() ? provider.getBlockTypeIds() : null;
 
         buildContext.setupTranslation(minX, minY, minZ);
@@ -119,10 +118,10 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
 
                         buildContext.getBlockRenderer().resetSharedState();
 
-                        ActiniumBlockRenderLayer shaderLayerOverride = blockTypeIds != null ? blockTypeIds.get(block) : null;
+                        BlockRenderLayer shaderLayerOverride = blockTypeIds != null ? blockTypeIds.get(block) : null;
 
                         if (shaderLayerOverride != null) {
-                            BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
+                            net.minecraft.util.BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
                             ForgeHooksClient.setRenderLayer(layer);
                             block.canRenderInLayer(blockState, layer);
                             if (blockState.getRenderType() == EnumBlockRenderType.MODEL && USE_NEW_BLOCK_RENDERER) {
@@ -137,7 +136,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                                 }
                             }
                         } else {
-                            for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
+                            for (net.minecraft.util.BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
                                 if (block.canRenderInLayer(blockState, layer)) {
                                     ForgeHooksClient.setRenderLayer(layer);
                                     if (blockState.getRenderType() == EnumBlockRenderType.MODEL && USE_NEW_BLOCK_RENDERER) {

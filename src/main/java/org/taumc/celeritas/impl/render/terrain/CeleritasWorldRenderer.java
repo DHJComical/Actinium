@@ -16,9 +16,10 @@ import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
-import com.dhj.actinium.shader.pipeline.ActiniumRenderPipeline;
-import com.dhj.actinium.celeritas.ActiniumShaderProvider;
-import com.dhj.actinium.celeritas.ActiniumShaderProviderHolder;
+import org.embeddedt.embeddium.impl.render.viewport.Viewport;
+import com.dhj.actinium.celeritas.ShaderProvider;
+import com.dhj.actinium.celeritas.ShaderProviderHolder;
+import net.coderbot.iris.pipeline.ShadowRenderer;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.mixin.core.terrain.ActiveRenderInfoAccessor;
 
@@ -61,11 +62,14 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
 
     @Override
     protected int getShadowEffectiveRenderDistance() {
-        return Math.max(1, ActiniumRenderPipeline.INSTANCE.getShadowTerrainRenderDistanceChunks());
+        return Math.max(1, this.getEffectiveRenderDistance());
     }
 
     @Override
     protected ChunkRenderMatrices createChunkRenderMatrices() {
+        if (this.renderSectionManager != null && this.renderSectionManager.isInShadowPass()) {
+            return new ChunkRenderMatrices(ShadowRenderer.PROJECTION, ShadowRenderer.MODELVIEW);
+        }
         return new ChunkRenderMatrices(ActiveRenderInfoAccessor.getProjectionMatrix(), ActiveRenderInfoAccessor.getModelViewMatrix());
     }
 
@@ -81,6 +85,10 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
         super.drawChunkLayer(renderLayer, x, y, z);
 
         GlStateManager.resetColor();
+    }
+
+    public void setCurrentViewport(Viewport viewport) {
+        this.currentViewport = viewport;
     }
 
     public static CameraState captureCameraState(double ticks) {
@@ -151,7 +159,7 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
     }
 
     private ChunkVertexType chooseVertexType() {
-        ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
+        ShaderProvider provider = ShaderProviderHolder.getProvider();
         if (provider != null && provider.isShadersEnabled()) {
             ChunkVertexType shaderVertexType = provider.getVertexType(ChunkMeshFormats.VANILLA_LIKE);
             if (shaderVertexType != null && shaderVertexType != ChunkMeshFormats.VANILLA_LIKE) {

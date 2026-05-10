@@ -1,6 +1,6 @@
 package org.taumc.celeritas.impl.gui;
 
-import com.dhj.actinium.shader.gui.screen.ActiniumShaderPackScreen;
+import net.coderbot.iris.gui.screen.ShaderPackScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import org.taumc.celeritas.api.options.OptionIdentifier;
@@ -36,7 +36,7 @@ public class CeleritasVideoOptionsScreen extends GuiScreen {
                         .setTitle(TextComponent.translatable("options.actinium.shaderPackSelection"))
                         .setId(OptionIdentifier.create(CeleritasVintage.MODID, "shader_packs"))
                         .setOnSelectFunction(() -> {
-                            Minecraft.getMinecraft().displayGuiScreen(new ActiniumShaderPackScreen(CeleritasVideoOptionsScreen.this));
+                            Minecraft.getMinecraft().displayGuiScreen(new ShaderPackScreen(CeleritasVideoOptionsScreen.this));
                             return false;
                         })
                         .build());

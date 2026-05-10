@@ -35,7 +35,7 @@ import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncode
 import org.embeddedt.embeddium.impl.util.ModelQuadUtil;
 import com.dhj.actinium.celeritas.vertices.BlockRenderContext;
 import com.dhj.actinium.celeritas.vertices.ContextAwareChunkVertexEncoder;
-import com.dhj.actinium.vertices.ActiniumExtendedDataHelper;
+import com.dhj.actinium.vertices.ExtendedDataHelper;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.light.LightDataCache;
@@ -222,8 +222,8 @@ public class VintageBlockRenderer {
                 || this.currentState.getMaterial() == net.minecraft.block.material.Material.LAVA;
         int blockId = Block.getIdFromBlock(block);
         short renderType = isFluid
-                ? ActiniumExtendedDataHelper.FLUID_RENDER_TYPE
-                : ActiniumExtendedDataHelper.BLOCK_RENDER_TYPE;
+                ? ExtendedDataHelper.FLUID_RENDER_TYPE
+                : ExtendedDataHelper.BLOCK_RENDER_TYPE;
 
         this.blockRenderContext.set(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, blockId, renderType, lightValue);
         if (isFluid) {

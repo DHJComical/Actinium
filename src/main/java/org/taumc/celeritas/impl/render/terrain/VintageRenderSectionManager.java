@@ -26,8 +26,8 @@ import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
-import com.dhj.actinium.celeritas.ActiniumShaderProvider;
-import com.dhj.actinium.celeritas.ActiniumShaderProviderHolder;
+import com.dhj.actinium.celeritas.ShaderProvider;
+import com.dhj.actinium.celeritas.ShaderProviderHolder;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.task.ChunkBuilderMeshingTask;
@@ -69,11 +69,11 @@ public class VintageRenderSectionManager extends RenderSectionManager {
             return false;
         }
 
-        if (ActiniumShaderProviderHolder.isShadowPass()) {
+        if (ShaderProviderHolder.isShadowPass()) {
             return true;
         }
 
-        if (!ActiniumShaderProviderHolder.isActive()) {
+        if (!ShaderProviderHolder.isActive()) {
             return true;
         }
 
@@ -167,7 +167,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
     @Override
     public boolean isInShadowPass() {
-        return ActiniumShaderProviderHolder.isShadowPass();
+        return ShaderProviderHolder.isShadowPass();
     }
 
     private static class ChunkRenderer extends DefaultChunkRenderer {
@@ -177,7 +177,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
         public ChunkRenderer(RenderDevice device, RenderPassConfiguration<?> renderPassConfiguration) {
             super(device, renderPassConfiguration);
 
-            ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
+            ShaderProvider provider = ShaderProviderHolder.getProvider();
             if (provider != null) {
                 provider.setRenderPassConfiguration(renderPassConfiguration);
             }
@@ -186,7 +186,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
         @Override
         @SuppressWarnings("unchecked")
         protected void begin(TerrainRenderPass pass) {
-            ActiniumShaderProvider provider = ActiniumShaderProviderHolder.getProvider();
+            ShaderProvider provider = ShaderProviderHolder.getProvider();
             if (provider != null && provider.isShadersEnabled()) {
                 GlProgram<? extends ChunkShaderInterface> override = provider.getShaderOverride(pass);
                 if (override != null) {
@@ -222,7 +222,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
         @Override
         public boolean useBlockFaceCulling(){
-            return CeleritasVintage.options().performance.useBlockFaceCulling && ActiniumShaderProviderHolder.shouldUseFaceCulling();
+            return CeleritasVintage.options().performance.useBlockFaceCulling && ShaderProviderHolder.shouldUseFaceCulling();
         }
 
         @Override

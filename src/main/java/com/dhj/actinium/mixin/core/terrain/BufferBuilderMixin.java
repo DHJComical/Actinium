@@ -1,7 +1,7 @@
 package com.dhj.actinium.mixin.core.terrain;
 
-import com.dhj.actinium.celeritas.buffer.ActiniumBufferBuilderExtension;
-import com.dhj.actinium.celeritas.buffer.ActiniumVanillaQuadContext;
+import com.dhj.actinium.celeritas.buffer.BufferBuilderExtension;
+import com.dhj.actinium.celeritas.buffer.VanillaQuadContext;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.vertex.VertexFormat;
 import org.jetbrains.annotations.Nullable;
@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Mixin(BufferBuilder.class)
-public class BufferBuilderMixin implements ActiniumBufferBuilderExtension {
+public class BufferBuilderMixin implements BufferBuilderExtension {
     @Shadow
     private int vertexCount;
 
@@ -25,10 +25,10 @@ public class BufferBuilderMixin implements ActiniumBufferBuilderExtension {
     private int drawMode;
 
     @Unique
-    private final List<ActiniumVanillaQuadContext> actinium$quadContexts = new ArrayList<>();
+    private final List<VanillaQuadContext> actinium$quadContexts = new ArrayList<>();
 
     @Unique
-    private @Nullable ActiniumVanillaQuadContext actinium$activeQuadContext;
+    private @Nullable VanillaQuadContext actinium$activeQuadContext;
 
     @Inject(method = "begin", at = @At("HEAD"))
     private void actinium$begin(int glMode, VertexFormat format, CallbackInfo ci) {
@@ -51,13 +51,13 @@ public class BufferBuilderMixin implements ActiniumBufferBuilderExtension {
     }
 
     @Override
-    public void actinium$setActiveQuadContext(@Nullable ActiniumVanillaQuadContext context) {
+    public void actinium$setActiveQuadContext(@Nullable VanillaQuadContext context) {
         this.actinium$activeQuadContext = context;
     }
 
     @Override
-    public List<ActiniumVanillaQuadContext> actinium$consumeQuadContexts() {
-        List<ActiniumVanillaQuadContext> copy = new ArrayList<>(this.actinium$quadContexts);
+    public List<VanillaQuadContext> actinium$consumeQuadContexts() {
+        List<VanillaQuadContext> copy = new ArrayList<>(this.actinium$quadContexts);
         this.actinium$quadContexts.clear();
         this.actinium$activeQuadContext = null;
         return copy;
