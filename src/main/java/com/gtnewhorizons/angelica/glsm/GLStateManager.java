@@ -6,6 +6,7 @@ import com.gtnewhorizons.angelica.glsm.states.ColorMask;
 import com.gtnewhorizons.angelica.glsm.states.DepthState;
 import com.gtnewhorizons.angelica.glsm.states.BooleanState;
 import com.gtnewhorizons.angelica.glsm.states.FogState;
+import com.gtnewhorizons.angelica.glsm.states.TextureUnitArray;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.BufferUtils;
@@ -26,7 +27,25 @@ import java.util.ArrayDeque;
 public final class GLStateManager {
     public static final Logger LOGGER = LogManager.getLogger("Actinium/GLSM");
     public static final Capabilities capabilities = new Capabilities();
-    private static final int TRACKED_TEXTURE_UNITS = 64;
+
+    // Stack depth constants (port from Angelica GLSM)
+    public static final int MAX_ATTRIB_STACK_DEPTH = 18;
+    public static final int MAX_MODELVIEW_STACK_DEPTH = 34;
+    public static final int MAX_PROJECTION_STACK_DEPTH = 4;
+    public static final int MAX_TEXTURE_STACK_DEPTH = 4;
+    public static final int MAX_TEXTURE_UNITS = 64;
+
+    private static final int TRACKED_TEXTURE_UNITS = MAX_TEXTURE_UNITS;
+
+    // GPU vendor detection
+    private static Vendor VENDOR = Vendor.UNKNOWN;
+
+    // Attribute depth tracking for lazy copy-on-write
+    private static int attribDepth = 0;
+    private static boolean poppingAttributes = false;
+
+    // Texture unit array for per-unit state
+    public static final TextureUnitArray textures = new TextureUnitArray(MAX_TEXTURE_UNITS);
 
     private static final BlendState BLEND_STATE = new BlendState();
     private static final AlphaState ALPHA_STATE = new AlphaState();
@@ -458,6 +477,63 @@ public final class GLStateManager {
             }
         }
     }
+
+    // ==================== Vendor Detection ====================
+
+    /**
+     * Initialize GPU vendor detection. Should be called after GL context creation.
+     */
+    public static void detectVendor() {
+        try {
+            final String vendorString = GL11.glGetString(GL11.GL_VENDOR);
+            VENDOR = Vendor.getVendor(vendorString);
+            LOGGER.info("Detected GPU vendor: {} ({})", VENDOR, vendorString);
+        } catch (Exception e) {
+            VENDOR = Vendor.UNKNOWN;
+            LOGGER.warn("Failed to detect GPU vendor: {}", e.getMessage());
+        }
+    }
+
+    public static Vendor getVendor() {
+        return VENDOR;
+    }
+
+    public static boolean vendorIsAMD() {
+        return VENDOR == Vendor.AMD;
+    }
+
+    // ==================== Cache and State Helpers ====================
+
+    /**
+     * Whether to bypass the GL state cache (e.g., when splash screen is active).
+     */
+    public static boolean shouldBypassCache() {
+        return false; // Default: always use cache
+    }
+
+    /**
+     * Whether the GL state manager is currently popping attributes.
+     */
+    public static boolean isPoppingAttributes() {
+        return poppingAttributes;
+    }
+
+    /**
+     * Get the current attribute depth for lazy copy-on-write tracking.
+     */
+    public static int getAttribDepth() {
+        return attribDepth;
+    }
+
+    /**
+     * Convert integer color component to float (0-255 to 0.0-1.0).
+     * Used by material/light state classes.
+     */
+    public static float i2f(int i) {
+        return i / 255.0f;
+    }
+
+    // ==================== Capabilities ====================
 
     public static final class Capabilities {
         public boolean GL_ARB_copy_image = true;

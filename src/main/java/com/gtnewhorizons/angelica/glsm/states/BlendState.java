@@ -2,7 +2,7 @@ package com.gtnewhorizons.angelica.glsm.states;
 
 import org.lwjgl.opengl.GL11;
 
-public final class BlendState {
+public class BlendState {
     private boolean enabled;
     private int srcRgb = GL11.GL_ONE;
     private int dstRgb = GL11.GL_ZERO;

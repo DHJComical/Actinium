@@ -1,7 +1,7 @@
 package com.gtnewhorizons.angelica.glsm.states;
 
 public class BooleanState {
-    private boolean enabled;
+    protected boolean enabled;
 
     public BooleanState(boolean enabled) {
         this.enabled = enabled;
