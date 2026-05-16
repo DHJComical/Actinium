@@ -4,6 +4,7 @@ import com.google.common.annotations.Beta;
 import com.gtnewhorizon.gtnhlib.client.renderer.vao.IVertexArrayObject;
 import com.gtnewhorizon.gtnhlib.client.renderer.vao.VertexBufferType;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormat;
+import net.minecraft.client.renderer.Tessellator;
 
 public final class TessellatorManager {
     public static final int DEFAULT_BUFFER_SIZE = 0x8000;
@@ -103,6 +104,10 @@ public final class TessellatorManager {
         final IVertexArrayObject vbo = tessellator.uploadToVBO(bufferType);
         stopCapturingDirect();
         return vbo;
+    }
+
+    public static boolean shouldInterceptDraw(Tessellator tess) {
+        return ((ITessellatorInstance) tess).gtnhlib$isCompiling() || hasDirectTessellator();
     }
 
     public static void cleanup() {

@@ -15,7 +15,7 @@ public abstract class GameSettingsIrisInitMixin {
 
     @Inject(method = "loadOptions", at = @At("HEAD"))
     private void celeritas$initializeIris(CallbackInfo ci) {
-        if (celeritas$irisInitialized) {
+        if (celeritas$irisInitialized || !Iris.enabled) {
             return;
         }
 

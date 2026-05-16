@@ -1,6 +1,7 @@
 package net.coderbot.iris.debug;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import net.coderbot.iris.Iris;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 import net.coderbot.iris.rendertarget.RenderTarget;
@@ -54,9 +55,13 @@ public final class IrisGlDebug {
     }
 
 	public static void logDebugInfo(String message, Object... params) {
-		if (isEnabled()) {
+		if (shouldEmitDebugInfo()) {
 			LOGGER.info(message, params);
 		}
+	}
+
+	private static boolean shouldEmitDebugInfo() {
+		return isEnabled() && Iris.isWorldReadyForShaderpackLoad();
 	}
 
 	public static void logSamplerInitialization(int program, String mode, String name, int location, int assignedUnit) {

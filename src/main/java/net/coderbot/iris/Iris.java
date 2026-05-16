@@ -113,6 +113,8 @@ public class Iris {
     // behavior is more concrete and therefore is more likely to repair a user's issues
     private static boolean resetShaderPackOptions = false;
     private static boolean loadShaderPackWhenPossible = false;
+    private static boolean renderSystemInitialized = false;
+    private static boolean runtimeGlInitialized = false;
 
     private static String IRIS_VERSION;
     @Getter
@@ -128,6 +130,9 @@ public class Iris {
 
     public static void tryLoadShaderpackWhenPossible() {
         if (loadShaderPackWhenPossible) {
+            if (!isWorldReadyForShaderpackLoad()) {
+                return;
+            }
             loadShaderPackWhenPossible = false;
             try {
                 reload();
@@ -401,19 +406,7 @@ public class Iris {
                 + " Trying to avoid a crash but this is an odd state.");
             return;
         }
-
-        // Register the Celeritas shader provider for Iris integration (only when Celeritas is enabled)
-        if (ActiniumConfig.enableCeleritas) {
-            ShaderProviderHolder.setProvider(new IrisCeleritasShaderProvider());
-        }
-
-        // Warm up the threadpool so shader transformations are faster when we need them
-        ShaderTransformExecutor.warmup();
-
-        // Initialize version hoisting pattern based on GL capabilities
-        ShaderTransformer.init();
-
-        PBRTextureManager.INSTANCE.init();
+        renderSystemInitialized = true;
 
         boolean isDHLoaded;
         try {
@@ -440,19 +433,8 @@ public class Iris {
                 + " Trying to avoid a crash but this is an odd state.");
             return;
         }
-
-        if (currentPack == null && !fallback) {
-            loadShaderpack();
-        }
-        tryLoadShaderpackWhenPossible();
-
-        // Initialize the pipeline now so that we don't increase world loading time. Just going to guess that
-        // the player is in the overworld.
-        // See: https://github.com/IrisShaders/Iris/issues/323
-        lastDimensionName = "Overworld";
-        Iris.getPipelineManager().preparePipeline("Overworld");
-
-        BlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
+        loadShaderPackWhenPossible = true;
+        logger.info("Deferring shaderpack load until world rendering begins");
     }
 
     public static void toggleShaders(Minecraft minecraft, boolean enabled) throws IOException {
@@ -466,6 +448,14 @@ public class Iris {
     }
 
     public static void loadShaderpack() {
+        if (!isWorldReadyForShaderpackLoad()) {
+            loadShaderPackWhenPossible = true;
+            logger.info("Deferring shaderpack load because no world is active yet");
+            return;
+        }
+
+        ensureRuntimeGlInitialized();
+
         if (irisConfig == null) {
             if (!initialized) {
                 throw new IllegalStateException("Iris::loadShaderpack was called, but Iris::onInitializeClient wasn't" + " called yet. How did this happen?");
@@ -624,6 +614,25 @@ public class Iris {
         logger.info("Shaders are disabled");
     }
 
+    private static void ensureRuntimeGlInitialized() {
+        if (runtimeGlInitialized) {
+            return;
+        }
+
+        if (!renderSystemInitialized) {
+            throw new IllegalStateException("Iris runtime GL initialization was requested before RenderSystem initialization completed");
+        }
+
+        if (ActiniumConfig.enableCeleritas) {
+            ShaderProviderHolder.setProvider(new IrisCeleritasShaderProvider());
+        }
+
+        ShaderTransformExecutor.warmup();
+        ShaderTransformer.init();
+        PBRTextureManager.INSTANCE.init();
+        runtimeGlInitialized = true;
+    }
+
     private static Optional<Properties> tryReadConfigProperties(Path path) {
         final Properties properties = new Properties();
 
@@ -746,6 +755,12 @@ public class Iris {
         // Destroy all allocated resources
         destroyEverything();
 
+        if (!isWorldReadyForShaderpackLoad()) {
+            loadShaderPackWhenPossible = true;
+            logger.info("Deferring shader reload because no world is active yet");
+            return;
+        }
+
         // Load the new shaderpack
         loadShaderpack();
 
@@ -823,6 +838,11 @@ public class Iris {
             return level.provider.getDimension();
         }
         return lastDimensionId;
+    }
+
+    public static boolean isWorldReadyForShaderpackLoad() {
+        final Minecraft minecraft = Minecraft.getMinecraft();
+        return minecraft != null && minecraft.world != null && minecraft.world.provider != null;
     }
 
 

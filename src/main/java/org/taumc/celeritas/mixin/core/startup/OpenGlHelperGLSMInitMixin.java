@@ -34,7 +34,7 @@ public class OpenGlHelperGLSMInitMixin {
             OpenGlHelper.lastBrightnessY = event.y;
         });
 
-        if (Thread.currentThread() == GLStateManager.getMainThread()) {
+        if (Iris.enabled && Thread.currentThread() == GLStateManager.getMainThread()) {
             Iris.onRenderSystemInit();
         }
     }

@@ -86,7 +86,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public boolean useAdvancedStagingBuffers = true;
         public boolean disableIncompatibleModWarnings = false;
 
-        public int cpuRenderAheadLimit = 3;
+        public int cpuRenderAheadLimit = 0;
     }
 
     public static class QualitySettings {

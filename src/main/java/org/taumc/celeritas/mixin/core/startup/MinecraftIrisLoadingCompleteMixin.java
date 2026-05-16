@@ -23,7 +23,7 @@ public class MinecraftIrisLoadingCompleteMixin {
         )
     )
     private void celeritas$onLoadingComplete(CallbackInfo ci) {
-        if (!celeritas$firstInitComplete && GLStateManager.isMainThread()) {
+        if (Iris.enabled && !celeritas$firstInitComplete && GLStateManager.isMainThread()) {
             celeritas$firstInitComplete = true;
             Iris.onLoadingComplete();
         }

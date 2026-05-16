@@ -136,6 +136,11 @@ public class RenderSystem {
                 ShaderManager.getInstance().enable();
             }
         }
+
+        if (!ShaderManager.getInstance().isEnabled()) {
+            GLStateManager.LOGGER.info("Enabling FFP shader emulation for streaming tessellator rendering.");
+            ShaderManager.getInstance().enable();
+        }
     }
 
     public static void generateMipmaps(int texture, int mipmapTarget) {

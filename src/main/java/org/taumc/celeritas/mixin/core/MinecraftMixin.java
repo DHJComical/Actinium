@@ -1,5 +1,6 @@
 package org.taumc.celeritas.mixin.core;
 
+import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import net.minecraft.client.Minecraft;
 import org.embeddedt.embeddium.impl.render.frame.RenderAheadManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,12 +18,18 @@ public class MinecraftMixin {
 
     @Inject(method = "runTick", at = @At("HEAD"))
     private void preRender(CallbackInfo ci) {
-        celeritas$renderAheadManager.startFrame(CeleritasVintage.options().advanced.cpuRenderAheadLimit);
+        final int limit = CeleritasVintage.options().advanced.cpuRenderAheadLimit;
+        if (limit > 0) {
+            celeritas$renderAheadManager.startFrame(limit);
+        }
         CeleritasWindowModeController.synchronize((Minecraft) (Object) this);
     }
 
     @Inject(method = "runTick", at = @At("RETURN"))
     private void postRender(CallbackInfo ci) {
-        celeritas$renderAheadManager.endFrame();
+        if (CeleritasVintage.options().advanced.cpuRenderAheadLimit > 0) {
+            celeritas$renderAheadManager.endFrame();
+        }
+        TessellatorStreamingDrawer.endFrame();
     }
 }

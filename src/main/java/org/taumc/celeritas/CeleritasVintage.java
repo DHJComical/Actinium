@@ -48,10 +48,9 @@ public class CeleritasVintage {
         }
         if (Iris.enabled) {
             IrisGLSMBridge.register();
+            Iris.INSTANCE.fmlInitEvent();
+            MinecraftForge.EVENT_BUS.register(Iris.INSTANCE);
         }
-        Iris.INSTANCE.fmlInitEvent();
-        MinecraftForge.EVENT_BUS.register(Iris.INSTANCE);
-
     }
 
     @SubscribeEvent

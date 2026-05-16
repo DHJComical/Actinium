@@ -6,6 +6,7 @@ import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWVidMode;
+import org.lwjgl.opengl.Display;
 import org.lwjgl.system.MemoryStack;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.mixin.core.MinecraftAccessor;
@@ -16,8 +17,10 @@ import java.nio.IntBuffer;
 
 public final class CeleritasWindowModeController {
     private static final Logger LOGGER = CeleritasVintage.logger();
+    private static final long WINDOW_LOOKUP_FAILED = Long.MIN_VALUE;
     private static boolean synchronizing;
     private static boolean loggedWindowLookupFailure;
+    private static long cachedWindowHandle = -1L;
     private static final WindowBounds savedWindowedBounds = new WindowBounds();
 
     private CeleritasWindowModeController() {
@@ -258,12 +261,28 @@ public final class CeleritasWindowModeController {
     }
 
     private static long findWindowHandle(Minecraft client) {
+        if (cachedWindowHandle == WINDOW_LOOKUP_FAILED) {
+            return 0L;
+        }
+
+        if (cachedWindowHandle > 0L) {
+            return cachedWindowHandle;
+        }
+
+        long displayWindow = Display.getWindow();
+        if (displayWindow != 0L) {
+            cachedWindowHandle = displayWindow;
+            return displayWindow;
+        }
+
         Long handle = extractLongHandle(client);
 
         if (handle != null) {
+            cachedWindowHandle = handle;
             return handle;
         }
 
+        cachedWindowHandle = WINDOW_LOOKUP_FAILED;
         if (!loggedWindowLookupFailure) {
             loggedWindowLookupFailure = true;
             LOGGER.warn("Unable to resolve the GLFW window handle, borderless fullscreen will be unavailable");
