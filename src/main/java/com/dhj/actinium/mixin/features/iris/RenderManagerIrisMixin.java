@@ -1,11 +1,12 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import com.gtnewhorizons.angelica.rendering.RenderingState;
-import net.coderbot.iris.uniforms.CapturedRenderingState;
-import net.coderbot.iris.uniforms.EntityIdHelper;
+import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
+import net.coderbot.iris.uniforms.CapturedRenderingState;
+import net.coderbot.iris.uniforms.EntityIdHelper;
 import net.minecraft.client.renderer.entity.Render;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.entity.Entity;
@@ -31,6 +32,11 @@ public class RenderManagerIrisMixin {
         float yaw,
         float partialTicks
     ) {
+        if (!IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
+            render.doRender(entity, x, y, z, yaw, partialTicks);
+            return;
+        }
+
         int previousEntity = CapturedRenderingState.INSTANCE.getCurrentRenderedEntity();
         WorldRenderingPhase previousPhase = GbufferPrograms.getCurrentPhase();
         boolean beganEntityPhase = previousPhase == WorldRenderingPhase.NONE;

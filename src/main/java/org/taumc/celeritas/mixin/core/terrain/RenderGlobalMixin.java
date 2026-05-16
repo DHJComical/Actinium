@@ -7,6 +7,7 @@ import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.layer.GbufferPrograms;
+import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.pipeline.HandRenderer;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
@@ -307,7 +308,7 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         int blockSkipped = 0;
         int rendered = 0;
 
-        boolean irisEntities = Iris.enabled && Iris.getPipelineManager().getPipelineNullable() != null;
+        boolean irisEntities = Iris.enabled && IrisApiV0Impl.INSTANCE.isShaderPackInUse();
         if (irisEntities) {
             GbufferPrograms.beginEntities();
         }

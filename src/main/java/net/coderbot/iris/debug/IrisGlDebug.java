@@ -2,6 +2,7 @@ package net.coderbot.iris.debug;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 import net.coderbot.iris.rendertarget.RenderTarget;
@@ -55,19 +56,27 @@ public final class IrisGlDebug {
     }
 
 	public static void logDebugInfo(String message, Object... params) {
-		if (shouldEmitDebugInfo()) {
+		if (shouldCaptureGlState()) {
 			LOGGER.info(message, params);
 		}
 	}
 
-	private static boolean shouldEmitDebugInfo() {
-		return isEnabled() && Iris.isWorldReadyForShaderpackLoad();
+	private static boolean shouldCaptureGlState() {
+		if (!isEnabled() || !Iris.isWorldReadyForShaderpackLoad()) {
+			return false;
+		}
+
+		try {
+			return IrisApiV0Impl.INSTANCE.isShaderPackInUse();
+		} catch (RuntimeException ignored) {
+			return false;
+		}
 	}
 
 	public static void logSamplerInitialization(int program, String mode, String name, int location, int assignedUnit) {
-		if (!isEnabled()) {
-			return;
-		}
+		if (!shouldCaptureGlState()) {
+            return;
+        }
 
 		String label = "sampler-init:" + program + ":" + mode + ":" + name + ":" + assignedUnit;
 		int count = SAMPLER_INIT_COUNTS.merge(label, 1, Integer::sum);
@@ -87,9 +96,9 @@ public final class IrisGlDebug {
 	}
 
 	public static void logSamplerIntercept(int program, String mode, int requestedUnit, boolean override, String... names) {
-		if (!isEnabled()) {
-			return;
-		}
+		if (!shouldCaptureGlState()) {
+            return;
+        }
 
 		String joinedNames = String.join(",", names);
 		String label = "sampler-intercept:" + program + ":" + mode + ":" + requestedUnit + ":" + override + ":" + joinedNames;
@@ -110,9 +119,9 @@ public final class IrisGlDebug {
 	}
 
 	public static void logPipelineInputs(String stage, String phase, String availability, boolean shadow, boolean mainBound, boolean fullscreen, boolean postChain) {
-		if (!isEnabled()) {
-			return;
-		}
+		if (!shouldCaptureGlState()) {
+            return;
+        }
 
 		String label = "pipeline-inputs:" + stage + ":" + phase + ":" + availability + ":" + shadow + ":" + mainBound + ":" + fullscreen + ":" + postChain;
 		int count = SAMPLER_INIT_COUNTS.merge(label, 1, Integer::sum);
@@ -134,9 +143,9 @@ public final class IrisGlDebug {
 	}
 
 	public static void logProgramSamplerState(String stage, int program, String availability, String phase) {
-		if (!isEnabled()) {
-			return;
-		}
+		if (!shouldCaptureGlState()) {
+            return;
+        }
 
 		String label = "program-sampler-state:" + stage + ":" + program + ":" + availability + ":" + phase;
 		int count = SAMPLER_INIT_COUNTS.merge(label, 1, Integer::sum);
@@ -174,6 +183,10 @@ public final class IrisGlDebug {
 
     public static void logMinecraftGlError(String message, int error) {
         if (error == 0) {
+            return;
+        }
+
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -219,6 +232,10 @@ public final class IrisGlDebug {
     }
 
     public static void check(String stage) {
+        if (!shouldCaptureGlState()) {
+            return;
+        }
+
         markStage(stage);
         int error = GL11.glGetError();
         if (error != 0) {
@@ -227,7 +244,7 @@ public final class IrisGlDebug {
     }
 
     public static void logCeleritasProgram(String passName, int program, Collection<GlVertexAttribute> attributes) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -276,7 +293,7 @@ public final class IrisGlDebug {
     }
 
     public static void logCeleritasTerrainState(String passName, int program) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -346,7 +363,7 @@ public final class IrisGlDebug {
     }
 
     public static void logTerrainMaterialSample(String source, int blockId, int renderType, int lightValue, int localX, int localY, int localZ, float u, float v) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -372,7 +389,7 @@ public final class IrisGlDebug {
     }
 
     public static void logShadowEntityState(String stage, double cameraX, double cameraY, double cameraZ, double renderPosX, double renderPosY, double renderPosZ, double viewerPosX, double viewerPosY, double viewerPosZ, int entityCount) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -409,7 +426,7 @@ public final class IrisGlDebug {
     }
 
     public static void logShadowEntityDraw(String entityType, double x, double y, double z, float yaw, float partialTicks) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -436,7 +453,7 @@ public final class IrisGlDebug {
     }
 
     public static void logEntityCullSample(String reason, String entityType, int pass) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -462,7 +479,7 @@ public final class IrisGlDebug {
     }
 
     public static void logEntityLoopSummary(String stage, int pass, int gathered, int rendered, int shadowSkipped, int frustumSkipped, int celeritasSkipped, int blockSkipped, boolean irisEntities, String phase) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -495,7 +512,7 @@ public final class IrisGlDebug {
     }
 
     public static void logEntityPhase(String entityType, String previousPhase, boolean beganEntityPhase, String uniformModelView, String uniformProjection) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -523,7 +540,7 @@ public final class IrisGlDebug {
     }
 
     public static void logEntityRenderCall(String stage, String entityType, String rendererType, String phase, int entityId) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -551,7 +568,7 @@ public final class IrisGlDebug {
     }
 
     public static void logWorldPassState(String stage, String phase, String subject) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -599,7 +616,7 @@ public final class IrisGlDebug {
     }
 
     public static void logActiveTextureBindings(String stage, String phase, String subject) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -632,7 +649,7 @@ public final class IrisGlDebug {
     }
 
     public static void logPipelineSkip(String stage, String phase, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -662,7 +679,7 @@ public final class IrisGlDebug {
     }
 
     public static void logPassBind(String stage, String phase, int previousProgram, int nextProgram) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -689,7 +706,7 @@ public final class IrisGlDebug {
     }
 
     public static void logPhaseChange(String stage, String previousPhase, String nextPhase, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain, String inputs) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -721,7 +738,7 @@ public final class IrisGlDebug {
     }
 
     public static void logProgramOverrideDecision(String stage, String phase, int oldProgram, int newProgram, int activePassProgram, boolean shouldOverrideShaders, boolean renderingLevel, boolean ownedProgram, boolean unlockedDepthColor, boolean invokedOverride) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -754,7 +771,7 @@ public final class IrisGlDebug {
     }
 
     public static void logModProgramOverride(String stage, String phase, String inputs, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain, int previousProgram, int activePassProgram) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -787,7 +804,7 @@ public final class IrisGlDebug {
     }
 
     public static void logCurrentFramebufferAttachments(String stage, String phase, int maxAttachments) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -841,7 +858,7 @@ public final class IrisGlDebug {
     }
 
     public static void logPipelineMatch(String stage, String phase, String condition, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain, int program) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -898,7 +915,7 @@ public final class IrisGlDebug {
     }
 
     public static void logFullscreenProgram(String stageName, String sourceName, int program, int[] drawBuffers) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -929,7 +946,7 @@ public final class IrisGlDebug {
     }
 
     public static void logFullscreenPassState(String stageName, String sourceName, int program, int[] drawBuffers, java.util.Set<Integer> readsFromAlt, RenderTargets renderTargets) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -972,7 +989,7 @@ public final class IrisGlDebug {
     }
 
     public static void logFullscreenSamplerSamples(String stageName, String sourceName, int program) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 
@@ -1030,7 +1047,7 @@ public final class IrisGlDebug {
     }
 
     public static void logCurrentFramebufferSamples(String label, int localColorAttachments) {
-        if (!isEnabled()) {
+        if (!shouldCaptureGlState()) {
             return;
         }
 

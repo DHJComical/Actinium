@@ -1,6 +1,7 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
@@ -44,7 +45,7 @@ public class RenderGlobalIrisMixin {
             return;
         }
 
-        if (Iris.getPipelineManager().getPipelineNullable() != null) {
+        if (IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             GbufferPrograms.beginOutline();
         }
     }
@@ -55,7 +56,7 @@ public class RenderGlobalIrisMixin {
             return;
         }
 
-        if (Iris.getPipelineManager().getPipelineNullable() != null) {
+        if (IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             GbufferPrograms.endOutline();
         }
     }

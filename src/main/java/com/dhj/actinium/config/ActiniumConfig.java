@@ -1,7 +1,7 @@
 package com.dhj.actinium.config;
 
 public final class ActiniumConfig {
-    public static boolean enableIris = false;
+    public static boolean enableIris = true;
     public static boolean enableCeleritas = true;
     public static boolean enableThreadedChunkBuilding = true;
     public static int chunkBuilderThreadCount = 0;

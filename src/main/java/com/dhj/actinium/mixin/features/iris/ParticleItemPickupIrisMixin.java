@@ -1,6 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
-import net.coderbot.iris.Iris;
+import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.minecraft.client.particle.ParticleItemPickup;
 import net.minecraft.client.renderer.entity.RenderManager;
@@ -25,7 +25,7 @@ public class ParticleItemPickupIrisMixin {
         float partialTicks,
         boolean debugBoundingBox
     ) {
-        if (!Iris.enabled || Iris.getPipelineManager().getPipelineNullable() == null) {
+        if (!IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             renderManager.renderEntity(entity, x, y, z, yaw, partialTicks, debugBoundingBox);
             return;
         }
