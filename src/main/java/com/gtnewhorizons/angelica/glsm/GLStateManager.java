@@ -1,5 +1,6 @@
 package com.gtnewhorizons.angelica.glsm;
 
+import com.gtnewhorizon.gtnhlib.client.opengl.UniversalVAO;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.states.AlphaState;
 import com.gtnewhorizons.angelica.glsm.states.BlendState;
@@ -8,6 +9,7 @@ import com.gtnewhorizons.angelica.glsm.states.DepthState;
 import com.gtnewhorizons.angelica.glsm.states.BooleanState;
 import com.gtnewhorizons.angelica.glsm.states.FogState;
 import com.gtnewhorizons.angelica.glsm.states.TextureUnitArray;
+import com.gtnewhorizons.angelica.glsm.states.ViewportState;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.BufferUtils;
@@ -74,6 +76,7 @@ public final class GLStateManager {
     private static int boundFramebuffer = 0;
     private static int boundReadFramebuffer = 0;
     private static int boundDrawFramebuffer = 0;
+    private static final ViewportState VIEWPORT_STATE = new ViewportState();
 
     static {
         for (int i = 0; i < TRACKED_TEXTURE_UNITS; i++) {
@@ -248,6 +251,10 @@ public final class GLStateManager {
         GL20.glDeleteProgram(program);
     }
 
+    public static int glGetAttribLocation(int program, CharSequence name) {
+        return GL20.glGetAttribLocation(program, name);
+    }
+
     public static void glBindFramebuffer(int target, int framebuffer) {
         switch (target) {
             case GL30.GL_FRAMEBUFFER -> {
@@ -311,10 +318,26 @@ public final class GLStateManager {
         GL15.glBindBuffer(target, buffer);
     }
 
-    public static int glGenVertexArrays() { return GL30.glGenVertexArrays(); }
+    public static void glDeleteBuffers(int buffer) {
+        if (boundArrayBuffer == buffer) {
+            boundArrayBuffer = 0;
+        }
+        if (boundElementArrayBuffer == buffer) {
+            boundElementArrayBuffer = 0;
+        }
+        GL15.glDeleteBuffers(buffer);
+    }
+
+    public static int glGenVertexArrays() { return UniversalVAO.genVertexArrays(); }
     public static void glBindVertexArray(int array) {
         boundVertexArray = array;
-        GL30.glBindVertexArray(array);
+        UniversalVAO.bindVertexArray(array);
+    }
+    public static void glDeleteVertexArrays(int array) {
+        if (boundVertexArray == array) {
+            boundVertexArray = 0;
+        }
+        UniversalVAO.deleteVertexArrays(array);
     }
     public static void glVertexAttribPointer(int index, int size, int type, boolean normalized, int stride, long pointer) { GL20.glVertexAttribPointer(index, size, type, normalized, stride, pointer); }
     public static void glEnableVertexAttribArray(int index) { GL20.glEnableVertexAttribArray(index); }
@@ -432,7 +455,10 @@ public final class GLStateManager {
 
     public static void glClear(int mask) { GL11.glClear(mask); }
     public static void glClearColor(float red, float green, float blue, float alpha) { GL11.glClearColor(red, green, blue, alpha); }
-    public static void glViewport(int x, int y, int width, int height) { GL11.glViewport(x, y, width, height); }
+    public static void glViewport(int x, int y, int width, int height) {
+        VIEWPORT_STATE.setViewPort(x, y, width, height);
+        GL11.glViewport(x, y, width, height);
+    }
     public static void glPixelStorei(int pname, int param) { GL11.glPixelStorei(pname, param); }
     public static void glTexParameteri(int target, int pname, int param) { GL11.glTexParameteri(target, pname, param); }
     public static void glCopyTexImage2D(int target, int level, int internalFormat, int x, int y, int width, int height, int border) { GL11.glCopyTexImage2D(target, level, internalFormat, x, y, width, height, border); }
@@ -505,6 +531,14 @@ public final class GLStateManager {
     public static org.joml.Vector3d getFogColor() { return new org.joml.Vector3d(0.0D, 0.0D, 0.0D); }
     public static void setLightmapTextureCoords(int target, float x, float y) { GL13.glMultiTexCoord2f(target, x, y); }
     public static void glGetTexImage(int target, int level, int format, int type, IntBuffer pixels) { GL11.glGetTexImage(target, level, format, type, pixels); }
+
+    public static int glGenFramebuffers() {
+        return GL30.glGenFramebuffers();
+    }
+
+    public static ViewportState getViewportState() {
+        return VIEWPORT_STATE;
+    }
 
     private static int trackedTextureUnit() {
         if (activeTextureUnit < 0) {

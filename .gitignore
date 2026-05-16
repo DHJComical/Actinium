@@ -29,3 +29,4 @@ gradle-app.setting
 # IDEA config
 .idea
 
+/.codex-tmp/

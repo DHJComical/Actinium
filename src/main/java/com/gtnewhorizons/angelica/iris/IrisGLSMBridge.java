@@ -5,7 +5,9 @@ import com.gtnewhorizons.angelica.glsm.hooks.DeferredAlphaHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredBlendHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredDepthColorHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gbuffer_overrides.state.StateTracker;
 import net.coderbot.iris.gl.blending.AlphaTestStorage;
 import net.coderbot.iris.gl.blending.BlendModeStorage;
@@ -42,6 +44,8 @@ public final class IrisGLSMBridge {
             return;
         }
         registered = true;
+
+        IrisGlDebug.logDebugInfo("glsm-bridge register defaultTexUnit={} lightmapTexUnit={}", OpenGlHelper.defaultTexUnit, OpenGlHelper.lightmapTexUnit);
 
         IrisSamplers.initRenderer();
 
@@ -156,7 +160,20 @@ public final class IrisGLSMBridge {
                 updatePipeline = true;
             }
 
+            if (event.unit() == IrisSamplers.ALBEDO_TEXTURE_UNIT || event.unit() == IrisSamplers.LIGHTMAP_TEXTURE_UNIT) {
+                IrisGlDebug.logDebugInfo(
+                        "texture-unit-state unit={} target={} enabled={} activeUnit={} albedo={} lightmap={}",
+                        event.unit(),
+                        event.target(),
+                        event.enabled(),
+                        com.gtnewhorizons.angelica.glsm.GLStateManager.getActiveTextureUnit(),
+                        StateTracker.INSTANCE.albedoSampler,
+                        StateTracker.INSTANCE.lightmapSampler
+                );
+            }
+
             if (updatePipeline) {
+                IrisGlDebug.logDebugInfo("pipeline-input-update albedo={} lightmap={}", StateTracker.INSTANCE.albedoSampler, StateTracker.INSTANCE.lightmapSampler);
                 Iris.getPipelineManager().getPipeline().ifPresent(pipeline -> pipeline.setInputs(StateTracker.INSTANCE.getInputs()));
             }
         });

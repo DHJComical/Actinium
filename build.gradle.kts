@@ -66,8 +66,10 @@ configurations {
 
 sourceSets {
     named("main") {
-        java.srcDir("src/lwjglCommon/java")
-        java.srcDir("src/lwjgl3/java")
+        java {
+            srcDir("src/lwjglCommon/java")
+            srcDir("src/lwjgl3/java")
+        }
         resources {
             exclude("mixins.celeritas.json")
         }
