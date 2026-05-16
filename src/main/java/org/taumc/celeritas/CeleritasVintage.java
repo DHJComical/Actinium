@@ -1,6 +1,7 @@
 package org.taumc.celeritas;
 
 import com.mojang.realmsclient.gui.ChatFormatting;
+import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 
 import java.lang.management.ManagementFactory;
 
@@ -46,6 +47,9 @@ public class CeleritasVintage {
     public void onInit(FMLInitializationEvent event) {
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
+        }
+        if (Iris.enabled) {
+            IrisGLSMBridge.register();
         }
         Iris.INSTANCE.fmlInitEvent();
         MinecraftForge.EVENT_BUS.register(Iris.INSTANCE);

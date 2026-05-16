@@ -784,6 +784,14 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	private void matchPass() {
 		if (!isRenderingWorld || isRenderingFullScreenPass || isPostChain || (!isMainBound && !isRenderingShadow)) {
+            IrisGlDebug.logPipelineSkip(
+                "match-pass-skip",
+                getPhase().name(),
+                isRenderingShadow,
+                isMainBound,
+                isRenderingWorld,
+                isRenderingFullScreenPass,
+                isPostChain);
 			return;
 		}
 		
@@ -804,7 +812,14 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	}
 
 	public void beginPass(Pass pass) {
+        WorldRenderingPhase activePhase = getPhase();
+        int previousProgram = getActivePassProgramId();
+        int nextProgram = pass != null && pass.getProgram() != null ? pass.getProgram().getProgramId() : -1;
+
 		if (current == pass) {
+            if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
+                IrisGlDebug.logPassBind("begin-pass-reuse", activePhase.name(), previousProgram, nextProgram);
+            }
 			return;
 		}
 
@@ -819,6 +834,10 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		} else {
 			Program.unbind();
 		}
+
+        if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
+            IrisGlDebug.logPassBind("begin-pass", activePhase.name(), previousProgram, nextProgram);
+        }
 	}
 
 	private Pass createDefaultPass() {
@@ -938,7 +957,10 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			}
 		});
 
-        Pass pass = new Pass(builder.build(), framebufferBeforeTranslucents, framebufferAfterTranslucents, alphaTestOverride,
+        Program builtProgram = builder.build();
+        IrisGlDebug.logProgramSamplerState("create-pass", builtProgram.getProgramId(), availability.toString(), getPhase().name());
+
+        Pass pass = new Pass(builtProgram, framebufferBeforeTranslucents, framebufferAfterTranslucents, alphaTestOverride,
             programDirectives.getBlendModeOverride().orElse(id.getBlendModeOverride()), bufferOverrides, shadow);
 
         this.customUniforms.mapholderToPass(builder, pass);
@@ -1716,6 +1738,15 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	@Override
 	public void setInputs(InputAvailability availability) {
 		this.inputs = availability;
+		IrisGlDebug.logPipelineInputs(
+			"set-inputs",
+			getPhase().name(),
+			availability.toString(),
+			isRenderingShadow,
+			isMainBound,
+			isRenderingFullScreenPass,
+			isPostChain
+		);
 		matchPass();
 	}
 

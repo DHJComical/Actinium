@@ -1,9 +1,11 @@
 package net.coderbot.iris.debug;
 
+import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 import net.coderbot.iris.rendertarget.RenderTarget;
 import net.coderbot.iris.rendertarget.RenderTargets;
+import org.taumc.celeritas.CeleritasVintage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttribute;
@@ -29,11 +31,12 @@ public final class IrisGlDebug {
     private static final Set<String> LOGGED_CELERITAS_STATES = ConcurrentHashMap.newKeySet();
     private static final Set<String> LOGGED_FULLSCREEN_PROGRAMS = ConcurrentHashMap.newKeySet();
     private static final Set<String> LOGGED_FULLSCREEN_STATES = ConcurrentHashMap.newKeySet();
-    private static final Map<String, Integer> FRAMEBUFFER_SAMPLE_COUNTS = new ConcurrentHashMap<>();
-    private static final Map<String, Integer> TEXTURE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
-    private static final Map<String, Integer> MATERIAL_SAMPLE_COUNTS = new ConcurrentHashMap<>();
-    private static final Map<String, Integer> ENTITY_PHASE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
-    private static long lastShadowEntityLogTime;
+	private static final Map<String, Integer> FRAMEBUFFER_SAMPLE_COUNTS = new ConcurrentHashMap<>();
+	private static final Map<String, Integer> TEXTURE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
+	private static final Map<String, Integer> MATERIAL_SAMPLE_COUNTS = new ConcurrentHashMap<>();
+	private static final Map<String, Integer> ENTITY_PHASE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
+	private static final Map<String, Integer> SAMPLER_INIT_COUNTS = new ConcurrentHashMap<>();
+	private static long lastShadowEntityLogTime;
     private static String lastStage = "startup";
     private static String framebufferSamplePhase;
     private static long lastLogTime;
@@ -41,6 +44,116 @@ public final class IrisGlDebug {
 
     private IrisGlDebug() {
     }
+
+    public static boolean isEnabled() {
+        try {
+            return CeleritasVintage.options().debug.enableActiniumGlDebug;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+	public static void logDebugInfo(String message, Object... params) {
+		if (isEnabled()) {
+			LOGGER.info(message, params);
+		}
+	}
+
+	public static void logSamplerInitialization(int program, String mode, String name, int location, int assignedUnit) {
+		if (!isEnabled()) {
+			return;
+		}
+
+		String label = "sampler-init:" + program + ":" + mode + ":" + name + ":" + assignedUnit;
+		int count = SAMPLER_INIT_COUNTS.merge(label, 1, Integer::sum);
+		if (count > 4) {
+			return;
+		}
+
+		logDebugInfo(
+			"sampler-init program={} mode={} name={} count={} location={} unit={}",
+			program,
+			mode,
+			name,
+			count,
+			location,
+			assignedUnit
+		);
+	}
+
+	public static void logSamplerIntercept(int program, String mode, int requestedUnit, boolean override, String... names) {
+		if (!isEnabled()) {
+			return;
+		}
+
+		String joinedNames = String.join(",", names);
+		String label = "sampler-intercept:" + program + ":" + mode + ":" + requestedUnit + ":" + override + ":" + joinedNames;
+		int count = SAMPLER_INIT_COUNTS.merge(label, 1, Integer::sum);
+		if (count > 4) {
+			return;
+		}
+
+		logDebugInfo(
+			"sampler-intercept program={} mode={} requestedUnit={} override={} count={} names=[{}]",
+			program,
+			mode,
+			requestedUnit,
+			override,
+			count,
+			joinedNames
+		);
+	}
+
+	public static void logPipelineInputs(String stage, String phase, String availability, boolean shadow, boolean mainBound, boolean fullscreen, boolean postChain) {
+		if (!isEnabled()) {
+			return;
+		}
+
+		String label = "pipeline-inputs:" + stage + ":" + phase + ":" + availability + ":" + shadow + ":" + mainBound + ":" + fullscreen + ":" + postChain;
+		int count = SAMPLER_INIT_COUNTS.merge(label, 1, Integer::sum);
+		if (count > 8) {
+			return;
+		}
+
+		logDebugInfo(
+			"pipeline-inputs stage={} phase={} availability={} count={} shadow={} mainBound={} fullscreen={} postChain={}",
+			stage,
+			phase,
+			availability,
+			count,
+			shadow,
+			mainBound,
+			fullscreen,
+			postChain
+		);
+	}
+
+	public static void logProgramSamplerState(String stage, int program, String availability, String phase) {
+		if (!isEnabled()) {
+			return;
+		}
+
+		String label = "program-sampler-state:" + stage + ":" + program + ":" + availability + ":" + phase;
+		int count = SAMPLER_INIT_COUNTS.merge(label, 1, Integer::sum);
+		if (count > 4) {
+			return;
+		}
+
+		logDebugInfo(
+			"program-sampler-state stage={} program={} phase={} availability={} count={} values[tex={}, lightmap={}, gaux4={}, shadowtex0={}, shadowtex1={}, shadowcolor0={}]",
+			stage,
+			program,
+			phase,
+			availability,
+			count,
+			getSamplerUniform(program, "tex"),
+			getSamplerUniform(program, "lightmap"),
+			getSamplerUniform(program, "gaux4"),
+			getSamplerUniform(program, "shadowtex0"),
+			getSamplerUniform(program, "shadowtex1"),
+			getSamplerUniform(program, "shadowcolor0")
+		);
+	}
 
     public static void markStage(String stage) {
         lastStage = stage;
@@ -109,6 +222,10 @@ public final class IrisGlDebug {
     }
 
     public static void logCeleritasProgram(String passName, int program, Collection<GlVertexAttribute> attributes) {
+        if (!isEnabled()) {
+            return;
+        }
+
         if (!LOGGED_CELERITAS_PROGRAMS.add(passName + ":" + program)) {
             return;
         }
@@ -117,7 +234,7 @@ public final class IrisGlDebug {
             .map(attribute -> attribute.getName() + "=" + GL20.glGetAttribLocation(program, attribute.getName()))
             .collect(Collectors.joining(", "));
 
-        LOGGER.info(
+        logDebugInfo(
             "celeritas-program pass={} program={} attrs=[{}] uniforms=[tex={}, lightmap={}, colortex0={}, gaux4={}, shadowtex0={}, shadowtex1={}, shadowcolor0={}, iris_ModelViewMatrix={}, iris_ProjectionMatrix={}, iris_TextureMatrix={}, iris_LightmapTextureMatrix={}, iris_NormalMatrix={}, u_RegionOffset={}, frameMod={}, frameCounter={}, cameraPosition={}, previousCameraPosition={}, sunPosition={}, moonPosition={}, viewWidth={}, viewHeight={}, pixelSizeX={}, pixelSizeY={}, worldTime={}, gbufferModelView={}, gbufferProjection={}, gbufferPreviousModelView={}, gbufferPreviousProjection={}]",
             passName,
             program,
@@ -154,6 +271,10 @@ public final class IrisGlDebug {
     }
 
     public static void logCeleritasTerrainState(String passName, int program) {
+        if (!isEnabled()) {
+            return;
+        }
+
         if (!LOGGED_CELERITAS_STATES.add(passName + ":" + program)) {
             return;
         }
@@ -181,7 +302,7 @@ public final class IrisGlDebug {
         String textureMatrix = getMatrixUniform(program, "iris_TextureMatrix");
         String lightmapTextureMatrix = getMatrixUniform(program, "iris_LightmapTextureMatrix");
 
-        LOGGER.info(
+        logDebugInfo(
             "celeritas-state pass={} program={} currentProgram={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} viewport=[{},{},{},{}] activeTex={} samplers[tex={}, lightmap={}, shadow0={}, shadow1={}, shadowColor0={}] textures[0={}, 1={}, 2={}, 3={}] values[frameMod={}, frameCounter={}, viewWidth={}, viewHeight={}, pixelSizeX={}, pixelSizeY={}, alphaTest={}] matrices[tex={}, lightmap={}]",
             passName,
             program,
@@ -220,13 +341,17 @@ public final class IrisGlDebug {
     }
 
     public static void logTerrainMaterialSample(String source, int blockId, int renderType, int lightValue, int localX, int localY, int localZ, float u, float v) {
+        if (!isEnabled()) {
+            return;
+        }
+
         String label = source + ":" + blockId + ":" + renderType;
         int count = MATERIAL_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
         if (count > 8) {
             return;
         }
 
-        LOGGER.info(
+        logDebugInfo(
             "terrain-material source={} count={} blockId={} renderType={} lightValue={} local=[{},{},{}] uv=[{},{}]",
             source,
             count,
@@ -242,6 +367,10 @@ public final class IrisGlDebug {
     }
 
     public static void logShadowEntityState(String stage, double cameraX, double cameraY, double cameraZ, double renderPosX, double renderPosY, double renderPosZ, double viewerPosX, double viewerPosY, double viewerPosZ, int entityCount) {
+        if (!isEnabled()) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
         if (now - lastShadowEntityLogTime < 1000L) {
             return;
@@ -251,7 +380,7 @@ public final class IrisGlDebug {
         VIEWPORT.clear();
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
 
-        LOGGER.info(
+        logDebugInfo(
             "shadow-entity-state stage={} camera=[{},{},{}] renderPos=[{},{},{}] viewerPos=[{},{},{}] entities={} modelviewDepth={} projectionDepth={} fb={} viewport=[{},{},{},{}]",
             stage,
             cameraX,
@@ -275,13 +404,17 @@ public final class IrisGlDebug {
     }
 
     public static void logShadowEntityDraw(String entityType, double x, double y, double z, float yaw, float partialTicks) {
+        if (!isEnabled()) {
+            return;
+        }
+
         String label = entityType + ":" + GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
         if (count > 6) {
             return;
         }
 
-        LOGGER.info(
+        logDebugInfo(
             "shadow-entity-draw entity={} count={} relative=[{},{},{}] yaw={} partialTicks={} program={} fb={} modelview={} projection={}",
             entityType,
             count,
@@ -297,14 +430,77 @@ public final class IrisGlDebug {
         );
     }
 
+    public static void logEntityCullSample(String reason, String entityType, int pass) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "entity-cull:" + reason + ":" + entityType + ":" + pass;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 4) {
+            return;
+        }
+
+        logDebugInfo(
+            "entity-cull reason={} entity={} pass={} count={} program={} fb={} viewport=[{},{},{},{}]",
+            reason,
+            entityType,
+            pass,
+            count,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
+    public static void logEntityLoopSummary(String stage, int pass, int gathered, int rendered, int shadowSkipped, int frustumSkipped, int celeritasSkipped, int blockSkipped, boolean irisEntities, String phase) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "entity-loop:" + stage + ":" + pass + ":" + gathered + ":" + rendered + ":" + shadowSkipped + ":" + frustumSkipped + ":" + celeritasSkipped + ":" + blockSkipped;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 6) {
+            return;
+        }
+
+        logDebugInfo(
+            "entity-loop stage={} pass={} count={} gathered={} rendered={} skipped[shadow={}, frustum={}, celeritas={}, block={}] irisEntities={} phase={} program={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            pass,
+            count,
+            gathered,
+            rendered,
+            shadowSkipped,
+            frustumSkipped,
+            celeritasSkipped,
+            blockSkipped,
+            irisEntities,
+            phase,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
     public static void logEntityPhase(String entityType, String previousPhase, boolean beganEntityPhase, String uniformModelView, String uniformProjection) {
+        if (!isEnabled()) {
+            return;
+        }
+
         String label = entityType + ":" + previousPhase + ":" + beganEntityPhase;
         int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
         if (count > 8) {
             return;
         }
 
-        LOGGER.info(
+        logDebugInfo(
             "entity-phase entity={} count={} previousPhase={} beganEntityPhase={} program={} fb={} viewport=[{},{},{},{}] uniforms[modelView={}, projection={}]",
             entityType,
             count,
@@ -321,15 +517,241 @@ public final class IrisGlDebug {
         );
     }
 
+    public static void logEntityRenderCall(String stage, String entityType, String rendererType, String phase, int entityId) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "entity-render:" + stage + ":" + entityType + ":" + rendererType;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        logDebugInfo(
+            "entity-render stage={} entity={} renderer={} phase={} entityId={} count={} program={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            entityType,
+            rendererType,
+            phase,
+            entityId,
+            count,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
+    public static void logWorldPassState(String stage, String phase, String subject) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "world-pass-state:" + stage + ":" + phase + ":" + subject;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        final var blend = GLStateManager.getBlendState();
+        final var alpha = GLStateManager.getAlphaState();
+        final var depth = GLStateManager.getDepthState();
+        final var alphaTest = GLStateManager.getAlphaTest();
+        final var colorMask = GLStateManager.getColorMask();
+
+        logDebugInfo(
+            "world-pass-state stage={} subject={} phase={} count={} program={} fb={} viewport=[{},{},{},{}] blend[enabled={}, srcRgb={}, dstRgb={}, srcAlpha={}, dstAlpha={}] alphaTest[enabled={}, func={}, ref={}] depth[enabled={}, func={}, mask={}] colorMask=[{},{},{},{}] cullEnabled={}",
+            stage,
+            subject,
+            phase,
+            count,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight(),
+            blend.isEnabled(),
+            blend.getSrcRgb(),
+            blend.getDstRgb(),
+            blend.getSrcAlpha(),
+            blend.getDstAlpha(),
+            alphaTest.isEnabled(),
+            alpha.getFunction(),
+            alpha.getReference(),
+            depth.isEnabled(),
+            depth.getFunc(),
+            GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
+            colorMask.red,
+            colorMask.green,
+            colorMask.blue,
+            colorMask.alpha,
+            GL11.glIsEnabled(GL11.GL_CULL_FACE)
+        );
+    }
+
+    public static void logActiveTextureBindings(String stage, String phase, String subject) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "texture-bindings:" + stage + ":" + phase + ":" + subject;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        int activeTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE) - GL13.GL_TEXTURE0;
+        int texUnit = getSamplerUniform(program, "tex");
+        int lightmapUnit = getSamplerUniform(program, "lightmap");
+
+        logDebugInfo(
+            "texture-bindings stage={} subject={} phase={} count={} program={} activeTex={} samplers[tex={}, lightmap={}] textures[0={}, 1={}, 2={}, 3={}]",
+            stage,
+            subject,
+            phase,
+            count,
+            program,
+            activeTexture,
+            texUnit,
+            lightmapUnit,
+            getBoundTexture2D(0),
+            getBoundTexture2D(1),
+            getBoundTexture2D(2),
+            getBoundTexture2D(3)
+        );
+    }
+
+    public static void logPipelineSkip(String stage, String phase, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "pipeline-skip:" + stage + ":" + phase + ":" + shadow + ":" + mainBound + ":" + renderingWorld + ":" + fullscreen + ":" + postChain;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        logDebugInfo(
+            "pipeline-skip stage={} count={} phase={} shadow={} mainBound={} world={} fullscreen={} postChain={} currentProgram={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            count,
+            phase,
+            shadow,
+            mainBound,
+            renderingWorld,
+            fullscreen,
+            postChain,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
+    public static void logPassBind(String stage, String phase, int previousProgram, int nextProgram) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "pass-bind:" + stage + ":" + phase + ":" + previousProgram + ":" + nextProgram;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        logDebugInfo(
+            "pass-bind stage={} count={} phase={} previousProgram={} nextProgram={} currentProgram={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            count,
+            phase,
+            previousProgram,
+            nextProgram,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
+    public static void logCurrentFramebufferAttachments(String stage, String phase, int maxAttachments) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "fb-attachments:" + stage + ":" + phase;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        StringBuilder attachments = new StringBuilder();
+        for (int i = 0; i < maxAttachments; i++) {
+            int objectType = GL30.glGetFramebufferAttachmentParameteri(
+                GL30.GL_FRAMEBUFFER,
+                GL30.GL_COLOR_ATTACHMENT0 + i,
+                GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE
+            );
+            int objectName = GL30.glGetFramebufferAttachmentParameteri(
+                GL30.GL_FRAMEBUFFER,
+                GL30.GL_COLOR_ATTACHMENT0 + i,
+                GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME
+            );
+            attachments.append(" att").append(i)
+                .append("[type=").append(objectType)
+                .append(", tex=").append(objectName)
+                .append("]");
+        }
+
+        int depthType = GL30.glGetFramebufferAttachmentParameteri(
+            GL30.GL_FRAMEBUFFER,
+            GL30.GL_DEPTH_ATTACHMENT,
+            GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE
+        );
+        int depthName = GL30.glGetFramebufferAttachmentParameteri(
+            GL30.GL_FRAMEBUFFER,
+            GL30.GL_DEPTH_ATTACHMENT,
+            GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME
+        );
+
+        logDebugInfo(
+            "fb-attachments stage={} phase={} count={} fb={} drawBuffer={} readBuffer={}{} depth[type={}, tex={}]",
+            stage,
+            phase,
+            count,
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            GL11.glGetInteger(GL11.GL_DRAW_BUFFER),
+            GL11.glGetInteger(GL11.GL_READ_BUFFER),
+            attachments,
+            depthType,
+            depthName
+        );
+    }
+
     public static void logPipelineMatch(String stage, String phase, String condition, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain, int program) {
+        if (!isEnabled()) {
+            return;
+        }
+
         String label = stage + ":" + phase + ":" + condition + ":" + shadow + ":" + mainBound + ":" + program;
         int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
         if (count > 8) {
             return;
         }
 
-        LOGGER.info(
-            "pipeline-match stage={} count={} phase={} condition={} shadow={} mainBound={} world={} fullscreen={} postChain={} program={} currentProgram={} fb={} viewport=[{},{},{},{}]",
+        final var blend = GLStateManager.getBlendState();
+
+        logDebugInfo(
+            "pipeline-match stage={} count={} phase={} condition={} shadow={} mainBound={} world={} fullscreen={} postChain={} program={} currentProgram={} fb={} viewport=[{},{},{},{}] blendEnabled={} blend=[{},{},{},{}]",
             stage,
             count,
             phase,
@@ -345,7 +767,12 @@ public final class IrisGlDebug {
             currentViewportX(),
             currentViewportY(),
             currentViewportWidth(),
-            currentViewportHeight()
+            currentViewportHeight(),
+            GLStateManager.getBlendMode().isEnabled(),
+            blend.getSrcRgb(),
+            blend.getDstRgb(),
+            blend.getSrcAlpha(),
+            blend.getDstAlpha()
         );
     }
 
@@ -368,11 +795,15 @@ public final class IrisGlDebug {
     }
 
     public static void logFullscreenProgram(String stageName, String sourceName, int program, int[] drawBuffers) {
+        if (!isEnabled()) {
+            return;
+        }
+
         if (!LOGGED_FULLSCREEN_PROGRAMS.add(stageName + ":" + sourceName + ":" + program)) {
             return;
         }
 
-        LOGGER.info(
+        logDebugInfo(
             "fullscreen-program stage={} source={} program={} drawBuffers={} uniforms=[colortex1={}, colortex3={}, depthtex1={}, frameMod={}, cameraPosition={}, previousCameraPosition={}, gbufferProjection={}, gbufferProjectionInverse={}, gbufferModelViewInverse={}, gbufferPreviousModelView={}, gbufferPreviousProjection={}, pixelSizeX={}, pixelSizeY={}]",
             stageName,
             sourceName,
@@ -395,6 +826,10 @@ public final class IrisGlDebug {
     }
 
     public static void logFullscreenPassState(String stageName, String sourceName, int program, int[] drawBuffers, java.util.Set<Integer> readsFromAlt, RenderTargets renderTargets) {
+        if (!isEnabled()) {
+            return;
+        }
+
         if (!LOGGED_FULLSCREEN_STATES.add(stageName + ":" + sourceName + ":" + program)) {
             return;
         }
@@ -406,7 +841,7 @@ public final class IrisGlDebug {
         int historyRead = history == null ? -1 : (readsFromAlt.contains(3) ? history.getAltTexture() : history.getMainTexture());
         int historyWrite = history == null ? -1 : (readsFromAlt.contains(3) ? history.getMainTexture() : history.getAltTexture());
 
-        LOGGER.info(
+        logDebugInfo(
             "fullscreen-state stage={} source={} program={} currentProgram={} drawBuffers={} readsFromAlt={} fb={} drawBuffer={} viewport=[{},{},{},{}] colortex3[main={}, alt={}, sampled={}, written={}] samplers[colortex1={}, colortex3={}, depthtex1={}] values[frameMod={}, pixelSizeX={}, pixelSizeY={}]",
             stageName,
             sourceName,
@@ -434,6 +869,10 @@ public final class IrisGlDebug {
     }
 
     public static void logFullscreenSamplerSamples(String stageName, String sourceName, int program) {
+        if (!isEnabled()) {
+            return;
+        }
+
         if (framebufferSamplePhase == null) {
             return;
         }
@@ -467,7 +906,7 @@ public final class IrisGlDebug {
         appendSamplerBinding(samples, program, "depthtex1");
         appendSamplerBinding(samples, program, "depthtex2");
 
-        LOGGER.info(
+        logDebugInfo(
             "fullscreen-sampler-sample label={} count={} fb={} readFb={} drawFb={} viewport=[{},{},{},{}]{}",
             label,
             count,
@@ -488,6 +927,10 @@ public final class IrisGlDebug {
     }
 
     public static void logCurrentFramebufferSamples(String label, int localColorAttachments) {
+        if (!isEnabled()) {
+            return;
+        }
+
         if (framebufferSamplePhase == null) {
             return;
         }
@@ -523,7 +966,7 @@ public final class IrisGlDebug {
             samples.append("]");
         }
 
-        LOGGER.info(
+        logDebugInfo(
             "framebuffer-sample label={} count={} fb={} readFb={} drawFb={} viewport=[{},{},{},{}]{}",
             phasedLabel,
             count,

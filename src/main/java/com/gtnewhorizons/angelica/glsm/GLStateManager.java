@@ -1,5 +1,6 @@
 package com.gtnewhorizons.angelica.glsm;
 
+import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.states.AlphaState;
 import com.gtnewhorizons.angelica.glsm.states.BlendState;
 import com.gtnewhorizons.angelica.glsm.states.ColorMask;
@@ -125,18 +126,33 @@ public final class GLStateManager {
     }
 
     public static void enableBlend() {
+        if (GLSMHooks.blendHandler != null && GLSMHooks.blendHandler.isBlendLocked()) {
+            GLSMHooks.blendHandler.deferBlendModeToggle(true);
+            return;
+        }
         GL11.glEnable(GL11.GL_BLEND);
         BLEND_STATE.setEnabled(true);
+        GLSMHooks.BLEND_FUNC_CHANGE.fire(new GLSMHooks.BlendFuncChangeEvent(true, BLEND_STATE.getSrcRgb(), BLEND_STATE.getDstRgb(), BLEND_STATE.getSrcAlpha(), BLEND_STATE.getDstAlpha()));
     }
 
     public static void disableBlend() {
+        if (GLSMHooks.blendHandler != null && GLSMHooks.blendHandler.isBlendLocked()) {
+            GLSMHooks.blendHandler.deferBlendModeToggle(false);
+            return;
+        }
         GL11.glDisable(GL11.GL_BLEND);
         BLEND_STATE.setEnabled(false);
+        GLSMHooks.BLEND_FUNC_CHANGE.fire(new GLSMHooks.BlendFuncChangeEvent(false, BLEND_STATE.getSrcRgb(), BLEND_STATE.getDstRgb(), BLEND_STATE.getSrcAlpha(), BLEND_STATE.getDstAlpha()));
     }
 
     public static void tryBlendFuncSeparate(int srcRgb, int dstRgb, int srcAlpha, int dstAlpha) {
+        if (GLSMHooks.blendHandler != null && GLSMHooks.blendHandler.isBlendLocked()) {
+            GLSMHooks.blendHandler.deferBlendFunc(srcRgb, dstRgb, srcAlpha, dstAlpha);
+            return;
+        }
         GL14.glBlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
         BLEND_STATE.setAll(srcRgb, dstRgb, srcAlpha, dstAlpha);
+        GLSMHooks.BLEND_FUNC_CHANGE.fire(new GLSMHooks.BlendFuncChangeEvent(BLEND_STATE.isEnabled(), srcRgb, dstRgb, srcAlpha, dstAlpha));
     }
 
     public static void enableBufferBlend(int index) { GL11.glEnable(GL11.GL_BLEND); }
@@ -163,6 +179,7 @@ public final class GLStateManager {
             boundTexture2D[trackedTextureUnit()] = texture;
         }
         GL11.glBindTexture(target, texture);
+        GLSMHooks.TEXTURE_BIND.fire(new GLSMHooks.TextureBindEvent(trackedTextureUnit(), target, texture));
     }
 
     public static int getBoundTextureForServerState() {
@@ -187,11 +204,14 @@ public final class GLStateManager {
     public static void glDeleteTextures(int texture) {
         clearDeletedTexture(texture);
         GL11.glDeleteTextures(texture);
+        GLSMHooks.TEXTURE_DELETE.fire(new GLSMHooks.TextureDeleteEvent(texture));
     }
 
     public static void glDeleteTextures(IntBuffer textures) {
         for (int i = textures.position(); i < textures.limit(); i++) {
-            clearDeletedTexture(textures.get(i));
+            int texture = textures.get(i);
+            clearDeletedTexture(texture);
+            GLSMHooks.TEXTURE_DELETE.fire(new GLSMHooks.TextureDeleteEvent(texture));
         }
         GL11.glDeleteTextures(textures);
     }
@@ -201,8 +221,10 @@ public final class GLStateManager {
     }
 
     public static void glUseProgram(int program) {
+        int previousProgram = currentProgram;
         currentProgram = program;
         GL20.glUseProgram(program);
+        GLSMHooks.PROGRAM_CHANGE.fire(new GLSMHooks.ProgramChangeEvent(previousProgram, program));
     }
 
     public static int glCreateProgram() { return GL20.glCreateProgram(); }
@@ -329,21 +351,31 @@ public final class GLStateManager {
 
     public static void glEnable(int cap) {
         if (cap == GL11.GL_BLEND) {
-            BLEND_STATE.setEnabled(true);
+            enableBlend();
+            return;
         } else if (cap == GL11.GL_DEPTH_TEST) {
             DEPTH_STATE.setEnabled(true);
         } else if (cap == GL11.GL_ALPHA_TEST) {
-            ALPHA_TEST.setEnabled(true);
+            enableAlphaTest();
+            return;
+        } else if (cap == GL11.GL_TEXTURE_2D) {
+            textures.getTextureUnitStates(trackedTextureUnit()).setEnabled(true);
+            GLSMHooks.TEXTURE_UNIT_STATE.fire(new GLSMHooks.TextureUnitStateEvent(trackedTextureUnit(), cap, true));
         }
         GL11.glEnable(cap);
     }
     public static void glDisable(int cap) {
         if (cap == GL11.GL_BLEND) {
-            BLEND_STATE.setEnabled(false);
+            disableBlend();
+            return;
         } else if (cap == GL11.GL_DEPTH_TEST) {
             DEPTH_STATE.setEnabled(false);
         } else if (cap == GL11.GL_ALPHA_TEST) {
-            ALPHA_TEST.setEnabled(false);
+            disableAlphaTest();
+            return;
+        } else if (cap == GL11.GL_TEXTURE_2D) {
+            textures.getTextureUnitStates(trackedTextureUnit()).setEnabled(false);
+            GLSMHooks.TEXTURE_UNIT_STATE.fire(new GLSMHooks.TextureUnitStateEvent(trackedTextureUnit(), cap, false));
         }
         GL11.glDisable(cap);
     }
@@ -351,13 +383,52 @@ public final class GLStateManager {
     public static void disableDepthTest() { GL11.glDisable(GL11.GL_DEPTH_TEST); DEPTH_STATE.setEnabled(false); }
     public static void enableCull() { GL11.glEnable(GL11.GL_CULL_FACE); }
     public static void disableCull() { GL11.glDisable(GL11.GL_CULL_FACE); }
-    public static void enableTexture() { GL11.glEnable(GL11.GL_TEXTURE_2D); }
-    public static void enableAlphaTest() { GL11.glEnable(GL11.GL_ALPHA_TEST); ALPHA_TEST.setEnabled(true); }
-    public static void disableAlphaTest() { GL11.glDisable(GL11.GL_ALPHA_TEST); ALPHA_TEST.setEnabled(false); }
-    public static void glAlphaFunc(int function, float reference) { GL11.glAlphaFunc(function, reference); ALPHA_STATE.setFunction(function); ALPHA_STATE.setReference(reference); }
+    public static void enableTexture() {
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        textures.getTextureUnitStates(trackedTextureUnit()).setEnabled(true);
+        GLSMHooks.TEXTURE_UNIT_STATE.fire(new GLSMHooks.TextureUnitStateEvent(trackedTextureUnit(), GL11.GL_TEXTURE_2D, true));
+    }
+    public static void enableAlphaTest() {
+        if (GLSMHooks.alphaHandler != null && GLSMHooks.alphaHandler.isAlphaTestLocked()) {
+            GLSMHooks.alphaHandler.deferAlphaTestToggle(true);
+            return;
+        }
+        GL11.glEnable(GL11.GL_ALPHA_TEST);
+        ALPHA_TEST.setEnabled(true);
+    }
+    public static void disableAlphaTest() {
+        if (GLSMHooks.alphaHandler != null && GLSMHooks.alphaHandler.isAlphaTestLocked()) {
+            GLSMHooks.alphaHandler.deferAlphaTestToggle(false);
+            return;
+        }
+        GL11.glDisable(GL11.GL_ALPHA_TEST);
+        ALPHA_TEST.setEnabled(false);
+    }
+    public static void glAlphaFunc(int function, float reference) {
+        if (GLSMHooks.alphaHandler != null && GLSMHooks.alphaHandler.isAlphaTestLocked()) {
+            GLSMHooks.alphaHandler.deferAlphaFunc(function, reference);
+            return;
+        }
+        GL11.glAlphaFunc(function, reference);
+        ALPHA_STATE.setFunction(function);
+        ALPHA_STATE.setReference(reference);
+    }
     public static void glDepthFunc(int function) { GL11.glDepthFunc(function); DEPTH_STATE.setFunc(function); }
-    public static void glDepthMask(boolean flag) { GL11.glDepthMask(flag); }
-    public static void glColorMask(boolean red, boolean green, boolean blue, boolean alpha) { GL11.glColorMask(red, green, blue, alpha); COLOR_MASK.setAll(red, green, blue, alpha); }
+    public static void glDepthMask(boolean flag) {
+        if (GLSMHooks.depthColorHandler != null && GLSMHooks.depthColorHandler.isDepthColorLocked()) {
+            GLSMHooks.depthColorHandler.deferDepthEnable(flag);
+            return;
+        }
+        GL11.glDepthMask(flag);
+    }
+    public static void glColorMask(boolean red, boolean green, boolean blue, boolean alpha) {
+        if (GLSMHooks.depthColorHandler != null && GLSMHooks.depthColorHandler.isDepthColorLocked()) {
+            GLSMHooks.depthColorHandler.deferColorMask(red, green, blue, alpha);
+            return;
+        }
+        GL11.glColorMask(red, green, blue, alpha);
+        COLOR_MASK.setAll(red, green, blue, alpha);
+    }
 
     public static void glClear(int mask) { GL11.glClear(mask); }
     public static void glClearColor(float red, float green, float blue, float alpha) { GL11.glClearColor(red, green, blue, alpha); }

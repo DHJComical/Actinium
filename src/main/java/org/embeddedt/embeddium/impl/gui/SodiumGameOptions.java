@@ -31,6 +31,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
     public final AdvancedSettings advanced = new AdvancedSettings();
     public final PerformanceSettings performance = new PerformanceSettings();
     public final NotificationSettings notifications = new NotificationSettings();
+    public final DebugSettings debug = new DebugSettings();
     public final WindowSettings window = new WindowSettings();
 
     private boolean readOnly;
@@ -107,6 +108,10 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
 
         public boolean hasClearedDonationButton = false;
         public boolean hasSeenDonationPrompt = false;
+    }
+
+    public static class DebugSettings {
+        public boolean enableActiniumGlDebug = false;
     }
 
     public static class WindowSettings {

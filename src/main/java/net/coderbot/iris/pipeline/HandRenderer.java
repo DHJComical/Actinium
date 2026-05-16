@@ -122,11 +122,24 @@ public class HandRenderer {
         GbufferPrograms.setBlockEntityDefaults();
 
         renderingSolid = true;
-
-        mc.entityRenderer.enableLightmap();
-        mc.entityRenderer.itemRenderer.renderItemInFirstPerson(tickDelta);
-        IrisGlDebug.check("hand-solid:render-item");
-        mc.entityRenderer.disableLightmap();
+        IrisGlDebug.logWorldPassState("before-render-item", WorldRenderingPhase.HAND_SOLID.name(), "hand-solid");
+        IrisGlDebug.logActiveTextureBindings("before-render-item", WorldRenderingPhase.HAND_SOLID.name(), "hand-solid");
+        IrisGlDebug.logCurrentFramebufferAttachments("before-render-item", WorldRenderingPhase.HAND_SOLID.name(), 2);
+        IrisGlDebug.beginFramebufferSamplePhase("hand-solid-draw");
+        try {
+            IrisGlDebug.logCurrentFramebufferSamples("before-render-item", 1);
+            mc.entityRenderer.enableLightmap();
+            IrisGlDebug.logActiveTextureBindings("after-enable-lightmap", WorldRenderingPhase.HAND_SOLID.name(), "hand-solid");
+            mc.entityRenderer.itemRenderer.renderItemInFirstPerson(tickDelta);
+            IrisGlDebug.check("hand-solid:render-item");
+            IrisGlDebug.logCurrentFramebufferSamples("after-render-item", 1);
+            IrisGlDebug.logWorldPassState("after-render-item", WorldRenderingPhase.HAND_SOLID.name(), "hand-solid");
+            IrisGlDebug.logActiveTextureBindings("after-render-item", WorldRenderingPhase.HAND_SOLID.name(), "hand-solid");
+            IrisGlDebug.logCurrentFramebufferAttachments("after-render-item", WorldRenderingPhase.HAND_SOLID.name(), 2);
+        } finally {
+            IrisGlDebug.endFramebufferSamplePhase();
+            mc.entityRenderer.disableLightmap();
+        }
 
         GLStateManager.defaultBlendFunc();
         GLStateManager.glDepthMask(false);
@@ -165,10 +178,24 @@ public class HandRenderer {
 
         GbufferPrograms.setBlockEntityDefaults();
 
-        mc.entityRenderer.enableLightmap();
-        mc.entityRenderer.itemRenderer.renderItemInFirstPerson(tickDelta);
-        IrisGlDebug.check("hand-translucent:render-item");
-        mc.entityRenderer.disableLightmap();
+        IrisGlDebug.logWorldPassState("before-render-item", WorldRenderingPhase.HAND_TRANSLUCENT.name(), "hand-translucent");
+        IrisGlDebug.logActiveTextureBindings("before-render-item", WorldRenderingPhase.HAND_TRANSLUCENT.name(), "hand-translucent");
+        IrisGlDebug.logCurrentFramebufferAttachments("before-render-item", WorldRenderingPhase.HAND_TRANSLUCENT.name(), 2);
+        IrisGlDebug.beginFramebufferSamplePhase("hand-translucent-draw");
+        try {
+            IrisGlDebug.logCurrentFramebufferSamples("before-render-item", 1);
+            mc.entityRenderer.enableLightmap();
+            IrisGlDebug.logActiveTextureBindings("after-enable-lightmap", WorldRenderingPhase.HAND_TRANSLUCENT.name(), "hand-translucent");
+            mc.entityRenderer.itemRenderer.renderItemInFirstPerson(tickDelta);
+            IrisGlDebug.check("hand-translucent:render-item");
+            IrisGlDebug.logCurrentFramebufferSamples("after-render-item", 1);
+            IrisGlDebug.logWorldPassState("after-render-item", WorldRenderingPhase.HAND_TRANSLUCENT.name(), "hand-translucent");
+            IrisGlDebug.logActiveTextureBindings("after-render-item", WorldRenderingPhase.HAND_TRANSLUCENT.name(), "hand-translucent");
+            IrisGlDebug.logCurrentFramebufferAttachments("after-render-item", WorldRenderingPhase.HAND_TRANSLUCENT.name(), 2);
+        } finally {
+            IrisGlDebug.endFramebufferSamplePhase();
+            mc.entityRenderer.disableLightmap();
+        }
 
         GLStateManager.glPopMatrix();
 

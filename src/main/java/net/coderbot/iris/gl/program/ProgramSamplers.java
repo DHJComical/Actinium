@@ -12,6 +12,7 @@ import net.coderbot.iris.gl.sampler.SamplerLimits;
 import net.coderbot.iris.gl.state.ValueUpdateNotifier;
 import net.coderbot.iris.gl.texture.TextureAccess;
 import net.coderbot.iris.gl.texture.TextureType;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.shaderpack.PackRenderTargetDirectives;
 import org.lwjgl.opengl.GL13;
 
@@ -139,6 +140,7 @@ public class ProgramSamplers {
 				// Set up this sampler uniform to use this particular texture unit.
 				//System.out.println("Binding external sampler " + name + " to texture unit " + textureUnit);
 				calls.add(new GlUniform1iCall(location, textureUnit));
+				IrisGlDebug.logSamplerInitialization(program, "external", name, location, textureUnit);
 			}
 		}
 
@@ -188,6 +190,7 @@ public class ProgramSamplers {
 
 				// Set up this sampler uniform to use this particular texture unit.
 				calls.add(new GlUniform1iCall(location, nextUnit));
+				IrisGlDebug.logSamplerInitialization(program, used ? "dynamic-shared" : "dynamic", name, location, nextUnit);
 
 				// And mark this texture unit as used.
 				used = true;
@@ -246,9 +249,20 @@ public class ProgramSamplers {
 			return existing;
 		}
 
+		private boolean hasOverride(String... names) {
+			for (String name : names) {
+				if (customTextureIds.containsKey(name) && !deactivatedOverrides.contains(name)) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		@Override
 		public void addExternalSampler(int textureUnit, String... names) {
 			IntSupplier override = getOverride(null, names);
+			IrisGlDebug.logSamplerIntercept(getProgramId(), "external", textureUnit, hasOverride(names), names);
 
 			if (override != null) {
 				if (textureUnit == 0) {
@@ -269,19 +283,29 @@ public class ProgramSamplers {
 		@Override
 		public boolean addDefaultSampler(TextureType type, IntSupplier texture, ValueUpdateNotifier notifier, GlSampler sampler, String... names) {
 			texture = getOverride(texture, names);
+			IrisGlDebug.logSamplerIntercept(getProgramId(), "default", 0, hasOverride(names), names);
 			return samplerHolder.addDefaultSampler(type, texture, notifier, sampler, names);
 		}
 
 		@Override
 		public boolean addDynamicSampler(TextureType type, IntSupplier texture, GlSampler sampler, String... names) {
 			texture = getOverride(texture, names);
+			IrisGlDebug.logSamplerIntercept(getProgramId(), "dynamic", -1, hasOverride(names), names);
 			return samplerHolder.addDynamicSampler(type, texture, sampler, names);
 		}
 
 		@Override
 		public boolean addDynamicSampler(TextureType type, IntSupplier texture, ValueUpdateNotifier notifier, GlSampler sampler, String... names) {
 			texture = getOverride(texture, names);
+			IrisGlDebug.logSamplerIntercept(getProgramId(), "dynamic-notified", -1, hasOverride(names), names);
 			return samplerHolder.addDynamicSampler(type, texture, notifier, sampler, names);
+		}
+
+		private int getProgramId() {
+			if (samplerHolder instanceof Builder builder) {
+				return builder.program;
+			}
+			return -1;
 		}
 	}
 }

@@ -48,7 +48,35 @@ public class RenderManagerIrisMixin {
             if (previousPhase == WorldRenderingPhase.NONE && beganEntityPhase) {
                 IrisGlDebug.logShadowEntityDraw(entity.getClass().getName(), x, y, z, yaw, partialTicks);
             }
+            IrisGlDebug.logEntityRenderCall(
+                    "before-do-render",
+                    entity.getClass().getName(),
+                    render.getClass().getName(),
+                    GbufferPrograms.getCurrentPhase().name(),
+                    CapturedRenderingState.INSTANCE.getCurrentRenderedEntity());
+            IrisGlDebug.logWorldPassState(
+                    "before-do-render",
+                    GbufferPrograms.getCurrentPhase().name(),
+                    entity.getClass().getName());
+            IrisGlDebug.logCurrentFramebufferAttachments(
+                    "before-do-render",
+                    GbufferPrograms.getCurrentPhase().name(),
+                    2);
             render.doRender(entity, x, y, z, yaw, partialTicks);
+            IrisGlDebug.logEntityRenderCall(
+                    "after-do-render",
+                    entity.getClass().getName(),
+                    render.getClass().getName(),
+                    GbufferPrograms.getCurrentPhase().name(),
+                    CapturedRenderingState.INSTANCE.getCurrentRenderedEntity());
+            IrisGlDebug.logWorldPassState(
+                    "after-do-render",
+                    GbufferPrograms.getCurrentPhase().name(),
+                    entity.getClass().getName());
+            IrisGlDebug.logCurrentFramebufferAttachments(
+                    "after-do-render",
+                    GbufferPrograms.getCurrentPhase().name(),
+                    2);
         } finally {
             if (beganEntityPhase) {
                 GbufferPrograms.endEntities();

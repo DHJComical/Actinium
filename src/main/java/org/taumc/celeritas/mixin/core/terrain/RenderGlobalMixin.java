@@ -5,6 +5,7 @@ import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.dhj.actinium.shadows.ShadowRenderingState;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.HandRenderer;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
@@ -296,8 +297,15 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         }
         EntityPlayerSP player = this.mc.player;
         BlockPos.MutableBlockPos entityBlockPos = new BlockPos.MutableBlockPos();
+        CeleritasWorldRenderer worldRenderer = CeleritasWorldRenderer.instance();
         // Apply entity distance scaling
         Entity.setRenderDistanceWeight(MathHelper.clamp((double)this.mc.gameSettings.renderDistanceChunks / 8.0D, 1.0D, 2.5D) * 1);
+        int gathered = celeritas$collectedEntities[pass].size();
+        int shadowSkipped = 0;
+        int frustumSkipped = 0;
+        int celeritasSkipped = 0;
+        int blockSkipped = 0;
+        int rendered = 0;
 
         boolean irisEntities = Iris.enabled && Iris.getPipelineManager().getPipelineNullable() != null;
         if (irisEntities) {
@@ -306,16 +314,22 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         try {
             for(Entity entity : celeritas$collectedEntities[pass]) {
                 if (!this.actinium$shouldRenderShadowEntity(entity, renderViewEntity)) {
+                    shadowSkipped++;
+                    IrisGlDebug.logEntityCullSample("shadow", entity.getClass().getName(), pass);
                     continue;
                 }
 
                 // Do regular vanilla checks for visibility
                 if(!this.renderManager.shouldRender(entity, camera, renderViewX, renderViewY, renderViewZ) && !entity.isRidingOrBeingRiddenBy(player)) {
+                    frustumSkipped++;
+                    IrisGlDebug.logEntityCullSample("frustum", entity.getClass().getName(), pass);
                     continue;
                 }
 
                 // Check if any corners of the bounding box are in a visible subchunk
-                if(!CeleritasWorldRenderer.instance().isEntityVisible(entity)) {
+                if(!worldRenderer.isEntityVisible(entity)) {
+                    celeritasSkipped++;
+                    IrisGlDebug.logEntityCullSample("celeritas", entity.getClass().getName(), pass);
                     continue;
                 }
 
@@ -325,10 +339,26 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
                         && (entity.posY < 0.0D || entity.posY >= 256.0D || this.world.isBlockLoaded(entityBlockPos.setPos(entity))))
                 {
                     ++this.countEntitiesRendered;
+                    rendered++;
                     if (irisEntities) {
                         CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
+                        IrisGlDebug.logWorldPassState("before-render-entity-static", GbufferPrograms.getCurrentPhase().name(), entity.getClass().getName());
+                        IrisGlDebug.logActiveTextureBindings("before-render-entity-static", GbufferPrograms.getCurrentPhase().name(), entity.getClass().getName());
+                        IrisGlDebug.logCurrentFramebufferAttachments("before-render-entity-static", GbufferPrograms.getCurrentPhase().name(), 2);
+                        IrisGlDebug.beginFramebufferSamplePhase("world-entity-static");
+                        IrisGlDebug.logCurrentFramebufferSamples("before-render-entity-static", 1);
                     }
-                    this.renderManager.renderEntityStatic(entity, partialTicks, false);
+                    try {
+                        this.renderManager.renderEntityStatic(entity, partialTicks, false);
+                    } finally {
+                        if (irisEntities) {
+                            IrisGlDebug.logCurrentFramebufferSamples("after-render-entity-static", 1);
+                            IrisGlDebug.endFramebufferSamplePhase();
+                            IrisGlDebug.logWorldPassState("after-render-entity-static", GbufferPrograms.getCurrentPhase().name(), entity.getClass().getName());
+                            IrisGlDebug.logActiveTextureBindings("after-render-entity-static", GbufferPrograms.getCurrentPhase().name(), entity.getClass().getName());
+                            IrisGlDebug.logCurrentFramebufferAttachments("after-render-entity-static", GbufferPrograms.getCurrentPhase().name(), 2);
+                        }
+                    }
 
                     if (this.isOutlineActive(entity, renderViewEntity, camera))
                     {
@@ -338,13 +368,28 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
                     if (this.renderManager.isRenderMultipass(entity)) {
                         multipassEntityList.add(entity);
                     }
+                } else {
+                    blockSkipped++;
+                    IrisGlDebug.logEntityCullSample("block", entity.getClass().getName(), pass);
                 }
             }
         } finally {
+            WorldRenderingPhase phaseBeforeEnd = irisEntities ? GbufferPrograms.getCurrentPhase() : WorldRenderingPhase.NONE;
             if (irisEntities) {
                 CapturedRenderingState.INSTANCE.setCurrentEntity(-1);
                 GbufferPrograms.endEntities();
             }
+            IrisGlDebug.logEntityLoopSummary(
+                    "render-global",
+                    pass,
+                    gathered,
+                    rendered,
+                    shadowSkipped,
+                    frustumSkipped,
+                    celeritasSkipped,
+                    blockSkipped,
+                    irisEntities,
+                    phaseBeforeEnd.name());
         }
     }
 
