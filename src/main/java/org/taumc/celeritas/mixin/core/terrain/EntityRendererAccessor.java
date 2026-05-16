@@ -21,6 +21,9 @@ public interface EntityRendererAccessor {
     @Accessor("lightmapTexture")
     DynamicTexture getLightmapTexture();
 
+    @Accessor("lightmapColors")
+    int[] getLightmapColors();
+
     @Invoker("getNightVisionBrightness")
     float invokeGetNightVisionBrightness(EntityLivingBase entityLivingBase, float partialTicks);
 }

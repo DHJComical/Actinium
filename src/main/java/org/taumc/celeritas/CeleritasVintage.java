@@ -37,8 +37,6 @@ public class CeleritasVintage {
     @EventHandler
     public void onConstruct(FMLConstructionEvent event) {
         GLRenderDevice.VANILLA_STATE_RESETTER = () -> OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0);
-        Iris.INSTANCE.onEarlyInitialize();
-        Iris.onRenderSystemInit();
         VERSION = Loader.instance().getIndexedModList().get(MODID).getVersion();
         MinecraftForge.EVENT_BUS.register(this);
     }

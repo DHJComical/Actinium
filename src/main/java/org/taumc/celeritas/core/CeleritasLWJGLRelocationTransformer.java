@@ -7,8 +7,6 @@ import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.Remapper;
 import org.taumc.celeritas.mixin.CeleritasVintageMixinPlugin;
 
-import java.util.regex.Pattern;
-
 public class CeleritasLWJGLRelocationTransformer implements IClassTransformer {
     private static final Remapper LWJGL_REMAPPER = new LwjglRemapper();
     @Override
@@ -29,14 +27,9 @@ public class CeleritasLWJGLRelocationTransformer implements IClassTransformer {
     }
 
     private static class LwjglRemapper extends Remapper {
-        private static final Pattern LWJGL3 = Pattern.compile("^org/lwjgl/");
         @Override
         public String map(String internalName) {
-            if(internalName.startsWith("org/lwjgl/")) {
-                return LWJGL3.matcher(internalName).replaceFirst("org/lwjgl3/");
-            } else {
-                return internalName;
-            }
+            return internalName;
         }
     }
 }

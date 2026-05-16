@@ -5,7 +5,6 @@ import org.jetbrains.annotations.Nullable;
 import zone.rong.mixinbooter.IEarlyMixinLoader;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -14,7 +13,11 @@ import java.util.Map;
 public class CeleritasLoadingPlugin implements IFMLLoadingPlugin, IEarlyMixinLoader {
     @Override
     public @Nullable String[] getASMTransformerClass() {
-        return new String[0];
+        return new String[] {
+            "com.gtnewhorizons.angelica.loading.fml.transformers.EarlyRedirectorTransformer",
+            "com.gtnewhorizons.angelica.loading.fml.transformers.AngelicaRedirectorTransformer",
+            "org.taumc.celeritas.core.CeleritasLWJGLRelocationTransformer"
+        };
     }
 
     @Override

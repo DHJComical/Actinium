@@ -69,8 +69,12 @@ sourceSets {
         java {
             srcDir("src/lwjglCommon/java")
             srcDir("src/lwjgl3/java")
+            srcDir("glsm/src/main/java")
+            srcDir("GTNHLib/src/main/java")
         }
         resources {
+            srcDir("glsm/src/main/resources")
+            srcDir("src/lwjgl3/resources")
             exclude("mixins.celeritas.json")
         }
     }

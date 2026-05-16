@@ -27,3 +27,6 @@ plugins {
 }
 
 rootProject.name = "Actinium"
+
+include("glsm")
+include("GTNHLib")

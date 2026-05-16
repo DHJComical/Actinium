@@ -683,6 +683,104 @@ public final class IrisGlDebug {
         );
     }
 
+    public static void logPhaseChange(String stage, String previousPhase, String nextPhase, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain, String inputs) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "phase-change:" + stage + ":" + previousPhase + ":" + nextPhase + ":" + shadow + ":" + mainBound + ":" + fullscreen + ":" + postChain + ":" + inputs;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        logDebugInfo(
+            "phase-change stage={} count={} previousPhase={} nextPhase={} inputs={} shadow={} mainBound={} world={} fullscreen={} postChain={} currentProgram={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            count,
+            previousPhase,
+            nextPhase,
+            inputs,
+            shadow,
+            mainBound,
+            renderingWorld,
+            fullscreen,
+            postChain,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
+    public static void logProgramOverrideDecision(String stage, String phase, int oldProgram, int newProgram, int activePassProgram, boolean shouldOverrideShaders, boolean renderingLevel, boolean ownedProgram, boolean unlockedDepthColor, boolean invokedOverride) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "program-override:" + stage + ":" + phase + ":" + oldProgram + ":" + newProgram + ":" + activePassProgram + ":" + shouldOverrideShaders + ":" + renderingLevel + ":" + ownedProgram + ":" + unlockedDepthColor + ":" + invokedOverride;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 12) {
+            return;
+        }
+
+        logDebugInfo(
+            "program-override stage={} count={} phase={} oldProgram={} newProgram={} activePassProgram={} shouldOverride={} renderingLevel={} ownedProgram={} unlockedDepthColor={} invokedOverride={} currentProgram={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            count,
+            phase,
+            oldProgram,
+            newProgram,
+            activePassProgram,
+            shouldOverrideShaders,
+            renderingLevel,
+            ownedProgram,
+            unlockedDepthColor,
+            invokedOverride,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
+    public static void logModProgramOverride(String stage, String phase, String inputs, boolean shadow, boolean mainBound, boolean renderingWorld, boolean fullscreen, boolean postChain, int previousProgram, int activePassProgram) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        String label = "mod-program-override:" + stage + ":" + phase + ":" + previousProgram + ":" + activePassProgram + ":" + shadow + ":" + mainBound + ":" + fullscreen + ":" + postChain + ":" + inputs;
+        int count = ENTITY_PHASE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 8) {
+            return;
+        }
+
+        logDebugInfo(
+            "mod-program-override stage={} count={} phase={} inputs={} previousProgram={} activePassProgram={} shadow={} mainBound={} world={} fullscreen={} postChain={} currentProgram={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            count,
+            phase,
+            inputs,
+            previousProgram,
+            activePassProgram,
+            shadow,
+            mainBound,
+            renderingWorld,
+            fullscreen,
+            postChain,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
+        );
+    }
+
     public static void logCurrentFramebufferAttachments(String stage, String phase, int maxAttachments) {
         if (!isEnabled()) {
             return;

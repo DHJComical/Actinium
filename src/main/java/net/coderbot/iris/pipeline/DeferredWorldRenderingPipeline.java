@@ -89,6 +89,7 @@ import org.joml.Vector3d;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL42;
 
@@ -779,6 +780,18 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	 * Called when a mod overrides the GL program away from the active Iris pass
 	 */
 	public void onModProgramOverride() {
+		IrisGlDebug.logModProgramOverride(
+			"on-mod-program-override",
+			getPhase().name(),
+			inputs.toString(),
+			isRenderingShadow,
+			isMainBound,
+			isRenderingWorld,
+			isRenderingFullScreenPass,
+			isPostChain,
+			GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+			getActivePassProgramId()
+		);
 		current = null;
 	}
 
@@ -1730,7 +1743,19 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	@Override
 	public void setPhase(WorldRenderingPhase phase) {
+		WorldRenderingPhase previousPhase = this.phase;
 		this.phase = phase;
+		IrisGlDebug.logPhaseChange(
+			"set-phase",
+			previousPhase.name(),
+			phase.name(),
+			isRenderingShadow,
+			isMainBound,
+			isRenderingWorld,
+			isRenderingFullScreenPass,
+			isPostChain,
+			inputs.toString()
+		);
 		matchPass();
 		GbufferPrograms.runPhaseChangeNotifier();
 	}

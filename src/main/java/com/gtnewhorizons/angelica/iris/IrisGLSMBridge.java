@@ -136,13 +136,13 @@ public final class IrisGLSMBridge {
             TextureTracker.INSTANCE.onBindTexture();
             WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
             if (pipeline != null) {
-                pipeline.onBindTexture(event.textureId());
+                pipeline.onBindTexture(event.textureId);
             }
         });
 
         GLSMHooks.TEXTURE_DELETE.addListener(event -> {
             if (Iris.enabled) {
-                PBRTextureManager.INSTANCE.onDeleteTexture(event.textureId());
+                PBRTextureManager.INSTANCE.onDeleteTexture(event.textureId);
             }
         });
 
@@ -152,20 +152,20 @@ public final class IrisGLSMBridge {
             }
 
             boolean updatePipeline = false;
-            if (event.unit() == IrisSamplers.ALBEDO_TEXTURE_UNIT) {
-                StateTracker.INSTANCE.albedoSampler = event.enabled();
+            if (event.unit == IrisSamplers.ALBEDO_TEXTURE_UNIT) {
+                StateTracker.INSTANCE.albedoSampler = event.enabled;
                 updatePipeline = true;
-            } else if (event.unit() == IrisSamplers.LIGHTMAP_TEXTURE_UNIT) {
-                StateTracker.INSTANCE.lightmapSampler = event.enabled();
+            } else if (event.unit == IrisSamplers.LIGHTMAP_TEXTURE_UNIT) {
+                StateTracker.INSTANCE.lightmapSampler = event.enabled;
                 updatePipeline = true;
             }
 
-            if (event.unit() == IrisSamplers.ALBEDO_TEXTURE_UNIT || event.unit() == IrisSamplers.LIGHTMAP_TEXTURE_UNIT) {
+            if (event.unit == IrisSamplers.ALBEDO_TEXTURE_UNIT || event.unit == IrisSamplers.LIGHTMAP_TEXTURE_UNIT) {
                 IrisGlDebug.logDebugInfo(
                         "texture-unit-state unit={} target={} enabled={} activeUnit={} albedo={} lightmap={}",
-                        event.unit(),
-                        event.target(),
-                        event.enabled(),
+                        event.unit,
+                        event.target,
+                        event.enabled,
                         com.gtnewhorizons.angelica.glsm.GLStateManager.getActiveTextureUnit(),
                         StateTracker.INSTANCE.albedoSampler,
                         StateTracker.INSTANCE.lightmapSampler
@@ -189,16 +189,68 @@ public final class IrisGLSMBridge {
             if (!(pipeline instanceof DeferredWorldRenderingPipeline deferredPipeline)) {
                 return;
             }
-            if (!deferredPipeline.shouldOverrideShaders()) {
+            boolean shouldOverrideShaders = deferredPipeline.shouldOverrideShaders();
+            if (!shouldOverrideShaders) {
+                IrisGlDebug.logProgramOverrideDecision(
+                        "program-change-skip",
+                        deferredPipeline.getPhase().name(),
+                        event.previousProgram,
+                        event.newProgram,
+                        deferredPipeline.getActivePassProgramId(),
+                        false,
+                        ImmediateState.isRenderingLevel,
+                        DepthColorStorage.isOwnedProgram(event.newProgram),
+                        false,
+                        false
+                );
                 return;
             }
-            if (deferredPipeline.getActivePassProgramId() == -1) {
+            int activePassProgramId = deferredPipeline.getActivePassProgramId();
+            if (activePassProgramId == -1) {
+                IrisGlDebug.logProgramOverrideDecision(
+                        "program-change-no-pass",
+                        deferredPipeline.getPhase().name(),
+                        event.previousProgram,
+                        event.newProgram,
+                        -1,
+                        true,
+                        ImmediateState.isRenderingLevel,
+                        DepthColorStorage.isOwnedProgram(event.newProgram),
+                        false,
+                        false
+                );
                 return;
             }
 
-            if (!ImmediateState.isRenderingLevel || DepthColorStorage.isOwnedProgram(event.newProgram())) {
+            boolean renderingLevel = ImmediateState.isRenderingLevel;
+            boolean ownedProgram = DepthColorStorage.isOwnedProgram(event.newProgram);
+            if (!renderingLevel || ownedProgram) {
+                IrisGlDebug.logProgramOverrideDecision(
+                        "program-change-unlock-depth-color",
+                        deferredPipeline.getPhase().name(),
+                        event.previousProgram,
+                        event.newProgram,
+                        activePassProgramId,
+                        true,
+                        renderingLevel,
+                        ownedProgram,
+                        true,
+                        false
+                );
                 DepthColorStorage.unlockDepthColor();
             } else {
+                IrisGlDebug.logProgramOverrideDecision(
+                        "program-change-mod-override",
+                        deferredPipeline.getPhase().name(),
+                        event.previousProgram,
+                        event.newProgram,
+                        activePassProgramId,
+                        true,
+                        true,
+                        false,
+                        false,
+                        true
+                );
                 deferredPipeline.onModProgramOverride();
             }
         });

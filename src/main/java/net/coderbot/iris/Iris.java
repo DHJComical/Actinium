@@ -424,9 +424,10 @@ public class Iris {
             isDHLoaded = false;
         }
 
-        // When DH is present, defer shaderpack loading until its init callback has run.
-        if (!isDHLoaded) {
-            loadShaderpack();
+        // Defer shaderpack loading until the first loading-complete stage so the window, splash,
+        // and default framebuffer are fully settled before heavy shader initialization starts.
+        if (isDHLoaded) {
+            loadShaderPackWhenPossible = true;
         }
     }
 
@@ -439,6 +440,11 @@ public class Iris {
                 + " Trying to avoid a crash but this is an odd state.");
             return;
         }
+
+        if (currentPack == null && !fallback) {
+            loadShaderpack();
+        }
+        tryLoadShaderpackWhenPossible();
 
         // Initialize the pipeline now so that we don't increase world loading time. Just going to guess that
         // the player is in the overworld.
