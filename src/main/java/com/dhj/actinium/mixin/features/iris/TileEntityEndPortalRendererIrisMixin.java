@@ -55,7 +55,7 @@ public abstract class TileEntityEndPortalRendererIrisMixin {
     ) {
         ci.cancel();
 
-        if (actinium$portalLogCount++ < 8) {
+        if (IrisGlDebug.shouldLogPortalRenderEvents() && actinium$portalLogCount++ < 8) {
             IrisGlDebug.logDebugInfo("end-portal-projective type={} pos=[{},{},{}]", te.getClass().getName(), x, y, z);
         }
 

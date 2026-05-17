@@ -22,6 +22,7 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,7 +41,44 @@ public final class IrisGlDebug {
 	private static final Map<String, Integer> ENTITY_PHASE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
 	private static final Map<String, Integer> SAMPLER_INIT_COUNTS = new ConcurrentHashMap<>();
 	private static final Map<String, Integer> GLSM_EVENT_COUNTS = new ConcurrentHashMap<>();
+	private static final Map<String, WorldPassStageTiming> WORLD_PASS_STAGE_TIMINGS = new ConcurrentHashMap<>();
+	private static final Map<String, WorldPassStageTiming> RENDER_GLOBAL_STAGE_TIMINGS = new ConcurrentHashMap<>();
+	private static final Map<String, RenderGlobalCounterTiming> RENDER_GLOBAL_COUNTER_TIMINGS = new ConcurrentHashMap<>();
+	private static final boolean ENABLE_TEXTURE_UNIT_LOGS = Boolean.getBoolean("actinium.debug.textureUnitLogs");
+	private static final boolean ENABLE_PORTAL_RENDER_LOGS = Boolean.getBoolean("actinium.debug.portalRenderLogs");
 	private static long lastShadowEntityLogTime;
+    private static long compositeTimingWindowStart;
+    private static int compositeTimingFrames;
+    private static int compositeTimingGpuFrames;
+    private static long compositeTimingCpuTotal;
+    private static long compositeTimingCpuCenterDepth;
+    private static long compositeTimingCpuComposite;
+    private static long compositeTimingCpuFinal;
+    private static long compositeTimingCpuMax;
+    private static long compositeTimingGpuTotal;
+    private static long compositeTimingGpuComposite;
+    private static long compositeTimingGpuFinal;
+    private static long compositeTimingGpuMax;
+    private static long frameOutputTimingWindowStart;
+    private static int frameOutputTimingFrames;
+    private static int frameOutputTimingGpuFrames;
+    private static long frameOutputTimingCpuTotal;
+    private static long frameOutputTimingCpuMax;
+    private static long frameOutputTimingGpuTotal;
+    private static long frameOutputTimingGpuMax;
+    private static long frameRenderTimingWindowStart;
+    private static int frameRenderTimingFrames;
+    private static int frameRenderTimingGpuFrames;
+    private static long frameRenderTimingCpuTotal;
+    private static long frameRenderTimingCpuMax;
+    private static long frameRenderTimingGpuTotal;
+    private static long frameRenderTimingGpuMax;
+    private static long worldPassTimingWindowStart;
+    private static long worldPassStageStartNanos;
+    private static String worldPassCurrentStage;
+    private static int worldPassCurrentPass;
+    private static long renderGlobalTimingWindowStart;
+    private static long renderGlobalCounterTimingWindowStart;
     private static String lastStage = "startup";
     private static String framebufferSamplePhase;
     private static long lastLogTime;
@@ -70,6 +108,376 @@ public final class IrisGlDebug {
 
 		int count = GLSM_EVENT_COUNTS.merge(label, 1, Integer::sum);
 		return count <= maxCount;
+	}
+
+	public static boolean shouldLogTextureUnitEvents() {
+		return ENABLE_TEXTURE_UNIT_LOGS;
+	}
+
+	public static boolean shouldLogPortalRenderEvents() {
+		return ENABLE_PORTAL_RENDER_LOGS;
+	}
+
+	public static void beginWorldPassTiming(int pass) {
+		if (!isEnabled()) {
+			worldPassCurrentStage = null;
+			return;
+		}
+
+		worldPassCurrentPass = pass;
+		worldPassCurrentStage = "start";
+		worldPassStageStartNanos = System.nanoTime();
+	}
+
+	public static void recordWorldPassStage(String nextStage) {
+		if (!isEnabled() || worldPassCurrentStage == null) {
+			return;
+		}
+
+		long nowNanos = System.nanoTime();
+		recordWorldPassStageTiming(worldPassCurrentStage, nowNanos - worldPassStageStartNanos);
+		worldPassCurrentStage = nextStage;
+		worldPassStageStartNanos = nowNanos;
+	}
+
+	public static void finishWorldPassTiming() {
+		if (!isEnabled() || worldPassCurrentStage == null) {
+			return;
+		}
+
+		long nowNanos = System.nanoTime();
+		recordWorldPassStageTiming(worldPassCurrentStage, nowNanos - worldPassStageStartNanos);
+		worldPassCurrentStage = null;
+		logWorldPassStageTimingIfReady(nowNanos);
+	}
+
+	private static void recordWorldPassStageTiming(String stage, long nanos) {
+		String key = "pass" + worldPassCurrentPass + ":" + stage;
+		WORLD_PASS_STAGE_TIMINGS.computeIfAbsent(key, ignored -> new WorldPassStageTiming()).add(nanos);
+	}
+
+	private static void logWorldPassStageTimingIfReady(long nowNanos) {
+		long nowMillis = System.currentTimeMillis();
+		if (worldPassTimingWindowStart == 0L) {
+			worldPassTimingWindowStart = nowMillis;
+		}
+
+		if (nowMillis - worldPassTimingWindowStart < 1000L || WORLD_PASS_STAGE_TIMINGS.isEmpty()) {
+			return;
+		}
+
+		String timings = WORLD_PASS_STAGE_TIMINGS.entrySet().stream()
+			.sorted(Comparator.comparingLong((Map.Entry<String, WorldPassStageTiming> entry) -> entry.getValue().totalNanos).reversed())
+			.map(entry -> entry.getKey() + "[avg=" + formatNanos(entry.getValue().averageNanos()) + ",max=" + formatNanos(entry.getValue().maxNanos) + ",n=" + entry.getValue().samples + "]")
+			.collect(Collectors.joining(" "));
+
+		LOGGER.info("world-pass-stage-timing {}", timings);
+		WORLD_PASS_STAGE_TIMINGS.clear();
+		worldPassTimingWindowStart = nowMillis;
+	}
+
+	public static long beginRenderGlobalStageTiming() {
+		return isEnabled() ? System.nanoTime() : 0L;
+	}
+
+	public static void recordRenderGlobalStageTiming(String stage, int pass, long startNanos) {
+		if (!isEnabled() || startNanos == 0L) {
+			return;
+		}
+
+		long nowNanos = System.nanoTime();
+		String key = "pass" + pass + ":" + stage;
+		RENDER_GLOBAL_STAGE_TIMINGS.computeIfAbsent(key, ignored -> new WorldPassStageTiming()).add(nowNanos - startNanos);
+		logRenderGlobalStageTimingIfReady();
+	}
+
+	private static void logRenderGlobalStageTimingIfReady() {
+		long nowMillis = System.currentTimeMillis();
+		if (renderGlobalTimingWindowStart == 0L) {
+			renderGlobalTimingWindowStart = nowMillis;
+		}
+
+		if (nowMillis - renderGlobalTimingWindowStart < 1000L || RENDER_GLOBAL_STAGE_TIMINGS.isEmpty()) {
+			return;
+		}
+
+		String timings = RENDER_GLOBAL_STAGE_TIMINGS.entrySet().stream()
+			.sorted(Comparator.comparingLong((Map.Entry<String, WorldPassStageTiming> entry) -> entry.getValue().totalNanos).reversed())
+			.map(entry -> entry.getKey() + "[avg=" + formatNanos(entry.getValue().averageNanos()) + ",max=" + formatNanos(entry.getValue().maxNanos) + ",n=" + entry.getValue().samples + "]")
+			.collect(Collectors.joining(" "));
+
+		LOGGER.info("render-global-stage-timing {}", timings);
+		RENDER_GLOBAL_STAGE_TIMINGS.clear();
+		renderGlobalTimingWindowStart = nowMillis;
+	}
+
+	public static void recordRenderGlobalCounterTiming(
+		String stage,
+		int pass,
+		long nanos,
+		int checked,
+		int visible,
+		int rendered,
+		int outlined,
+		int multipass
+	) {
+		if (!isEnabled()) {
+			return;
+		}
+
+		String key = "pass" + pass + ":" + stage;
+		RENDER_GLOBAL_COUNTER_TIMINGS.computeIfAbsent(key, ignored -> new RenderGlobalCounterTiming())
+			.add(nanos, checked, visible, rendered, outlined, multipass);
+		logRenderGlobalCounterTimingIfReady();
+	}
+
+	private static void logRenderGlobalCounterTimingIfReady() {
+		long nowMillis = System.currentTimeMillis();
+		if (renderGlobalCounterTimingWindowStart == 0L) {
+			renderGlobalCounterTimingWindowStart = nowMillis;
+		}
+
+		if (nowMillis - renderGlobalCounterTimingWindowStart < 1000L || RENDER_GLOBAL_COUNTER_TIMINGS.isEmpty()) {
+			return;
+		}
+
+		String timings = RENDER_GLOBAL_COUNTER_TIMINGS.entrySet().stream()
+			.sorted(Comparator.comparingLong((Map.Entry<String, RenderGlobalCounterTiming> entry) -> entry.getValue().totalNanos).reversed())
+			.map(entry -> entry.getKey()
+				+ "[avg=" + formatNanos(entry.getValue().averageNanos())
+				+ ",max=" + formatNanos(entry.getValue().maxNanos)
+				+ ",n=" + entry.getValue().samples
+				+ ",checked=" + entry.getValue().averageChecked()
+				+ ",visible=" + entry.getValue().averageVisible()
+				+ ",rendered=" + entry.getValue().averageRendered()
+				+ ",outlined=" + entry.getValue().averageOutlined()
+				+ ",multipass=" + entry.getValue().averageMultipass()
+				+ "]")
+			.collect(Collectors.joining(" "));
+
+		LOGGER.info("render-global-counter-timing {}", timings);
+		RENDER_GLOBAL_COUNTER_TIMINGS.clear();
+		renderGlobalCounterTimingWindowStart = nowMillis;
+	}
+
+	private static final class WorldPassStageTiming {
+		private int samples;
+		private long totalNanos;
+		private long maxNanos;
+
+		private void add(long nanos) {
+			this.samples++;
+			this.totalNanos += nanos;
+			this.maxNanos = Math.max(this.maxNanos, nanos);
+		}
+
+		private long averageNanos() {
+			return this.samples == 0 ? 0L : this.totalNanos / this.samples;
+		}
+	}
+
+	private static final class RenderGlobalCounterTiming {
+		private int samples;
+		private long totalNanos;
+		private long maxNanos;
+		private long checked;
+		private long visible;
+		private long rendered;
+		private long outlined;
+		private long multipass;
+
+		private void add(long nanos, int checked, int visible, int rendered, int outlined, int multipass) {
+			this.samples++;
+			this.totalNanos += nanos;
+			this.maxNanos = Math.max(this.maxNanos, nanos);
+			this.checked += checked;
+			this.visible += visible;
+			this.rendered += rendered;
+			this.outlined += outlined;
+			this.multipass += multipass;
+		}
+
+		private long averageNanos() {
+			return this.samples == 0 ? 0L : this.totalNanos / this.samples;
+		}
+
+		private long averageChecked() {
+			return this.samples == 0 ? 0L : this.checked / this.samples;
+		}
+
+		private long averageVisible() {
+			return this.samples == 0 ? 0L : this.visible / this.samples;
+		}
+
+		private long averageRendered() {
+			return this.samples == 0 ? 0L : this.rendered / this.samples;
+		}
+
+		private long averageOutlined() {
+			return this.samples == 0 ? 0L : this.outlined / this.samples;
+		}
+
+		private long averageMultipass() {
+			return this.samples == 0 ? 0L : this.multipass / this.samples;
+		}
+	}
+
+	public static void logCompositeOutputTiming(
+		long cpuTotalNanos,
+		long cpuCenterDepthNanos,
+		long cpuCompositeNanos,
+		long cpuFinalNanos,
+		long gpuTotalNanos,
+		long gpuCompositeNanos,
+		long gpuFinalNanos
+	) {
+		if (!shouldCaptureGlState()) {
+			return;
+		}
+
+		long now = System.currentTimeMillis();
+		if (compositeTimingWindowStart == 0L) {
+			compositeTimingWindowStart = now;
+		}
+
+		compositeTimingFrames++;
+		compositeTimingCpuTotal += cpuTotalNanos;
+		compositeTimingCpuCenterDepth += cpuCenterDepthNanos;
+		compositeTimingCpuComposite += cpuCompositeNanos;
+		compositeTimingCpuFinal += cpuFinalNanos;
+		compositeTimingCpuMax = Math.max(compositeTimingCpuMax, cpuTotalNanos);
+
+		if (gpuTotalNanos > 0L) {
+			compositeTimingGpuFrames++;
+			compositeTimingGpuTotal += gpuTotalNanos;
+			compositeTimingGpuComposite += Math.max(0L, gpuCompositeNanos);
+			compositeTimingGpuFinal += Math.max(0L, gpuFinalNanos);
+			compositeTimingGpuMax = Math.max(compositeTimingGpuMax, gpuTotalNanos);
+		}
+
+		if (now - compositeTimingWindowStart < 1000L) {
+			return;
+		}
+
+		int frames = Math.max(1, compositeTimingFrames);
+		int gpuFrames = Math.max(1, compositeTimingGpuFrames);
+		LOGGER.info(
+			"composite-output-timing frames={} gpuFrames={} cpuMs[avg={},max={},center={},composite={},final={}] gpuMs[avg={},max={},composite={},final={}]",
+			compositeTimingFrames,
+			compositeTimingGpuFrames,
+			formatNanos(compositeTimingCpuTotal / frames),
+			formatNanos(compositeTimingCpuMax),
+			formatNanos(compositeTimingCpuCenterDepth / frames),
+			formatNanos(compositeTimingCpuComposite / frames),
+			formatNanos(compositeTimingCpuFinal / frames),
+			compositeTimingGpuFrames == 0 ? "pending" : formatNanos(compositeTimingGpuTotal / gpuFrames),
+			compositeTimingGpuFrames == 0 ? "pending" : formatNanos(compositeTimingGpuMax),
+			compositeTimingGpuFrames == 0 ? "pending" : formatNanos(compositeTimingGpuComposite / gpuFrames),
+			compositeTimingGpuFrames == 0 ? "pending" : formatNanos(compositeTimingGpuFinal / gpuFrames)
+		);
+
+		compositeTimingWindowStart = now;
+		compositeTimingFrames = 0;
+		compositeTimingGpuFrames = 0;
+		compositeTimingCpuTotal = 0L;
+		compositeTimingCpuCenterDepth = 0L;
+		compositeTimingCpuComposite = 0L;
+		compositeTimingCpuFinal = 0L;
+		compositeTimingCpuMax = 0L;
+		compositeTimingGpuTotal = 0L;
+		compositeTimingGpuComposite = 0L;
+		compositeTimingGpuFinal = 0L;
+		compositeTimingGpuMax = 0L;
+	}
+
+	public static void logFrameOutputTiming(long cpuNanos, long gpuNanos) {
+		if (!isEnabled()) {
+			return;
+		}
+
+		long now = System.currentTimeMillis();
+		if (frameOutputTimingWindowStart == 0L) {
+			frameOutputTimingWindowStart = now;
+		}
+
+		frameOutputTimingFrames++;
+		frameOutputTimingCpuTotal += cpuNanos;
+		frameOutputTimingCpuMax = Math.max(frameOutputTimingCpuMax, cpuNanos);
+
+		if (gpuNanos > 0L) {
+			frameOutputTimingGpuFrames++;
+			frameOutputTimingGpuTotal += gpuNanos;
+			frameOutputTimingGpuMax = Math.max(frameOutputTimingGpuMax, gpuNanos);
+		}
+
+		if (now - frameOutputTimingWindowStart < 1000L) {
+			return;
+		}
+
+		int frames = Math.max(1, frameOutputTimingFrames);
+		int gpuFrames = Math.max(1, frameOutputTimingGpuFrames);
+		LOGGER.info(
+			"frame-output-timing frames={} gpuFrames={} cpuMs[avg={},max={}] gpuMs[avg={},max={}]",
+			frameOutputTimingFrames,
+			frameOutputTimingGpuFrames,
+			formatNanos(frameOutputTimingCpuTotal / frames),
+			formatNanos(frameOutputTimingCpuMax),
+			frameOutputTimingGpuFrames == 0 ? "pending" : formatNanos(frameOutputTimingGpuTotal / gpuFrames),
+			frameOutputTimingGpuFrames == 0 ? "pending" : formatNanos(frameOutputTimingGpuMax)
+		);
+
+		frameOutputTimingWindowStart = now;
+		frameOutputTimingFrames = 0;
+		frameOutputTimingGpuFrames = 0;
+		frameOutputTimingCpuTotal = 0L;
+		frameOutputTimingCpuMax = 0L;
+		frameOutputTimingGpuTotal = 0L;
+		frameOutputTimingGpuMax = 0L;
+	}
+
+	public static void logFrameRenderTiming(long cpuNanos, long gpuNanos) {
+		if (!isEnabled()) {
+			return;
+		}
+
+		long now = System.currentTimeMillis();
+		if (frameRenderTimingWindowStart == 0L) {
+			frameRenderTimingWindowStart = now;
+		}
+
+		frameRenderTimingFrames++;
+		frameRenderTimingCpuTotal += cpuNanos;
+		frameRenderTimingCpuMax = Math.max(frameRenderTimingCpuMax, cpuNanos);
+
+		if (gpuNanos > 0L) {
+			frameRenderTimingGpuFrames++;
+			frameRenderTimingGpuTotal += gpuNanos;
+			frameRenderTimingGpuMax = Math.max(frameRenderTimingGpuMax, gpuNanos);
+		}
+
+		if (now - frameRenderTimingWindowStart < 1000L) {
+			return;
+		}
+
+		int frames = Math.max(1, frameRenderTimingFrames);
+		int gpuFrames = Math.max(1, frameRenderTimingGpuFrames);
+		LOGGER.info(
+			"frame-render-timing frames={} gpuFrames={} cpuMs[avg={},max={}] gpuMs[avg={},max={}]",
+			frameRenderTimingFrames,
+			frameRenderTimingGpuFrames,
+			formatNanos(frameRenderTimingCpuTotal / frames),
+			formatNanos(frameRenderTimingCpuMax),
+			frameRenderTimingGpuFrames == 0 ? "pending" : formatNanos(frameRenderTimingGpuTotal / gpuFrames),
+			frameRenderTimingGpuFrames == 0 ? "pending" : formatNanos(frameRenderTimingGpuMax)
+		);
+
+		frameRenderTimingWindowStart = now;
+		frameRenderTimingFrames = 0;
+		frameRenderTimingGpuFrames = 0;
+		frameRenderTimingCpuTotal = 0L;
+		frameRenderTimingCpuMax = 0L;
+		frameRenderTimingGpuTotal = 0L;
+		frameRenderTimingGpuMax = 0L;
 	}
 
 	public static void checkDrawError(String stage, String source, int drawMode, int vertexFlags, int stride, int vertexCount, String format, int vao, int vbo) {
@@ -964,6 +1372,10 @@ public final class IrisGlDebug {
 
     private static int currentViewportHeight() {
         return VIEWPORT.get(3);
+    }
+
+    private static String formatNanos(long nanos) {
+        return String.format(java.util.Locale.ROOT, "%.3f", nanos / 1_000_000.0D);
     }
 
     public static void logFullscreenProgram(String stageName, String sourceName, int program, int[] drawBuffers) {

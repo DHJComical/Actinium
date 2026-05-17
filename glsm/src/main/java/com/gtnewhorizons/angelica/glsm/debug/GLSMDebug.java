@@ -20,6 +20,7 @@ import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memGetInt;
 
 public final class GLSMDebug {
     private static final Logger LOGGER = LogManager.getLogger("GLSMDebug");
+    private static final boolean ENABLE_VERBOSE_DRAW_LOGS = Boolean.getBoolean("actinium.glsm.verboseDrawLogs");
     private static final long OPTION_REFRESH_NS = 500_000_000L;
     private static final int STREAM_LIMIT = 128;
     private static final int QUAD_LIMIT = 512;
@@ -275,7 +276,7 @@ public final class GLSMDebug {
     }
 
     private static boolean shouldLogWorldRender() {
-        return isEnabled() && "Client thread".equals(Thread.currentThread().getName()) && isWorldLoaded();
+        return ENABLE_VERBOSE_DRAW_LOGS && isEnabled() && "Client thread".equals(Thread.currentThread().getName()) && isWorldLoaded();
     }
 
     private static boolean isWorldLoaded() {

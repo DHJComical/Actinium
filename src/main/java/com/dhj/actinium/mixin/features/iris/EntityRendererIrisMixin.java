@@ -51,6 +51,16 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     private void addRainParticles() {
     }
 
+    @Inject(method = "renderWorldPass(IFJ)V", at = @At("HEAD"))
+    private void actinium$beginWorldPassTiming(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.beginWorldPassTiming(pass);
+    }
+
+    @Inject(method = "renderWorldPass(IFJ)V", at = @At("RETURN"))
+    private void actinium$finishWorldPassTiming(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.finishWorldPassTiming();
+    }
+
     @Inject(
         method = "renderWorldPass(IFJ)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/culling/ClippingHelperImpl;getInstance()Lnet/minecraft/client/renderer/culling/ClippingHelper;", shift = At.Shift.AFTER)
@@ -76,6 +86,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         BlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
         pipeline.beginLevelRendering();
         IrisGlDebug.markStage("mixin:begin-world:done");
+        IrisGlDebug.recordWorldPassStage("iris-begin-to-shadows");
     }
 
     @Inject(
@@ -150,6 +161,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         if (pipeline != null) {
             pipeline.renderShadows((EntityRenderer) (Object) this, Camera.INSTANCE);
             IrisGlDebug.markStage("mixin:shadows:done");
+            IrisGlDebug.recordWorldPassStage("shadows-to-sky");
         }
     }
 
@@ -159,6 +171,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterSky(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-sky");
+        IrisGlDebug.recordWorldPassStage("sky-to-clouds");
     }
 
     @Inject(
@@ -167,6 +180,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterClouds(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-clouds");
+        IrisGlDebug.recordWorldPassStage("clouds-to-setup-terrain");
     }
 
     @Inject(
@@ -175,6 +189,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterSetupTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-setup-terrain");
+        IrisGlDebug.recordWorldPassStage("setup-terrain-to-update-chunks");
     }
 
     @Inject(
@@ -183,6 +198,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterUpdateChunks(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-update-chunks");
+        IrisGlDebug.recordWorldPassStage("update-chunks-to-terrain-solid");
     }
 
     @Inject(
@@ -191,6 +207,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterSolidTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-solid");
+        IrisGlDebug.recordWorldPassStage("terrain-solid-to-cutout-mipped");
     }
 
     @Inject(
@@ -199,6 +216,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterCutoutMippedTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-cutout-mipped");
+        IrisGlDebug.recordWorldPassStage("terrain-cutout-mipped-to-cutout");
     }
 
     @Inject(
@@ -207,6 +225,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterCutoutTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-cutout");
+        IrisGlDebug.recordWorldPassStage("terrain-cutout-to-entities-0");
     }
 
     @Inject(
@@ -215,6 +234,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterEntitiesPass0(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.check("render-world-pass:" + pass + ":after-entities-0");
+        IrisGlDebug.recordWorldPassStage("entities-0-to-selection-box");
     }
 
     @Inject(
@@ -223,6 +243,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterSelectionBox(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-selection-box");
+        IrisGlDebug.recordWorldPassStage("selection-box-to-block-damage");
     }
 
     @Inject(
@@ -231,6 +252,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterBlockDamage(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-block-damage");
+        IrisGlDebug.recordWorldPassStage("block-damage-to-lit-particles");
     }
 
     @Inject(
@@ -239,6 +261,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterLitParticles(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-lit-particles");
+        IrisGlDebug.recordWorldPassStage("lit-particles-to-particles");
     }
 
     @Inject(
@@ -247,6 +270,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterParticles(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-particles");
+        IrisGlDebug.recordWorldPassStage("particles-to-weather");
     }
 
     @Inject(
@@ -255,6 +279,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterWeather(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-weather");
+        IrisGlDebug.recordWorldPassStage("weather-to-terrain-translucent");
     }
 
     @Inject(
@@ -263,6 +288,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterTranslucentTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-translucent");
+        IrisGlDebug.recordWorldPassStage("terrain-translucent-to-entities-1");
     }
 
     @Inject(
@@ -271,6 +297,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterEntitiesPass1(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.check("render-world-pass:" + pass + ":after-entities-1");
+        IrisGlDebug.recordWorldPassStage("entities-1-to-render-last");
     }
 
     @Inject(
@@ -279,6 +306,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterRenderLast(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-render-last");
+        IrisGlDebug.recordWorldPassStage("render-last-to-hand");
     }
 
     @Inject(
@@ -287,6 +315,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterHand(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.check("render-world-pass:" + pass + ":after-hand");
+        IrisGlDebug.recordWorldPassStage("hand-to-return");
     }
 
     @Inject(
@@ -314,6 +343,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         Program.unbind();
         GLStateManager.glDepthMask(true);
         IrisGlDebug.markStage("mixin:finalize:done");
+        IrisGlDebug.recordWorldPassStage("finalize-to-render-last");
     }
 
     @Inject(

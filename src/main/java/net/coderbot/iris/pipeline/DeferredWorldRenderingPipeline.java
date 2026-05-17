@@ -84,6 +84,7 @@ import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.shader.Framebuffer;
 import org.apache.commons.lang3.tuple.Pair;
+import org.embeddedt.embeddium.impl.gl.profiling.TimerQueryManager;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
 import org.joml.Vector4f;
@@ -165,6 +166,12 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	private final Map<Pair<String, InputAvailability>, Map<PatchShaderType, String>> attributeTransforms;
 
 	private final HorizonRenderer horizonRenderer = new HorizonRenderer();
+    @Nullable
+    private TimerQueryManager finalizeOutputTimer;
+    @Nullable
+    private TimerQueryManager compositeOutputTimer;
+    @Nullable
+    private TimerQueryManager finalOutputTimer;
 
 	private final float sunPathRotation;
 	private final CloudSetting cloudSetting;
@@ -1203,6 +1210,12 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		deferredRenderer.destroy();
 		finalPassRenderer.destroy();
 		centerDepthSampler.destroy();
+        closeFinalizeTimer(finalizeOutputTimer);
+        closeFinalizeTimer(compositeOutputTimer);
+        closeFinalizeTimer(finalOutputTimer);
+        finalizeOutputTimer = null;
+        compositeOutputTimer = null;
+        finalOutputTimer = null;
 
 		// Destroy setup compute programs
 		if (setup != null) {
@@ -1695,20 +1708,72 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 		isRenderingFullScreenPass = true;
 
+        boolean profileOutput = IrisGlDebug.isEnabled();
+        if (profileOutput) {
+            updateFinalizeTimers();
+            finalizeOutputTimer.startProfiling();
+        }
+
+        long cpuStart = System.nanoTime();
         IrisGlDebug.check("level:finalize:before-center-depth");
 		centerDepthSampler.sampleCenterDepth();
+        long cpuAfterCenterDepth = System.nanoTime();
         IrisGlDebug.check("level:finalize:center-depth");
 
         IrisGlDebug.check("level:finalize:before-composite");
         IrisGlDebug.beginFramebufferSamplePhase("finalize-after-terrain");
+        if (profileOutput) {
+            compositeOutputTimer.startProfiling();
+        }
 		compositeRenderer.renderAll();
+        if (profileOutput) {
+            compositeOutputTimer.finishProfiling();
+        }
+        long cpuAfterComposite = System.nanoTime();
         IrisGlDebug.check("level:finalize:before-final");
+        if (profileOutput) {
+            finalOutputTimer.startProfiling();
+        }
 		finalPassRenderer.renderFinalPass();
+        if (profileOutput) {
+            finalOutputTimer.finishProfiling();
+            finalizeOutputTimer.finishProfiling();
+        }
+        long cpuAfterFinal = System.nanoTime();
         IrisGlDebug.endFramebufferSamplePhase();
+        if (profileOutput) {
+            IrisGlDebug.logCompositeOutputTiming(
+                cpuAfterFinal - cpuStart,
+                cpuAfterCenterDepth - cpuStart,
+                cpuAfterComposite - cpuAfterCenterDepth,
+                cpuAfterFinal - cpuAfterComposite,
+                finalizeOutputTimer.getLastTime(),
+                compositeOutputTimer.getLastTime(),
+                finalOutputTimer.getLastTime()
+            );
+        }
 
 		isRenderingFullScreenPass = false;
         IrisGlDebug.check("level:finalized");
 	}
+
+    private void updateFinalizeTimers() {
+        if (finalizeOutputTimer == null) {
+            finalizeOutputTimer = new TimerQueryManager();
+            compositeOutputTimer = new TimerQueryManager();
+            finalOutputTimer = new TimerQueryManager();
+        }
+
+        finalizeOutputTimer.updateTime();
+        compositeOutputTimer.updateTime();
+        finalOutputTimer.updateTime();
+    }
+
+    private static void closeFinalizeTimer(@Nullable TimerQueryManager timer) {
+        if (timer != null) {
+            timer.close();
+        }
+    }
 
 	@Override
 	public CeleritasTerrainPipeline getCeleritasTerrainPipeline() {

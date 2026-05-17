@@ -230,6 +230,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 || InternalShadowRenderingState.shouldRenderShadowBlockEntities();
 
         if (renderShadowBlockEntities) {
+            long blockEntityStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
             if (Iris.enabled) {
                 GbufferPrograms.beginBlockEntities();
                 GbufferPrograms.setBlockEntityDefaults();
@@ -238,6 +239,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
             if (Iris.enabled) {
                 GbufferPrograms.endBlockEntities();
             }
+            IrisGlDebug.recordRenderGlobalStageTiming("block-entities-main", pass, blockEntityStartNanos);
         }
 
         /*
@@ -248,6 +250,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         if (renderShadowBlockEntities) {
             synchronized(this.setTileEntities) {
                 if (!this.setTileEntities.isEmpty()) {
+                    long setBlockEntityStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
                     TileEntityRendererDispatcher.instance.preDrawBatch();
                     for (var te : this.setTileEntities) {
                         if (te.shouldRenderInPass(pass)) {
@@ -255,6 +258,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                         }
                     }
                     TileEntityRendererDispatcher.instance.drawBatch(pass);
+                    IrisGlDebug.recordRenderGlobalStageTiming("block-entities-set", pass, setBlockEntityStartNanos);
                 }
             }
         }
@@ -316,8 +320,16 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         if (irisEntities) {
             GbufferPrograms.beginEntities();
         }
+        long entitiesStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
+        long renderCallNanos = 0L;
+        int checkedEntities = 0;
+        int visibleEntities = 0;
+        int renderedEntities = 0;
+        int outlinedEntities = 0;
+        int multipassEntities = 0;
         try {
             for(Entity entity : celeritas$collectedEntities[pass]) {
+                checkedEntities++;
                 if (!this.actinium$shouldRenderShadowEntity(entity, renderViewEntity)) {
                     continue;
                 }
@@ -331,6 +343,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 if(!worldRenderer.isEntityVisible(entity)) {
                     continue;
                 }
+                visibleEntities++;
 
                 boolean isSleeping = renderViewEntity instanceof EntityLivingBase && ((EntityLivingBase) renderViewEntity).isPlayerSleeping();
 
@@ -341,15 +354,22 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                     if (irisEntities) {
                         CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
                     }
+                    long renderCallStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
                     this.renderManager.renderEntityStatic(entity, partialTicks, false);
+                    if (renderCallStartNanos != 0L) {
+                        renderCallNanos += System.nanoTime() - renderCallStartNanos;
+                    }
+                    renderedEntities++;
 
                     if (this.isOutlineActive(entity, renderViewEntity, camera))
                     {
                         outlineEntityList.add(entity);
+                        outlinedEntities++;
                     }
 
                     if (this.renderManager.isRenderMultipass(entity)) {
                         multipassEntityList.add(entity);
+                        multipassEntities++;
                     }
                 }
             }
@@ -358,6 +378,27 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 CapturedRenderingState.INSTANCE.setCurrentEntity(-1);
                 GbufferPrograms.endEntities();
             }
+            IrisGlDebug.recordRenderGlobalStageTiming("entities", pass, entitiesStartNanos);
+            IrisGlDebug.recordRenderGlobalCounterTiming(
+                    "entities-loop-total",
+                    pass,
+                    entitiesStartNanos == 0L ? 0L : System.nanoTime() - entitiesStartNanos,
+                    checkedEntities,
+                    visibleEntities,
+                    renderedEntities,
+                    outlinedEntities,
+                    multipassEntities
+            );
+            IrisGlDebug.recordRenderGlobalCounterTiming(
+                    "entities-render-call",
+                    pass,
+                    renderCallNanos,
+                    checkedEntities,
+                    visibleEntities,
+                    renderedEntities,
+                    outlinedEntities,
+                    multipassEntities
+            );
         }
     }
 
