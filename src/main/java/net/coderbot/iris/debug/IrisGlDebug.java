@@ -1292,6 +1292,10 @@ public final class IrisGlDebug {
 
     private static void appendTexturePixels(StringBuilder builder, int texture) {
         int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
 
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         int previousTexture0 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
@@ -1301,6 +1305,10 @@ public final class IrisGlDebug {
         if (width <= 0 || height <= 0) {
             builder.append(",size=").append(width).append("x").append(height);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
             GL13.glActiveTexture(previousActiveTexture);
             return;
         }
@@ -1332,6 +1340,10 @@ public final class IrisGlDebug {
 
         GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
         GL13.glActiveTexture(previousActiveTexture);
     }
 
