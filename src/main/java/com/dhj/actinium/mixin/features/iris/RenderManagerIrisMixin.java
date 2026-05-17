@@ -8,7 +8,6 @@ import net.coderbot.iris.uniforms.EntityIdHelper;
 import net.minecraft.client.renderer.entity.Render;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.entity.Entity;
-import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -55,7 +54,7 @@ public class RenderManagerIrisMixin {
         method = "renderEntity(Lnet/minecraft/entity/Entity;DDDFFZ)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/Render;doRenderShadowAndFire(Lnet/minecraft/entity/Entity;DDDFF)V")
     )
-    private void actinium$renderEntityShadowWithDebug(
+    private void actinium$renderEntityShadow(
         Render<Entity> render,
         Entity entity,
         double x,

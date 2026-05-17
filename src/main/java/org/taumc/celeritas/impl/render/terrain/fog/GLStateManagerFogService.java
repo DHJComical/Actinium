@@ -1,25 +1,27 @@
 package org.taumc.celeritas.impl.render.terrain.fog;
 
-import net.minecraft.client.renderer.GlStateManager;
+import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.gtnewhorizons.angelica.glsm.states.FogState;
 import org.embeddedt.embeddium.impl.render.chunk.fog.FogService;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
+import org.joml.Vector3d;
 
 public class GLStateManagerFogService implements FogService {
-    private static final float[] FOG_COLOR = new float[] {1.0F, 1.0F, 1.0F, 1.0F};
+    private final float[] fogColor = new float[4];
 
     @Override
     public float getFogEnd() {
-        return GlStateManager.fogState.end;
+        return GLStateManager.getFogState().getEnd();
     }
 
     @Override
     public float getFogStart() {
-        return GlStateManager.fogState.start;
+        return GLStateManager.getFogState().getStart();
     }
 
     @Override
     public float getFogDensity() {
-        return GlStateManager.fogState.density;
+        return GLStateManager.getFogState().getDensity();
     }
 
     @Override
@@ -29,19 +31,25 @@ public class GLStateManagerFogService implements FogService {
 
     @Override
     public float getFogCutoff() {
-        return GlStateManager.fogState.end;
+        return getFogEnd();
     }
 
     @Override
     public float[] getFogColor() {
-        return FOG_COLOR;
+        FogState state = GLStateManager.getFogState();
+        Vector3d color = state.getFogColor();
+        this.fogColor[0] = (float) color.x;
+        this.fogColor[1] = (float) color.y;
+        this.fogColor[2] = (float) color.z;
+        this.fogColor[3] = state.getFogAlpha();
+        return this.fogColor;
     }
 
     @Override
     public ChunkFogMode getFogMode() {
-        if (!GlStateManager.fogState.fog.currentState) {
+        if (!GLStateManager.getFogMode().isEnabled()) {
             return ChunkFogMode.NONE;
         }
-        return ChunkFogMode.fromGLMode(GlStateManager.fogState.mode);
+        return ChunkFogMode.fromGLMode(GLStateManager.getFogState().getFogMode());
     }
 }
