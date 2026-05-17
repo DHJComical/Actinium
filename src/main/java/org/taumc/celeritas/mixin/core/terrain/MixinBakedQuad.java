@@ -2,7 +2,6 @@ package org.taumc.celeritas.mixin.core.terrain;
 
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.client.renderer.vertex.VertexFormat;
 import net.minecraft.util.EnumFacing;
 import org.embeddedt.embeddium.impl.model.quad.BakedQuadView;
@@ -18,7 +17,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.taumc.celeritas.impl.render.terrain.compile.light.VintageDiffuseProvider;
 
 @Mixin(BakedQuad.class)
-public abstract class BakedQuadMixin implements BakedQuadView {
+public abstract class MixinBakedQuad implements BakedQuadView {
     @Shadow
     @Final
     protected EnumFacing face;

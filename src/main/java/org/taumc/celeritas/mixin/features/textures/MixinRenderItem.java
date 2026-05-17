@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.taumc.celeritas.impl.render.terrain.sprite.SpriteUtil;
 
 @Mixin(RenderItem.class)
-public class RenderItemMixin {
+public class MixinRenderItem {
     @ModifyExpressionValue(method = { "func_175032_a", "renderQuads" }, at = @At(value = "INVOKE", target = "Ljava/util/List;get(I)Ljava/lang/Object;"))
     private Object markSpriteActive(Object o) {
         if (o instanceof BakedQuad quad) {

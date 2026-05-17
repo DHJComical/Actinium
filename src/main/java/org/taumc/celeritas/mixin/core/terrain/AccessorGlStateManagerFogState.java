@@ -5,7 +5,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(GlStateManager.FogState.class)
-public interface GlStateManagerFogStateAccessor {
+public interface AccessorGlStateManagerFogState {
     @Accessor("fog")
     GlStateManager.BooleanState celeritas$getFog();
 

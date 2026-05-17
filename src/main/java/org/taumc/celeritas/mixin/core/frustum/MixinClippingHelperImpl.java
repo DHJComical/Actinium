@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.taumc.celeritas.impl.render.frustum.IClippingHelper;
 
 @Mixin(ClippingHelperImpl.class)
-public abstract class ClippingHelperImplMixin extends ClippingHelper implements IClippingHelper {
+public abstract class MixinClippingHelperImpl extends ClippingHelper implements IClippingHelper {
     @Unique
     private final FrustumIntersection celeritas$frustum = new FrustumIntersection();
 

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Minecraft.class)
-public class MinecraftIrisLoadingCompleteMixin {
+public class MixinMinecraftIrisLoadingComplete {
     @Unique
     private static boolean celeritas$firstInitComplete;
 

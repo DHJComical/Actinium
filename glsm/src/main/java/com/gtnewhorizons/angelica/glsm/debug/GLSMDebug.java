@@ -26,12 +26,14 @@ public final class GLSMDebug {
     private static final int FFP_LIMIT = 20_000;
     private static final int DRAW_LIMIT = 20_000;
     private static final int CLIENT_ARRAY_LIMIT = 1_000;
+    private static final int BUFFER_BUILDER_LIMIT = 20_000;
 
     private static final AtomicInteger streamCount = new AtomicInteger();
     private static final AtomicInteger quadCount = new AtomicInteger();
     private static final AtomicInteger ffpCount = new AtomicInteger();
     private static final AtomicInteger drawCount = new AtomicInteger();
     private static final AtomicInteger clientArrayCount = new AtomicInteger();
+    private static final AtomicInteger bufferBuilderCount = new AtomicInteger();
 
     private static long lastOptionRefresh;
     private static boolean cachedEnabled;
@@ -189,6 +191,32 @@ public final class GLSMDebug {
             savedVbo,
             GLStateManager.getBoundVAO(),
             sb);
+    }
+
+    public static void logBufferBuilderUpload(
+            String format,
+            int drawMode,
+            int vertexFlags,
+            int stride,
+            int vertexCount,
+            int byteCount,
+            int vao,
+            int vbo) {
+        if (!shouldLogWorldRender()) return;
+        final int count = bufferBuilderCount.incrementAndGet();
+        if (count > BUFFER_BUILDER_LIMIT) return;
+
+        LOGGER.info(
+            "bufferbuilder-upload #{} mode={} flags=0x{} stride={} vertices={} bytes={} vao={} vbo={} format={}",
+            count,
+            drawModeName(drawMode),
+            Integer.toHexString(vertexFlags),
+            stride,
+            vertexCount,
+            byteCount,
+            vao,
+            vbo,
+            format);
     }
 
     public static boolean forceOrphanStreaming() {

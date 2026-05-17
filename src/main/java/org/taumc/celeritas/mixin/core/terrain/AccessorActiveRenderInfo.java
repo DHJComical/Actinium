@@ -8,7 +8,7 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
 @Mixin(ActiveRenderInfo.class)
-public interface ActiveRenderInfoAccessor {
+public interface AccessorActiveRenderInfo {
     @Accessor("PROJECTION")
     static FloatBuffer getProjectionMatrix() {
         throw new AssertionError();

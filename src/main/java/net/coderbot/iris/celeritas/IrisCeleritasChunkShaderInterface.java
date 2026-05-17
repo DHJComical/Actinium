@@ -16,7 +16,7 @@ import net.coderbot.iris.shadows.ShadowRenderingState;
 import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import org.taumc.celeritas.mixin.core.terrain.EntityRendererAccessor;
+import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix3f;
@@ -106,7 +106,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, Minecraft.getMinecraft().getTextureMapBlocks().getGlTextureId());
 
         GLStateManager.glActiveTexture(GL13.GL_TEXTURE0 + IrisSamplers.LIGHTMAP_TEXTURE_UNIT);
-        final DynamicTexture lightmapTexture = ((EntityRendererAccessor) Minecraft.getMinecraft().entityRenderer).getLightmapTexture();
+        final DynamicTexture lightmapTexture = ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer).getLightmapTexture();
         GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, lightmapTexture.getGlTextureId());
 
         if (blendModeOverride != null) {

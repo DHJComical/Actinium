@@ -41,7 +41,7 @@ import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.light.LightDataCache;
 import org.taumc.celeritas.impl.render.terrain.compile.light.VintageDiffuseProvider;
 import org.taumc.celeritas.impl.world.cloned.CeleritasBlockAccess;
-import org.taumc.celeritas.mixin.core.terrain.BlockColorsAccessor;
+import org.taumc.celeritas.mixin.core.terrain.AccessorBlockColors;
 
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -78,7 +78,7 @@ public class VintageBlockRenderer {
         this.consumer = new VertexBufferConsumer();
         this.context = context;
         this.lighters = new LightPipelineProvider(cache, VintageDiffuseProvider.INSTANCE, true);
-        this.blockColors = ((BlockColorsAccessor)Minecraft.getMinecraft().getBlockColors()).getBlockColorMap();
+        this.blockColors = ((AccessorBlockColors)Minecraft.getMinecraft().getBlockColors()).getBlockColorMap();
         this.useRenderPassOptimization = CeleritasVintage.options().performance.useRenderPassOptimization;
     }
 

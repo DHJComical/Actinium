@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @SuppressWarnings("deprecation")
 @Mixin(targets = "net/minecraftforge/fml/client/SplashProgress")
-public class SplashProgressGLSMCachingMixin {
+public class MixinSplashProgress {
     @Inject(method = "start", at = @At("HEAD"))
     private static void celeritas$initSplashTessellator(CallbackInfo ci) {
         ImmediateModeRecorder.initSplashTessellator();

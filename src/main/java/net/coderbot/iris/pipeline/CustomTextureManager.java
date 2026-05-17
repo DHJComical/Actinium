@@ -27,7 +27,7 @@ import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.util.ResourceLocation;
 import org.apache.commons.io.FilenameUtils;
-import org.taumc.celeritas.mixin.core.terrain.EntityRendererAccessor;
+import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
 import org.lwjgl.opengl.GL11;
 
 import java.io.IOException;
@@ -102,7 +102,7 @@ public class CustomTextureManager {
 		} else if (textureData instanceof CustomTextureData.LightmapMarker) {
 			// Special code path for the light texture. While shader packs hardcode the primary light texture, it's possible that a mod will
 			// create a different light texture, so this code path is robust to that.
-			return new TextureWrapper(() -> ((EntityRendererAccessor) Minecraft.getMinecraft().entityRenderer).getLightmapTexture().getGlTextureId(), TextureType.TEXTURE_2D);
+			return new TextureWrapper(() -> ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer).getLightmapTexture().getGlTextureId(), TextureType.TEXTURE_2D);
 		} else if (textureData instanceof CustomTextureData.RawData1D rawData) {
 			final GlTexture texture = new GlTexture(TextureType.TEXTURE_1D, rawData.getSizeX(), 0, 0, rawData.getInternalFormat().getGlFormat(), rawData.getPixelFormat().getGlFormat(), rawData.getPixelType().getGlFormat(), rawData.getContent(), rawData.getFilteringData());
 			ownedRawTextures.add(texture);

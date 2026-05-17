@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 @Mixin(EntityRenderer.class)
-public interface EntityRendererAccessor {
+public interface AccessorEntityRenderer {
     @Accessor("fogColorRed")
     float celeritas$getFogColorRed();
 

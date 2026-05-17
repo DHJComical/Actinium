@@ -5,7 +5,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(Chunk.class)
-public interface ChunkAccessor {
+public interface AccessorChunk {
     @Accessor("hasEntities")
     boolean celeritas$getHasEntities();
 }

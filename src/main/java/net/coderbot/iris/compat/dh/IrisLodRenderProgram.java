@@ -13,7 +13,6 @@ import net.coderbot.iris.gl.program.ProgramUniforms;
 import net.coderbot.iris.gl.shader.GlShader;
 import net.coderbot.iris.gl.shader.ShaderType;
 import net.coderbot.iris.gl.state.FogMode;
-import net.coderbot.iris.gl.texture.TextureType;
 import net.coderbot.iris.pipeline.DeferredWorldRenderingPipeline;
 import net.coderbot.iris.pipeline.PatchedShaderPrinter;
 import net.coderbot.iris.pipeline.transform.PatchShaderType;
@@ -25,14 +24,13 @@ import net.coderbot.iris.uniforms.builtin.BuiltinReplacementUniforms;
 import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import org.taumc.celeritas.mixin.core.terrain.EntityRendererAccessor;
+import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL32;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
@@ -225,7 +223,7 @@ public class IrisLodRenderProgram {
         GLStateManager.glUseProgram(id);
 
         GLStateManager.glActiveTexture(GL13.GL_TEXTURE0 + IrisSamplers.LIGHTMAP_TEXTURE_UNIT);
-        DynamicTexture lightmapTexture = ((EntityRendererAccessor) Minecraft.getMinecraft().entityRenderer).getLightmapTexture();
+        DynamicTexture lightmapTexture = ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer).getLightmapTexture();
         GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, lightmapTexture.getGlTextureId());
         setUniform(modelViewUniform, modelView);
         setUniform(modelViewInverseUniform, modelView.invert(tempMat4a));

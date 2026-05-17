@@ -3,7 +3,6 @@ package org.taumc.celeritas.mixin.core.startup;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;
-import com.gtnewhorizons.angelica.glsm.recording.ImmediateModeRecorder;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import net.coderbot.iris.Iris;
 import net.minecraft.client.Minecraft;
@@ -15,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = OpenGlHelper.class, priority = 100)
-public class OpenGlHelperGLSMInitMixin {
+public class MixinOpenGlHelper {
     @Inject(method = "initializeTextures", at = @At("RETURN"))
     private static void celeritas$initializeGLStateManager(CallbackInfo ci) {
         final Minecraft mc = Minecraft.getMinecraft();

@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(ChunkProviderClient.class)
-public interface ChunkProviderClientAccessor {
+public interface AccessorChunkProviderClient {
     @Accessor("loadedChunks")
     Long2ObjectMap<Chunk> celeritas$getLoadedChunks();
 }

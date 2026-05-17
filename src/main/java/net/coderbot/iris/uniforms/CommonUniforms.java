@@ -9,7 +9,6 @@ import com.gtnewhorizons.angelica.client.rendering.TextureTracker;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.gl.state.FogMode;
 import net.coderbot.iris.gl.state.StateUpdateNotifiers;
-import net.coderbot.iris.gl.state.ValueUpdateNotifier;
 import net.coderbot.iris.gl.uniform.DynamicUniformHolder;
 import net.coderbot.iris.gl.uniform.UniformHolder;
 import net.coderbot.iris.layer.GbufferPrograms;
@@ -32,7 +31,7 @@ import org.joml.Vector2f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
 import org.joml.Vector4i;
-import org.taumc.celeritas.mixin.core.terrain.EntityRendererAccessor;
+import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
 
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_FRAME;
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_TICK;
@@ -245,7 +244,7 @@ public final class CommonUniforms {
             if (!entityPlayer.isPotionActive(MobEffects.NIGHT_VISION)) {
                 return 0.0F;
             }
-            float nightVisionStrength = ((EntityRendererAccessor)client.entityRenderer).invokeGetNightVisionBrightness(entityPlayer, CapturedRenderingState.INSTANCE.getTickDelta());
+            float nightVisionStrength = ((AccessorEntityRenderer)client.entityRenderer).invokeGetNightVisionBrightness(entityPlayer, CapturedRenderingState.INSTANCE.getTickDelta());
 
 			try {
 				if (nightVisionStrength > 0) {

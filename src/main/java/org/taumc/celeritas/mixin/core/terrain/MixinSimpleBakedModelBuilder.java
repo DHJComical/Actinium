@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 @Mixin(SimpleBakedModel.Builder.class)
-public class SimpleBakedModelBuilderMixin {
+public class MixinSimpleBakedModelBuilder {
     @ModifyArg(method = { "addFaceQuad", "addGeneralQuad" }, at = @At(value = "INVOKE", target = "Ljava/util/List;add(Ljava/lang/Object;)Z", remap = false), require = 0)
     private Object setVanillaShadingFlag(Object quad) {
         BakedQuadView view = (BakedQuadView)quad;

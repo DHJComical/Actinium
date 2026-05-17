@@ -9,7 +9,7 @@ import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.world.cloned.CeleritasBlockAccess;
 
 @Mixin(value = BiomeColorHelper.class, priority = 1200)
-public class BiomeColorHelperMixin {
+public class MixinBiomeColorHelper {
     /**
      * @author embeddedt
      * @reason reduce allocation rate, use Sodium's biome cache, use configurable biome blending

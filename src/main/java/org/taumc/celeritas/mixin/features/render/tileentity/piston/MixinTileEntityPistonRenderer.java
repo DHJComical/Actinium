@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Mixin(TileEntityPistonRenderer.class)
-public class TileEntityPistonRendererMixin {
+public class MixinTileEntityPistonRenderer {
     /**
      * @author embeddedt
      * @reason Pistons appear to flicker if the TESR stops rendering before the chunk mesh updates with the block model.

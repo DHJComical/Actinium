@@ -12,7 +12,7 @@ import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.gui.CeleritasWindowModeController;
 
 @Mixin(Minecraft.class)
-public class MinecraftMixin {
+public class MixinMinecraft {
     @Unique
     private final RenderAheadManager celeritas$renderAheadManager = new RenderAheadManager();
 

@@ -5,7 +5,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(GlStateManager.class)
-public interface GlStateManagerAccessor {
+public interface AccessorGlStateManager {
     @Accessor("fogState")
     static GlStateManager.FogState celeritas$getFogState() {
         throw new AssertionError();

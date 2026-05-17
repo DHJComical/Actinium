@@ -45,7 +45,7 @@ import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
 import java.util.*;
 
 @Mixin(RenderGlobal.class)
-public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<CeleritasWorldRenderer> {
+public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<CeleritasWorldRenderer> {
 
     @Shadow
     @Final

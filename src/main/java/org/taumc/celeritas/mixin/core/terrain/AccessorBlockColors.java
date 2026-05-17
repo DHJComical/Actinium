@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 import java.util.Map;
 
 @Mixin(BlockColors.class)
-public interface BlockColorsAccessor {
+public interface AccessorBlockColors {
     @Accessor("blockColorMap")
     Map<IRegistryDelegate<Block>, IBlockColor> getBlockColorMap();
 }

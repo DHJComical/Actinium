@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ChunkProviderClient.class)
-public abstract class ClientChunkManagerMixin {
+public abstract class MixinClientChunkManager {
     @Shadow
     @Final
     private World world;

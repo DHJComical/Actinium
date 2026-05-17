@@ -9,7 +9,7 @@ import org.taumc.celeritas.impl.render.frustum.IClippingHelper;
 import org.taumc.celeritas.impl.render.terrain.CameraHelper;
 
 @Mixin(Frustum.class)
-public class FrustumMixin implements ViewportProvider {
+public class MixinFrustum implements ViewportProvider {
     @Shadow
     @Final
     private ClippingHelper clippingHelper;

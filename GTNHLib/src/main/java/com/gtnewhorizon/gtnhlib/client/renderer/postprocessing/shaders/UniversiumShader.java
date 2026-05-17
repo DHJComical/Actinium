@@ -15,7 +15,7 @@ import org.lwjgl.opengl.GL20;
 import com.gtnewhorizon.gtnhlib.GTNHLib;
 import com.gtnewhorizon.gtnhlib.client.renderer.shader.ShaderProgram;
 import com.gtnewhorizon.gtnhlib.client.renderer.textures.TextureAtlas;
-import org.taumc.celeritas.mixin.core.terrain.EntityRendererAccessor;
+import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
 
 // This was largely copied from avaritia
 public final class UniversiumShader extends ShaderProgram {
@@ -215,7 +215,7 @@ public final class UniversiumShader extends ShaderProgram {
 
         int coord = world.getCombinedLight(new BlockPos(x, y, z), 0);
 
-        int[] map = ((EntityRendererAccessor) Minecraft.getMinecraft().entityRenderer).getLightmapColors();
+        int[] map = ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer).getLightmapColors();
 
         if (map == null) {
             return setLightLevel(1.0f);

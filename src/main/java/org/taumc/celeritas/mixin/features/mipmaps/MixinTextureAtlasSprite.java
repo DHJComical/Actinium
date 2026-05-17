@@ -15,7 +15,7 @@ import org.taumc.celeritas.impl.extensions.SpriteExtension;
 import java.util.List;
 
 @Mixin(TextureAtlasSprite.class)
-public abstract class TextureAtlasSpriteMixin implements SpriteExtension, SpriteTransparencyLevel.Holder {
+public abstract class MixinTextureAtlasSprite implements SpriteExtension, SpriteTransparencyLevel.Holder {
     @Shadow
     protected List<int[][]> framesTextureData;
 

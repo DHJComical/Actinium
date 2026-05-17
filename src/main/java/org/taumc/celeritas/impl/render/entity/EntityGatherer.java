@@ -4,8 +4,8 @@ import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.ClassInheritanceMultiMap;
 import net.minecraft.world.chunk.Chunk;
-import org.taumc.celeritas.mixin.core.terrain.ChunkAccessor;
-import org.taumc.celeritas.mixin.core.terrain.ChunkProviderClientAccessor;
+import org.taumc.celeritas.mixin.core.terrain.AccessorChunk;
+import org.taumc.celeritas.mixin.core.terrain.AccessorChunkProviderClient;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,10 +43,10 @@ public class EntityGatherer {
         Consumer<Entity> addEntity = this.addEntity;
         // Iterate directly over chunk entity lists where possible - mods may create multipart entities that are not
         // added to the main loadedEntityList.
-        if (world.getChunkProvider() instanceof ChunkProviderClientAccessor provider) {
+        if (world.getChunkProvider() instanceof AccessorChunkProviderClient provider) {
             var loadedChunks = provider.celeritas$getLoadedChunks();
             for (Chunk chunk : loadedChunks.values()) {
-                if (!((ChunkAccessor)chunk).celeritas$getHasEntities()) {
+                if (!((AccessorChunk)chunk).celeritas$getHasEntities()) {
                     continue;
                 }
                 ClassInheritanceMultiMap<Entity>[] entityMaps = chunk.getEntityLists();

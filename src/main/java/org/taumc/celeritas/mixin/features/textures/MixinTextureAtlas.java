@@ -22,7 +22,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 @Mixin(TextureMap.class)
-public class TextureAtlasMixin implements TextureMapExtension {
+public class MixinTextureAtlas implements TextureMapExtension {
     @Shadow
     @Final
     private Map<String, TextureAtlasSprite> mapUploadedSprites;

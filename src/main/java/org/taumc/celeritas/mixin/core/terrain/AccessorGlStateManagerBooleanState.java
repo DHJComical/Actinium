@@ -5,7 +5,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(GlStateManager.BooleanState.class)
-public interface GlStateManagerBooleanStateAccessor {
+public interface AccessorGlStateManagerBooleanState {
     @Accessor("currentState")
     boolean celeritas$getCurrentState();
 }

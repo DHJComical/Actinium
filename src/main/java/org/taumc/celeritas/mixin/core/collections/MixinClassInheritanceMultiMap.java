@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 @Mixin(ClassInheritanceMultiMap.class)
-public abstract class ClassInheritanceMultiMapMixin<T> extends AbstractSet<T> {
+public abstract class MixinClassInheritanceMultiMap<T> extends AbstractSet<T> {
     @Shadow
     @Final
     private List<T> values;
