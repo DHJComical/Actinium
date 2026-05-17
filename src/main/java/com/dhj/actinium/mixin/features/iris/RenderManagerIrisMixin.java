@@ -64,6 +64,10 @@ public class RenderManagerIrisMixin {
                     "before-do-render",
                     GbufferPrograms.getCurrentPhase().name(),
                     entity.getClass().getName());
+            IrisGlDebug.logActiveTextureBindings(
+                    "before-do-render",
+                    GbufferPrograms.getCurrentPhase().name(),
+                    entity.getClass().getName());
             IrisGlDebug.logCurrentFramebufferAttachments(
                     "before-do-render",
                     GbufferPrograms.getCurrentPhase().name(),
@@ -76,6 +80,10 @@ public class RenderManagerIrisMixin {
                     GbufferPrograms.getCurrentPhase().name(),
                     CapturedRenderingState.INSTANCE.getCurrentRenderedEntity());
             IrisGlDebug.logWorldPassState(
+                    "after-do-render",
+                    GbufferPrograms.getCurrentPhase().name(),
+                    entity.getClass().getName());
+            IrisGlDebug.logActiveTextureBindings(
                     "after-do-render",
                     GbufferPrograms.getCurrentPhase().name(),
                     entity.getClass().getName());

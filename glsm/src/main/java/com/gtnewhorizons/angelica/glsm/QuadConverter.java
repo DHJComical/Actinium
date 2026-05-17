@@ -1,5 +1,6 @@
 package com.gtnewhorizons.angelica.glsm;
 
+import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.states.VertexAttribState;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
@@ -91,6 +92,7 @@ public final class QuadConverter {
         RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
         // Index offset: first vertex / 4 quads * 6 indices * 4 bytes per int
         final long indexOffset = (long) (first / 4) * 6 * 4;
+        GLSMDebug.logQuadConversion(first, vertexCount, eboId, prevEbo, indexOffset);
         RENDER_BACKEND.drawElements(GL11.GL_TRIANGLES, quadCount * 6, INDEX_TYPE, indexOffset);
         RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
     }

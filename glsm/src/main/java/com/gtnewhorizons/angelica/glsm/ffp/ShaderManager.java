@@ -4,6 +4,7 @@ import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormat;
 import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredBlendHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.stacks.Vec3fStack;
@@ -120,6 +121,7 @@ public class ShaderManager {
 
     public void preDraw(int vertexFlags) {
         currentVertexFlags = vertexFlags;
+        GLSMDebug.logFfpPreDraw(vertexFlags);
         preDraw(
             (vertexFlags & VertexFlags.COLOR_BIT) != 0,
             (vertexFlags & VertexFlags.NORMAL_BIT) != 0,

@@ -66,11 +66,7 @@ public final class IrisGlDebug {
 			return false;
 		}
 
-		try {
-			return IrisApiV0Impl.INSTANCE.isShaderPackInUse();
-		} catch (RuntimeException ignored) {
-			return false;
-		}
+		return true;
 	}
 
 	public static void logSamplerInitialization(int program, String mode, String name, int location, int assignedUnit) {

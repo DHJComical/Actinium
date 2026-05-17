@@ -269,7 +269,15 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ItemRenderer;renderItemInFirstPerson(F)V")
     )
     private void actinium$disableVanillaShaderHand(ItemRenderer itemRenderer, float partialTicks) {
-        if (!IrisApi.getInstance().isShaderPackInUse()) {
+        boolean shaderPackInUse = IrisApi.getInstance().isShaderPackInUse();
+        IrisGlDebug.logWorldPassState("vanilla-hand-redirect", WorldRenderingPhase.NONE.name(), "renderHand");
+        IrisGlDebug.logDebugInfo(
+            "vanilla-hand-redirect partialTicks={} shaderPackInUse={} willRenderVanilla={}",
+            partialTicks,
+            shaderPackInUse,
+            !shaderPackInUse
+        );
+        if (!shaderPackInUse) {
             itemRenderer.renderItemInFirstPerson(partialTicks);
         }
     }

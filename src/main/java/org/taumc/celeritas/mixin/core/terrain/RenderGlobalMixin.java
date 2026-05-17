@@ -124,6 +124,8 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
      */
     @Overwrite
     public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
+        WorldRenderingPipeline entryPipeline = Iris.enabled ? Iris.getPipelineManager().getPipelineNullable() : null;
+        IrisGlDebug.logWorldPassState("render-block-layer-entry", entryPipeline != null ? entryPipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
         WorldRenderingPipeline pipeline = null;
         if (Iris.enabled) {
             pipeline = Iris.getPipelineManager().getPipelineNullable();
@@ -150,8 +152,10 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
         GlStateManager.bindTexture(this.mc.getTextureMapBlocks().getGlTextureId());
         GlStateManager.enableTexture2D();
+        IrisGlDebug.logActiveTextureBindings("render-block-layer-after-bind-atlas", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
         this.mc.entityRenderer.enableLightmap();
+        IrisGlDebug.logWorldPassState("render-block-layer-after-enable-lightmap", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
         double d3 = entityIn.lastTickPosX + (entityIn.posX - entityIn.lastTickPosX) * partialTicks;
         double d4 = entityIn.lastTickPosY + (entityIn.posY - entityIn.lastTickPosY) * partialTicks;
@@ -164,9 +168,12 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         }
 
         this.mc.entityRenderer.disableLightmap();
+        IrisGlDebug.logWorldPassState("render-block-layer-after-disable-lightmap", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
         if (pipeline != null) {
+            IrisGlDebug.logWorldPassState("before-reset-terrain-phase", pipeline.getPhase().name(), blockLayerIn.name());
             pipeline.setPhase(WorldRenderingPhase.NONE);
+            IrisGlDebug.logWorldPassState("after-reset-terrain-phase", pipeline.getPhase().name(), blockLayerIn.name());
         }
 
         return 1;
@@ -261,10 +268,14 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
     }
 
     private void actinium$beginIrisTranslucents(WorldRenderingPipeline pipeline, float partialTicks) {
+        IrisGlDebug.logWorldPassState("before-begin-hand", pipeline.getPhase().name(), "translucent-prelude");
         pipeline.beginHand();
+        IrisGlDebug.logWorldPassState("after-begin-hand", pipeline.getPhase().name(), "translucent-prelude");
         HandRenderer.INSTANCE.renderSolid(partialTicks, Camera.INSTANCE, this.mc.renderGlobal, pipeline);
+        IrisGlDebug.logWorldPassState("after-hand-solid", pipeline.getPhase().name(), "translucent-prelude");
         this.mc.profiler.endStartSection("iris_pre_translucent");
         pipeline.beginTranslucents();
+        IrisGlDebug.logWorldPassState("after-begin-translucents", pipeline.getPhase().name(), "translucent-prelude");
     }
 
     /**
@@ -309,8 +320,11 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         int rendered = 0;
 
         boolean irisEntities = Iris.enabled && IrisApiV0Impl.INSTANCE.isShaderPackInUse();
+        IrisGlDebug.logWorldPassState("render-entities-entry", irisEntities ? GbufferPrograms.getCurrentPhase().name() : WorldRenderingPhase.NONE.name(), "render-global");
         if (irisEntities) {
+            IrisGlDebug.logWorldPassState("before-begin-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");
             GbufferPrograms.beginEntities();
+            IrisGlDebug.logWorldPassState("after-begin-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");
         }
         try {
             for(Entity entity : celeritas$collectedEntities[pass]) {
@@ -378,7 +392,9 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
             WorldRenderingPhase phaseBeforeEnd = irisEntities ? GbufferPrograms.getCurrentPhase() : WorldRenderingPhase.NONE;
             if (irisEntities) {
                 CapturedRenderingState.INSTANCE.setCurrentEntity(-1);
+                IrisGlDebug.logWorldPassState("before-end-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");
                 GbufferPrograms.endEntities();
+                IrisGlDebug.logWorldPassState("after-end-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");
             }
             IrisGlDebug.logEntityLoopSummary(
                     "render-global",

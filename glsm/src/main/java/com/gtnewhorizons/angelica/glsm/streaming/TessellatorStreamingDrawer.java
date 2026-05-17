@@ -8,6 +8,7 @@ import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.ITessellatorData;
 import com.gtnewhorizons.angelica.glsm.QuadConverter;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -55,7 +56,9 @@ public class TessellatorStreamingDrawer {
         if (initialized) return;
         initialized = true;
 
-        if (RenderSystem.supportsBufferStorage() && !Boolean.getBoolean("angelica.forceOrphanStreaming")) {
+        if (RenderSystem.supportsBufferStorage()
+            && !Boolean.getBoolean("angelica.forceOrphanStreaming")
+            && !GLSMDebug.forceOrphanStreaming()) {
             try {
                 persistentBuffer = new PersistentStreamingBuffer();
                 LOGGER.info("Persistent streaming buffer created ({}MB)", PersistentStreamingBuffer.DEFAULT_CAPACITY / (1024 * 1024));
@@ -196,14 +199,32 @@ public class TessellatorStreamingDrawer {
             firstVertex = persistentBuffer.upload(packed, vertexSize);
         }
 
-        if (firstVertex >= 0) {
+        final boolean persistentPath = firstVertex >= 0;
+        final int vao;
+        final int bufferId;
+        if (persistentPath) {
+            vao = persistentVAOs[flags];
+            bufferId = persistentBuffer.getBufferId();
             GLStateManager.glBindVertexArray(persistentVAOs[flags]);
         } else {
+            vao = orphanVAOs[flags];
+            bufferId = orphanBuffers[flags].getBufferId();
             GLStateManager.glBindVertexArray(orphanVAOs[flags]);
             orphanBuffers[flags].upload(packed);
             firstVertex = 0;
         }
 
+        GLSMDebug.logStreamingDraw(
+            drawMode,
+            flags,
+            vertexSize,
+            vertexCount,
+            vertexCount * vertexSize,
+            firstVertex,
+            persistentPath,
+            vao,
+            bufferId,
+            packed);
         GLStateManager.prepareWideLineEmulation(drawMode);
         ShaderManager.getInstance().preDraw(flags);
         drawWithQuadConversion(drawMode, firstVertex, vertexCount);

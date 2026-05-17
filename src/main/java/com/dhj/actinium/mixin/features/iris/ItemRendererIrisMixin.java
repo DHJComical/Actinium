@@ -1,6 +1,7 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import com.gtnewhorizons.angelica.compat.mojang.InteractionHand;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.pipeline.HandRenderer;
 import net.coderbot.iris.uniforms.ItemIdManager;
 import net.irisshaders.iris.api.v0.IrisApi;
@@ -22,8 +23,19 @@ public class ItemRendererIrisMixin {
             return;
         }
 
-        boolean handTranslucent = HandRenderer.INSTANCE.isHandTranslucent(InteractionHand.MAIN_HAND);
-        if (HandRenderer.INSTANCE.isRenderingSolid() == handTranslucent) {
+        boolean mainHandTranslucent = HandRenderer.INSTANCE.isHandTranslucent(InteractionHand.MAIN_HAND);
+        boolean offHandTranslucent = HandRenderer.INSTANCE.isHandTranslucent(InteractionHand.OFF_HAND);
+        boolean cancel = HandRenderer.INSTANCE.isRenderingSolid() == mainHandTranslucent;
+        IrisGlDebug.logDebugInfo(
+            "hand-pass-decision partialTicks={} active={} renderingSolid={} mainTranslucent={} offTranslucent={} cancel={}",
+            partialTicks,
+            HandRenderer.INSTANCE.isActive(),
+            HandRenderer.INSTANCE.isRenderingSolid(),
+            mainHandTranslucent,
+            offHandTranslucent,
+            cancel
+        );
+        if (cancel) {
             ci.cancel();
         }
     }
