@@ -6,6 +6,7 @@ import com.dhj.actinium.shadows.ShadowRenderingState;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.debug.IrisGlDebug;
+import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.pipeline.HandRenderer;
@@ -268,6 +269,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     }
 
     private void actinium$beginIrisTranslucents(WorldRenderingPipeline pipeline, float partialTicks) {
+        MinecraftFramebufferHelper.restoreMinecraftFramebufferBuffers();
         IrisGlDebug.logWorldPassState("before-begin-hand", pipeline.getPhase().name(), "translucent-prelude");
         pipeline.beginHand();
         IrisGlDebug.logWorldPassState("after-begin-hand", pipeline.getPhase().name(), "translucent-prelude");

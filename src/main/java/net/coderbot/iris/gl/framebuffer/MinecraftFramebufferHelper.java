@@ -5,7 +5,6 @@ import net.minecraft.client.shader.Framebuffer;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
-import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
 public final class MinecraftFramebufferHelper {
@@ -30,13 +29,13 @@ public final class MinecraftFramebufferHelper {
         // Iris uses custom FBOs with explicit COLOR_ATTACHMENT draw/read buffers.
         // Minecraft's own framebuffer is also an FBO on 1.12, so restore its single color attachment
         // whenever Minecraft binds it directly.
-        GL20.glDrawBuffers(GL30.GL_COLOR_ATTACHMENT0);
-        GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+        GLStateManager.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
+        GLStateManager.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
     }
 
     public static void restoreDefaultFramebufferBuffers() {
-        GL11.glDrawBuffer(GL11.GL_BACK);
-        GL11.glReadBuffer(GL11.GL_BACK);
+        GLStateManager.glDrawBuffer(GL11.GL_BACK);
+        GLStateManager.glReadBuffer(GL11.GL_BACK);
     }
 
     public static void bindDefaultFramebuffer() {

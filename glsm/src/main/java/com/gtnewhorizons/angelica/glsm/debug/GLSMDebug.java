@@ -27,6 +27,7 @@ public final class GLSMDebug {
     private static final int DRAW_LIMIT = 20_000;
     private static final int CLIENT_ARRAY_LIMIT = 1_000;
     private static final int BUFFER_BUILDER_LIMIT = 20_000;
+    private static final int VERTEX_BUFFER_LIMIT = 20_000;
 
     private static final AtomicInteger streamCount = new AtomicInteger();
     private static final AtomicInteger quadCount = new AtomicInteger();
@@ -34,6 +35,7 @@ public final class GLSMDebug {
     private static final AtomicInteger drawCount = new AtomicInteger();
     private static final AtomicInteger clientArrayCount = new AtomicInteger();
     private static final AtomicInteger bufferBuilderCount = new AtomicInteger();
+    private static final AtomicInteger vertexBufferCount = new AtomicInteger();
 
     private static long lastOptionRefresh;
     private static boolean cachedEnabled;
@@ -214,6 +216,39 @@ public final class GLSMDebug {
             stride,
             vertexCount,
             byteCount,
+            vao,
+            vbo,
+            format);
+    }
+
+    public static void logVertexBufferUpload(String format, int vertexFlags, int stride, int byteCount, int vbo, int vao) {
+        if (!shouldLogWorldRender()) return;
+        final int count = vertexBufferCount.incrementAndGet();
+        if (count > VERTEX_BUFFER_LIMIT) return;
+
+        LOGGER.info(
+            "vertexbuffer-upload #{} flags=0x{} stride={} bytes={} vao={} vbo={} format={}",
+            count,
+            Integer.toHexString(vertexFlags),
+            stride,
+            byteCount,
+            vao,
+            vbo,
+            format);
+    }
+
+    public static void logVertexBufferDraw(String format, int drawMode, int vertexFlags, int stride, int vertexCount, int vbo, int vao) {
+        if (!shouldLogWorldRender()) return;
+        final int count = vertexBufferCount.incrementAndGet();
+        if (count > VERTEX_BUFFER_LIMIT) return;
+
+        LOGGER.info(
+            "vertexbuffer-draw #{} mode={} flags=0x{} stride={} vertices={} vao={} vbo={} format={}",
+            count,
+            drawModeName(drawMode),
+            Integer.toHexString(vertexFlags),
+            stride,
+            vertexCount,
             vao,
             vbo,
             format);
