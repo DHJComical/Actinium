@@ -17,14 +17,12 @@ import java.util.List;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memAddress0;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memAlloc;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memCopy;
-import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memFree;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.nmemFree;
 
 /**
  * Compiles multiple ByteBuffers of the same Vertex format into a VBO. Any buffer added to the builder will be freed afterward.
  */
 public final class DisplayListVBOBuilder {
-
     // Removes the need for a HashMap. Since it's only an array of 16 values, this should be faster
     private final List<FormatData>[] formats = new List[VertexFlags.BITSET_SIZE];
     private int count;
@@ -88,18 +86,19 @@ public final class DisplayListVBOBuilder {
 
                 start += vertexCount;
             }
-            ByteBuffer bigBuffer = mergeAndDelete(allBuffers);
-            vbo.allocate(bigBuffer, start);
-            memFree(bigBuffer);
+            MergedBuffer bigBuffer = mergeAndDelete(allBuffers);
+            vbo.allocate(bigBuffer.buffer, start);
+            nmemFree(bigBuffer.address);
 
             allBuffers.clear();
         }
         return new DisplayListVBO(vbos);
     }
 
-    private static ByteBuffer mergeAndDelete(List<ByteBuffer> buffers) {
+    private static MergedBuffer mergeAndDelete(List<ByteBuffer> buffers) {
         if (buffers.size() == 1) {
-            return buffers.get(0);
+            final ByteBuffer buffer = buffers.get(0);
+            return new MergedBuffer(buffer, memAddress0(buffer));
         }
         int needed = 0;
         for (ByteBuffer buffer : buffers) {
@@ -107,10 +106,11 @@ public final class DisplayListVBOBuilder {
         }
 
         ByteBuffer out = memAlloc(needed);
-        long dst = memAddress0(out);
+        final long outAddress = memAddress0(out);
+        long dst = outAddress;
 
         for (ByteBuffer buffer : buffers) {
-            final int len = buffer.limit();
+            final int len = buffer.remaining();
             final long address = memAddress0(buffer);
             memCopy(address, dst, len);
             dst += len;
@@ -119,7 +119,17 @@ public final class DisplayListVBOBuilder {
         }
 
         out.limit(needed);
-        return out;
+        return new MergedBuffer(out, outAddress);
+    }
+
+    private static final class MergedBuffer {
+        private final ByteBuffer buffer;
+        private final long address;
+
+        private MergedBuffer(ByteBuffer buffer, long address) {
+            this.buffer = buffer;
+            this.address = address;
+        }
     }
 
     private static final class FormatData {

@@ -60,6 +60,10 @@ public class DirectTessellator {
         this(memAlloc(capacity), true);
     }
 
+    public DirectTessellator(int capacity, boolean deleteAfter) {
+        this(memAlloc(capacity), deleteAfter);
+    }
+
     public DirectTessellator(ByteBuffer initial, boolean deleteAfter) {
         this.baseBuffer = initial;
 

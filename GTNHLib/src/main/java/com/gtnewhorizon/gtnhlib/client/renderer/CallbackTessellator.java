@@ -24,6 +24,10 @@ public final class CallbackTessellator extends DirectTessellator {
         super(capacity);
     }
 
+    public CallbackTessellator(int capacity, boolean deleteAfter) {
+        super(capacity, deleteAfter);
+    }
+
     public CallbackTessellator(ByteBuffer initial, boolean deleteAfter) {
         super(initial, deleteAfter);
     }

@@ -10,8 +10,8 @@ public final class TessellatorManager {
     public static final int DEFAULT_BUFFER_SIZE = 0x8000;
     private static final int DIRECT_TESSELLATOR_STACK_DEPTH = 16;
 
-    private static final DirectTessellator mainInstance = new DirectTessellator(DEFAULT_BUFFER_SIZE);
-    private static final CallbackTessellator mainCallbackInstance = new CallbackTessellator(DEFAULT_BUFFER_SIZE);
+    private static final DirectTessellator mainInstance = new DirectTessellator(DEFAULT_BUFFER_SIZE, false);
+    private static final CallbackTessellator mainCallbackInstance = new CallbackTessellator(DEFAULT_BUFFER_SIZE, false);
     private static final DirectTessellator[] directTessellators = new DirectTessellator[DIRECT_TESSELLATOR_STACK_DEPTH];
 
     private static int directTessellatorIndex = -1;
