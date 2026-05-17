@@ -66,7 +66,6 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
             return;
         }
 
-        IrisGlDebug.check("mixin:begin-world:entry");
         CapturedRenderingState.INSTANCE.setTickDelta(partialTicks);
         SystemTimeUniforms.COUNTER.beginFrame();
         SystemTimeUniforms.TIMER.beginFrame(System.nanoTime());
@@ -75,9 +74,8 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
         WorldRenderingPipeline pipeline = Iris.getPipelineManager().preparePipeline(Iris.getCurrentDimensionName());
         BlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
-        IrisGlDebug.check("mixin:begin-world:prepared");
         pipeline.beginLevelRendering();
-        IrisGlDebug.check("mixin:begin-world:done");
+        IrisGlDebug.markStage("mixin:begin-world:done");
     }
 
     @Inject(
@@ -103,7 +101,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderWorld(FJ)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterRenderWorld(float partialTicks, long nanoTime, CallbackInfo ci) {
-        IrisGlDebug.check("entity-renderer:after-render-world");
+        IrisGlDebug.markStage("entity-renderer:after-render-world");
     }
 
     @Inject(
@@ -111,7 +109,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderEntityOutlineFramebuffer()V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterEntityOutlineFramebuffer(float partialTicks, long nanoTime, CallbackInfo ci) {
-        IrisGlDebug.check("entity-renderer:after-entity-outline-fbo");
+        IrisGlDebug.markStage("entity-renderer:after-entity-outline-fbo");
     }
 
     @Inject(
@@ -119,7 +117,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/shader/ShaderGroup;render(F)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterShaderGroup(float partialTicks, long nanoTime, CallbackInfo ci) {
-        IrisGlDebug.check("entity-renderer:after-shader-group");
+        IrisGlDebug.markStage("entity-renderer:after-shader-group");
     }
 
     @Inject(
@@ -127,7 +125,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiIngame;renderGameOverlay(F)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterGameOverlay(float partialTicks, long nanoTime, CallbackInfo ci) {
-        IrisGlDebug.check("entity-renderer:after-game-overlay");
+        IrisGlDebug.markStage("entity-renderer:after-game-overlay");
     }
 
     @Inject(
@@ -135,7 +133,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;drawScreen(Lnet/minecraft/client/gui/GuiScreen;IIF)V", shift = At.Shift.AFTER, remap = false)
     )
     private void actinium$checkAfterDrawScreen(float partialTicks, long nanoTime, CallbackInfo ci) {
-        IrisGlDebug.check("entity-renderer:after-draw-screen");
+        IrisGlDebug.markStage("entity-renderer:after-draw-screen");
     }
 
     @Inject(
@@ -147,11 +145,11 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
             return;
         }
 
-        IrisGlDebug.check("mixin:shadows:entry");
+        IrisGlDebug.markStage("mixin:shadows:entry");
         WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
         if (pipeline != null) {
             pipeline.renderShadows((EntityRenderer) (Object) this, Camera.INSTANCE);
-            IrisGlDebug.check("mixin:shadows:done");
+            IrisGlDebug.markStage("mixin:shadows:done");
         }
     }
 
@@ -160,7 +158,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderSky(FI)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterSky(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-sky");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-sky");
     }
 
     @Inject(
@@ -168,7 +166,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderCloudsCheck(Lnet/minecraft/client/renderer/RenderGlobal;FIDDD)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterClouds(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-clouds");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-clouds");
     }
 
     @Inject(
@@ -176,7 +174,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterSetupTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-setup-terrain");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-setup-terrain");
     }
 
     @Inject(
@@ -184,7 +182,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;updateChunks(J)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterUpdateChunks(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-update-chunks");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-update-chunks");
     }
 
     @Inject(
@@ -192,7 +190,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 0)
     )
     private void actinium$checkAfterSolidTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-terrain-solid");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-solid");
     }
 
     @Inject(
@@ -200,7 +198,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 1)
     )
     private void actinium$checkAfterCutoutMippedTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-terrain-cutout-mipped");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-cutout-mipped");
     }
 
     @Inject(
@@ -208,7 +206,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 2)
     )
     private void actinium$checkAfterCutoutTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-terrain-cutout");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-cutout");
     }
 
     @Inject(
@@ -224,7 +222,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;drawSelectionBox(Lnet/minecraft/entity/player/EntityPlayer;Lnet/minecraft/util/math/RayTraceResult;IF)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterSelectionBox(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-selection-box");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-selection-box");
     }
 
     @Inject(
@@ -232,7 +230,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;drawBlockDamageTexture(Lnet/minecraft/client/renderer/Tessellator;Lnet/minecraft/client/renderer/BufferBuilder;Lnet/minecraft/entity/Entity;F)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterBlockDamage(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-block-damage");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-block-damage");
     }
 
     @Inject(
@@ -240,7 +238,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/ParticleManager;renderLitParticles(Lnet/minecraft/entity/Entity;F)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterLitParticles(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-lit-particles");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-lit-particles");
     }
 
     @Inject(
@@ -248,7 +246,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/ParticleManager;renderParticles(Lnet/minecraft/entity/Entity;F)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterParticles(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-particles");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-particles");
     }
 
     @Inject(
@@ -256,7 +254,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderRainSnow(F)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterWeather(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-weather");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-weather");
     }
 
     @Inject(
@@ -264,7 +262,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 3)
     )
     private void actinium$checkAfterTranslucentTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-terrain-translucent");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-translucent");
     }
 
     @Inject(
@@ -280,7 +278,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;dispatchRenderLast(Lnet/minecraft/client/renderer/RenderGlobal;F)V", shift = At.Shift.AFTER, remap = false)
     )
     private void actinium$checkAfterRenderLast(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("render-world-pass:" + pass + ":after-render-last");
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-render-last");
     }
 
     @Inject(
@@ -301,21 +299,21 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         }
 
         MinecraftFramebufferHelper.restoreMinecraftFramebufferBuffers();
-        IrisGlDebug.check("mixin:finalize:entry");
+        IrisGlDebug.markStage("mixin:finalize:entry");
         WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
         if (pipeline == null) {
             return;
         }
 
-        IrisGlDebug.check("mixin:finalize:before-hand-translucent");
+        IrisGlDebug.markStage("mixin:finalize:before-hand-translucent");
         HandRenderer.INSTANCE.renderTranslucent(partialTicks, Camera.INSTANCE, this.mc.renderGlobal, pipeline);
-        IrisGlDebug.check("mixin:finalize:after-hand-translucent");
+        IrisGlDebug.markStage("mixin:finalize:after-hand-translucent");
         this.mc.profiler.endStartSection("iris_final");
         pipeline.finalizeLevelRendering();
-        IrisGlDebug.check("mixin:finalize:after-pipeline");
+        IrisGlDebug.markStage("mixin:finalize:after-pipeline");
         Program.unbind();
         GLStateManager.glDepthMask(true);
-        IrisGlDebug.check("mixin:finalize:done");
+        IrisGlDebug.markStage("mixin:finalize:done");
     }
 
     @Inject(
@@ -452,13 +450,6 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$disableVanillaShaderHand(ItemRenderer itemRenderer, float partialTicks) {
         boolean shaderPackInUse = IrisApi.getInstance().isShaderPackInUse();
-        IrisGlDebug.logWorldPassState("vanilla-hand-redirect", WorldRenderingPhase.NONE.name(), "renderHand");
-        IrisGlDebug.logDebugInfo(
-            "vanilla-hand-redirect partialTicks={} shaderPackInUse={} willRenderVanilla={}",
-            partialTicks,
-            shaderPackInUse,
-            !shaderPackInUse
-        );
         if (!shaderPackInUse) {
             itemRenderer.renderItemInFirstPerson(partialTicks);
         }

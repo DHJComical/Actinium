@@ -5,6 +5,7 @@ import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.QuadConverter;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.minecraft.client.renderer.vertex.VertexFormat;
 import net.minecraft.client.renderer.vertex.VertexFormatElement;
 import org.lwjgl.opengl.GL11;
@@ -47,11 +48,14 @@ public final class VanillaVertexBufferRenderer {
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         GLStateManager.prepareWideLineEmulation(mode);
         ShaderManager.getInstance().preDraw(flags);
+        IrisGlDebug.checkDrawError("vertexbuffer:after-predraw", "VertexBuffer", mode, flags, format.getSize(), count, format.toString(), vao, vbo);
         GLSMDebug.logVertexBufferDraw(format.toString(), mode, flags, format.getSize(), count, vbo, vao);
         drawArrays(mode, count);
+        IrisGlDebug.checkDrawError("vertexbuffer:after-draw", "VertexBuffer", mode, flags, format.getSize(), count, format.toString(), vao, vbo);
 
         GLStateManager.glBindVertexArray(savedVao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
+        IrisGlDebug.checkDrawError("vertexbuffer:after-restore", "VertexBuffer", mode, flags, format.getSize(), count, format.toString(), vao, vbo);
     }
 
     public static void deleteVertexBuffer(int vbo) {

@@ -1,8 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
-import com.gtnewhorizons.angelica.rendering.RenderingState;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
-import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
 import net.coderbot.iris.uniforms.CapturedRenderingState;
@@ -14,8 +12,6 @@ import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-
-import java.util.Locale;
 
 @Mixin(RenderManager.class)
 public class RenderManagerIrisMixin {
@@ -32,7 +28,8 @@ public class RenderManagerIrisMixin {
         float yaw,
         float partialTicks
     ) {
-        if (!IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
+        boolean shaderPackInUse = IrisApiV0Impl.INSTANCE.isShaderPackInUse();
+        if (!shaderPackInUse) {
             render.doRender(entity, x, y, z, yaw, partialTicks);
             return;
         }
@@ -45,52 +42,7 @@ public class RenderManagerIrisMixin {
             if (beganEntityPhase) {
                 GbufferPrograms.beginEntities();
             }
-            IrisGlDebug.logEntityPhase(
-                    entity.getClass().getName(),
-                    previousPhase.name(),
-                    beganEntityPhase,
-                    actinium$matrixSummary(RenderingState.INSTANCE.getModelViewMatrix()),
-                    actinium$matrixSummary(RenderingState.INSTANCE.getProjectionMatrix()));
-            if (previousPhase == WorldRenderingPhase.NONE && beganEntityPhase) {
-                IrisGlDebug.logShadowEntityDraw(entity.getClass().getName(), x, y, z, yaw, partialTicks);
-            }
-            IrisGlDebug.logEntityRenderCall(
-                    "before-do-render",
-                    entity.getClass().getName(),
-                    render.getClass().getName(),
-                    GbufferPrograms.getCurrentPhase().name(),
-                    CapturedRenderingState.INSTANCE.getCurrentRenderedEntity());
-            IrisGlDebug.logWorldPassState(
-                    "before-do-render",
-                    GbufferPrograms.getCurrentPhase().name(),
-                    entity.getClass().getName());
-            IrisGlDebug.logActiveTextureBindings(
-                    "before-do-render",
-                    GbufferPrograms.getCurrentPhase().name(),
-                    entity.getClass().getName());
-            IrisGlDebug.logCurrentFramebufferAttachments(
-                    "before-do-render",
-                    GbufferPrograms.getCurrentPhase().name(),
-                    2);
             render.doRender(entity, x, y, z, yaw, partialTicks);
-            IrisGlDebug.logEntityRenderCall(
-                    "after-do-render",
-                    entity.getClass().getName(),
-                    render.getClass().getName(),
-                    GbufferPrograms.getCurrentPhase().name(),
-                    CapturedRenderingState.INSTANCE.getCurrentRenderedEntity());
-            IrisGlDebug.logWorldPassState(
-                    "after-do-render",
-                    GbufferPrograms.getCurrentPhase().name(),
-                    entity.getClass().getName());
-            IrisGlDebug.logActiveTextureBindings(
-                    "after-do-render",
-                    GbufferPrograms.getCurrentPhase().name(),
-                    entity.getClass().getName());
-            IrisGlDebug.logCurrentFramebufferAttachments(
-                    "after-do-render",
-                    GbufferPrograms.getCurrentPhase().name(),
-                    2);
         } finally {
             if (beganEntityPhase) {
                 GbufferPrograms.endEntities();
@@ -99,17 +51,19 @@ public class RenderManagerIrisMixin {
         }
     }
 
-    private static String actinium$matrixSummary(Matrix4f matrix) {
-        return String.format(
-                Locale.ROOT,
-                "[%.4f,%.4f,%.4f,%.4f|%.4f,%.4f,%.4f,%.4f]",
-                matrix.m00(),
-                matrix.m01(),
-                matrix.m02(),
-                matrix.m03(),
-                matrix.m10(),
-                matrix.m11(),
-                matrix.m12(),
-                matrix.m13());
+    @Redirect(
+        method = "renderEntity(Lnet/minecraft/entity/Entity;DDDFFZ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/Render;doRenderShadowAndFire(Lnet/minecraft/entity/Entity;DDDFF)V")
+    )
+    private void actinium$renderEntityShadowWithDebug(
+        Render<Entity> render,
+        Entity entity,
+        double x,
+        double y,
+        double z,
+        float yaw,
+        float partialTicks
+    ) {
+        render.doRenderShadowAndFire(entity, x, y, z, yaw, partialTicks);
     }
 }

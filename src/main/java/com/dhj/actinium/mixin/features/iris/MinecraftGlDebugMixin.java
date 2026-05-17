@@ -31,7 +31,7 @@ public class MinecraftGlDebugMixin {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/shader/Framebuffer;framebufferRender(II)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterFramebufferRender(CallbackInfo ci) {
-        IrisGlDebug.check("minecraft:after-framebuffer-render");
+        IrisGlDebug.markStage("minecraft:after-framebuffer-render");
     }
 
     @Inject(
@@ -39,7 +39,7 @@ public class MinecraftGlDebugMixin {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderStreamIndicator(F)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterStreamIndicator(CallbackInfo ci) {
-        IrisGlDebug.check("minecraft:after-stream-indicator");
+        IrisGlDebug.markStage("minecraft:after-stream-indicator");
     }
 
     @Inject(
@@ -55,6 +55,6 @@ public class MinecraftGlDebugMixin {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;updateDisplay()V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterUpdateDisplay(CallbackInfo ci) {
-        IrisGlDebug.check("minecraft:after-update-display");
+        IrisGlDebug.markStage("minecraft:after-update-display");
     }
 }

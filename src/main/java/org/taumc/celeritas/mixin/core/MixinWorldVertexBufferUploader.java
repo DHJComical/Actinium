@@ -3,6 +3,7 @@ package org.taumc.celeritas.mixin.core;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.WorldVertexBufferUploader;
 import net.minecraft.client.renderer.vertex.VertexFormat;
@@ -61,10 +62,40 @@ public class MixinWorldVertexBufferUploader {
 
         GLStateManager.prepareWideLineEmulation(bufferBuilder.getDrawMode());
         ShaderManager.getInstance().preDraw(vertexFlags);
+        IrisGlDebug.checkDrawError(
+                "bufferbuilder:after-predraw",
+                "WorldVertexBufferUploader",
+                bufferBuilder.getDrawMode(),
+                vertexFlags,
+                bufferBuilder.getVertexFormat().getSize(),
+                bufferBuilder.getVertexCount(),
+                bufferBuilder.getVertexFormat().toString(),
+                vao,
+                vbo);
         VanillaVertexBufferRenderer.drawArrays(bufferBuilder.getDrawMode(), bufferBuilder.getVertexCount());
+        IrisGlDebug.checkDrawError(
+                "bufferbuilder:after-draw",
+                "WorldVertexBufferUploader",
+                bufferBuilder.getDrawMode(),
+                vertexFlags,
+                bufferBuilder.getVertexFormat().getSize(),
+                bufferBuilder.getVertexCount(),
+                bufferBuilder.getVertexFormat().toString(),
+                vao,
+                vbo);
 
         GLStateManager.glBindVertexArray(0);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
+        IrisGlDebug.checkDrawError(
+                "bufferbuilder:after-restore",
+                "WorldVertexBufferUploader",
+                bufferBuilder.getDrawMode(),
+                vertexFlags,
+                bufferBuilder.getVertexFormat().getSize(),
+                bufferBuilder.getVertexCount(),
+                bufferBuilder.getVertexFormat().toString(),
+                vao,
+                vbo);
         bufferBuilder.reset();
         ci.cancel();
     }

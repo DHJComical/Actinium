@@ -14,6 +14,7 @@ import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttribute;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 
@@ -38,6 +39,7 @@ public final class IrisGlDebug {
 	private static final Map<String, Integer> MATERIAL_SAMPLE_COUNTS = new ConcurrentHashMap<>();
 	private static final Map<String, Integer> ENTITY_PHASE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
 	private static final Map<String, Integer> SAMPLER_INIT_COUNTS = new ConcurrentHashMap<>();
+	private static final Map<String, Integer> GLSM_EVENT_COUNTS = new ConcurrentHashMap<>();
 	private static long lastShadowEntityLogTime;
     private static String lastStage = "startup";
     private static String framebufferSamplePhase;
@@ -55,10 +57,64 @@ public final class IrisGlDebug {
         }
     }
 
-	public static void logDebugInfo(String message, Object... params) {
+    public static void logDebugInfo(String message, Object... params) {
 		if (shouldCaptureGlState()) {
 			LOGGER.info(message, params);
 		}
+	}
+
+	public static boolean shouldLogGlsmEvent(String label, int maxCount) {
+		if (!shouldCaptureGlState()) {
+			return false;
+		}
+
+		int count = GLSM_EVENT_COUNTS.merge(label, 1, Integer::sum);
+		return count <= maxCount;
+	}
+
+	public static void checkDrawError(String stage, String source, int drawMode, int vertexFlags, int stride, int vertexCount, String format, int vao, int vbo) {
+		if (!shouldCaptureGlState()) {
+			return;
+		}
+
+		int error = GL11.glGetError();
+		if (error == 0) {
+			return;
+		}
+
+		String label = "draw-error:" + stage + ":" + source + ":" + error + ":" + drawMode + ":" + vertexFlags + ":" + stride;
+		int count = GLSM_EVENT_COUNTS.merge(label, 1, Integer::sum);
+		if (count > 8) {
+			return;
+		}
+
+		VIEWPORT.clear();
+		GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+		LOGGER.error(
+			"draw-error stage={} source={} count={} error={} mode={} flags=0x{} stride={} vertices={} vao={} vbo={} currentVao={} currentVbo={} currentEbo={} program={} fb={} drawBuffer={} readBuffer={} viewport=[{},{},{},{}] format={}",
+			stage,
+			source,
+			count,
+			error,
+			drawMode,
+			Integer.toHexString(vertexFlags),
+			stride,
+			vertexCount,
+			vao,
+			vbo,
+			GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING),
+			GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING),
+			GL11.glGetInteger(GL15.GL_ELEMENT_ARRAY_BUFFER_BINDING),
+			GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+			GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+			GL11.glGetInteger(GL11.GL_DRAW_BUFFER),
+			GL11.glGetInteger(GL11.GL_READ_BUFFER),
+			VIEWPORT.get(0),
+			VIEWPORT.get(1),
+			VIEWPORT.get(2),
+			VIEWPORT.get(3),
+			format
+		);
 	}
 
 	private static boolean shouldCaptureGlState() {
@@ -1067,8 +1123,9 @@ public final class IrisGlDebug {
         int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
 
         StringBuilder samples = new StringBuilder();
-        for (int attachment = 0; attachment < localColorAttachments; attachment++) {
-            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0 + attachment);
+        int attachmentCount = previousReadFramebuffer == 0 ? 1 : localColorAttachments;
+        for (int attachment = 0; attachment < attachmentCount; attachment++) {
+            GL11.glReadBuffer(previousReadFramebuffer == 0 ? previousReadBuffer : GL30.GL_COLOR_ATTACHMENT0 + attachment);
             samples.append(" att").append(attachment).append("[");
             appendPixel(samples, width / 2, height / 2);
             samples.append(" ");

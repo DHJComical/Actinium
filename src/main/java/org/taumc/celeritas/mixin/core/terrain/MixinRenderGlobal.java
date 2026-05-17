@@ -125,8 +125,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
      */
     @Overwrite
     public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
-        WorldRenderingPipeline entryPipeline = Iris.enabled ? Iris.getPipelineManager().getPipelineNullable() : null;
-        IrisGlDebug.logWorldPassState("render-block-layer-entry", entryPipeline != null ? entryPipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
         WorldRenderingPipeline pipeline = null;
         if (Iris.enabled) {
             pipeline = Iris.getPipelineManager().getPipelineNullable();
@@ -154,34 +152,24 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
         GlStateManager.bindTexture(this.mc.getTextureMapBlocks().getGlTextureId());
         GlStateManager.enableTexture2D();
-        IrisGlDebug.logActiveTextureBindings("render-block-layer-after-bind-atlas", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
-        IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":before-enable-lightmap");
         this.mc.entityRenderer.enableLightmap();
-        IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":after-enable-lightmap");
-        IrisGlDebug.logWorldPassState("render-block-layer-after-enable-lightmap", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
         double d3 = entityIn.lastTickPosX + (entityIn.posX - entityIn.lastTickPosX) * partialTicks;
         double d4 = entityIn.lastTickPosY + (entityIn.posY - entityIn.lastTickPosY) * partialTicks;
         double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
         try {
-            IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":before-draw-chunk-layer");
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
-            IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":after-draw-chunk-layer");
         } finally {
             RenderDevice.exitManagedCode();
         }
 
         this.mc.entityRenderer.disableLightmap();
-        IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":after-disable-lightmap");
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
-        IrisGlDebug.logWorldPassState("render-block-layer-after-disable-lightmap", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
         if (pipeline != null) {
-            IrisGlDebug.logWorldPassState("before-reset-terrain-phase", pipeline.getPhase().name(), blockLayerIn.name());
             pipeline.setPhase(WorldRenderingPhase.NONE);
-            IrisGlDebug.logWorldPassState("after-reset-terrain-phase", pipeline.getPhase().name(), blockLayerIn.name());
         }
 
         return 1;
@@ -236,7 +224,8 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     }
 
     @Inject(method = "renderEntities", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderHelper;enableStandardItemLighting()V", shift = At.Shift.AFTER, ordinal = 1), cancellable = true)
-    public void sodium$renderTileEntities(Entity entity, ICamera camera, float partialTicks, CallbackInfo ci, @Local(ordinal = 0) int pass) {
+    public void sodium$renderTileEntities(Entity entity, ICamera camera, float partialTicks, CallbackInfo ci) {
+        int pass = net.minecraftforge.client.MinecraftForgeClient.getRenderPass();
         boolean renderShadowBlockEntities = !ShadowRenderingState.areShadowsCurrentlyBeingRendered()
                 || InternalShadowRenderingState.shouldRenderShadowBlockEntities();
 
@@ -307,11 +296,11 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     @Inject(method = "renderEntities", at = @At(value = "FIELD", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderInfos:Ljava/util/List;", ordinal = 0))
     private void renderEntities(Entity renderViewEntity, ICamera camera, float partialTicks, CallbackInfo ci,
                                 @Local(ordinal = 1) List<Entity> outlineEntityList,
-                                @Local(ordinal = 2) List<Entity> multipassEntityList,
-                                @Local(ordinal = 0) double renderViewX,
-                                @Local(ordinal = 1) double renderViewY,
-                                @Local(ordinal = 2) double renderViewZ) {
+                                @Local(ordinal = 2) List<Entity> multipassEntityList) {
         int pass = net.minecraftforge.client.MinecraftForgeClient.getRenderPass();
+        double renderViewX = renderViewEntity.prevPosX + (renderViewEntity.posX - renderViewEntity.prevPosX) * partialTicks;
+        double renderViewY = renderViewEntity.prevPosY + (renderViewEntity.posY - renderViewEntity.prevPosY) * partialTicks;
+        double renderViewZ = renderViewEntity.prevPosZ + (renderViewEntity.posZ - renderViewEntity.prevPosZ) * partialTicks;
         if (pass == 0 || celeritas$collectedEntities == null) {
             celeritas$entityGatherer.clear();
             celeritas$collectedEntities = celeritas$entityGatherer.getLoadedEntityList(world);
@@ -321,41 +310,25 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         CeleritasWorldRenderer worldRenderer = CeleritasWorldRenderer.instance();
         // Apply entity distance scaling
         Entity.setRenderDistanceWeight(MathHelper.clamp((double)this.mc.gameSettings.renderDistanceChunks / 8.0D, 1.0D, 2.5D) * 1);
-        int gathered = celeritas$collectedEntities[pass].size();
-        int shadowSkipped = 0;
-        int frustumSkipped = 0;
-        int celeritasSkipped = 0;
-        int blockSkipped = 0;
-        int rendered = 0;
-
         boolean irisEntities = Iris.enabled && IrisApiV0Impl.INSTANCE.isShaderPackInUse();
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
         GlStateManager.enableTexture2D();
-        IrisGlDebug.logWorldPassState("render-entities-entry", irisEntities ? GbufferPrograms.getCurrentPhase().name() : WorldRenderingPhase.NONE.name(), "render-global");
         if (irisEntities) {
-            IrisGlDebug.logWorldPassState("before-begin-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");
             GbufferPrograms.beginEntities();
-            IrisGlDebug.logWorldPassState("after-begin-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");
         }
         try {
             for(Entity entity : celeritas$collectedEntities[pass]) {
                 if (!this.actinium$shouldRenderShadowEntity(entity, renderViewEntity)) {
-                    shadowSkipped++;
-                    IrisGlDebug.logEntityCullSample("shadow", entity.getClass().getName(), pass);
                     continue;
                 }
 
                 // Do regular vanilla checks for visibility
                 if(!this.renderManager.shouldRender(entity, camera, renderViewX, renderViewY, renderViewZ) && !entity.isRidingOrBeingRiddenBy(player)) {
-                    frustumSkipped++;
-                    IrisGlDebug.logEntityCullSample("frustum", entity.getClass().getName(), pass);
                     continue;
                 }
 
                 // Check if any corners of the bounding box are in a visible subchunk
                 if(!worldRenderer.isEntityVisible(entity)) {
-                    celeritasSkipped++;
-                    IrisGlDebug.logEntityCullSample("celeritas", entity.getClass().getName(), pass);
                     continue;
                 }
 
@@ -365,26 +338,10 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                         && (entity.posY < 0.0D || entity.posY >= 256.0D || this.world.isBlockLoaded(entityBlockPos.setPos(entity))))
                 {
                     ++this.countEntitiesRendered;
-                    rendered++;
                     if (irisEntities) {
                         CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
-                        IrisGlDebug.logWorldPassState("before-render-entity-static", GbufferPrograms.getCurrentPhase().name(), entity.getClass().getName());
-                        IrisGlDebug.logActiveTextureBindings("before-render-entity-static", GbufferPrograms.getCurrentPhase().name(), entity.getClass().getName());
-                        IrisGlDebug.logCurrentFramebufferAttachments("before-render-entity-static", GbufferPrograms.getCurrentPhase().name(), 2);
-                        IrisGlDebug.beginFramebufferSamplePhase("world-entity-static");
-                        IrisGlDebug.logCurrentFramebufferSamples("before-render-entity-static", 1);
                     }
-                    try {
-                        this.renderManager.renderEntityStatic(entity, partialTicks, false);
-                    } finally {
-                        if (irisEntities) {
-                            IrisGlDebug.logCurrentFramebufferSamples("after-render-entity-static", 1);
-                            IrisGlDebug.endFramebufferSamplePhase();
-                            IrisGlDebug.logWorldPassState("after-render-entity-static", GbufferPrograms.getCurrentPhase().name(), entity.getClass().getName());
-                            IrisGlDebug.logActiveTextureBindings("after-render-entity-static", GbufferPrograms.getCurrentPhase().name(), entity.getClass().getName());
-                            IrisGlDebug.logCurrentFramebufferAttachments("after-render-entity-static", GbufferPrograms.getCurrentPhase().name(), 2);
-                        }
-                    }
+                    this.renderManager.renderEntityStatic(entity, partialTicks, false);
 
                     if (this.isOutlineActive(entity, renderViewEntity, camera))
                     {
@@ -394,30 +351,13 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                     if (this.renderManager.isRenderMultipass(entity)) {
                         multipassEntityList.add(entity);
                     }
-                } else {
-                    blockSkipped++;
-                    IrisGlDebug.logEntityCullSample("block", entity.getClass().getName(), pass);
                 }
             }
         } finally {
-            WorldRenderingPhase phaseBeforeEnd = irisEntities ? GbufferPrograms.getCurrentPhase() : WorldRenderingPhase.NONE;
             if (irisEntities) {
                 CapturedRenderingState.INSTANCE.setCurrentEntity(-1);
-                IrisGlDebug.logWorldPassState("before-end-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");
                 GbufferPrograms.endEntities();
-                IrisGlDebug.logWorldPassState("after-end-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");
             }
-            IrisGlDebug.logEntityLoopSummary(
-                    "render-global",
-                    pass,
-                    gathered,
-                    rendered,
-                    shadowSkipped,
-                    frustumSkipped,
-                    celeritasSkipped,
-                    blockSkipped,
-                    irisEntities,
-                    phaseBeforeEnd.name());
         }
     }
 

@@ -21,13 +21,13 @@ import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memGetInt;
 public final class GLSMDebug {
     private static final Logger LOGGER = LogManager.getLogger("GLSMDebug");
     private static final long OPTION_REFRESH_NS = 500_000_000L;
-    private static final int STREAM_LIMIT = 20_000;
-    private static final int QUAD_LIMIT = 20_000;
-    private static final int FFP_LIMIT = 20_000;
-    private static final int DRAW_LIMIT = 20_000;
-    private static final int CLIENT_ARRAY_LIMIT = 1_000;
-    private static final int BUFFER_BUILDER_LIMIT = 20_000;
-    private static final int VERTEX_BUFFER_LIMIT = 20_000;
+    private static final int STREAM_LIMIT = 128;
+    private static final int QUAD_LIMIT = 512;
+    private static final int FFP_LIMIT = 512;
+    private static final int DRAW_LIMIT = 256;
+    private static final int CLIENT_ARRAY_LIMIT = 64;
+    private static final int BUFFER_BUILDER_LIMIT = 512;
+    private static final int VERTEX_BUFFER_LIMIT = 256;
 
     private static final AtomicInteger streamCount = new AtomicInteger();
     private static final AtomicInteger quadCount = new AtomicInteger();

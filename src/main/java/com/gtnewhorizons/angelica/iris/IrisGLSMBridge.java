@@ -161,19 +161,23 @@ public final class IrisGLSMBridge {
             }
 
             if (event.unit == IrisSamplers.ALBEDO_TEXTURE_UNIT || event.unit == IrisSamplers.LIGHTMAP_TEXTURE_UNIT) {
-                IrisGlDebug.logDebugInfo(
-                        "texture-unit-state unit={} target={} enabled={} activeUnit={} albedo={} lightmap={}",
-                        event.unit,
-                        event.target,
-                        event.enabled,
-                        com.gtnewhorizons.angelica.glsm.GLStateManager.getActiveTextureUnit(),
-                        StateTracker.INSTANCE.albedoSampler,
-                        StateTracker.INSTANCE.lightmapSampler
-                );
+                if (IrisGlDebug.shouldLogGlsmEvent("texture-unit-state:" + event.unit, 16)) {
+                    IrisGlDebug.logDebugInfo(
+                            "texture-unit-state unit={} target={} enabled={} activeUnit={} albedo={} lightmap={}",
+                            event.unit,
+                            event.target,
+                            event.enabled,
+                            com.gtnewhorizons.angelica.glsm.GLStateManager.getActiveTextureUnit(),
+                            StateTracker.INSTANCE.albedoSampler,
+                            StateTracker.INSTANCE.lightmapSampler
+                    );
+                }
             }
 
             if (updatePipeline) {
-                IrisGlDebug.logDebugInfo("pipeline-input-update albedo={} lightmap={}", StateTracker.INSTANCE.albedoSampler, StateTracker.INSTANCE.lightmapSampler);
+                if (IrisGlDebug.shouldLogGlsmEvent("pipeline-input-update", 16)) {
+                    IrisGlDebug.logDebugInfo("pipeline-input-update albedo={} lightmap={}", StateTracker.INSTANCE.albedoSampler, StateTracker.INSTANCE.lightmapSampler);
+                }
                 Iris.getPipelineManager().getPipeline().ifPresent(pipeline -> pipeline.setInputs(StateTracker.INSTANCE.getInputs()));
             }
         });
