@@ -4,6 +4,7 @@ import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.debug.IrisGlDebug;
@@ -55,14 +56,17 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/culling/ClippingHelperImpl;getInstance()Lnet/minecraft/client/renderer/culling/ClippingHelper;", shift = At.Shift.AFTER)
     )
     private void actinium$beginIrisWorld(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("mixin:begin-world:entry");
         if (!Iris.enabled) {
             return;
         }
 
         DHCompat.checkFrame();
         Iris.tryLoadShaderpackWhenPossible();
+        if (!IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
+            return;
+        }
 
+        IrisGlDebug.check("mixin:begin-world:entry");
         CapturedRenderingState.INSTANCE.setTickDelta(partialTicks);
         SystemTimeUniforms.COUNTER.beginFrame();
         SystemTimeUniforms.TIMER.beginFrame(System.nanoTime());
@@ -95,15 +99,55 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     }
 
     @Inject(
+        method = "updateCameraAndRender(FJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderWorld(FJ)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterRenderWorld(float partialTicks, long nanoTime, CallbackInfo ci) {
+        IrisGlDebug.check("entity-renderer:after-render-world");
+    }
+
+    @Inject(
+        method = "updateCameraAndRender(FJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderEntityOutlineFramebuffer()V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterEntityOutlineFramebuffer(float partialTicks, long nanoTime, CallbackInfo ci) {
+        IrisGlDebug.check("entity-renderer:after-entity-outline-fbo");
+    }
+
+    @Inject(
+        method = "updateCameraAndRender(FJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/shader/ShaderGroup;render(F)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterShaderGroup(float partialTicks, long nanoTime, CallbackInfo ci) {
+        IrisGlDebug.check("entity-renderer:after-shader-group");
+    }
+
+    @Inject(
+        method = "updateCameraAndRender(FJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiIngame;renderGameOverlay(F)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterGameOverlay(float partialTicks, long nanoTime, CallbackInfo ci) {
+        IrisGlDebug.check("entity-renderer:after-game-overlay");
+    }
+
+    @Inject(
+        method = "updateCameraAndRender(FJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;drawScreen(Lnet/minecraft/client/gui/GuiScreen;IIF)V", shift = At.Shift.AFTER, remap = false)
+    )
+    private void actinium$checkAfterDrawScreen(float partialTicks, long nanoTime, CallbackInfo ci) {
+        IrisGlDebug.check("entity-renderer:after-draw-screen");
+    }
+
+    @Inject(
         method = "renderWorldPass(IFJ)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V")
     )
     private void actinium$renderIrisShadows(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        IrisGlDebug.check("mixin:shadows:entry");
-        if (!Iris.enabled) {
+        if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             return;
         }
 
+        IrisGlDebug.check("mixin:shadows:entry");
         WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
         if (pipeline != null) {
             pipeline.renderShadows((EntityRenderer) (Object) this, Camera.INSTANCE);
@@ -113,15 +157,151 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
     @Inject(
         method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderSky(FI)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterSky(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-sky");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderCloudsCheck(Lnet/minecraft/client/renderer/RenderGlobal;FIDDD)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterClouds(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-clouds");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterSetupTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-setup-terrain");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;updateChunks(J)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterUpdateChunks(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-update-chunks");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 0)
+    )
+    private void actinium$checkAfterSolidTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-terrain-solid");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 1)
+    )
+    private void actinium$checkAfterCutoutMippedTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-terrain-cutout-mipped");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 2)
+    )
+    private void actinium$checkAfterCutoutTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-terrain-cutout");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderEntities(Lnet/minecraft/entity/Entity;Lnet/minecraft/client/renderer/culling/ICamera;F)V", shift = At.Shift.AFTER, ordinal = 0)
+    )
+    private void actinium$checkAfterEntitiesPass0(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-entities-0");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;drawSelectionBox(Lnet/minecraft/entity/player/EntityPlayer;Lnet/minecraft/util/math/RayTraceResult;IF)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterSelectionBox(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-selection-box");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;drawBlockDamageTexture(Lnet/minecraft/client/renderer/Tessellator;Lnet/minecraft/client/renderer/BufferBuilder;Lnet/minecraft/entity/Entity;F)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterBlockDamage(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-block-damage");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/ParticleManager;renderLitParticles(Lnet/minecraft/entity/Entity;F)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterLitParticles(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-lit-particles");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/ParticleManager;renderParticles(Lnet/minecraft/entity/Entity;F)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterParticles(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-particles");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderRainSnow(F)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterWeather(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-weather");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 3)
+    )
+    private void actinium$checkAfterTranslucentTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-terrain-translucent");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderEntities(Lnet/minecraft/entity/Entity;Lnet/minecraft/client/renderer/culling/ICamera;F)V", shift = At.Shift.AFTER, ordinal = 1)
+    )
+    private void actinium$checkAfterEntitiesPass1(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-entities-1");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;dispatchRenderLast(Lnet/minecraft/client/renderer/RenderGlobal;F)V", shift = At.Shift.AFTER, remap = false)
+    )
+    private void actinium$checkAfterRenderLast(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-render-last");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderHand(FI)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterHand(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.check("render-world-pass:" + pass + ":after-hand");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;dispatchRenderLast(Lnet/minecraft/client/renderer/RenderGlobal;F)V", remap = false)
     )
     private void actinium$finalizeIrisWorld(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        MinecraftFramebufferHelper.restoreMinecraftFramebufferBuffers();
-        IrisGlDebug.check("mixin:finalize:entry");
-        if (!Iris.enabled) {
+        if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             return;
         }
 
+        MinecraftFramebufferHelper.restoreMinecraftFramebufferBuffers();
+        IrisGlDebug.check("mixin:finalize:entry");
         WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
         if (pipeline == null) {
             return;

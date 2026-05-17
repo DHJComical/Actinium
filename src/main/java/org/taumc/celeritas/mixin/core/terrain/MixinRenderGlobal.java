@@ -138,7 +138,8 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 } else if (blockLayerIn == BlockRenderLayer.CUTOUT) {
                     pipeline.setPhase(WorldRenderingPhase.TERRAIN_CUTOUT);
                 } else if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
-                    if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+                    if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()
+                            && IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
                         this.actinium$beginIrisTranslucents(pipeline, (float) partialTicks);
                     }
                     pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
@@ -155,7 +156,9 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         GlStateManager.enableTexture2D();
         IrisGlDebug.logActiveTextureBindings("render-block-layer-after-bind-atlas", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
+        IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":before-enable-lightmap");
         this.mc.entityRenderer.enableLightmap();
+        IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":after-enable-lightmap");
         IrisGlDebug.logWorldPassState("render-block-layer-after-enable-lightmap", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
         double d3 = entityIn.lastTickPosX + (entityIn.posX - entityIn.lastTickPosX) * partialTicks;
@@ -163,12 +166,16 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
         try {
+            IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":before-draw-chunk-layer");
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
+            IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":after-draw-chunk-layer");
         } finally {
             RenderDevice.exitManagedCode();
         }
 
         this.mc.entityRenderer.disableLightmap();
+        IrisGlDebug.check("render-block-layer:" + blockLayerIn + ":after-disable-lightmap");
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
         IrisGlDebug.logWorldPassState("render-block-layer-after-disable-lightmap", pipeline != null ? pipeline.getPhase().name() : WorldRenderingPhase.NONE.name(), blockLayerIn.name());
 
         if (pipeline != null) {
@@ -322,6 +329,8 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         int rendered = 0;
 
         boolean irisEntities = Iris.enabled && IrisApiV0Impl.INSTANCE.isShaderPackInUse();
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.enableTexture2D();
         IrisGlDebug.logWorldPassState("render-entities-entry", irisEntities ? GbufferPrograms.getCurrentPhase().name() : WorldRenderingPhase.NONE.name(), "render-global");
         if (irisEntities) {
             IrisGlDebug.logWorldPassState("before-begin-entities", GbufferPrograms.getCurrentPhase().name(), "render-global");

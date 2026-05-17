@@ -19,6 +19,13 @@ public final class FragmentShaderGenerator {
         emitUniforms(sb, key);
         sb.append("out vec4 fragColor;\n\n");
 
+        if (key.textureEnabled() || key.lightmapEnabled()) {
+            sb.append("vec2 projectTexCoord(vec4 coord) {\n");
+            sb.append("  float q = abs(coord.q) > 1.0e-6 ? coord.q : 1.0;\n");
+            sb.append("  return coord.st / q;\n");
+            sb.append("}\n\n");
+        }
+
         sb.append("void main() {\n");
         emitTextureSampling(sb, key);
         emitTexEnvChain(sb, key);
@@ -78,7 +85,7 @@ public final class FragmentShaderGenerator {
             // Unit 1 is the lightmap — uses v_TexCoord1.
             // Units 2-3 intentionally share unit 0's texture coordinates since
             // the vertex shader only provides 2 tex coord varyings (unit 0 and unit 1/lightmap).
-            final String texCoord = (i == 1) ? "v_TexCoord1.st" : "v_TexCoord0.st";
+            final String texCoord = (i == 1) ? "projectTexCoord(v_TexCoord1)" : "projectTexCoord(v_TexCoord0)";
             sb.append("  vec4 tex").append(i).append("Color = texture(u_Sampler").append(i).append(", ").append(texCoord).append(");\n");
         }
     }

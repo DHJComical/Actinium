@@ -11,6 +11,7 @@ import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.client.MinecraftForgeClient;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
+import net.coderbot.iris.debug.IrisGlDebug;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
@@ -29,6 +30,8 @@ import java.util.*;
  * Provides an extension to vanilla's {@link net.minecraft.client.renderer.RenderGlobal}.
  */
 public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, VintageRenderSectionManager, BlockRenderLayer, TileEntity, CeleritasWorldRenderer.TileEntityRenderContext>  {
+    private static final double MAX_ENTITY_CHECK_VOLUME = 16 * 16 * 16 * 15;
+
     public record TileEntityRenderContext(Map<Integer, DestroyBlockProgress> damagedBlocks, float partialTicks) {}
 
     /**
@@ -82,9 +85,12 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
      * Performs a render pass for the given {@link BlockRenderLayer} and draws all visible chunks for it.
      */
     public void drawChunkLayer(BlockRenderLayer renderLayer, double x, double y, double z) {
+        IrisGlDebug.check("celeritas:draw-chunk-layer:" + renderLayer + ":before-super");
         super.drawChunkLayer(renderLayer, x, y, z);
+        IrisGlDebug.check("celeritas:draw-chunk-layer:" + renderLayer + ":after-super");
 
         GlStateManager.resetColor();
+        IrisGlDebug.check("celeritas:draw-chunk-layer:" + renderLayer + ":after-reset-color");
     }
 
     public void setCurrentViewport(Viewport viewport) {
@@ -150,10 +156,15 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
             return true;
         }
 
-        //? if <1.21.2
         AxisAlignedBB box = entity.getRenderBoundingBox();
-        //? if >=1.21.2
-        /*AABB box = renderer.getBoundingBoxForCulling(entity);*/
+        if (box == null) {
+            return true;
+        }
+
+        double volume = (box.maxX - box.minX) * (box.maxY - box.minY) * (box.maxZ - box.minZ);
+        if (volume <= 0.0D || volume > MAX_ENTITY_CHECK_VOLUME) {
+            return true;
+        }
 
         return this.isBoxVisible(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ);
     }

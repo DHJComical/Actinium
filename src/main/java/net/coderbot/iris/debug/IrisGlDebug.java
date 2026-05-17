@@ -1100,6 +1100,10 @@ public final class IrisGlDebug {
     }
 
     private static int getSamplerUniform(int program, String name) {
+        if (program <= 0) {
+            return -1;
+        }
+
         int location = GL20.glGetUniformLocation(program, name);
         if (location < 0) {
             return -1;
@@ -1109,6 +1113,10 @@ public final class IrisGlDebug {
     }
 
     private static int getIntUniform(int program, String name) {
+        if (program <= 0) {
+            return -1;
+        }
+
         int location = GL20.glGetUniformLocation(program, name);
         if (location < 0) {
             return -1;
@@ -1118,6 +1126,10 @@ public final class IrisGlDebug {
     }
 
     private static float getFloatUniform(int program, String name) {
+        if (program <= 0) {
+            return -1.0F;
+        }
+
         int location = GL20.glGetUniformLocation(program, name);
         if (location < 0) {
             return -1.0F;
@@ -1127,6 +1139,10 @@ public final class IrisGlDebug {
     }
 
     private static String getMatrixUniform(int program, String name) {
+        if (program <= 0) {
+            return "missing";
+        }
+
         int location = GL20.glGetUniformLocation(program, name);
         if (location < 0) {
             return "missing";
