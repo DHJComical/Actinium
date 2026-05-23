@@ -28,13 +28,18 @@ class AttributeTransformer {
 
 		if (parameters.type == ShaderType.VERTEX) {
 			transformer.injectVariable("layout(location = 0) in vec4 iris_Vertex;");
-			transformer.injectVariable("layout(location = 1) in vec4 iris_Color;");
 			transformer.injectVariable("layout(location = 2) in vec4 iris_MultiTexCoord0;");
 			transformer.injectVariable("layout(location = 3) in vec4 iris_MultiTexCoord1;");
 			transformer.injectVariable("layout(location = 4) in vec3 iris_Normal;");
+			if (parameters.inputs.color) {
+				transformer.injectVariable("layout(location = 1) in vec4 iris_Color;");
+				transformer.rename("gl_Color", "iris_Color");
+			} else {
+				transformer.injectVariable("uniform vec4 iris_ColorModulator;");
+				transformer.rename("gl_Color", "iris_ColorModulator");
+			}
 
 			transformer.rename("gl_Vertex", "iris_Vertex");
-			transformer.rename("gl_Color", "iris_Color");
 			transformer.rename("gl_Normal", "iris_Normal");
 
 			// ftransform() = gl_ModelViewProjectionMatrix * gl_Vertex

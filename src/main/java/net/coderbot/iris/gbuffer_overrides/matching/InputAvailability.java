@@ -5,14 +5,20 @@ public class InputAvailability {
 
 	public final boolean texture;
 	public final boolean lightmap;
+	public final boolean color;
 
 	public InputAvailability(boolean texture, boolean lightmap) {
+		this(texture, lightmap, true);
+	}
+
+	public InputAvailability(boolean texture, boolean lightmap, boolean color) {
 		this.texture = texture;
 		this.lightmap = lightmap;
+		this.color = color;
 	}
 
 	public static InputAvailability unpack(int packed) {
-		return new InputAvailability((packed & 1) == 1, (packed & 2) == 2);
+		return new InputAvailability((packed & 1) == 1, (packed & 2) == 2, true);
 	}
 
 	public int pack() {
@@ -34,6 +40,7 @@ public class InputAvailability {
 		return "InputAvailability{" +
 			"texture=" + texture +
 			", lightmap=" + lightmap +
+			", color=" + color +
 			'}';
 	}
 
@@ -43,6 +50,7 @@ public class InputAvailability {
 		int result = 1;
 		result = prime * result + (lightmap ? 1231 : 1237);
 		result = prime * result + (texture ? 1231 : 1237);
+		result = prime * result + (color ? 1231 : 1237);
 		return result;
 	}
 
@@ -58,6 +66,8 @@ public class InputAvailability {
 		if (lightmap != other.lightmap)
 			return false;
 		if (texture != other.texture)
+			return false;
+		if (color != other.color)
 			return false;
 		return true;
 	}

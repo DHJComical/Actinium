@@ -47,6 +47,7 @@ public class CompatUniformManager {
     static final int LOC_SCENE_COLOR = 16;
     static final int LOC_CLIP_PLANES = 17;
     static final int LOC_CLIP_PLANES_ENABLED = 18;
+    static final int LOC_IRIS_COLOR_MODULATOR = 19;
 
     // Light source fields: 12 per light × 2 lights = 24 locations
     static final int LIGHT_FIELDS = 12;
@@ -54,7 +55,7 @@ public class CompatUniformManager {
     static final int LF_HALF_VECTOR = 4, LF_SPOT_DIRECTION = 5, LF_SPOT_EXPONENT = 6;
     static final int LF_SPOT_CUTOFF = 7, LF_SPOT_COS_CUTOFF = 8;
     static final int LF_CONSTANT_ATTEN = 9, LF_LINEAR_ATTEN = 10, LF_QUADRATIC_ATTEN = 11;
-    static final int LOC_LIGHT_BASE = 19;
+    static final int LOC_LIGHT_BASE = 20;
 
     // Material fields: 5 locations
     static final int MF_EMISSION = 0, MF_AMBIENT = 1, MF_DIFFUSE = 2, MF_SPECULAR = 3, MF_SHININESS = 4;
@@ -95,6 +96,7 @@ public class CompatUniformManager {
         UNIFORM_NAMES[LOC_SCENE_COLOR] = "angelica_SceneColor";
         UNIFORM_NAMES[LOC_CLIP_PLANES] = "angelica_ClipPlane[0]";
         UNIFORM_NAMES[LOC_CLIP_PLANES_ENABLED] = "angelica_ClipPlanesEnabled";
+        UNIFORM_NAMES[LOC_IRIS_COLOR_MODULATOR] = "iris_ColorModulator";
         for (int li = 0; li < 2; li++) {
             for (int fi = 0; fi < LIGHT_FIELDS; fi++) {
                 UNIFORM_NAMES[LOC_LIGHT_BASE + li * LIGHT_FIELDS + fi] = "angelica_LightSource[" + li + "]." + LIGHT_FIELD_NAMES[fi];
@@ -130,6 +132,7 @@ public class CompatUniformManager {
     private static int lastProjGen = -1;
     private static int lastTexMatGen = -1;
     private static int lastFragmentGen = -1;
+    private static int lastColorGen = -1;
     private static int lastLightingGen = -1;
     private static int lastClipPlaneGen = -1;
 
@@ -178,6 +181,12 @@ public class CompatUniformManager {
         if (programChanged || fragGen != lastFragmentGen) {
             lastFragmentGen = fragGen;
             uploadFragmentUniforms(locs);
+        }
+
+        final int colorGen = GLStateManager.colorGeneration;
+        if (programChanged || colorGen != lastColorGen) {
+            lastColorGen = colorGen;
+            uploadColorModulator(locs);
         }
 
         // Lighting-derived uniforms (scene color, light sources, material)
@@ -323,6 +332,19 @@ public class CompatUniformManager {
             }
             RENDER_BACKEND.uniform1f(locs[LOC_ALPHA_TEST_REF], ref);
         }
+
+    }
+
+    private static void uploadColorModulator(int[] locs) {
+        if (locs[LOC_IRIS_COLOR_MODULATOR] == -1) {
+            return;
+        }
+
+        final var color = GLStateManager.getColor();
+        vec4Buf.clear();
+        vec4Buf.put(color.getRed()).put(color.getGreen()).put(color.getBlue()).put(color.getAlpha());
+        vec4Buf.flip();
+        RENDER_BACKEND.uniform4(locs[LOC_IRIS_COLOR_MODULATOR], vec4Buf);
     }
 
     /**

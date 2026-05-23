@@ -158,7 +158,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
     @Inject(
         method = "renderWorldPass(IFJ)V",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V")
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderSky(FI)V")
     )
     private void actinium$renderIrisShadows(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {

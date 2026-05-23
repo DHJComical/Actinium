@@ -871,7 +871,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	private Pass createPass(ProgramSource source, InputAvailability availability, boolean shadow, ProgramId id) {
 		// Use pre-computed transform if available, otherwise transform synchronously
-		Pair<String, InputAvailability> key = Pair.of(source.getName(), availability);
+		InputAvailability transformAvailability = getTransformInputAvailability(id, availability);
+		Pair<String, InputAvailability> key = Pair.of(source.getName(), transformAvailability);
 		Map<PatchShaderType, String> transformed = attributeTransforms.get(key);
 
 		if (transformed == null) {
@@ -882,7 +883,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 				source.getTessControlSource().orElse(null),
 				source.getTessEvalSource().orElse(null),
 				source.getFragmentSource().orElseThrow(NullPointerException::new),
-				availability);
+				transformAvailability);
 		}
 
 		String vertex = transformed.get(PatchShaderType.VERTEX);
@@ -897,6 +898,13 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
 
 		return createPassInner(builder, source.getDirectives(), availability, shadow, id);
+	}
+
+	private static InputAvailability getTransformInputAvailability(ProgramId id, InputAvailability availability) {
+		if (id == ProgramId.SkyTextured && availability.texture && !availability.lightmap) {
+			return INPUT_TEXTURE_NO_COLOR;
+		}
+		return availability;
 	}
 
 	private Pass createPassInner(ProgramBuilder builder, ProgramDirectives programDirectives, InputAvailability availability, boolean shadow, ProgramId id) {
@@ -1881,7 +1889,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	private static final InputAvailability INPUT_NONE = new InputAvailability(false, false);
 	private static final InputAvailability INPUT_TEXTURE = new InputAvailability(true, false);
 	private static final InputAvailability INPUT_TEXTURE_LIGHTMAP = new InputAvailability(true, true);
-	private static final InputAvailability[] INPUT_AVAILABILITIES = { INPUT_NONE, INPUT_TEXTURE, INPUT_TEXTURE_LIGHTMAP };
+	private static final InputAvailability INPUT_TEXTURE_NO_COLOR = new InputAvailability(true, false, false);
+	private static final InputAvailability[] INPUT_AVAILABILITIES = { INPUT_NONE, INPUT_TEXTURE, INPUT_TEXTURE_LIGHTMAP, INPUT_TEXTURE_NO_COLOR };
 
 	private static CompletableFuture<Map<PatchShaderType, String>> submitCompositeTransform(ProgramSource source, TextureStage stage,
 		Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
