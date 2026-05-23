@@ -5925,6 +5925,184 @@ public class GLStateManager {
     public static void glGetUniform(int program, int location, IntBuffer params) {
         RENDER_BACKEND.getUniformiv(program, location, params);
     }
+
+    public static void glPushAttrib() {
+        glPushAttrib(GL11.GL_ENABLE_BIT);
+    }
+
+    public static void blendFunc(net.minecraft.client.renderer.GlStateManager.SourceFactor srcFactor,
+                                 net.minecraft.client.renderer.GlStateManager.DestFactor dstFactor) {
+        glBlendFunc(srcFactor.factor, dstFactor.factor);
+    }
+
+    public static void glBlendFunc(net.minecraft.client.renderer.GlStateManager.SourceFactor srcFactor,
+                                   net.minecraft.client.renderer.GlStateManager.DestFactor dstFactor) {
+        glBlendFunc(srcFactor.factor, dstFactor.factor);
+    }
+
+    public static void tryBlendFuncSeparate(net.minecraft.client.renderer.GlStateManager.SourceFactor srcFactor,
+                                            net.minecraft.client.renderer.GlStateManager.DestFactor dstFactor,
+                                            net.minecraft.client.renderer.GlStateManager.SourceFactor srcFactorAlpha,
+                                            net.minecraft.client.renderer.GlStateManager.DestFactor dstFactorAlpha) {
+        tryBlendFuncSeparate(srcFactor.factor, dstFactor.factor, srcFactorAlpha.factor, dstFactorAlpha.factor);
+    }
+
+    public static void setFog(net.minecraft.client.renderer.GlStateManager.FogMode fogMode) {
+        setFog(fogMode.capabilityId);
+    }
+
+    public static void setFog(int mode) {
+        glFogi(GL11.GL_FOG_MODE, mode);
+    }
+
+    public static void setFogDensity(float density) {
+        glFogf(GL11.GL_FOG_DENSITY, density);
+    }
+
+    public static void setFogStart(float start) {
+        glFogf(GL11.GL_FOG_START, start);
+    }
+
+    public static void setFogEnd(float end) {
+        glFogf(GL11.GL_FOG_END, end);
+    }
+
+    public static void cullFace(net.minecraft.client.renderer.GlStateManager.CullFace cullFace) {
+        glCullFace(cullFace.mode);
+    }
+
+    public static void glCullFace(net.minecraft.client.renderer.GlStateManager.CullFace cullFace) {
+        glCullFace(cullFace.mode);
+    }
+
+    public static void enablePolygonOffset() {
+        glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+    }
+
+    public static void disablePolygonOffset() {
+        glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+    }
+
+    public static void enableColorLogic() {
+        glEnable(GL11.GL_COLOR_LOGIC_OP);
+    }
+
+    public static void disableColorLogic() {
+        glDisable(GL11.GL_COLOR_LOGIC_OP);
+    }
+
+    public static void colorLogicOp(net.minecraft.client.renderer.GlStateManager.LogicOp logicOperation) {
+        glLogicOp(logicOperation.opcode);
+    }
+
+    public static void glLogicOp(net.minecraft.client.renderer.GlStateManager.LogicOp logicOperation) {
+        glLogicOp(logicOperation.opcode);
+    }
+
+    public static void enableTexGenCoord(net.minecraft.client.renderer.GlStateManager.TexGen texGen) {
+        glEnable(texGenCapability(texGen));
+    }
+
+    public static void disableTexGenCoord(net.minecraft.client.renderer.GlStateManager.TexGen texGen) {
+        glDisable(texGenCapability(texGen));
+    }
+
+    public static void texGen(net.minecraft.client.renderer.GlStateManager.TexGen texGen, int param) {
+        glTexGeni(texGenCoord(texGen), GL11.GL_TEXTURE_GEN_MODE, param);
+    }
+
+    public static void texGen(net.minecraft.client.renderer.GlStateManager.TexGen texGen, int pname, FloatBuffer params) {
+        glTexGen(texGenCoord(texGen), pname, params);
+    }
+
+    private static int texGenCoord(net.minecraft.client.renderer.GlStateManager.TexGen texGen) {
+        return switch (texGen) {
+            case S -> GL11.GL_S;
+            case T -> GL11.GL_T;
+            case R -> GL11.GL_R;
+            case Q -> GL11.GL_Q;
+        };
+    }
+
+    private static int texGenCapability(net.minecraft.client.renderer.GlStateManager.TexGen texGen) {
+        return switch (texGen) {
+            case S -> GL11.GL_TEXTURE_GEN_S;
+            case T -> GL11.GL_TEXTURE_GEN_T;
+            case R -> GL11.GL_TEXTURE_GEN_R;
+            case Q -> GL11.GL_TEXTURE_GEN_Q;
+        };
+    }
+
+    public static void bindTexture(int texture) {
+        glBindTexture(GL11.GL_TEXTURE_2D, texture);
+    }
+
+    public static void enableNormalize() {
+        glEnable(GL11.GL_NORMALIZE);
+    }
+
+    public static void disableNormalize() {
+        glDisable(GL11.GL_NORMALIZE);
+    }
+
+    public static void glScalef(double x, double y, double z) {
+        glScaled(x, y, z);
+    }
+
+    public static void glTranslatef(double x, double y, double z) {
+        glTranslated(x, y, z);
+    }
+
+    public static void glRotatef(org.lwjgl.util.vector.Quaternion quaternion) {
+        FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
+        float x = quaternion.x;
+        float y = quaternion.y;
+        float z = quaternion.z;
+        float w = quaternion.w;
+        buffer.put(1.0F - 2.0F * y * y - 2.0F * z * z);
+        buffer.put(2.0F * x * y + 2.0F * w * z);
+        buffer.put(2.0F * x * z - 2.0F * w * y);
+        buffer.put(0.0F);
+        buffer.put(2.0F * x * y - 2.0F * w * z);
+        buffer.put(1.0F - 2.0F * x * x - 2.0F * z * z);
+        buffer.put(2.0F * y * z + 2.0F * w * x);
+        buffer.put(0.0F);
+        buffer.put(2.0F * x * z + 2.0F * w * y);
+        buffer.put(2.0F * y * z - 2.0F * w * x);
+        buffer.put(1.0F - 2.0F * x * x - 2.0F * y * y);
+        buffer.put(0.0F);
+        buffer.put(0.0F);
+        buffer.put(0.0F);
+        buffer.put(0.0F);
+        buffer.put(1.0F);
+        buffer.flip();
+        glMultMatrix(buffer);
+    }
+
+    public static void glColor4f(float red, float green, float blue) {
+        glColor4f(red, green, blue, 1.0F);
+    }
+
+    public static void glTexCoordPointer(int size, int type, int stride, int pointer) {
+        glTexCoordPointer(size, type, stride, (long) pointer);
+    }
+
+    public static void glVertexPointer(int size, int type, int stride, int pointer) {
+        glVertexPointer(size, type, stride, (long) pointer);
+    }
+
+    public static void glColorPointer(int size, int type, int stride, int pointer) {
+        glColorPointer(size, type, stride, (long) pointer);
+    }
+
+    public static void enableBlendProfile(net.minecraft.client.renderer.GlStateManager.Profile profile) {
+        profile.apply();
+    }
+
+    public static void disableBlendProfile(net.minecraft.client.renderer.GlStateManager.Profile profile) {
+        profile.clean();
+    }
+
     public static void glGetTexImage(int target, int level, int format, int type, long pixels) {
         GL11.glGetTexImage(target, level, format, type, pixels);
     }

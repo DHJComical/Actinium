@@ -39,7 +39,7 @@ public final class MinecraftFramebufferHelper {
     }
 
     public static void bindDefaultFramebuffer() {
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        GLStateManager.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
         restoreDefaultFramebufferBuffers();
     }
 }

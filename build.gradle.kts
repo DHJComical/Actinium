@@ -138,6 +138,9 @@ unimined.minecraft {
                     set("foundation.verbose", "true")
                 }
             }
+            if (propertyBool("enable_actinium_redirector_debug")) {
+                systemProperty("actinium.redirectorDebug", "true")
+            }
             if (propertyBool("is_coremod")) {
                 systemProperty("fml.coreMods.load", propertyString("coremod_plugin_class_name"))
             }

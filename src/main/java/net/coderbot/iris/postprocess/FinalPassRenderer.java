@@ -330,6 +330,8 @@ public class FinalPassRenderer {
 		}
 
 		GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
+        GLStateManager.glDepthMask(true);
+        GLStateManager.glColorMask(true, true, true, true);
         IrisGlDebug.markStage("final:end");
 	}
 

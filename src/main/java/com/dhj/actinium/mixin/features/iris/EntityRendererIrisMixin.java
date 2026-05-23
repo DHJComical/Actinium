@@ -18,11 +18,11 @@ import net.coderbot.iris.uniforms.CapturedRenderingState;
 import net.coderbot.iris.uniforms.SystemTimeUniforms;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.ItemRenderer;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.client.resources.IResourceManagerReloadListener;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.EntityLivingBase;
@@ -137,6 +137,14 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterGameOverlay(float partialTicks, long nanoTime, CallbackInfo ci) {
         IrisGlDebug.markStage("entity-renderer:after-game-overlay");
+    }
+
+    @Inject(
+        method = "updateCameraAndRender(FJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;setupOverlayRendering()V")
+    )
+    private void actinium$restoreBeforeGui(float partialTicks, long nanoTime, CallbackInfo ci) {
+        MinecraftFramebufferHelper.restoreMainFramebuffer(true);
     }
 
     @Inject(
@@ -436,6 +444,46 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
             this.renderRainSnow(partialTicks);
         }
         pipeline.setPhase(WorldRenderingPhase.NONE);
+    }
+
+    @Redirect(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderWorldBorder(Lnet/minecraft/entity/Entity;F)V")
+    )
+    private void actinium$renderWorldBorder(RenderGlobal renderGlobal, net.minecraft.entity.Entity entity, float partialTicks) {
+        if (!Iris.enabled) {
+            renderGlobal.renderWorldBorder(entity, partialTicks);
+            return;
+        }
+
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        if (pipeline != null) {
+            pipeline.setPhase(WorldRenderingPhase.WORLD_BORDER);
+        }
+        renderGlobal.renderWorldBorder(entity, partialTicks);
+        if (pipeline != null) {
+            pipeline.setPhase(WorldRenderingPhase.NONE);
+        }
+    }
+
+    @Redirect(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/debug/DebugRenderer;renderDebug(FJ)V")
+    )
+    private void actinium$renderDebug(DebugRenderer debugRenderer, float partialTicks, long finishTimeNano) {
+        if (!Iris.enabled) {
+            debugRenderer.renderDebug(partialTicks, finishTimeNano);
+            return;
+        }
+
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        if (pipeline != null) {
+            pipeline.setPhase(WorldRenderingPhase.DEBUG);
+        }
+        debugRenderer.renderDebug(partialTicks, finishTimeNano);
+        if (pipeline != null) {
+            pipeline.setPhase(WorldRenderingPhase.NONE);
+        }
     }
 
     @Redirect(

@@ -2,13 +2,11 @@ package com.dhj.actinium.mixin.features.iris;
 
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
 import org.embeddedt.embeddium.impl.gl.profiling.TimerQueryManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Minecraft.class)
@@ -26,11 +24,9 @@ public class MinecraftGlDebugMixin {
     @Unique
     private boolean actinium$frameRenderProfiling;
 
-    @Redirect(method = "checkGLError(Ljava/lang/String;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;glGetError()I"))
-    private int actinium$logGlStateForErrors(String message) {
-        int error = GlStateManager.glGetError();
-        IrisGlDebug.logMinecraftGlError(message, error);
-        return error;
+    @Inject(method = "checkGLError(Ljava/lang/String;)V", at = @At("HEAD"))
+    private void actinium$markGlErrorCheck(String message, CallbackInfo ci) {
+        IrisGlDebug.markStage("minecraft:check-gl-error:" + message);
     }
 
     @Inject(
@@ -64,7 +60,16 @@ public class MinecraftGlDebugMixin {
             this.actinium$frameRenderProfiling = false;
         }
 
+        IrisGlDebug.logWhiteScreenProbe("after-game-renderer");
         IrisGlDebug.check("minecraft:after-game-renderer");
+    }
+
+    @Inject(
+        method = "runGameLoop",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/shader/Framebuffer;bindFramebuffer(Z)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$probeAfterMainFramebufferBind(CallbackInfo ci) {
+        IrisGlDebug.logWhiteScreenProbe("after-main-fbo-bind");
     }
 
     @Inject(
@@ -98,6 +103,7 @@ public class MinecraftGlDebugMixin {
             this.actinium$frameOutputProfiling = false;
         }
 
+        IrisGlDebug.logWhiteScreenProbe("after-framebuffer-render");
         IrisGlDebug.markStage("minecraft:after-framebuffer-render");
     }
 
@@ -123,5 +129,6 @@ public class MinecraftGlDebugMixin {
     )
     private void actinium$checkAfterUpdateDisplay(CallbackInfo ci) {
         IrisGlDebug.markStage("minecraft:after-update-display");
+        IrisGlDebug.logWhiteScreenProbe("after-update-display");
     }
 }

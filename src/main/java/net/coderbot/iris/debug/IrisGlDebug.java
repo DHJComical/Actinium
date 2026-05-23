@@ -44,6 +44,8 @@ public final class IrisGlDebug {
 	private static final Map<String, WorldPassStageTiming> WORLD_PASS_STAGE_TIMINGS = new ConcurrentHashMap<>();
 	private static final Map<String, WorldPassStageTiming> RENDER_GLOBAL_STAGE_TIMINGS = new ConcurrentHashMap<>();
 	private static final Map<String, RenderGlobalCounterTiming> RENDER_GLOBAL_COUNTER_TIMINGS = new ConcurrentHashMap<>();
+	private static final Map<String, Long> WHITE_SCREEN_PROBE_TIMES = new ConcurrentHashMap<>();
+	private static final Map<String, Integer> WHITE_SCREEN_PROBE_COUNTS = new ConcurrentHashMap<>();
 	private static final boolean ENABLE_TEXTURE_UNIT_LOGS = Boolean.getBoolean("actinium.debug.textureUnitLogs");
 	private static final boolean ENABLE_PORTAL_RENDER_LOGS = Boolean.getBoolean("actinium.debug.portalRenderLogs");
 	private static long lastShadowEntityLogTime;
@@ -702,6 +704,92 @@ public final class IrisGlDebug {
         if (error != 0) {
             logGlState(stage, error);
         }
+    }
+
+    public static void logWhiteScreenProbe(String label) {
+        if (!shouldCaptureGlState()) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Long previous = WHITE_SCREEN_PROBE_TIMES.get(label);
+        if (previous != null && now - previous < 1000L) {
+            return;
+        }
+        WHITE_SCREEN_PROBE_TIMES.put(label, now);
+
+        VIEWPORT.clear();
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+        int width = Math.max(1, VIEWPORT.get(2));
+        int height = Math.max(1, VIEWPORT.get(3));
+
+        int[][] pixels = new int[5][4];
+        readPixel(width / 2, height / 2, pixels[0]);
+        readPixel(width / 4, height / 4, pixels[1]);
+        readPixel((width * 3) / 4, height / 4, pixels[2]);
+        readPixel(width / 4, (height * 3) / 4, pixels[3]);
+        readPixel((width * 3) / 4, (height * 3) / 4, pixels[4]);
+
+        int minR = 255;
+        int minG = 255;
+        int minB = 255;
+        int maxR = 0;
+        int maxG = 0;
+        int maxB = 0;
+        for (int[] pixel : pixels) {
+            minR = Math.min(minR, pixel[0]);
+            minG = Math.min(minG, pixel[1]);
+            minB = Math.min(minB, pixel[2]);
+            maxR = Math.max(maxR, pixel[0]);
+            maxG = Math.max(maxG, pixel[1]);
+            maxB = Math.max(maxB, pixel[2]);
+        }
+
+        boolean white = minR >= 245 && minG >= 245 && minB >= 245;
+        boolean solid = maxR - minR <= 3 && maxG - minG <= 3 && maxB - minB <= 3;
+        int count = WHITE_SCREEN_PROBE_COUNTS.merge(label, 1, Integer::sum);
+
+        Minecraft mc = Minecraft.getMinecraft();
+        Framebuffer main = mc.getFramebuffer();
+        int mainFbo = main != null ? main.framebufferObject : -1;
+        int mainTex = main != null ? main.framebufferTexture : -1;
+        int mainWidth = main != null ? main.framebufferWidth : -1;
+        int mainHeight = main != null ? main.framebufferHeight : -1;
+
+        LOGGER.info(
+            "white-screen-probe label={} count={} white={} solid={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} program={} vao={} activeTex={} tex2D={} depthTest={} depthMask={} blend={} viewport=[{},{},{},{}] mainFbo={} mainTex={} mainSize={}x{} display={}x{} pixels=[({}, {}, {}, {}) ({}, {}, {}, {}) ({}, {}, {}, {}) ({}, {}, {}, {}) ({}, {}, {}, {})]",
+            label,
+            count,
+            white,
+            solid,
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING),
+            GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING),
+            GL11.glGetInteger(GL11.GL_DRAW_BUFFER),
+            GL11.glGetInteger(GL11.GL_READ_BUFFER),
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING),
+            GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE),
+            GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D),
+            GL11.glIsEnabled(GL11.GL_DEPTH_TEST),
+            GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
+            GL11.glIsEnabled(GL11.GL_BLEND),
+            VIEWPORT.get(0),
+            VIEWPORT.get(1),
+            VIEWPORT.get(2),
+            VIEWPORT.get(3),
+            mainFbo,
+            mainTex,
+            mainWidth,
+            mainHeight,
+            mc.displayWidth,
+            mc.displayHeight,
+            pixels[0][0], pixels[0][1], pixels[0][2], pixels[0][3],
+            pixels[1][0], pixels[1][1], pixels[1][2], pixels[1][3],
+            pixels[2][0], pixels[2][1], pixels[2][2], pixels[2][3],
+            pixels[3][0], pixels[3][1], pixels[3][2], pixels[3][3],
+            pixels[4][0], pixels[4][1], pixels[4][2], pixels[4][3]
+        );
     }
 
     public static void logCeleritasProgram(String passName, int program, Collection<GlVertexAttribute> attributes) {
@@ -1570,10 +1658,10 @@ public final class IrisGlDebug {
         GL13.glActiveTexture(previousActiveTexture);
     }
 
-    public static void logCurrentFramebufferSamples(String label, int localColorAttachments) {
-        if (!shouldCaptureGlState()) {
-            return;
-        }
+	public static void logCurrentFramebufferSamples(String label, int localColorAttachments) {
+		if (!shouldCaptureGlState()) {
+			return;
+		}
 
         if (framebufferSamplePhase == null) {
             return;
@@ -1626,6 +1714,114 @@ public final class IrisGlDebug {
         );
 
         GL11.glReadBuffer(previousReadBuffer);
+    }
+
+    public static void logFramebufferOutputState(
+        String label,
+        int framebufferTexture,
+        int framebufferWidth,
+        int framebufferHeight,
+        int framebufferTextureWidth,
+        int framebufferTextureHeight,
+        int outputWidth,
+        int outputHeight,
+        boolean disableBlend
+    ) {
+        if (!shouldCaptureGlState()) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        String phasedLabel = "framebuffer-output-state:" + label;
+        Long previous = WHITE_SCREEN_PROBE_TIMES.get(phasedLabel);
+        if (previous != null && now - previous < 1000L) {
+            return;
+        }
+        WHITE_SCREEN_PROBE_TIMES.put(phasedLabel, now);
+
+        VIEWPORT.clear();
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+
+        StringBuilder framebufferPixels = new StringBuilder();
+        int readWidth = Math.max(1, VIEWPORT.get(2));
+        int readHeight = Math.max(1, VIEWPORT.get(3));
+        framebufferPixels.append("[");
+        appendPixel(framebufferPixels, readWidth / 2, readHeight / 2);
+        framebufferPixels.append(" ");
+        appendPixel(framebufferPixels, readWidth / 4, readHeight / 4);
+        framebufferPixels.append(" ");
+        appendPixel(framebufferPixels, (readWidth * 3) / 4, readHeight / 4);
+        framebufferPixels.append(" ");
+        appendPixel(framebufferPixels, readWidth / 4, (readHeight * 3) / 4);
+        framebufferPixels.append(" ");
+        appendPixel(framebufferPixels, (readWidth * 3) / 4, (readHeight * 3) / 4);
+        framebufferPixels.append("]");
+
+        StringBuilder texturePixels = new StringBuilder();
+        if (framebufferTexture > 0) {
+            appendTexturePixels(texturePixels, framebufferTexture);
+        } else {
+            texturePixels.append(",missing");
+        }
+
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
+        GL13.glActiveTexture(previousActiveTexture);
+
+        ByteBuffer colorMask = BufferUtils.createByteBuffer(4);
+        GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, colorMask);
+        float uMax = framebufferTextureWidth <= 0 ? -1.0F : (float) framebufferWidth / (float) framebufferTextureWidth;
+        float vMax = framebufferTextureHeight <= 0 ? -1.0F : (float) framebufferHeight / (float) framebufferTextureHeight;
+        LOGGER.info(
+            "framebuffer-output-state label={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} program={} vao={} activeTex={} tex2D={} texUnits[0={},1={},2={},3={}] depthTest={} depthMask={} blend={} colorMask=[{},{},{},{}] viewport=[{},{},{},{}] framebufferTex={} fbSize={}x{} texSize={}x{} output={}x{} uvMax=[{},{}] disableBlend={} framebufferPixels={} texture{} matrices[projection={}, modelview={}, texture={}]",
+            label,
+            previousFramebuffer,
+            previousReadFramebuffer,
+            previousDrawFramebuffer,
+            GL11.glGetInteger(GL11.GL_DRAW_BUFFER),
+            previousReadBuffer,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_VERTEX_ARRAY_BINDING),
+            previousActiveTexture,
+            GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D),
+            getBoundTexture2D(0),
+            getBoundTexture2D(1),
+            getBoundTexture2D(2),
+            getBoundTexture2D(3),
+            GL11.glIsEnabled(GL11.GL_DEPTH_TEST),
+            GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
+            GL11.glIsEnabled(GL11.GL_BLEND),
+            colorMask.get(0) != 0,
+            colorMask.get(1) != 0,
+            colorMask.get(2) != 0,
+            colorMask.get(3) != 0,
+            VIEWPORT.get(0),
+            VIEWPORT.get(1),
+            VIEWPORT.get(2),
+            VIEWPORT.get(3),
+            framebufferTexture,
+            framebufferWidth,
+            framebufferHeight,
+            framebufferTextureWidth,
+            framebufferTextureHeight,
+            outputWidth,
+            outputHeight,
+            uMax,
+            vMax,
+            disableBlend,
+            framebufferPixels,
+            texturePixels,
+            getMatrixModeMatrix(GL11.GL_PROJECTION_MATRIX),
+            getMatrixModeMatrix(GL11.GL_MODELVIEW_MATRIX),
+            getMatrixModeMatrix(GL11.GL_TEXTURE_MATRIX)
+        );
     }
 
     private static int getSamplerUniform(int program, String name) {
@@ -1827,6 +2023,15 @@ public final class IrisGlDebug {
             .append(Byte.toUnsignedInt(pixel.get(1))).append(",")
             .append(Byte.toUnsignedInt(pixel.get(2))).append(",")
             .append(Byte.toUnsignedInt(pixel.get(3))).append(")");
+    }
+
+    private static void readPixel(int x, int y, int[] out) {
+        ByteBuffer pixel = BufferUtils.createByteBuffer(4);
+        GL11.glReadPixels(Math.max(0, x), Math.max(0, y), 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, pixel);
+        out[0] = Byte.toUnsignedInt(pixel.get(0));
+        out[1] = Byte.toUnsignedInt(pixel.get(1));
+        out[2] = Byte.toUnsignedInt(pixel.get(2));
+        out[3] = Byte.toUnsignedInt(pixel.get(3));
     }
 
     private static void logGlState(String stage, int error) {

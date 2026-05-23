@@ -65,4 +65,40 @@ public class RenderManagerIrisMixin {
     ) {
         render.doRenderShadowAndFire(entity, x, y, z, yaw, partialTicks);
     }
+
+    @Redirect(
+        method = "renderMultipass(Lnet/minecraft/entity/Entity;F)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/entity/Render;renderMultipass(Lnet/minecraft/entity/Entity;DDDFF)V")
+    )
+    private void actinium$renderEntityMultipassWithIrisId(
+        Render<Entity> render,
+        Entity entity,
+        double x,
+        double y,
+        double z,
+        float yaw,
+        float partialTicks
+    ) {
+        boolean shaderPackInUse = IrisApiV0Impl.INSTANCE.isShaderPackInUse();
+        if (!shaderPackInUse) {
+            render.renderMultipass(entity, x, y, z, yaw, partialTicks);
+            return;
+        }
+
+        int previousEntity = CapturedRenderingState.INSTANCE.getCurrentRenderedEntity();
+        WorldRenderingPhase previousPhase = GbufferPrograms.getCurrentPhase();
+        boolean beganEntityPhase = previousPhase == WorldRenderingPhase.NONE;
+        CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
+        try {
+            if (beganEntityPhase) {
+                GbufferPrograms.beginEntities();
+            }
+            render.renderMultipass(entity, x, y, z, yaw, partialTicks);
+        } finally {
+            if (beganEntityPhase) {
+                GbufferPrograms.endEntities();
+            }
+            CapturedRenderingState.INSTANCE.setCurrentEntity(previousEntity);
+        }
+    }
 }

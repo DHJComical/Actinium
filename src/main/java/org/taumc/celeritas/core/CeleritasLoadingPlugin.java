@@ -1,9 +1,13 @@
 package org.taumc.celeritas.core;
 
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
+import net.minecraft.launchwrapper.Launch;
 import org.jetbrains.annotations.Nullable;
+import org.spongepowered.asm.launch.GlobalProperties;
+import org.spongepowered.asm.service.mojang.MixinServiceLaunchWrapper;
 import zone.rong.mixinbooter.IEarlyMixinLoader;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +19,6 @@ public class CeleritasLoadingPlugin implements IFMLLoadingPlugin, IEarlyMixinLoa
     public @Nullable String[] getASMTransformerClass() {
         return new String[] {
             "com.gtnewhorizons.angelica.loading.fml.transformers.EarlyRedirectorTransformer",
-            "com.gtnewhorizons.angelica.loading.fml.transformers.AngelicaRedirectorTransformer",
             "org.taumc.celeritas.core.CeleritasLWJGLRelocationTransformer"
         };
     }
@@ -32,7 +35,20 @@ public class CeleritasLoadingPlugin implements IFMLLoadingPlugin, IEarlyMixinLoa
 
     @Override
     public void injectData(Map<String, Object> map) {
-
+        List<String> tweaks = GlobalProperties.get(MixinServiceLaunchWrapper.BLACKBOARD_KEY_TWEAKCLASSES);
+        if (tweaks == null) {
+            Object value = Launch.blackboard.get("TweakClasses");
+            if (value instanceof List<?>) {
+                tweaks = (List<String>) value;
+            }
+        }
+        if (tweaks == null) {
+            tweaks = new ArrayList<>();
+            Launch.blackboard.put("TweakClasses", tweaks);
+        }
+        if (!tweaks.contains("com.gtnewhorizons.angelica.loading.fml.tweakers.AngelicaLateTweaker")) {
+            tweaks.add("com.gtnewhorizons.angelica.loading.fml.tweakers.AngelicaLateTweaker");
+        }
     }
 
     @Override

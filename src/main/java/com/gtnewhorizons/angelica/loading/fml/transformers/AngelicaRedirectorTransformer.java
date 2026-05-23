@@ -9,12 +9,18 @@ import org.objectweb.asm.tree.ClassNode;
 
 public class AngelicaRedirectorTransformer implements IClassTransformer {
 
+    private static final boolean DEBUG = Boolean.getBoolean("actinium.redirectorDebug");
     private final AngelicaRedirector inner;
     private final String[] exclusions;
 
     public AngelicaRedirectorTransformer() {
         inner = new AngelicaRedirector();
         exclusions = inner.getTransformerExclusions();
+    }
+
+    @Override
+    public int getPriority() {
+        return Integer.MAX_VALUE;
     }
 
     @Override
@@ -44,6 +50,14 @@ public class AngelicaRedirectorTransformer implements IClassTransformer {
         ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
         cn.accept(cw);
         byte[] bytes = cw.toByteArray();
+        if (DEBUG && (transformedName.startsWith("net.minecraft.client.renderer.")
+            || transformedName.startsWith("net.minecraft.client.shader.")
+            || transformedName.startsWith("net.minecraft.client.gui.FontRenderer")
+            || transformedName.startsWith("net.minecraftforge.client.")
+            || transformedName.startsWith("org.taumc.celeritas.")
+            || transformedName.startsWith("com.dhj.actinium."))) {
+            System.out.println("[ActiniumRedirector] late transformed " + transformedName);
+        }
         AngelicaClassDump.dumpClass(transformedName, basicClass, bytes, this);
         return bytes;
     }
