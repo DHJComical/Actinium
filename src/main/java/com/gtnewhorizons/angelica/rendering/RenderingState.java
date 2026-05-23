@@ -3,6 +3,7 @@ package com.gtnewhorizons.angelica.rendering;
 import lombok.Getter;
 import lombok.Setter;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Vector3d;
 import org.lwjgl.BufferUtils;
 
@@ -35,7 +36,17 @@ public class RenderingState {
 
     }
 
+    public void setProjectionMatrix(Matrix4fc projection) {
+        projectionMatrix.set(projection);
+        projectionMatrix.get(0, projectionBuffer);
+    }
+
     public void setModelViewMatrix(FloatBuffer modelview) {
+        modelViewMatrix.set(modelview);
+        modelViewMatrix.get(0, modelViewBuffer);
+    }
+
+    public void setModelViewMatrix(Matrix4fc modelview) {
         modelViewMatrix.set(modelview);
         modelViewMatrix.get(0, modelViewBuffer);
     }

@@ -118,6 +118,20 @@ public class ProgramUniforms {
 		}
 	}
 
+	public static void refreshActiveUniforms() {
+		if (active != null) {
+			active.updateMatrixUniforms(active.perFrame);
+		}
+	}
+
+	private void updateMatrixUniforms(ImmutableList<Uniform> uniforms) {
+		for (Uniform uniform : uniforms) {
+			if (uniform instanceof net.coderbot.iris.gl.uniform.MatrixUniform || uniform instanceof net.coderbot.iris.gl.uniform.MatrixFromFloatArrayUniform) {
+				uniform.update();
+			}
+		}
+	}
+
 	public static Builder builder(String name, int program) {
 		return new Builder(name, program);
 	}

@@ -6,6 +6,7 @@ import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
 import com.dhj.actinium.config.ActiniumConfig;
 import com.dhj.actinium.shadows.InternalShadowRenderingState;
+import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
@@ -14,6 +15,7 @@ import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
+import net.coderbot.iris.gl.program.ProgramUniforms;
 import net.coderbot.iris.gui.option.IrisVideoSettings;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.shaderpack.PackDirectives;
@@ -491,6 +493,8 @@ public class ShadowRenderer {
 	// Saved RenderManager position for shadow pass
     private double savedRenderPosX, savedRenderPosY, savedRenderPosZ;
     private double savedViewerPosX, savedViewerPosY, savedViewerPosZ;
+    private final Matrix4f savedRenderingStateModelView = new Matrix4f();
+    private final Matrix4f savedRenderingStateProjection = new Matrix4f();
 
     private void setupEntityShadowState(MatrixStack modelView, double cameraX, double cameraY, double cameraZ) {
         RenderManager renderManager = Minecraft.getMinecraft().getRenderManager();
@@ -527,10 +531,12 @@ public class ShadowRenderer {
         MODELVIEW_BUFFER.clear().rewind();
         modelView.peek().getModel().get(MODELVIEW_BUFFER);
         GLStateManager.glLoadMatrix(MODELVIEW_BUFFER);
+        pushShadowRenderingState(modelView);
     }
 
     private void teardownEntityShadowState() {
         GLStateManager.glPopMatrix();
+        popShadowRenderingState();
 
         GLStateManager.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
         GLStateManager.glPolygonOffset(0.0f, 0.0f);
@@ -540,6 +546,21 @@ public class ShadowRenderer {
         renderManager.viewerPosX = savedViewerPosX;
         renderManager.viewerPosY = savedViewerPosY;
         renderManager.viewerPosZ = savedViewerPosZ;
+    }
+
+    private void pushShadowRenderingState(MatrixStack modelView) {
+        savedRenderingStateModelView.set(RenderingState.INSTANCE.getModelViewMatrix());
+        savedRenderingStateProjection.set(RenderingState.INSTANCE.getProjectionMatrix());
+        RenderingState.INSTANCE.setModelViewMatrix(modelView.peek().getModel());
+        RenderingState.INSTANCE.setProjectionMatrix(PROJECTION);
+        ProgramUniforms.refreshActiveUniforms();
+        CompatUniformManager.refreshCurrentProgramMatrices();
+    }
+
+    private void popShadowRenderingState() {
+        RenderingState.INSTANCE.setModelViewMatrix(savedRenderingStateModelView);
+        RenderingState.INSTANCE.setProjectionMatrix(savedRenderingStateProjection);
+        CompatUniformManager.refreshCurrentProgramMatrices();
     }
 
 	private void renderPlayerEntity(EntityRenderer levelRenderer, Frustum frustum, Object bufferSource, MatrixStack modelView, double cameraX, double cameraY, double cameraZ, float tickDelta) {
@@ -619,33 +640,41 @@ public class ShadowRenderer {
         MODELVIEW_BUFFER.clear().rewind();
         modelView.peek().getModel().get(MODELVIEW_BUFFER);
         GLStateManager.glLoadMatrix(MODELVIEW_BUFFER);
+        pushShadowRenderingState(modelView);
 
-        GbufferPrograms.beginBlockEntities();
-        GbufferPrograms.setBlockEntityDefaults();
+        boolean beganBlockEntities = false;
+        try {
+            GbufferPrograms.beginBlockEntities();
+            beganBlockEntities = true;
+            GbufferPrograms.setBlockEntityDefaults();
 
-		for (TileEntity tileEntity : visibleTileEntities) {
-			BlockPos pos = tileEntity.getPos();
-			if (hasEntityFrustum && (culler.isCulled(pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1, pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1))) {
-                continue;
-			}
-            renderTileEntity(tileEntity, cameraX, cameraY, cameraZ, partialTicks);
+            for (TileEntity tileEntity : visibleTileEntities) {
+                BlockPos pos = tileEntity.getPos();
+                if (hasEntityFrustum && (culler.isCulled(pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1, pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1))) {
+                    continue;
+                }
+                renderTileEntity(tileEntity, cameraX, cameraY, cameraZ, partialTicks);
 
-			shadowTileEntities++;
-		}
-		for (TileEntity tileEntity : globalTileEntities) {
-			BlockPos pos = tileEntity.getPos();
-			if (hasEntityFrustum && (culler.isCulled(pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1, pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1))) {
-				continue;
-			}
-			renderTileEntity(tileEntity, cameraX, cameraY, cameraZ, partialTicks);
+                shadowTileEntities++;
+            }
+            for (TileEntity tileEntity : globalTileEntities) {
+                BlockPos pos = tileEntity.getPos();
+                if (hasEntityFrustum && (culler.isCulled(pos.getX() - 1, pos.getY() - 1, pos.getZ() - 1, pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1))) {
+                    continue;
+                }
+                renderTileEntity(tileEntity, cameraX, cameraY, cameraZ, partialTicks);
 
-			shadowTileEntities++;
-		}
+                shadowTileEntities++;
+            }
 
-        GbufferPrograms.endBlockEntities();
-        GLStateManager.glPopMatrix();
-
-		renderedShadowTileEntities = shadowTileEntities;
+            renderedShadowTileEntities = shadowTileEntities;
+        } finally {
+            if (beganBlockEntities) {
+                GbufferPrograms.endBlockEntities();
+            }
+            GLStateManager.glPopMatrix();
+            popShadowRenderingState();
+        }
 
 		profiler.endSection();
 	}
@@ -718,6 +747,9 @@ public class ShadowRenderer {
 		final double terrainX = renderViewEntity != null ? renderViewEntity.lastTickPosX + (renderViewEntity.posX - renderViewEntity.lastTickPosX) * tickDelta : entityX;
 		final double terrainY = renderViewEntity != null ? renderViewEntity.lastTickPosY + (renderViewEntity.posY - renderViewEntity.lastTickPosY) * tickDelta : entityY;
 		final double terrainZ = renderViewEntity != null ? renderViewEntity.lastTickPosZ + (renderViewEntity.posZ - renderViewEntity.lastTickPosZ) * tickDelta : entityZ;
+		final double renderOriginX = terrainX;
+		final double renderOriginY = terrainY;
+		final double renderOriginZ = terrainZ;
 
 		// Center the frustum on the player position
 		terrainFrustumHolder.getFrustum().setPosition(entityX, entityY, entityZ);
@@ -805,13 +837,13 @@ public class ShadowRenderer {
 		// Render nearby entities
 
 		if (shouldRenderEntities) {
-			renderEntities(levelRenderer, entityShadowFrustum, null, modelView, entityX, entityY, entityZ, tickDelta);
+			renderEntities(levelRenderer, entityShadowFrustum, null, modelView, renderOriginX, renderOriginY, renderOriginZ, tickDelta);
 		} else if (shouldRenderPlayer) {
-			renderPlayerEntity(levelRenderer, entityShadowFrustum, null, modelView, entityX, entityY, entityZ, tickDelta);
+			renderPlayerEntity(levelRenderer, entityShadowFrustum, null, modelView, renderOriginX, renderOriginY, renderOriginZ, tickDelta);
 		}
 
 		if (shouldRenderBlockEntities) {
-			renderTileEntities(null, modelView, entityX, entityY, entityZ, tickDelta, hasEntityFrustum);
+			renderTileEntities(null, modelView, renderOriginX, renderOriginY, renderOriginZ, tickDelta, hasEntityFrustum);
 		}
 
 		profiler.endStartSection("draw entities");

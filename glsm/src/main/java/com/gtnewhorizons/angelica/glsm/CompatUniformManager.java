@@ -199,6 +199,24 @@ public class CompatUniformManager {
         }
     }
 
+    public static void refreshCurrentProgramMatrices() {
+        final int program = GLStateManager.getActiveProgram();
+        if (program == 0) {
+            return;
+        }
+
+        int[] locs = programLocations.get(program);
+        if (locs == null) {
+            return;
+        }
+
+        uploadMatrices(locs, true, true, true);
+        lastProgram = program;
+        lastMvGen = GLStateManager.mvGeneration;
+        lastProjGen = GLStateManager.projGeneration;
+        lastTexMatGen = GLStateManager.texMatrixGeneration;
+    }
+
     private static void uploadMatrices(int[] locs, boolean mvChanged, boolean projChanged, boolean texMatChanged) {
         final Matrix4f mv = GLStateManager.getModelViewMatrix();
         final Matrix4f proj = GLStateManager.getProjectionMatrix();
