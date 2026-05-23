@@ -1,9 +1,11 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.coderbot.iris.gbuffer_overrides.matching.SpecialCondition;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.minecraft.client.renderer.entity.layers.LayerSpiderEyes;
 import net.minecraft.entity.monster.EntitySpider;
+import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -23,6 +25,8 @@ public class LayerSpiderEyesIrisMixin {
         float scale,
         CallbackInfo ci
     ) {
+        GLStateManager.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+        GLStateManager.glPolygonOffset(-1.0F, -1.0F);
         GbufferPrograms.setupSpecialRenderCondition(SpecialCondition.ENTITY_EYES);
     }
 
@@ -39,5 +43,7 @@ public class LayerSpiderEyesIrisMixin {
         CallbackInfo ci
     ) {
         GbufferPrograms.teardownSpecialRenderCondition();
+        GLStateManager.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+        GLStateManager.glPolygonOffset(0.0F, 0.0F);
     }
 }
