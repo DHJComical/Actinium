@@ -14,6 +14,9 @@ import com.gtnewhorizons.angelica.rendering.RenderingState;
 import net.coderbot.iris.debug.IrisGlDebug;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
+import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
+import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderList;
+import org.embeddedt.embeddium.impl.render.chunk.lists.SortedRenderLists;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
@@ -95,6 +98,65 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
 
     public void setCurrentViewport(Viewport viewport) {
         this.currentViewport = viewport;
+    }
+
+    @Override
+    public void setupTerrain(Viewport viewport, CameraState cameraState, int frame, boolean spectator, boolean updateChunksImmediately) {
+        super.setupTerrain(viewport, cameraState, frame, spectator, updateChunksImmediately);
+
+        if (this.renderSectionManager.isInShadowPass() && ShaderProviderHolder.isActive()) {
+            this.renderSectionManager.finishAllGraphUpdates();
+            collectTileEntitiesForShadow();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void collectTileEntitiesForShadow() {
+        final SortedRenderLists renderLists = this.renderSectionManager.getRenderLists();
+        final Iterator<ChunkRenderList> renderListIterator = renderLists.iterator();
+
+        while (renderListIterator.hasNext()) {
+            final ChunkRenderList renderList = renderListIterator.next();
+            final var renderRegion = renderList.getRegion();
+            final var renderSectionIterator = renderList.sectionsWithEntitiesIterator();
+
+            if (renderSectionIterator == null) {
+                continue;
+            }
+
+            while (renderSectionIterator.hasNext()) {
+                final int renderSectionId = renderSectionIterator.nextByteAsInt();
+                final var renderSection = renderRegion.getSection(renderSectionId);
+
+                if (renderSection == null) {
+                    continue;
+                }
+
+                final var context = renderSection.getBuiltContext();
+                if (context instanceof MinecraftBuiltRenderSectionData<?, ?> mcData) {
+                    ShadowRenderer.visibleTileEntities.addAll((List<TileEntity>) mcData.culledBlockEntities);
+                }
+            }
+        }
+
+        for (var renderSection : this.renderSectionManager.getSectionsWithGlobalEntities()) {
+            final var context = renderSection.getBuiltContext();
+            if (context instanceof MinecraftBuiltRenderSectionData<?, ?> mcData) {
+                ShadowRenderer.globalTileEntities.addAll((List<TileEntity>) mcData.globalBlockEntities);
+            }
+        }
+
+        IrisGlDebug.logShadowPassState(
+            "collect-block-entities",
+            true,
+            true,
+            true,
+            true,
+            true,
+            this.renderSectionManager.getVisibleChunkCount(),
+            -1,
+            ShadowRenderer.visibleTileEntities.size() + ShadowRenderer.globalTileEntities.size()
+        );
     }
 
     public static CameraState captureCameraState(double ticks) {

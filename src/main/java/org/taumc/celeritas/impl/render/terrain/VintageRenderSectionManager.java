@@ -23,6 +23,7 @@ import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
 import org.embeddedt.embeddium.impl.render.chunk.sprite.GenericSectionSpriteTicker;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
+import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
@@ -169,6 +170,15 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     @Override
     public boolean isInShadowPass() {
         return ShaderProviderHolder.isShadowPass();
+    }
+
+    @Override
+    public void renderLayer(ChunkRenderMatrices matrices, TerrainRenderPass pass, CameraTransform occlusionCamera, CameraTransform camera) {
+        if (ShaderProviderHolder.isShadowPass()) {
+            finishAllGraphUpdates();
+            IrisGlDebug.logShadowTerrainLayer("before-render-layer", pass.name(), getVisibleChunkCount());
+        }
+        super.renderLayer(matrices, pass, occlusionCamera, camera);
     }
 
     private static class ChunkRenderer extends DefaultChunkRenderer {

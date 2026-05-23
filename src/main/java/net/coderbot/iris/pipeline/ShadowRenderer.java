@@ -5,6 +5,7 @@ import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
 import com.dhj.actinium.config.ActiniumConfig;
+import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
@@ -682,7 +683,20 @@ public class ShadowRenderer {
 		}
 
 		PROJECTION.set(shadowProjection);
+		InternalShadowRenderingState.begin(MODELVIEW, PROJECTION, shouldRenderEntities, shouldRenderPlayer, shouldRenderBlockEntities);
+		IrisGlDebug.logShadowPassState(
+			"begin",
+			shouldRenderTerrain,
+			shouldRenderTranslucent,
+			shouldRenderEntities,
+			shouldRenderPlayer,
+			shouldRenderBlockEntities,
+			0,
+			0,
+			0
+		);
 
+		try {
 		profiler.startSection("terrain_setup");
 
 		if (levelRenderer instanceof CullingDataCache) {
@@ -695,10 +709,15 @@ public class ShadowRenderer {
 		FRUSTUM = terrainFrustumHolder.getFrustum();
 
 		// Use the player/entity position for shadow rendering
+		final float tickDelta = CapturedRenderingState.INSTANCE.getTickDelta();
 		final Vector3d entityPos = playerCamera.getEntityPos();
 		final double entityX = entityPos.x;
 		final double entityY = entityPos.y;
 		final double entityZ = entityPos.z;
+		final Entity renderViewEntity = mc.getRenderViewEntity();
+		final double terrainX = renderViewEntity != null ? renderViewEntity.lastTickPosX + (renderViewEntity.posX - renderViewEntity.lastTickPosX) * tickDelta : entityX;
+		final double terrainY = renderViewEntity != null ? renderViewEntity.lastTickPosY + (renderViewEntity.posY - renderViewEntity.lastTickPosY) * tickDelta : entityY;
+		final double terrainZ = renderViewEntity != null ? renderViewEntity.lastTickPosZ + (renderViewEntity.posZ - renderViewEntity.lastTickPosZ) * tickDelta : entityZ;
 
 		// Center the frustum on the player position
 		terrainFrustumHolder.getFrustum().setPosition(entityX, entityY, entityZ);
@@ -754,7 +773,7 @@ public class ShadowRenderer {
 		// Render all opaque terrain unless pack requests not to
 		if (shouldRenderTerrain) {
             mc.renderEngine.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-            CeleritasWorldRenderer.instance().drawChunkLayer(net.minecraft.util.BlockRenderLayer.SOLID, entityX, entityY, entityZ);
+            CeleritasWorldRenderer.instance().drawChunkLayer(net.minecraft.util.BlockRenderLayer.SOLID, terrainX, terrainY, terrainZ);
 		}
 
 		// Reset viewport in case terrain rendering changed it
@@ -764,8 +783,6 @@ public class ShadowRenderer {
 
 		// Get the current tick delta. Normally this is the same as client.getTickDelta(), but when the game is paused,
 		// it is set to a fixed value.
-		final float tickDelta = CapturedRenderingState.INSTANCE.getTickDelta();
-
 		// Create a constrained shadow frustum for entities to avoid rendering faraway entities in the shadow pass,
 		// if the shader pack has requested it. Otherwise, use the same frustum as for terrain.
 		boolean hasEntityFrustum = false;
@@ -811,7 +828,7 @@ public class ShadowRenderer {
 		// It doesn't matter a ton, since this just means that they won't be sorted in the getNormal rendering pass.
 		// Just something to watch out for, however...
 		if (shouldRenderTranslucent) {
-            CeleritasWorldRenderer.instance().drawChunkLayer(net.minecraft.util.BlockRenderLayer.TRANSLUCENT, entityX, entityY, entityZ);
+            CeleritasWorldRenderer.instance().drawChunkLayer(net.minecraft.util.BlockRenderLayer.TRANSLUCENT, terrainX, terrainY, terrainZ);
 		}
 
 		if (celeritasManaged) {
@@ -838,6 +855,18 @@ public class ShadowRenderer {
 			((CullingDataCache) levelRenderer).restoreState();
 		}
 
+		IrisGlDebug.logShadowPassState(
+			"after-render",
+			shouldRenderTerrain,
+			shouldRenderTranslucent,
+			shouldRenderEntities,
+			shouldRenderPlayer,
+			shouldRenderBlockEntities,
+			ActiniumConfig.enableCeleritas ? CeleritasWorldRenderer.instance().getVisibleChunkCount() : -1,
+			renderedShadowEntities,
+			renderedShadowTileEntities
+		);
+
 		profiler.endStartSection("shadowcomp");
 
 		if (compositeRenderer != null) compositeRenderer.renderAll();
@@ -849,6 +878,11 @@ public class ShadowRenderer {
 		CURRENT_TARGETS = null;
 		profiler.endSection();
 		profiler.endStartSection("updatechunks");
+		} finally {
+			InternalShadowRenderingState.end();
+			ACTIVE = false;
+			CURRENT_TARGETS = null;
+		}
 	}
 
 	public void addDebugText(List<String> messages) {

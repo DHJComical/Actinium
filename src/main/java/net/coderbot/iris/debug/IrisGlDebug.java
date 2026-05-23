@@ -47,6 +47,7 @@ public final class IrisGlDebug {
 	private static final boolean ENABLE_TEXTURE_UNIT_LOGS = Boolean.getBoolean("actinium.debug.textureUnitLogs");
 	private static final boolean ENABLE_PORTAL_RENDER_LOGS = Boolean.getBoolean("actinium.debug.portalRenderLogs");
 	private static long lastShadowEntityLogTime;
+	private static long lastShadowPassLogTime;
     private static long compositeTimingWindowStart;
     private static int compositeTimingFrames;
     private static int compositeTimingGpuFrames;
@@ -845,6 +846,65 @@ public final class IrisGlDebug {
             localZ,
             u,
             v
+        );
+    }
+
+    public static void logShadowPassState(String stage, boolean terrain, boolean translucent, boolean entities, boolean player, boolean blockEntities, int visibleChunks, int renderedEntities, int renderedBlockEntities) {
+        if (!shouldCaptureGlState()) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastShadowPassLogTime < 1000L && !"after-render".equals(stage)) {
+            return;
+        }
+        lastShadowPassLogTime = now;
+
+        VIEWPORT.clear();
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+
+        logDebugInfo(
+            "shadow-pass stage={} terrain={} translucent={} entities={} player={} blockEntities={} visibleChunks={} renderedEntities={} renderedBlockEntities={} program={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            terrain,
+            translucent,
+            entities,
+            player,
+            blockEntities,
+            visibleChunks,
+            renderedEntities,
+            renderedBlockEntities,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            VIEWPORT.get(0),
+            VIEWPORT.get(1),
+            VIEWPORT.get(2),
+            VIEWPORT.get(3)
+        );
+    }
+
+    public static void logShadowTerrainLayer(String stage, String passName, int visibleChunks) {
+        if (!shouldCaptureGlState()) {
+            return;
+        }
+
+        String label = "shadow-terrain-layer:" + stage + ":" + passName + ":" + visibleChunks;
+        int count = FRAMEBUFFER_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 4) {
+            return;
+        }
+
+        logDebugInfo(
+            "shadow-terrain-layer stage={} pass={} visibleChunks={} program={} fb={} viewport=[{},{},{},{}]",
+            stage,
+            passName,
+            visibleChunks,
+            GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+            GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING),
+            currentViewportX(),
+            currentViewportY(),
+            currentViewportWidth(),
+            currentViewportHeight()
         );
     }
 
