@@ -1,12 +1,14 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL30;
 import org.spongepowered.asm.mixin.Mixin;
@@ -54,6 +56,22 @@ public class FramebufferIrisMixin implements IRenderTargetExt {
     @Shadow
     private boolean stencilEnabled;
 
+    @Unique
+    private void actinium$prepareFramebufferOutputState() {
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE3);
+        GLStateManager.disableTexture();
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE2);
+        GLStateManager.disableTexture();
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE1);
+        GLStateManager.disableTexture();
+        GLStateManager.glActiveTexture(OpenGlHelper.defaultTexUnit);
+        GLStateManager.enableTexture();
+        GLStateManager.glTexEnvi(GL11.GL_TEXTURE_ENV, GL11.GL_TEXTURE_ENV_MODE, GL11.GL_MODULATE);
+        GLStateManager.disableAlphaTest();
+        GLStateManager.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GLStateManager.glColorMask(true, true, true, true);
+    }
+
     @Inject(method = "deleteFramebuffer()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/shader/Framebuffer;unbindFramebuffer()V", shift = At.Shift.AFTER))
     private void actinium$onDestroyBuffers(CallbackInfo ci) {
         this.actinium$depthBufferVersion++;
@@ -72,6 +90,9 @@ public class FramebufferIrisMixin implements IRenderTargetExt {
 
     @Inject(method = "framebufferRenderExt(IIZ)V", at = @At("HEAD"))
     private void actinium$beginFramebufferOutputDiagnostics(int width, int height, boolean disableBlend, CallbackInfo ci) {
+        if (IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
+            this.actinium$prepareFramebufferOutputState();
+        }
         IrisGlDebug.markStage("framebuffer-output:entry");
         IrisGlDebug.beginFramebufferSamplePhase("minecraft-output");
         IrisGlDebug.logFramebufferOutputState(
@@ -93,6 +114,9 @@ public class FramebufferIrisMixin implements IRenderTargetExt {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/shader/Framebuffer;bindFramebufferTexture()V")
     )
     private void actinium$beforeFramebufferTextureBind(int width, int height, boolean disableBlend, CallbackInfo ci) {
+        if (IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
+            this.actinium$prepareFramebufferOutputState();
+        }
         IrisGlDebug.logFramebufferOutputState(
             "before-bind-texture",
             this.framebufferTexture,
@@ -162,6 +186,10 @@ public class FramebufferIrisMixin implements IRenderTargetExt {
 
     @Inject(method = "framebufferRenderExt(IIZ)V", at = @At("RETURN"))
     private void actinium$endFramebufferOutputDiagnostics(int width, int height, boolean disableBlend, CallbackInfo ci) {
+        if (IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
+            GLStateManager.glActiveTexture(OpenGlHelper.defaultTexUnit);
+            GLStateManager.glColorMask(true, true, true, true);
+        }
         IrisGlDebug.logFramebufferOutputState(
             "return",
             this.framebufferTexture,

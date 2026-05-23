@@ -1779,8 +1779,9 @@ public final class IrisGlDebug {
         GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, colorMask);
         float uMax = framebufferTextureWidth <= 0 ? -1.0F : (float) framebufferWidth / (float) framebufferTextureWidth;
         float vMax = framebufferTextureHeight <= 0 ? -1.0F : (float) framebufferHeight / (float) framebufferTextureHeight;
+        final var blend = GLStateManager.getBlendState();
         LOGGER.info(
-            "framebuffer-output-state label={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} program={} vao={} activeTex={} tex2D={} texUnits[0={},1={},2={},3={}] depthTest={} depthMask={} blend={} colorMask=[{},{},{},{}] viewport=[{},{},{},{}] framebufferTex={} fbSize={}x{} texSize={}x{} output={}x{} uvMax=[{},{}] disableBlend={} framebufferPixels={} texture{} matrices[projection={}, modelview={}, texture={}]",
+            "framebuffer-output-state label={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} program={} vao={} activeTex={} tex2D={} texUnits[0={},1={},2={},3={}] tex2DEnabled[0={},1={},2={},3={}] depthTest={} depthMask={} blend={} blendFunc=[{},{},{},{}] colorMask=[{},{},{},{}] viewport=[{},{},{},{}] framebufferTex={} fbSize={}x{} texSize={}x{} output={}x{} uvMax=[{},{}] disableBlend={} framebufferPixels={} texture{} matrices[projection={}, modelview={}, texture={}]",
             label,
             previousFramebuffer,
             previousReadFramebuffer,
@@ -1795,9 +1796,17 @@ public final class IrisGlDebug {
             getBoundTexture2D(1),
             getBoundTexture2D(2),
             getBoundTexture2D(3),
+            GLStateManager.getTextures().getTextureUnitStates(0).isEnabled(),
+            GLStateManager.getTextures().getTextureUnitStates(1).isEnabled(),
+            GLStateManager.getTextures().getTextureUnitStates(2).isEnabled(),
+            GLStateManager.getTextures().getTextureUnitStates(3).isEnabled(),
             GL11.glIsEnabled(GL11.GL_DEPTH_TEST),
             GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
             GL11.glIsEnabled(GL11.GL_BLEND),
+            blend.getSrcRgb(),
+            blend.getDstRgb(),
+            blend.getSrcAlpha(),
+            blend.getDstAlpha(),
             colorMask.get(0) != 0,
             colorMask.get(1) != 0,
             colorMask.get(2) != 0,
@@ -1927,6 +1936,7 @@ public final class IrisGlDebug {
         GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
         int texture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         GL13.glActiveTexture(previous);
+        GLStateManager.glActiveTexture(previous);
         return texture;
     }
 
@@ -1965,19 +1975,19 @@ public final class IrisGlDebug {
         int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
 
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
         int previousTexture0 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
+        GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, texture);
         int width = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
         int height = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
         if (width <= 0 || height <= 0) {
             builder.append(",size=").append(width).append("x").append(height);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
+            GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
             GL11.glReadBuffer(previousReadBuffer);
-            GL13.glActiveTexture(previousActiveTexture);
+            GLStateManager.glActiveTexture(previousActiveTexture);
             return;
         }
 
@@ -2007,12 +2017,12 @@ public final class IrisGlDebug {
         }
 
         GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
+        GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
         GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
         GL11.glReadBuffer(previousReadBuffer);
-        GL13.glActiveTexture(previousActiveTexture);
+        GLStateManager.glActiveTexture(previousActiveTexture);
     }
 
     private static void appendPixel(StringBuilder builder, int x, int y) {

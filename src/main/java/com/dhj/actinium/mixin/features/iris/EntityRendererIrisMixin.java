@@ -26,6 +26,7 @@ import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.client.resources.IResourceManagerReloadListener;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.EntityLivingBase;
+import org.lwjgl.opengl.GL13;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -436,14 +437,23 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
             return;
         }
 
-        pipeline.setPhase(WorldRenderingPhase.RAIN_SNOW);
-        if (pipeline.shouldWriteRainAndSnowToDepthBuffer()) {
-            GLStateManager.glDepthMask(true);
+        WorldRenderingPhase previousPhase = pipeline.getPhase();
+        boolean previousDepthMask = GLStateManager.getDepthState().isEnabled();
+        int previousActiveTexture = GLStateManager.getActiveTextureUnit();
+
+        try {
+            pipeline.setPhase(WorldRenderingPhase.RAIN_SNOW);
+            if (pipeline.shouldWriteRainAndSnowToDepthBuffer()) {
+                GLStateManager.glDepthMask(true);
+            }
+            if (pipeline.shouldRenderWeather()) {
+                this.renderRainSnow(partialTicks);
+            }
+        } finally {
+            GLStateManager.glDepthMask(previousDepthMask);
+            GLStateManager.glActiveTexture(GL13.GL_TEXTURE0 + previousActiveTexture);
+            pipeline.setPhase(previousPhase);
         }
-        if (pipeline.shouldRenderWeather()) {
-            this.renderRainSnow(partialTicks);
-        }
-        pipeline.setPhase(WorldRenderingPhase.NONE);
     }
 
     @Redirect(
