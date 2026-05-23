@@ -23,6 +23,7 @@ import net.minecraft.client.renderer.ItemRenderer;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.debug.DebugRenderer;
+import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.resources.IResourceManagerReloadListener;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.EntityLivingBase;
@@ -87,7 +88,30 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         BlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
         pipeline.beginLevelRendering();
         IrisGlDebug.markStage("mixin:begin-world:done");
-        IrisGlDebug.recordWorldPassStage("iris-begin-to-shadows");
+        pipeline.renderPreSkyPrepare();
+        IrisGlDebug.markStage("mixin:pre-sky-prepare:done");
+        IrisGlDebug.recordWorldPassStage("iris-begin-to-sky");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$renderIrisShadows(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
+            return;
+        }
+
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        if (pipeline == null) {
+            return;
+        }
+
+        actinium$prepareRenderManagerForShadowPass(partialTicks);
+        IrisGlDebug.markStage("mixin:shadows:entry");
+        pipeline.renderShadows((EntityRenderer) (Object) this, Camera.INSTANCE);
+        IrisGlDebug.markStage("mixin:shadows:done");
+        IrisGlDebug.recordWorldPassStage("setup-terrain-to-shadows");
     }
 
     @Inject(
@@ -156,22 +180,16 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         IrisGlDebug.markStage("entity-renderer:after-draw-screen");
     }
 
-    @Inject(
-        method = "renderWorldPass(IFJ)V",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderSky(FI)V")
-    )
-    private void actinium$renderIrisShadows(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
-        if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
-            return;
-        }
-
-        IrisGlDebug.markStage("mixin:shadows:entry");
-        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
-        if (pipeline != null) {
-            pipeline.renderShadows((EntityRenderer) (Object) this, Camera.INSTANCE);
-            IrisGlDebug.markStage("mixin:shadows:done");
-            IrisGlDebug.recordWorldPassStage("shadows-to-sky");
-        }
+    private void actinium$prepareRenderManagerForShadowPass(float partialTicks) {
+        RenderManager renderManager = this.mc.getRenderManager();
+        renderManager.cacheActiveRenderInfo(
+            this.mc.world,
+            this.mc.fontRenderer,
+            this.mc.getRenderViewEntity(),
+            this.mc.pointedEntity,
+            this.mc.gameSettings,
+            partialTicks
+        );
     }
 
     @Inject(

@@ -20,6 +20,7 @@ import java.util.OptionalInt;
 
 public interface WorldRenderingPipeline {
 	void beginLevelRendering();
+	void renderPreSkyPrepare();
 	void renderShadows(EntityRenderer levelRenderer, Camera camera);
 	void addDebugText(List<String> messages);
 	OptionalInt getForcedShadowRenderDistanceChunksForDisplay();

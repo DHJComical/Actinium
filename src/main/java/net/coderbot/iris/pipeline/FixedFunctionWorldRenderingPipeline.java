@@ -40,6 +40,11 @@ public class FixedFunctionWorldRenderingPipeline implements WorldRenderingPipeli
 	}
 
 	@Override
+	public void renderPreSkyPrepare() {
+		// stub: nothing to do here
+	}
+
+	@Override
 	public void renderShadows(EntityRenderer levelRenderer, Camera camera) {
 		// stub: nothing to do here
 	}

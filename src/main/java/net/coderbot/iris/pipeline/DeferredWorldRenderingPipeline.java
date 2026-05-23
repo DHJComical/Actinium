@@ -915,7 +915,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		Supplier<ImmutableSet<Integer>> flipped;
 
 		if (shadow) {
-			flipped = () -> (shouldRenderPrepareBeforeShadow ? flippedAfterPrepare : flippedBeforeShadow);
+			flipped = () -> ((shouldRenderPrepareBeforeShadow || hasRenderedPreparePass) ? flippedAfterPrepare : flippedBeforeShadow);
 		} else {
 			flipped = () -> isBeforeTranslucent ? flippedAfterPrepare : flippedAfterTranslucent;
 		}
@@ -1582,13 +1582,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	@Override
 	public void renderShadows(EntityRenderer levelRenderer, Camera playerCamera) {
         IrisGlDebug.check("level:shadows:start");
-		if (shouldRenderPrepareBeforeShadow) {
-			isRenderingFullScreenPass = true;
-
-			prepareRenderer.renderAll();
-            IrisGlDebug.check("level:shadows:prepare-before");
-
-			isRenderingFullScreenPass = false;
+		if (shouldRenderPrepareBeforeShadow && !hasRenderedPreparePass) {
+			renderPreparePass("level:shadows:prepare-before");
 		}
 
 		if (shadowRenderer != null) {
@@ -1605,15 +1600,27 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			isRenderingShadow = false;
 		}
 
-		if (!shouldRenderPrepareBeforeShadow) {
-			isRenderingFullScreenPass = true;
-
-			prepareRenderer.renderAll();
-            IrisGlDebug.check("level:shadows:prepare-after");
-
-			isRenderingFullScreenPass = false;
+		if (!shouldRenderPrepareBeforeShadow && !hasRenderedPreparePass) {
+			renderPreparePass("level:shadows:prepare-after");
 		}
         IrisGlDebug.check("level:shadows:end");
+	}
+
+	@Override
+	public void renderPreSkyPrepare() {
+		renderPreparePass("level:pre-sky-prepare");
+	}
+
+	private void renderPreparePass(String debugStage) {
+		if (hasRenderedPreparePass) {
+			return;
+		}
+
+		isRenderingFullScreenPass = true;
+		prepareRenderer.renderAll();
+		IrisGlDebug.check(debugStage);
+		isRenderingFullScreenPass = false;
+		hasRenderedPreparePass = true;
 	}
 
 	@Override
@@ -1635,11 +1642,13 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	// TODO: better way to avoid this global state?
 	private boolean isRenderingWorld = false;
 	private boolean isRenderingFullScreenPass = false;
+	private boolean hasRenderedPreparePass = false;
 
 	@Override
 	public void beginLevelRendering() {
         IrisGlDebug.markStage("level:begin");
 		isRenderingFullScreenPass = false;
+		hasRenderedPreparePass = false;
 		isRenderingWorld = true;
 		isBeforeTranslucent = true;
 		isMainBound = true;
