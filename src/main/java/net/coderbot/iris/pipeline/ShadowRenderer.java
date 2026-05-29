@@ -186,8 +186,7 @@ public class ShadowRenderer {
 	}
 
 	public static MatrixStack createShadowModelView(float sunPathRotation, float intervalSize) {
-		// Use entity position for shadow matrix
-		final Vector3d entityPos = Camera.INSTANCE.getEntityPos();
+		final Vector3d entityPos = getShadowCameraAnchor(CapturedRenderingState.INSTANCE.getTickDelta());
 
 		// Set up our modelview matrix stack
 		final MatrixStack modelView = new MatrixStack();
@@ -197,11 +196,24 @@ public class ShadowRenderer {
 	}
 
 	private MatrixStack getShadowModelView() {
-		final Vector3d entityPos = Camera.INSTANCE.getEntityPos();
+		final Vector3d entityPos = getShadowCameraAnchor(CapturedRenderingState.INSTANCE.getTickDelta());
 
 		shadowModelView.reset();
 		ShadowMatrices.createModelViewMatrix(shadowModelView, getShadowAngle(), this.intervalSize, this.sunPathRotation, entityPos.x, entityPos.y, entityPos.z);
 		return shadowModelView;
+	}
+
+	private static Vector3d getShadowCameraAnchor(float tickDelta) {
+		Entity renderViewEntity = Minecraft.getMinecraft().getRenderViewEntity();
+		if (renderViewEntity == null) {
+			return Camera.INSTANCE.getEntityPos();
+		}
+
+		return new Vector3d(
+			renderViewEntity.lastTickPosX + (renderViewEntity.posX - renderViewEntity.lastTickPosX) * tickDelta,
+			renderViewEntity.lastTickPosY + (renderViewEntity.posY - renderViewEntity.lastTickPosY) * tickDelta,
+			renderViewEntity.lastTickPosZ + (renderViewEntity.posZ - renderViewEntity.lastTickPosZ) * tickDelta
+		);
 	}
 
 	private static WorldClient getLevel() {
@@ -382,6 +394,31 @@ public class ShadowRenderer {
 		return holder;
 	}
 
+	private FrustumHolder createEntityShadowFrustum(float renderMultiplier, FrustumHolder holder) {
+		double distance = halfPlaneLength * renderMultiplier;
+		String setter = "(set by shader pack)";
+
+		if (renderMultiplier < 0) {
+			distance = IrisVideoSettings.shadowDistance * 16;
+			setter = "(set by user)";
+		}
+
+		int renderDistanceBlocks = Minecraft.getMinecraft().gameSettings.renderDistanceChunks * 16;
+		if (distance <= 0 || distance > renderDistanceBlocks) {
+			return holder.setInfo(
+				NON_CULLING_FRUSTUM,
+				renderDistanceBlocks + " blocks (capped by normal render distance)",
+				"disabled (entity shadow stability)"
+			);
+		}
+
+		return holder.setInfo(
+			getOrCreateBoxCullingFrustum(distance),
+			distance + " blocks " + setter,
+			"distance only (entity shadow stability)"
+		);
+	}
+
 	private BoxCullingFrustum getOrCreateBoxCullingFrustum(double distance) {
 		if (cachedBoxCuller == null) {
 			cachedBoxCuller = new BoxCuller(distance);
@@ -476,12 +513,18 @@ public class ShadowRenderer {
 		profiler.endStartSection("build geometry");
 
 		setupEntityShadowState(modelView, cameraX, cameraY, cameraZ);
+		boolean beganEntities = false;
 		try {
+			GbufferPrograms.beginEntities();
+			beganEntities = true;
 			RenderManager renderManager = Minecraft.getMinecraft().getRenderManager();
 			for (Entity entity : renderedEntitiesList) {
 				renderManager.renderEntityStatic(entity, tickDelta, false);
 			}
 		} finally {
+			if (beganEntities) {
+				GbufferPrograms.endEntities();
+			}
 			teardownEntityShadowState();
 		}
 
@@ -493,6 +536,8 @@ public class ShadowRenderer {
 	// Saved RenderManager position for shadow pass
     private double savedRenderPosX, savedRenderPosY, savedRenderPosZ;
     private double savedViewerPosX, savedViewerPosY, savedViewerPosZ;
+    private boolean savedRenderShadow;
+    private int savedMatrixMode;
     private final Matrix4f savedRenderingStateModelView = new Matrix4f();
     private final Matrix4f savedRenderingStateProjection = new Matrix4f();
 
@@ -504,11 +549,13 @@ public class ShadowRenderer {
         savedViewerPosX = renderManager.viewerPosX;
         savedViewerPosY = renderManager.viewerPosY;
         savedViewerPosZ = renderManager.viewerPosZ;
+        savedRenderShadow = renderManager.isRenderShadow();
 
         renderManager.setRenderPosition(cameraX, cameraY, cameraZ);
         renderManager.viewerPosX = cameraX;
         renderManager.viewerPosY = cameraY;
         renderManager.viewerPosZ = cameraZ;
+        renderManager.setRenderShadow(false);
 
         IrisGlDebug.logShadowEntityState(
             "setup",
@@ -527,6 +574,8 @@ public class ShadowRenderer {
         GLStateManager.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
         GLStateManager.glPolygonOffset(1.0f, 1.0f);
 
+        savedMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        GLStateManager.glMatrixMode(GL11.GL_MODELVIEW);
         GLStateManager.glPushMatrix();
         MODELVIEW_BUFFER.clear().rewind();
         modelView.peek().getModel().get(MODELVIEW_BUFFER);
@@ -535,7 +584,9 @@ public class ShadowRenderer {
     }
 
     private void teardownEntityShadowState() {
+        GLStateManager.glMatrixMode(GL11.GL_MODELVIEW);
         GLStateManager.glPopMatrix();
+        GLStateManager.glMatrixMode(savedMatrixMode);
         popShadowRenderingState();
 
         GLStateManager.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
@@ -546,6 +597,7 @@ public class ShadowRenderer {
         renderManager.viewerPosX = savedViewerPosX;
         renderManager.viewerPosY = savedViewerPosY;
         renderManager.viewerPosZ = savedViewerPosZ;
+        renderManager.setRenderShadow(savedRenderShadow);
     }
 
     private void pushShadowRenderingState(MatrixStack modelView) {
@@ -586,7 +638,10 @@ public class ShadowRenderer {
 		int shadowEntities = 0;
 
 		setupEntityShadowState(modelView, cameraX, cameraY, cameraZ);
+		boolean beganEntities = false;
 		try {
+			GbufferPrograms.beginEntities();
+			beganEntities = true;
 			RenderManager renderManager = Minecraft.getMinecraft().getRenderManager();
 			for (Entity passenger : player.getPassengers()) {
 				renderManager.renderEntityStatic(passenger, tickDelta, false);
@@ -601,6 +656,9 @@ public class ShadowRenderer {
 			renderManager.renderEntityStatic(player, tickDelta, false);
 			shadowEntities++;
 		} finally {
+			if (beganEntities) {
+				GbufferPrograms.endEntities();
+			}
 			teardownEntityShadowState();
 		}
 
@@ -636,6 +694,8 @@ public class ShadowRenderer {
 			culler.setPosition(cameraX, cameraY, cameraZ);
 		}
 
+        int previousMatrixMode = GL11.glGetInteger(GL11.GL_MATRIX_MODE);
+        GLStateManager.glMatrixMode(GL11.GL_MODELVIEW);
         GLStateManager.glPushMatrix();
         MODELVIEW_BUFFER.clear().rewind();
         modelView.peek().getModel().get(MODELVIEW_BUFFER);
@@ -672,7 +732,9 @@ public class ShadowRenderer {
             if (beganBlockEntities) {
                 GbufferPrograms.endBlockEntities();
             }
+            GLStateManager.glMatrixMode(GL11.GL_MODELVIEW);
             GLStateManager.glPopMatrix();
+            GLStateManager.glMatrixMode(previousMatrixMode);
             popShadowRenderingState();
         }
 
@@ -820,10 +882,10 @@ public class ShadowRenderer {
 		boolean hasEntityFrustum = false;
 
 		if (entityShadowDistanceMultiplier == 1.0F || entityShadowDistanceMultiplier < 0.0F) {
-			entityFrustumHolder.setInfo(terrainFrustumHolder.getFrustum(), terrainFrustumHolder.getDistanceInfo(), terrainFrustumHolder.getCullingInfo());
+			entityFrustumHolder = createEntityShadowFrustum(renderDistanceMultiplier, entityFrustumHolder);
 		} else {
 			hasEntityFrustum = true;
-			entityFrustumHolder = createShadowFrustum(renderDistanceMultiplier * entityShadowDistanceMultiplier, entityFrustumHolder);
+			entityFrustumHolder = createEntityShadowFrustum(renderDistanceMultiplier * entityShadowDistanceMultiplier, entityFrustumHolder);
 		}
 
 		Frustum entityShadowFrustum = entityFrustumHolder.getFrustum();

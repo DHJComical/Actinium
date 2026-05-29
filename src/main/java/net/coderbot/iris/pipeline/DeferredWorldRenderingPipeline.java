@@ -837,6 +837,18 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
         int nextProgram = pass != null && pass.getProgram() != null ? pass.getProgram().getProgramId() : -1;
 
 		if (current == pass) {
+			int currentProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+			if (currentProgram != nextProgram) {
+				if (pass != null) {
+					pass.use();
+				} else {
+					Program.unbind();
+				}
+				if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
+					IrisGlDebug.logPassBind("begin-pass-rebind", activePhase.name(), currentProgram, nextProgram);
+				}
+				return;
+			}
             if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
                 IrisGlDebug.logPassBind("begin-pass-reuse", activePhase.name(), previousProgram, nextProgram);
             }
