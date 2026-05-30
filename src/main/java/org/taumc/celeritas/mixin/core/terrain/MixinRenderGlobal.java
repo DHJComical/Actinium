@@ -159,9 +159,11 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         double d4 = entityIn.lastTickPosY + (entityIn.posY - entityIn.lastTickPosY) * partialTicks;
         double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
+        long drawStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
         try {
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
         } finally {
+            IrisGlDebug.recordRenderGlobalStageTiming("terrain-" + blockLayerIn.name().toLowerCase(Locale.ROOT), pass, drawStartNanos);
             RenderDevice.exitManagedCode();
         }
 

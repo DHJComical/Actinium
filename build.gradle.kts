@@ -144,6 +144,17 @@ unimined.minecraft {
             if (propertyBool("enable_actinium_redirector_debug")) {
                 systemProperty("actinium.redirectorDebug", "true")
             }
+            systemProperty("actinium.glDebug", propertyBool("enable_actinium_gl_debug").toString())
+            systemProperty("actinium.frameGlErrorCheck", propertyBool("enable_actinium_frame_gl_error_check").toString())
+            systemProperty("actinium.postRenderGlErrorCheck", propertyBool("enable_actinium_post_render_gl_error_check").toString())
+            systemProperty("actinium.gpuPerfDebug", propertyBool("enable_actinium_gpu_perf_debug").toString())
+            val chunkMultiDrawMode = propertyString("actinium_chunk_multidraw_mode")
+            if (chunkMultiDrawMode.isNotBlank()) {
+                systemProperty("actinium.chunkMultiDrawMode", chunkMultiDrawMode)
+            }
+            if (propertyBool("enable_actinium_perf_debug")) {
+                systemProperty("actinium.perfDebug", "true")
+            }
             if (propertyBool("is_coremod")) {
                 systemProperty("fml.coreMods.load", propertyString("coremod_plugin_class_name"))
             }

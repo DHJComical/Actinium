@@ -194,11 +194,99 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
     @Inject(
         method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;clear(I)V", ordinal = 0, shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterClear(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("clear-to-camera");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;setupCameraTransform(FI)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterCameraTransform(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("camera-to-active-render-info");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ActiveRenderInfo;updateRenderInfo(Lnet/minecraft/entity/Entity;Z)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterActiveRenderInfo(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("active-render-info-to-frustum");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/culling/ClippingHelperImpl;getInstance()Lnet/minecraft/client/renderer/culling/ClippingHelper;", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterClippingHelper(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("clipping-helper-to-culling");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/culling/ICamera;setPosition(DDD)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterFrustumPosition(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("culling-to-sky-fog");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;setupFog(IF)V", ordinal = 0, shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterSkyFog(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("sky-fog-to-projection");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderSky(FI)V")
+    )
+    private void actinium$checkBeforeSky(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("render-sky-call");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;matrixMode(I)V", ordinal = 0, shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterSkyProjectionMatrixMode(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("sky-matrix-mode-to-load-identity");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;loadIdentity()V", ordinal = 0, shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterSkyProjectionLoadIdentity(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("sky-load-identity-to-fov");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;getFOVModifier(FZ)F", ordinal = 0, shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterSkyFov(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("sky-fov-to-perspective");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(value = "INVOKE", target = "Lorg/lwjgl/util/glu/Project;gluPerspective(FFFF)V", ordinal = 0, shift = At.Shift.AFTER)
+    )
+    private void actinium$checkAfterSkyPerspective(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        IrisGlDebug.recordWorldPassStage("sky-perspective-to-modelview");
+    }
+
+    @Inject(
+        method = "renderWorldPass(IFJ)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderSky(FI)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterSky(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-sky");
-        IrisGlDebug.recordWorldPassStage("sky-to-clouds");
+        IrisGlDebug.recordWorldPassStage("render-sky-to-clouds");
     }
 
     @Inject(

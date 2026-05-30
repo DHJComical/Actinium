@@ -3,6 +3,7 @@ package org.embeddedt.embeddium.impl.render.chunk;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import com.gtnewhorizons.angelica.AngelicaMod;
+import net.coderbot.iris.debug.IrisGlDebug;
 import org.embeddedt.embeddium.impl.gl.array.GlVertexArray;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeBinding;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
@@ -84,6 +85,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             case INDIVIDUAL -> new IndividualDrawEmitter();
         };
     }
+
     protected boolean useBlockFaceCulling() {
         return true;
     }
@@ -114,6 +116,14 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
         // If there is no active program, shader compilation probably failed, and we can't render anything.
         if (this.activeProgram != null) {
+            long totalStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
+            long fillNanos = 0L;
+            long tessellationNanos = 0L;
+            long uniformsNanos = 0L;
+            long drawNanos = 0L;
+            int regions = 0;
+            int batches = 0;
+            int commands = 0;
             boolean useBlockFaceCulling = this.useBlockFaceCulling();
 
             GLDebug.pushGroup(770, renderPass.name() + " terrain pass");
@@ -143,28 +153,60 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
                     continue;
                 }
 
+                regions++;
+                long fillStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
                 fillCommandBuffer(this.emitter, region, storage, renderList, occlusionCamera, renderPass, useBlockFaceCulling && !renderPass.isSorted());
+                if (fillStartNanos != 0L) {
+                    fillNanos += System.nanoTime() - fillStartNanos;
+                }
 
                 if (this.emitter.isEmpty()) {
                     continue;
                 }
+                batches++;
+                commands += this.emitter.getCommandCount();
 
                 if (!renderPass.isSorted()) {
                    getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, this.emitter.getIndexBufferSize());
                 }
 
+                long tessellationStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
                 var tessellation = this.prepareTessellation(commandList, region);
+                if (tessellationStartNanos != 0L) {
+                    tessellationNanos += System.nanoTime() - tessellationStartNanos;
+                }
 
+                long uniformsStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
                 setModelMatrixUniforms(shader, region, camera);
                 shader.setSectionAges(timestamp, region.getSectionLoadTimes());
+                if (uniformsStartNanos != 0L) {
+                    uniformsNanos += System.nanoTime() - uniformsStartNanos;
+                }
 
+                long drawStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
                 this.emitter.executeBatch(commandList, tessellation, primitiveType);
+                if (drawStartNanos != 0L) {
+                    drawNanos += System.nanoTime() - drawStartNanos;
+                }
             }
 
             this.currentVertexFormat = null;
             this.currentRenderPass = null;
 
             GLDebug.popGroup();
+            if (totalStartNanos != 0L) {
+                IrisGlDebug.recordTerrainRendererTiming(
+                    renderPass.name(),
+                    System.nanoTime() - totalStartNanos,
+                    fillNanos,
+                    tessellationNanos,
+                    uniformsNanos,
+                    drawNanos,
+                    regions,
+                    batches,
+                    commands
+                );
+            }
         }
 
         this.end(renderPass);

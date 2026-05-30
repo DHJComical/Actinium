@@ -40,6 +40,11 @@ public class CapturedRenderingState {
 	}
 
     public void setCurrentEntity(int entity) {
+		if (this.currentRenderedEntity == entity) {
+			setCurrentRenderedItem(0);
+			return;
+		}
+
 		this.currentRenderedEntity = entity;
 
 		if (this.entityIdListener != null) {

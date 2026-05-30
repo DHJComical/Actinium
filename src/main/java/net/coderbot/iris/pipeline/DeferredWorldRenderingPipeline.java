@@ -834,20 +834,22 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	public void beginPass(Pass pass) {
         WorldRenderingPhase activePhase = getPhase();
         int previousProgram = getActivePassProgramId();
-        int nextProgram = pass != null && pass.getProgram() != null ? pass.getProgram().getProgramId() : -1;
+		int nextProgram = pass != null && pass.getProgram() != null ? pass.getProgram().getProgramId() : -1;
 
 		if (current == pass) {
-			int currentProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-			if (currentProgram != nextProgram) {
-				if (pass != null) {
-					pass.use();
-				} else {
-					Program.unbind();
+			if (IrisGlDebug.shouldCaptureGlState()) {
+				int currentProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+				if (currentProgram != nextProgram) {
+					if (pass != null) {
+						pass.use();
+					} else {
+						Program.unbind();
+					}
+					if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
+						IrisGlDebug.logPassBind("begin-pass-rebind", activePhase.name(), currentProgram, nextProgram);
+					}
+					return;
 				}
-				if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
-					IrisGlDebug.logPassBind("begin-pass-rebind", activePhase.name(), currentProgram, nextProgram);
-				}
-				return;
 			}
             if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
                 IrisGlDebug.logPassBind("begin-pass-reuse", activePhase.name(), previousProgram, nextProgram);
@@ -1737,7 +1739,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 		isRenderingFullScreenPass = true;
 
-        boolean profileOutput = IrisGlDebug.isEnabled();
+        boolean profileOutput = IrisGlDebug.shouldCaptureGpuPerfTiming();
         if (profileOutput) {
             updateFinalizeTimers();
             finalizeOutputTimer.startProfiling();

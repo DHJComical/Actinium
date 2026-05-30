@@ -44,10 +44,13 @@ public final class IrisGlDebug {
 	private static final Map<String, WorldPassStageTiming> WORLD_PASS_STAGE_TIMINGS = new ConcurrentHashMap<>();
 	private static final Map<String, WorldPassStageTiming> RENDER_GLOBAL_STAGE_TIMINGS = new ConcurrentHashMap<>();
 	private static final Map<String, RenderGlobalCounterTiming> RENDER_GLOBAL_COUNTER_TIMINGS = new ConcurrentHashMap<>();
+	private static final Map<String, TerrainRendererTiming> TERRAIN_RENDERER_TIMINGS = new ConcurrentHashMap<>();
 	private static final Map<String, Long> WHITE_SCREEN_PROBE_TIMES = new ConcurrentHashMap<>();
 	private static final Map<String, Integer> WHITE_SCREEN_PROBE_COUNTS = new ConcurrentHashMap<>();
 	private static final boolean ENABLE_TEXTURE_UNIT_LOGS = Boolean.getBoolean("actinium.debug.textureUnitLogs");
 	private static final boolean ENABLE_PORTAL_RENDER_LOGS = Boolean.getBoolean("actinium.debug.portalRenderLogs");
+	private static final boolean ENABLE_PERF_DEBUG = Boolean.getBoolean("actinium.perfDebug");
+	private static final boolean ENABLE_GPU_PERF_DEBUG = Boolean.getBoolean("actinium.gpuPerfDebug");
 	private static long lastShadowEntityLogTime;
 	private static long lastShadowPassLogTime;
     private static long compositeTimingWindowStart;
@@ -73,15 +76,19 @@ public final class IrisGlDebug {
     private static int frameRenderTimingFrames;
     private static int frameRenderTimingGpuFrames;
     private static long frameRenderTimingCpuTotal;
-    private static long frameRenderTimingCpuMax;
-    private static long frameRenderTimingGpuTotal;
-    private static long frameRenderTimingGpuMax;
-    private static long worldPassTimingWindowStart;
+	private static long frameRenderTimingCpuMax;
+	private static long frameRenderTimingGpuTotal;
+	private static long frameRenderTimingGpuMax;
+	private static long gameLoopTimingWindowStart;
+	private static int gameLoopTimingFrames;
+	private static final Map<String, WorldPassStageTiming> GAME_LOOP_STAGE_TIMINGS = new ConcurrentHashMap<>();
+	private static long worldPassTimingWindowStart;
     private static long worldPassStageStartNanos;
     private static String worldPassCurrentStage;
     private static int worldPassCurrentPass;
     private static long renderGlobalTimingWindowStart;
     private static long renderGlobalCounterTimingWindowStart;
+    private static long terrainRendererTimingWindowStart;
     private static String lastStage = "startup";
     private static String framebufferSamplePhase;
     private static long lastLogTime;
@@ -91,6 +98,11 @@ public final class IrisGlDebug {
     }
 
     public static boolean isEnabled() {
+		String override = System.getProperty("actinium.glDebug");
+		if (override != null) {
+			return Boolean.parseBoolean(override);
+		}
+
         try {
             return CeleritasVintage.options().debug.enableActiniumGlDebug;
         } catch (RuntimeException ignored) {
@@ -122,7 +134,7 @@ public final class IrisGlDebug {
 	}
 
 	public static void beginWorldPassTiming(int pass) {
-		if (!isEnabled()) {
+		if (!shouldCapturePerfTiming()) {
 			worldPassCurrentStage = null;
 			return;
 		}
@@ -133,7 +145,7 @@ public final class IrisGlDebug {
 	}
 
 	public static void recordWorldPassStage(String nextStage) {
-		if (!isEnabled() || worldPassCurrentStage == null) {
+		if (!shouldCapturePerfTiming() || worldPassCurrentStage == null) {
 			return;
 		}
 
@@ -144,7 +156,7 @@ public final class IrisGlDebug {
 	}
 
 	public static void finishWorldPassTiming() {
-		if (!isEnabled() || worldPassCurrentStage == null) {
+		if (!shouldCapturePerfTiming() || worldPassCurrentStage == null) {
 			return;
 		}
 
@@ -180,11 +192,11 @@ public final class IrisGlDebug {
 	}
 
 	public static long beginRenderGlobalStageTiming() {
-		return isEnabled() ? System.nanoTime() : 0L;
+		return shouldCapturePerfTiming() ? System.nanoTime() : 0L;
 	}
 
 	public static void recordRenderGlobalStageTiming(String stage, int pass, long startNanos) {
-		if (!isEnabled() || startNanos == 0L) {
+		if (!shouldCapturePerfTiming() || startNanos == 0L) {
 			return;
 		}
 
@@ -224,7 +236,7 @@ public final class IrisGlDebug {
 		int outlined,
 		int multipass
 	) {
-		if (!isEnabled()) {
+		if (!shouldCapturePerfTiming()) {
 			return;
 		}
 
@@ -261,6 +273,60 @@ public final class IrisGlDebug {
 		LOGGER.info("render-global-counter-timing {}", timings);
 		RENDER_GLOBAL_COUNTER_TIMINGS.clear();
 		renderGlobalCounterTimingWindowStart = nowMillis;
+	}
+
+	public static void recordTerrainRendererTiming(
+		String passName,
+		long totalNanos,
+		long fillNanos,
+		long tessellationNanos,
+		long uniformsNanos,
+		long drawNanos,
+		int regions,
+		int batches,
+		int commands
+	) {
+		if (!shouldCapturePerfTiming()) {
+			return;
+		}
+
+		TERRAIN_RENDERER_TIMINGS.computeIfAbsent(passName, ignored -> new TerrainRendererTiming())
+			.add(totalNanos, fillNanos, tessellationNanos, uniformsNanos, drawNanos, regions, batches, commands);
+		logTerrainRendererTimingIfReady();
+	}
+
+	private static void logTerrainRendererTimingIfReady() {
+		long nowMillis = System.currentTimeMillis();
+		if (terrainRendererTimingWindowStart == 0L) {
+			terrainRendererTimingWindowStart = nowMillis;
+		}
+
+		if (nowMillis - terrainRendererTimingWindowStart < 1000L || TERRAIN_RENDERER_TIMINGS.isEmpty()) {
+			return;
+		}
+
+		String timings = TERRAIN_RENDERER_TIMINGS.entrySet().stream()
+			.sorted(Comparator.comparingLong((Map.Entry<String, TerrainRendererTiming> entry) -> entry.getValue().totalNanos).reversed())
+			.map(entry -> {
+				TerrainRendererTiming value = entry.getValue();
+				return entry.getKey()
+					+ "[avg=" + formatNanos(value.averageNanos(value.totalNanos))
+					+ ",fill=" + formatNanos(value.averageNanos(value.fillNanos))
+					+ ",tess=" + formatNanos(value.averageNanos(value.tessellationNanos))
+					+ ",uniforms=" + formatNanos(value.averageNanos(value.uniformsNanos))
+					+ ",draw=" + formatNanos(value.averageNanos(value.drawNanos))
+					+ ",max=" + formatNanos(value.maxNanos)
+					+ ",n=" + value.samples
+					+ ",regions=" + value.averageRegions()
+					+ ",batches=" + value.averageBatches()
+					+ ",commands=" + value.averageCommands()
+					+ "]";
+			})
+			.collect(Collectors.joining(" "));
+
+		LOGGER.info("terrain-renderer-timing {}", timings);
+		TERRAIN_RENDERER_TIMINGS.clear();
+		terrainRendererTimingWindowStart = nowMillis;
 	}
 
 	private static final class WorldPassStageTiming {
@@ -334,7 +400,7 @@ public final class IrisGlDebug {
 		long gpuCompositeNanos,
 		long gpuFinalNanos
 	) {
-		if (!shouldCaptureGlState()) {
+		if (!shouldCapturePerfTiming()) {
 			return;
 		}
 
@@ -394,7 +460,7 @@ public final class IrisGlDebug {
 	}
 
 	public static void logFrameOutputTiming(long cpuNanos, long gpuNanos) {
-		if (!isEnabled()) {
+		if (!shouldCapturePerfTiming()) {
 			return;
 		}
 
@@ -439,7 +505,7 @@ public final class IrisGlDebug {
 	}
 
 	public static void logFrameRenderTiming(long cpuNanos, long gpuNanos) {
-		if (!isEnabled()) {
+		if (!shouldCapturePerfTiming()) {
 			return;
 		}
 
@@ -481,6 +547,89 @@ public final class IrisGlDebug {
 		frameRenderTimingCpuMax = 0L;
 		frameRenderTimingGpuTotal = 0L;
 		frameRenderTimingGpuMax = 0L;
+	}
+
+	private static final class TerrainRendererTiming {
+		private int samples;
+		private long totalNanos;
+		private long fillNanos;
+		private long tessellationNanos;
+		private long uniformsNanos;
+		private long drawNanos;
+		private long maxNanos;
+		private long regions;
+		private long batches;
+		private long commands;
+
+		private void add(long totalNanos, long fillNanos, long tessellationNanos, long uniformsNanos, long drawNanos, int regions, int batches, int commands) {
+			this.samples++;
+			this.totalNanos += totalNanos;
+			this.fillNanos += fillNanos;
+			this.tessellationNanos += tessellationNanos;
+			this.uniformsNanos += uniformsNanos;
+			this.drawNanos += drawNanos;
+			this.maxNanos = Math.max(this.maxNanos, totalNanos);
+			this.regions += regions;
+			this.batches += batches;
+			this.commands += commands;
+		}
+
+		private long averageNanos(long nanos) {
+			return this.samples == 0 ? 0L : nanos / this.samples;
+		}
+
+		private long averageRegions() {
+			return this.samples == 0 ? 0L : this.regions / this.samples;
+		}
+
+		private long averageBatches() {
+			return this.samples == 0 ? 0L : this.batches / this.samples;
+		}
+
+		private long averageCommands() {
+			return this.samples == 0 ? 0L : this.commands / this.samples;
+		}
+	}
+
+	public static long beginGameLoopStageTiming() {
+		return shouldCapturePerfTiming() ? System.nanoTime() : 0L;
+	}
+
+	public static void recordGameLoopStageTiming(String stage, long startNanos) {
+		if (!shouldCapturePerfTiming() || startNanos == 0L) {
+			return;
+		}
+
+		GAME_LOOP_STAGE_TIMINGS.computeIfAbsent(stage, ignored -> new WorldPassStageTiming())
+			.add(System.nanoTime() - startNanos);
+		logGameLoopStageTimingIfReady();
+	}
+
+	public static void incrementGameLoopFrameCount() {
+		if (shouldCapturePerfTiming()) {
+			gameLoopTimingFrames++;
+		}
+	}
+
+	private static void logGameLoopStageTimingIfReady() {
+		long nowMillis = System.currentTimeMillis();
+		if (gameLoopTimingWindowStart == 0L) {
+			gameLoopTimingWindowStart = nowMillis;
+		}
+
+		if (nowMillis - gameLoopTimingWindowStart < 1000L || GAME_LOOP_STAGE_TIMINGS.isEmpty()) {
+			return;
+		}
+
+		String timings = GAME_LOOP_STAGE_TIMINGS.entrySet().stream()
+			.sorted(Comparator.comparingLong((Map.Entry<String, WorldPassStageTiming> entry) -> entry.getValue().totalNanos).reversed())
+			.map(entry -> entry.getKey() + "[avg=" + formatNanos(entry.getValue().averageNanos()) + ",max=" + formatNanos(entry.getValue().maxNanos) + ",n=" + entry.getValue().samples + "]")
+			.collect(Collectors.joining(" "));
+
+		LOGGER.info("game-loop-stage-timing frames={} {}", gameLoopTimingFrames, timings);
+		GAME_LOOP_STAGE_TIMINGS.clear();
+		gameLoopTimingFrames = 0;
+		gameLoopTimingWindowStart = nowMillis;
 	}
 
 	public static void checkDrawError(String stage, String source, int drawMode, int vertexFlags, int stride, int vertexCount, String format, int vao, int vbo) {
@@ -528,12 +677,24 @@ public final class IrisGlDebug {
 		);
 	}
 
-	private static boolean shouldCaptureGlState() {
+	public static boolean shouldCaptureGlState() {
 		if (!isEnabled() || !Iris.isWorldReadyForShaderpackLoad()) {
 			return false;
 		}
 
 		return true;
+	}
+
+	public static boolean shouldCapturePerfTiming() {
+		if (!(ENABLE_PERF_DEBUG || isEnabled()) || !Iris.isWorldReadyForShaderpackLoad()) {
+			return false;
+		}
+
+		return true;
+	}
+
+	public static boolean shouldCaptureGpuPerfTiming() {
+		return ENABLE_GPU_PERF_DEBUG && shouldCapturePerfTiming();
 	}
 
 	public static void logSamplerInitialization(int program, String mode, String name, int location, int assignedUnit) {

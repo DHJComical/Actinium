@@ -16,20 +16,18 @@ import net.minecraft.client.renderer.vertex.VertexBuffer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.RayTraceResult;
-import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.nio.FloatBuffer;
-
 @Mixin(RenderGlobal.class)
 public class RenderGlobalIrisMixin {
-    private static final FloatBuffer ACTINIUM_CURRENT_COLOR = BufferUtils.createFloatBuffer(4);
+    @Unique
+    private static float actinium$skyRainAlpha = 1.0F;
 
     @Inject(method = "renderSky(FI)V", at = @At("HEAD"))
     private void actinium$beginSky(float partialTicks, int pass, CallbackInfo ci) {
@@ -41,6 +39,7 @@ public class RenderGlobalIrisMixin {
         if (pipeline != null) {
             pipeline.setPhase(WorldRenderingPhase.CUSTOM_SKY);
         }
+        actinium$skyRainAlpha = 1.0F - net.minecraft.client.Minecraft.getMinecraft().world.getRainStrength(partialTicks);
     }
 
     @Inject(method = "renderSky(FI)V", at = @At("RETURN"))
@@ -254,14 +253,7 @@ public class RenderGlobalIrisMixin {
     }
 
     private static void actinium$applyCurrentColorAttribute() {
-        ACTINIUM_CURRENT_COLOR.clear();
-        GL11.glGetFloatv(GL11.GL_CURRENT_COLOR, ACTINIUM_CURRENT_COLOR);
-        GL20.glVertexAttrib4f(
-                1,
-                ACTINIUM_CURRENT_COLOR.get(0),
-                ACTINIUM_CURRENT_COLOR.get(1),
-                ACTINIUM_CURRENT_COLOR.get(2),
-                ACTINIUM_CURRENT_COLOR.get(3));
+        GL20.glVertexAttrib4f(1, 1.0F, 1.0F, 1.0F, actinium$skyRainAlpha);
     }
 
     private static void actinium$discard(BufferBuilder bufferBuilder) {
