@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.JsonSyntaxException;
+import com.gtnewhorizons.angelica.glsm.streaming.StreamingUploader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.taumc.celeritas.api.options.structure.OptionStorage;
@@ -71,7 +72,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public boolean useEntityCulling = true;
         public boolean useFogOcclusion = true;
         public boolean useBlockFaceCulling = true;
-        public boolean useCompactVertexFormat = false;
+        public boolean useCompactVertexFormat = true;
         @SerializedName("use_translucent_face_sorting_v2")
         public boolean useTranslucentFaceSorting = true;
         public boolean useRenderPassOptimization = true;
@@ -89,6 +90,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
 
         public int cpuRenderAheadLimit = 0;
         public MultiDrawMode multiDrawMode = MultiDrawMode.DIRECT;
+        public StreamingUploadStrategy streamingUploadStrategy = StreamingUploadStrategy.MAP_BUFFER_RANGE;
     }
 
     public static class QualitySettings {
@@ -145,6 +147,29 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         }
     }
 
+    public enum StreamingUploadStrategy implements TextProvider {
+        BUFFER_DATA(StreamingUploader.UploadStrategy.BUFFER_DATA, "sodium.options.streaming_upload_strategy.buffer_data"),
+        BUFFER_SUB_DATA(StreamingUploader.UploadStrategy.BUFFER_SUB_DATA, "sodium.options.streaming_upload_strategy.buffer_sub_data"),
+        MAP_BUFFER_RANGE(StreamingUploader.UploadStrategy.MAP_BUFFER_RANGE, "sodium.options.streaming_upload_strategy.map_buffer_range");
+
+        private final StreamingUploader.UploadStrategy glsmStrategy;
+        private final TextComponent name;
+
+        StreamingUploadStrategy(StreamingUploader.UploadStrategy glsmStrategy, String translationKey) {
+            this.glsmStrategy = glsmStrategy;
+            this.name = TextComponent.translatable(translationKey);
+        }
+
+        public StreamingUploader.UploadStrategy glsmStrategy() {
+            return this.glsmStrategy;
+        }
+
+        @Override
+        public TextComponent getLocalizedName() {
+            return this.name;
+        }
+    }
+
     private static final Gson GSON = new GsonBuilder()
             .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
             .setPrettyPrinting()
@@ -178,6 +203,10 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
 
         // TODO Embeddium: Remove the field completely in 0.4
         config.notifications.forceDisableDonationPrompts = false;
+
+        if (config.advanced.streamingUploadStrategy == null) {
+            config.advanced.streamingUploadStrategy = StreamingUploadStrategy.MAP_BUFFER_RANGE;
+        }
 
         try {
             if(resaveConfig)

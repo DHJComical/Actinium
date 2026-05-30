@@ -84,7 +84,8 @@ public class VintageRenderPassConfigurationBuilder {
 
         if (CeleritasVintage.options().performance.useRenderPassConsolidation) {
             cutoutMaterial = new Material(cutoutMippedPass, AlphaCutoffParameter.ONE_TENTH, false);
-            vanillaRenderStages.put(BlockRenderLayer.SOLID, cutoutMippedPass);
+            vanillaRenderStages.put(BlockRenderLayer.CUTOUT, cutoutMippedPass);
+            vanillaRenderStages.put(BlockRenderLayer.CUTOUT_MIPPED, cutoutMippedPass);
         } else {
             TerrainRenderPass cutoutPass;
 

@@ -64,6 +64,7 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> PERSISTENT_MAPPING = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "persistent_mapping");
         public static final OptionIdentifier<Void> CPU_FRAMES_AHEAD = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "cpu_render_ahead_limit");
         public static final OptionIdentifier<Void> MULTIDRAW_MODE = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "multidraw_mode");
+        public static final OptionIdentifier<Void> STREAMING_UPLOAD_STRATEGY = OptionIdentifier.create(ACTINIUM_MOD_NAME, "streaming_upload_strategy");
         public static final OptionIdentifier<Void> TRANSLUCENT_FACE_SORTING = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "translucent_face_sorting");
         public static final OptionIdentifier<Void> USE_QUAD_NORMALS_FOR_LIGHTING = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "use_quad_normals_for_lighting");
         public static final OptionIdentifier<Void> RENDER_PASS_OPTIMIZATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "render_pass_optimization");

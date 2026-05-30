@@ -309,6 +309,15 @@ public class SodiumGameOptionPages {
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build()
                 )
+                .add(OptionImpl.createBuilder(SodiumGameOptions.StreamingUploadStrategy.class, sodiumOpts)
+                        .setId(StandardOptions.Option.STREAMING_UPLOAD_STRATEGY.cast())
+                        .setName(TextComponent.translatable("sodium.options.streaming_upload_strategy.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.streaming_upload_strategy.tooltip"))
+                        .setControl(option -> new CyclingControl<>(option, SodiumGameOptions.StreamingUploadStrategy.class))
+                        .setBinding((opts, value) -> opts.advanced.streamingUploadStrategy = value, opts -> opts.advanced.streamingUploadStrategy)
+                        .setFlags(OptionFlag.REQUIRES_GAME_RESTART)
+                        .build()
+                )
                 .build());
 
         return new OptionPage(StandardOptions.Pages.ADVANCED, TextComponent.translatable("sodium.options.pages.advanced"), ImmutableList.copyOf(groups));

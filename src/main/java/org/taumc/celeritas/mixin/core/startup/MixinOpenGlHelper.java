@@ -24,6 +24,7 @@ public class MixinOpenGlHelper {
             .displaySize(mc.displayWidth, mc.displayHeight)
             .framebufferSupported(OpenGlHelper.framebufferSupported)
             .fboEnabled(mc.gameSettings.fboEnable)
+            .streamingUploadStrategy(org.taumc.celeritas.CeleritasVintage.options().advanced.streamingUploadStrategy.glsmStrategy())
             .directDrawer(TessellatorStreamingDrawer::drawDirect)
             .streamingDrawerDestroy(TessellatorStreamingDrawer::destroy)
             .build());
