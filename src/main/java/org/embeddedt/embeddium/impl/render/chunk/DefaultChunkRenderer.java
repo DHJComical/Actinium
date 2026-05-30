@@ -2,6 +2,7 @@ package org.embeddedt.embeddium.impl.render.chunk;
 
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+import com.gtnewhorizons.angelica.AngelicaMod;
 import org.embeddedt.embeddium.impl.gl.array.GlVertexArray;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeBinding;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
@@ -16,15 +17,23 @@ import org.embeddedt.embeddium.impl.render.chunk.data.SectionRenderDataUnsafe;
 import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderListIterable;
 import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderList;
 import org.embeddedt.embeddium.impl.render.chunk.multidraw.DirectMultiDrawEmitter;
+import org.embeddedt.embeddium.impl.render.chunk.multidraw.IndirectMultiDrawEmitter;
+import org.embeddedt.embeddium.impl.render.chunk.multidraw.IndividualDrawEmitter;
 import org.embeddedt.embeddium.impl.render.chunk.multidraw.MultiDrawEmitter;
 import org.embeddedt.embeddium.impl.render.chunk.region.RenderRegion;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.util.BitwiseMath;
+import org.taumc.celeritas.CeleritasVintage;
+import org.taumc.celeritas.lwjgl.GLExtension;
 import java.util.Iterator;
 
+import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+
 public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
+    private static boolean loggedMultiDrawMode;
+
     private final MultiDrawEmitter emitter;
 
     private final Reference2ReferenceMap<ChunkPrimitiveType, SharedQuadIndexBuffer> sharedIndexBuffers;
@@ -33,7 +42,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
     private GlVertexFormat currentVertexFormat;
 
     public DefaultChunkRenderer(RenderDevice device, RenderPassConfiguration<?> renderPassConfiguration) {
-        this(device, renderPassConfiguration, new DirectMultiDrawEmitter());
+        this(device, renderPassConfiguration, createEmitter(device));
     }
 
     public DefaultChunkRenderer(RenderDevice device, RenderPassConfiguration<?> renderPassConfiguration, MultiDrawEmitter emitter) {
@@ -43,6 +52,38 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
         this.sharedIndexBuffers = new Reference2ReferenceOpenHashMap<>();
     }
 
+    private static MultiDrawEmitter createEmitter(RenderDevice device) {
+        String override = System.getProperty("actinium.chunkMultiDrawMode", "").trim();
+        MultiDrawMode configuredMode = CeleritasVintage.options().advanced.multiDrawMode;
+        MultiDrawMode mode = override.isEmpty() ? configuredMode : MultiDrawMode.fromProperty(override);
+        boolean gl32 = LWJGL.isOpenGLVersionSupported(3, 2);
+        boolean gl43 = LWJGL.isOpenGLVersionSupported(4, 3);
+        boolean arbIndirect = LWJGL.isExtensionSupported(GLExtension.ARB_multi_draw_indirect);
+
+        if (mode == MultiDrawMode.INDIRECT && !gl43 && !arbIndirect) {
+            AngelicaMod.LOGGER.warn("Indirect chunk multidraw is not supported, falling back to direct (GL43={}, ARB_multi_draw_indirect={})", gl43, arbIndirect);
+            mode = MultiDrawMode.DIRECT;
+        }
+
+        if (!loggedMultiDrawMode) {
+            loggedMultiDrawMode = true;
+            AngelicaMod.LOGGER.info(
+                "Chunk multidraw mode: requested={}, selected={}, directFunction={}, GL32={}, GL43={}, ARB_multi_draw_indirect={}",
+                override.isEmpty() ? configuredMode.id() : override,
+                mode.id(),
+                device.getDeviceFunctions().multidrawFunctions(),
+                gl32,
+                gl43,
+                arbIndirect
+            );
+        }
+
+        return switch (mode) {
+            case DIRECT -> new DirectMultiDrawEmitter();
+            case INDIRECT -> new IndirectMultiDrawEmitter();
+            case INDIVIDUAL -> new IndividualDrawEmitter();
+        };
+    }
     protected boolean useBlockFaceCulling() {
         return true;
     }

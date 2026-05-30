@@ -10,6 +10,7 @@ import org.apache.logging.log4j.Logger;
 import org.taumc.celeritas.api.options.structure.OptionStorage;
 import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.embeddedt.embeddium.impl.gui.options.TextProvider;
+import org.embeddedt.embeddium.impl.render.chunk.MultiDrawMode;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
 import org.taumc.celeritas.impl.gui.CeleritasFullscreenMode;
 
@@ -87,6 +88,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public boolean disableIncompatibleModWarnings = false;
 
         public int cpuRenderAheadLimit = 0;
+        public MultiDrawMode multiDrawMode = MultiDrawMode.DIRECT;
     }
 
     public static class QualitySettings {

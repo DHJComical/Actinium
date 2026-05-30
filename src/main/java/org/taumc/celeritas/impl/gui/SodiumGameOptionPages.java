@@ -12,6 +12,7 @@ import org.taumc.celeritas.api.options.control.TickBoxControl;
 import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
 import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.lwjgl.opengl.Display;
+import org.embeddedt.embeddium.impl.render.chunk.MultiDrawMode;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.api.options.structure.OptionFlag;
 import org.taumc.celeritas.api.options.structure.OptionGroup;
@@ -22,6 +23,9 @@ import org.taumc.celeritas.api.options.structure.OptionStorage;
 import org.taumc.celeritas.api.options.structure.StandardOptions;
 import org.taumc.celeritas.impl.compat.modernui.MuiGuiScaleHook;
 import org.taumc.celeritas.impl.render.terrain.compile.task.ChunkBuilderMeshingTask;
+import org.taumc.celeritas.lwjgl.GLExtension;
+
+import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -291,9 +295,27 @@ public class SodiumGameOptionPages {
                         .setBinding((opts, value) -> opts.advanced.cpuRenderAheadLimit = value, opts -> opts.advanced.cpuRenderAheadLimit)
                         .build()
                 )
+                .add(OptionImpl.createBuilder(MultiDrawMode.class, sodiumOpts)
+                        .setId(StandardOptions.Option.MULTIDRAW_MODE.cast())
+                        .setName(TextComponent.translatable("sodium.options.multidraw_mode.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.multidraw_mode.tooltip"))
+                        .setControl(option -> {
+                            MultiDrawMode[] allowed = isIndirectMultiDrawSupported()
+                                    ? MultiDrawMode.values()
+                                    : new MultiDrawMode[] { MultiDrawMode.DIRECT, MultiDrawMode.INDIVIDUAL };
+                            return new CyclingControl<>(option, MultiDrawMode.class, allowed);
+                        })
+                        .setBinding((opts, value) -> opts.advanced.multiDrawMode = value, opts -> opts.advanced.multiDrawMode)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build()
+                )
                 .build());
 
         return new OptionPage(StandardOptions.Pages.ADVANCED, TextComponent.translatable("sodium.options.pages.advanced"), ImmutableList.copyOf(groups));
+    }
+
+    private static boolean isIndirectMultiDrawSupported() {
+        return LWJGL.isOpenGLVersionSupported(4, 3) || LWJGL.isExtensionSupported(GLExtension.ARB_multi_draw_indirect);
     }
 
     public static OptionStorage<GameSettings> getVanillaOpts() {
