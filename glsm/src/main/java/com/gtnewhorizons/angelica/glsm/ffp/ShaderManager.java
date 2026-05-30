@@ -30,6 +30,8 @@ public class ShaderManager {
         static final ShaderManager INSTANCE = new ShaderManager();
     }
 
+    private static final boolean DEBUG_DRAW_LOGS = Boolean.getBoolean("actinium.glsm.verboseDrawLogs");
+
     private final ShaderCache cache = new ShaderCache();
     private final Uniforms uniforms = new Uniforms();
     private final Int2IntOpenHashMap vaoVertexFlags = new Int2IntOpenHashMap();
@@ -121,7 +123,9 @@ public class ShaderManager {
 
     public void preDraw(int vertexFlags) {
         currentVertexFlags = vertexFlags;
-        GLSMDebug.logFfpPreDraw(vertexFlags);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logFfpPreDraw(vertexFlags);
+        }
         preDraw(
             (vertexFlags & VertexFlags.COLOR_BIT) != 0,
             (vertexFlags & VertexFlags.NORMAL_BIT) != 0,

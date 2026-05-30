@@ -29,6 +29,7 @@ import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memPutShort;
  */
 public final class QuadConverter {
     public static final int INDEX_TYPE = GL11.GL_UNSIGNED_INT;
+    private static final boolean DEBUG_DRAW_LOGS = Boolean.getBoolean("actinium.glsm.verboseDrawLogs");
 
     private static int eboId;
     private static int maxQuads;
@@ -92,7 +93,9 @@ public final class QuadConverter {
         RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
         // Index offset: first vertex / 4 quads * 6 indices * 4 bytes per int
         final long indexOffset = (long) (first / 4) * 6 * 4;
-        GLSMDebug.logQuadConversion(first, vertexCount, eboId, prevEbo, indexOffset);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logQuadConversion(first, vertexCount, eboId, prevEbo, indexOffset);
+        }
         RENDER_BACKEND.drawElements(GL11.GL_TRIANGLES, quadCount * 6, INDEX_TYPE, indexOffset);
         RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
     }

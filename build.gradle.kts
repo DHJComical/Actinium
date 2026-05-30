@@ -148,6 +148,8 @@ unimined.minecraft {
             systemProperty("actinium.frameGlErrorCheck", propertyBool("enable_actinium_frame_gl_error_check").toString())
             systemProperty("actinium.postRenderGlErrorCheck", propertyBool("enable_actinium_post_render_gl_error_check").toString())
             systemProperty("actinium.gpuPerfDebug", propertyBool("enable_actinium_gpu_perf_debug").toString())
+            systemProperty("actinium.glsm.verboseDrawLogs", propertyBool("enable_actinium_glsm_verbose_draw_logs").toString())
+            systemProperty("actinium.glsm.forceOrphanStreaming", propertyBool("enable_actinium_glsm_force_orphan_streaming").toString())
             val chunkMultiDrawMode = propertyString("actinium_chunk_multidraw_mode")
             if (chunkMultiDrawMode.isNotBlank()) {
                 systemProperty("actinium.chunkMultiDrawMode", chunkMultiDrawMode)

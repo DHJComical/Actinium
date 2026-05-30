@@ -117,6 +117,7 @@ import static com.gtnewhorizons.angelica.glsm.Vendor.NVIDIA;
 public class GLStateManager {
 
     public static final Logger LOGGER = LogManager.getLogger("GLSM");
+    private static final boolean DEBUG_DRAW_LOGS = Boolean.getBoolean("actinium.glsm.verboseDrawLogs");
 
     // Thread Checking - must be early in static init order so isMainThread() works for state initialization
     @Getter private static final Thread MainThread = Thread.currentThread();
@@ -2169,7 +2170,9 @@ public class GLStateManager {
         prepareWideLineEmulation(mode);
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
-        GLSMDebug.logDrawElements("byte-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_BYTE, -1L);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logDrawElements("byte-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_BYTE, -1L);
+        }
         RENDER_BACKEND.drawElements(mode, indices);
     }
 
@@ -2184,7 +2187,9 @@ public class GLStateManager {
         prepareWideLineEmulation(mode);
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
-        GLSMDebug.logDrawElements("int-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_INT, -1L);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logDrawElements("int-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_INT, -1L);
+        }
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadElementsAsTriangles(indices);
         } else {
@@ -2203,7 +2208,9 @@ public class GLStateManager {
         prepareWideLineEmulation(mode);
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
-        GLSMDebug.logDrawElements("short-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_SHORT, -1L);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logDrawElements("short-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_SHORT, -1L);
+        }
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadElementsAsTriangles(indices);
         } else {
@@ -2222,7 +2229,9 @@ public class GLStateManager {
         prepareWideLineEmulation(mode);
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
-        GLSMDebug.logDrawElements("typed-byte-buffer", mode, count, type, -1L);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logDrawElements("typed-byte-buffer", mode, count, type, -1L);
+        }
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadElementsAsTriangles(count, type, indices);
         } else {
@@ -2255,7 +2264,9 @@ public class GLStateManager {
         prepareWideLineEmulation(mode);
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
-        GLSMDebug.logDrawElements("ebo-offset", mode, indices_count, type, indices_buffer_offset);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logDrawElements("ebo-offset", mode, indices_count, type, indices_buffer_offset);
+        }
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadElementsAsTriangles(indices_count, type, indices_buffer_offset);
         } else {
@@ -2334,7 +2345,9 @@ public class GLStateManager {
             clientArraysVBOCapacity = newCap;
         }
         RENDER_BACKEND.bufferData(GL15.GL_ARRAY_BUFFER, clientArraysVBOCapacity, GL15.GL_STREAM_DRAW);
-        GLSMDebug.logClientArrayUpload(totalBytes, clientArraysVBOCapacity, clientArraysVBO, savedVBO, clientArraysVBOOffsets);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logClientArrayUpload(totalBytes, clientArraysVBOCapacity, clientArraysVBO, savedVBO, clientArraysVBOOffsets);
+        }
 
         for (int i = 0; i < VertexAttribState.MAX_ATTRIBS; i++) {
             if (clientArraysVBOOffsets[i] < 0) continue;
@@ -2365,7 +2378,9 @@ public class GLStateManager {
         prepareWideLineEmulation(mode);
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
-        GLSMDebug.logDrawArrays("draw-arrays", mode, first, count);
+        if (DEBUG_DRAW_LOGS) {
+            GLSMDebug.logDrawArrays("draw-arrays", mode, first, count);
+        }
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadsAsTriangles(first, count);
         } else if (mode == GL11.GL_QUAD_STRIP) {

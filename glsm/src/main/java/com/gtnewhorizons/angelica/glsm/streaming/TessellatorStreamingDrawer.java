@@ -32,6 +32,7 @@ public class TessellatorStreamingDrawer {
 
     private static final Logger LOGGER = LogManager.getLogger("TessellatorStreamingDrawer");
     private static final int FORMAT_COUNT = VertexFlags.BITSET_SIZE; // 16
+    private static final boolean DEBUG_STREAMING_DRAWS = Boolean.getBoolean("actinium.glsm.verboseDrawLogs");
 
     private static PersistentStreamingBuffer persistentBuffer;
     private static final OrphanStreamingBuffer[] orphanBuffers = new OrphanStreamingBuffer[FORMAT_COUNT];
@@ -58,7 +59,7 @@ public class TessellatorStreamingDrawer {
 
         if (RenderSystem.supportsBufferStorage()
             && !Boolean.getBoolean("angelica.forceOrphanStreaming")
-            && !GLSMDebug.forceOrphanStreaming()) {
+            && !Boolean.getBoolean("actinium.glsm.forceOrphanStreaming")) {
             try {
                 persistentBuffer = new PersistentStreamingBuffer();
                 LOGGER.info("Persistent streaming buffer created ({}MB)", PersistentStreamingBuffer.DEFAULT_CAPACITY / (1024 * 1024));
@@ -214,17 +215,19 @@ public class TessellatorStreamingDrawer {
             firstVertex = 0;
         }
 
-        GLSMDebug.logStreamingDraw(
-            drawMode,
-            flags,
-            vertexSize,
-            vertexCount,
-            vertexCount * vertexSize,
-            firstVertex,
-            persistentPath,
-            vao,
-            bufferId,
-            packed);
+        if (DEBUG_STREAMING_DRAWS) {
+            GLSMDebug.logStreamingDraw(
+                drawMode,
+                flags,
+                vertexSize,
+                vertexCount,
+                vertexCount * vertexSize,
+                firstVertex,
+                persistentPath,
+                vao,
+                bufferId,
+                packed);
+        }
         GLStateManager.prepareWideLineEmulation(drawMode);
         ShaderManager.getInstance().preDraw(flags);
         drawWithQuadConversion(drawMode, firstVertex, vertexCount);
