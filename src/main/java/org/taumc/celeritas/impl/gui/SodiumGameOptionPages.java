@@ -318,6 +318,15 @@ public class SodiumGameOptionPages {
                         .setFlags(OptionFlag.REQUIRES_GAME_RESTART)
                         .build()
                 )
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.HUD_CACHING.cast())
+                        .setName(TextComponent.translatable("sodium.options.hud_caching.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.hud_caching.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.MEDIUM)
+                        .setBinding((opts, value) -> opts.advanced.hudCaching = value, opts -> opts.advanced.hudCaching)
+                        .build()
+                )
                 .build());
 
         return new OptionPage(StandardOptions.Pages.ADVANCED, TextComponent.translatable("sodium.options.pages.advanced"), ImmutableList.copyOf(groups));

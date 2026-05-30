@@ -4,11 +4,11 @@ import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.ResourceLocation;
 
 public interface GuiIngameForgeAccessor {
-    void callRenderCrosshairs(int width, int height);
+    void callRenderCrosshairs(float partialTicks);
 
-    void callRenderHelmet(ScaledResolution res, float partialTicks, boolean hasScreen, int mouseX, int mouseY);
+    void callRenderHelmet(ScaledResolution res, float partialTicks);
 
-    void callRenderPortal(int width, int height, float partialTicks);
+    void callRenderPortal(ScaledResolution res, float partialTicks);
 
     void callBind(ResourceLocation res);
 }

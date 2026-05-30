@@ -1,9 +1,11 @@
 package com.gtnewhorizons.angelica.mixins.interfaces;
 
+import net.minecraft.client.gui.ScaledResolution;
+
 public interface GuiIngameAccessor {
-	void callRenderVignette(float brightness, int width, int height);
+	void callRenderVignette(float lightLevel, ScaledResolution scaledRes);
 
-	void callRenderPumpkinBlur(int width, int height);
+	void callRenderPumpkinOverlay(ScaledResolution scaledRes);
 
-	void callRenderPortal(float partialTicks, int width, int height);
+	void callRenderPortal(float timeInPortal, ScaledResolution scaledRes);
 }

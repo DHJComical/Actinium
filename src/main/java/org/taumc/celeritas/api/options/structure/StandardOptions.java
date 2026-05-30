@@ -70,6 +70,7 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> RENDER_PASS_OPTIMIZATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "render_pass_optimization");
         public static final OptionIdentifier<Void> RENDER_PASS_CONSOLIDATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "render_pass_consolidation");
         public static final OptionIdentifier<Void> USE_FASTER_CLOUDS = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "use_faster_clouds");
+        public static final OptionIdentifier<Void> HUD_CACHING = OptionIdentifier.create(ACTINIUM_MOD_NAME, "hud_caching");
         public static final OptionIdentifier<Void> ASYNC_GRAPH_SEARCH = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "async_graph_search");
         public static final OptionIdentifier<Void> CHUNK_FADE_IN_DURATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "chunk_fade_in_duration");
     }
