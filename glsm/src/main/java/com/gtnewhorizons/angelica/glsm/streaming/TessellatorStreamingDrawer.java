@@ -9,6 +9,7 @@ import com.gtnewhorizons.angelica.glsm.ITessellatorData;
 import com.gtnewhorizons.angelica.glsm.QuadConverter;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -74,6 +75,7 @@ public class TessellatorStreamingDrawer {
      * Draw the vanilla Tessellator's data using streaming VBO+VAO instead of FFP client arrays.
      */
     public static int draw(ITessellatorData tess) {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.STREAM_DRAW) : 0L;
         if (!tess.isDrawing()) {
             throw new IllegalStateException("Not tesselating!");
         }
@@ -100,6 +102,9 @@ public class TessellatorStreamingDrawer {
         repackBuffer.limit((int)(writePtr - repackAddress));
 
         uploadAndDraw(repackBuffer, flags, format, vertexSize, tess.getDrawMode(), vertexCount);
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.count(GLSMPerfDebug.Source.STREAM_TESSELLATOR);
+        }
 
         // Shrink rawBuffer if oversized
         if (tess.getRawBufferSize() > 0x20000 && tess.getRawBufferIndex() < (tess.getRawBufferSize() << 3)) {
@@ -109,6 +114,9 @@ public class TessellatorStreamingDrawer {
 
         final int result = tess.getRawBufferIndex() * 4;
         tess.angelica$reset();
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_DRAW, perfStart);
+        }
         return result;
     }
 
@@ -116,6 +124,7 @@ public class TessellatorStreamingDrawer {
      * Draw DirectTessellator data via streaming VBO+VAO. Used for live immediate mode emulation.
      */
     public static void drawDirect(DirectTessellator dt) {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.STREAM_DRAW_DIRECT) : 0L;
         final VertexFormat format = dt.getVertexFormat();
         if (format == null) return;
 
@@ -128,6 +137,12 @@ public class TessellatorStreamingDrawer {
         final int vertexSize = format.getVertexSize();
 
         uploadAndDraw(buffer, flags, format, vertexSize, drawMode, vertexCount);
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.count(GLSMPerfDebug.Source.DIRECT_EXTERNAL);
+        }
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_DRAW_DIRECT, perfStart);
+        }
     }
 
     /**
@@ -192,12 +207,18 @@ public class TessellatorStreamingDrawer {
      * Tries the persistent ring buffer first, falls back to orphan buffer on overflow.
      */
     private static void uploadAndDraw(ByteBuffer packed, int flags, VertexFormat format, int vertexSize, int drawMode, int vertexCount) {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.STREAM_UPLOAD_AND_DRAW) : 0L;
+        final boolean perfSampled = perfStart != 0L;
         ensureVAO(flags, format);
 
         int firstVertex = -1;
 
         if (persistentBuffer != null) {
+            final long uploadStart = perfSampled ? GLSMPerfDebug.now() : 0L;
             firstVertex = persistentBuffer.upload(packed, vertexSize);
+            if (perfSampled) {
+                GLSMPerfDebug.record(GLSMPerfDebug.Stage.STREAM_PERSISTENT_UPLOAD, uploadStart, GLSMPerfDebug.now());
+            }
         }
 
         final boolean persistentPath = firstVertex >= 0;
@@ -211,7 +232,11 @@ public class TessellatorStreamingDrawer {
             vao = orphanVAOs[flags];
             bufferId = orphanBuffers[flags].getBufferId();
             GLStateManager.glBindVertexArray(orphanVAOs[flags]);
+            final long uploadStart = perfSampled ? GLSMPerfDebug.now() : 0L;
             orphanBuffers[flags].upload(packed);
+            if (perfSampled) {
+                GLSMPerfDebug.record(GLSMPerfDebug.Stage.STREAM_ORPHAN_UPLOAD, uploadStart, GLSMPerfDebug.now());
+            }
             firstVertex = 0;
         }
 
@@ -226,16 +251,24 @@ public class TessellatorStreamingDrawer {
                 persistentPath,
                 vao,
                 bufferId,
-                packed);
+            packed);
         }
         GLStateManager.prepareWideLineEmulation(drawMode);
+        final long preDrawStart = perfSampled ? GLSMPerfDebug.now() : 0L;
         ShaderManager.getInstance().preDraw(flags);
+        if (perfSampled) {
+            GLSMPerfDebug.record(GLSMPerfDebug.Stage.STREAM_SHADER_PREDRAW, preDrawStart, GLSMPerfDebug.now());
+        }
+        final long drawStart = perfSampled ? GLSMPerfDebug.now() : 0L;
         drawWithQuadConversion(drawMode, firstVertex, vertexCount);
+        if (perfSampled) {
+            GLSMPerfDebug.record(GLSMPerfDebug.Stage.STREAM_DRAW_CALL, drawStart, GLSMPerfDebug.now());
+        }
         GLStateManager.glBindVertexArray(0);
-        GLStateManager.glDisableClientState(GL11.GL_VERTEX_ARRAY);
-        GLStateManager.glDisableClientState(GL11.GL_TEXTURE_COORD_ARRAY);
-        GLStateManager.glDisableClientState(GL11.GL_COLOR_ARRAY);
-        GLStateManager.glDisableClientState(GL11.GL_NORMAL_ARRAY);
+        ShaderManager.getInstance().clearClientVertexFlags();
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_UPLOAD_AND_DRAW, perfStart);
+        }
     }
 
     private static void drawWithQuadConversion(int drawMode, int firstVertex, int vertexCount) {

@@ -8,6 +8,7 @@ import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage
 import com.gtnewhorizons.angelica.glsm.DisplayListManager.RecordMode;
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredAlphaHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredBlendHandler;
@@ -2109,6 +2110,9 @@ public class GLStateManager {
                 if (DisplayListManager.isCompileAndExecute() && initConfig != null && initConfig.getDirectDrawer() != null) {
                     DisplayListManager.flushMatrix();
                     final var recorder = DisplayListManager.pauseRecording();
+                    if (GLSMPerfDebug.ENABLED) {
+                        GLSMPerfDebug.count(GLSMPerfDebug.Source.DIRECT_COMPILE_EXECUTE);
+                    }
                     initConfig.getDirectDrawer().accept(result);
                     DisplayListManager.resumeRecording(recorder);
                 }
@@ -2118,6 +2122,9 @@ public class GLStateManager {
         }
         final DirectTessellator result = ImmediateModeRecorder.end();
         if (result != null && initConfig != null && initConfig.getDirectDrawer() != null) {
+            if (GLSMPerfDebug.ENABLED) {
+                GLSMPerfDebug.count(GLSMPerfDebug.Source.DIRECT_LIVE_IMMEDIATE);
+            }
             initConfig.getDirectDrawer().accept(result);
         }
     }
@@ -2312,8 +2319,12 @@ public class GLStateManager {
     }
 
     private static void prepareClientArrays() {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.GL_PREPARE_CLIENT_ARRAYS) : 0L;
         if (ShaderManager.getInstance().isEnabled() && VertexAttribState.hasAnyClientSideEnabledAttrib()) {
             uploadClientArraysToVBO();
+        }
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.GL_PREPARE_CLIENT_ARRAYS, perfStart);
         }
     }
 
@@ -2322,6 +2333,7 @@ public class GLStateManager {
      * attribs into a shared stream VBO so the draw succeeds under core profile.
      */
     private static void uploadClientArraysToVBO() {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.GL_CLIENT_ARRAY_UPLOAD) : 0L;
         int totalBytes = 0;
         for (int i = 0; i < VertexAttribState.MAX_ATTRIBS; i++) {
             clientArraysVBOOffsets[i] = -1;
@@ -2357,6 +2369,9 @@ public class GLStateManager {
         }
 
         glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVBO);
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.GL_CLIENT_ARRAY_UPLOAD, perfStart);
+        }
     }
 
     public static void glDrawArrays(int mode, int first, int count) {

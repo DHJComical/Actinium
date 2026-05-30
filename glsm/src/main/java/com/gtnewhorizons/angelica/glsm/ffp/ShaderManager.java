@@ -5,6 +5,7 @@ import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormat;
 import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredBlendHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.stacks.Vec3fStack;
@@ -94,6 +95,7 @@ public class ShaderManager {
     }
 
     public void preDraw(boolean hasColor, boolean hasNormal, boolean hasTexCoord, boolean hasLightmap) {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.FFP_PREDRAW) : 0L;
         GLStateManager.flushDeferredVertexAttribs();
         final DeferredBlendHandler bh = GLSMHooks.blendHandler;
         if (bh != null) bh.flushDeferredBlend();
@@ -119,6 +121,9 @@ public class ShaderManager {
         }
 
         uploadUniforms();
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_PREDRAW, perfStart);
+        }
     }
 
     public void preDraw(int vertexFlags) {
@@ -154,7 +159,11 @@ public class ShaderManager {
 
     private void uploadUniforms() {
         if (currentProgram != null) {
+            final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.FFP_UNIFORMS) : 0L;
             uniforms.upload(currentProgram);
+            if (GLSMPerfDebug.ENABLED) {
+                GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_UNIFORMS, perfStart);
+            }
         }
     }
 
@@ -173,6 +182,7 @@ public class ShaderManager {
 
     public void enableClientVertexFlag(int flag) {currentVertexFlags |= flag;}
     public void disableClientVertexFlag(int flag) {currentVertexFlags &= ~flag;}
+    public void clearClientVertexFlags() {currentVertexFlags = 0;}
     public int getCurrentVertexFlags() {return currentVertexFlags;}
     public void setCurrentVertexFlags(int flags) {currentVertexFlags = flags;}
 

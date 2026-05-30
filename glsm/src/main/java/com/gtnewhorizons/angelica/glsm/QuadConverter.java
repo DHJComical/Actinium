@@ -1,6 +1,7 @@
 package com.gtnewhorizons.angelica.glsm;
 
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import com.gtnewhorizons.angelica.glsm.states.VertexAttribState;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
@@ -85,6 +86,7 @@ public final class QuadConverter {
      * @param vertexCount number of vertices (must be multiple of 4)
      */
     public static void drawQuadsAsTriangles(int first, int vertexCount) {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.QUAD_ARRAYS) : 0L;
         assert first % 4 == 0 : "QuadConverter: first (" + first + ") must be a multiple of 4";
         assert vertexCount % 4 == 0 : "QuadConverter: vertexCount (" + vertexCount + ") must be a multiple of 4";
         final int quadCount = vertexCount / 4;
@@ -98,6 +100,9 @@ public final class QuadConverter {
         }
         RENDER_BACKEND.drawElements(GL11.GL_TRIANGLES, quadCount * 6, INDEX_TYPE, indexOffset);
         RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.QUAD_ARRAYS, perfStart);
+        }
     }
 
     /**
@@ -111,6 +116,7 @@ public final class QuadConverter {
      * @param bytesPerIndex  bytes per index element
      */
     private static void uploadAndDraw(ByteBuffer dst, int triIndexCount, int indexType, int bytesPerIndex) {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.QUAD_SCRATCH_UPLOAD_DRAW) : 0L;
         final int needed = triIndexCount * bytesPerIndex;
         final int prevEbo = GLStateManager.getBoundEBO();
 
@@ -133,6 +139,9 @@ public final class QuadConverter {
 
         RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
         memFree(dst);
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.QUAD_SCRATCH_UPLOAD_DRAW, perfStart);
+        }
     }
 
     /**
@@ -144,6 +153,7 @@ public final class QuadConverter {
      * @param offset     byte offset into the currently bound EBO
      */
     public static void drawQuadElementsAsTriangles(int indexCount, int type, long offset) {
+        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.QUAD_ELEMENTS) : 0L;
         if (indexCount == 0) return;
         assert indexCount % 4 == 0 : "QuadConverter: indexCount must be multiple of 4";
         final int quadCount = indexCount / 4;
@@ -190,6 +200,9 @@ public final class QuadConverter {
 
         memFree(src);
         uploadAndDraw(dst, triIndexCount, GL11.GL_UNSIGNED_INT, 4);
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.QUAD_ELEMENTS, perfStart);
+        }
     }
 
     /**
