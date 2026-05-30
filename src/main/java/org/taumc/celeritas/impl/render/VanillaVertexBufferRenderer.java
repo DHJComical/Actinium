@@ -15,6 +15,8 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACKEND;
+
 public final class VanillaVertexBufferRenderer {
     private static final Map<Integer, Integer> VAOS_BY_VBO = new HashMap<>();
     private static final Map<Integer, Integer> FLAGS_BY_VBO = new HashMap<>();
@@ -80,14 +82,18 @@ public final class VanillaVertexBufferRenderer {
     }
 
     public static void drawArrays(int drawMode, int vertexCount) {
+        drawArrays(drawMode, 0, vertexCount);
+    }
+
+    public static void drawArrays(int drawMode, int firstVertex, int vertexCount) {
         if (drawMode == GL11.GL_QUADS) {
-            QuadConverter.drawQuadsAsTriangles(0, vertexCount);
+            QuadConverter.drawQuadsAsTriangles(firstVertex, vertexCount);
         } else if (drawMode == GL11.GL_QUAD_STRIP) {
-            GLStateManager.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, vertexCount & ~1);
+            RENDER_BACKEND.drawArrays(GL11.GL_TRIANGLE_STRIP, firstVertex, vertexCount & ~1);
         } else if (drawMode == GL11.GL_POLYGON) {
-            GLStateManager.glDrawArrays(GL11.GL_TRIANGLE_FAN, 0, vertexCount);
+            RENDER_BACKEND.drawArrays(GL11.GL_TRIANGLE_FAN, firstVertex, vertexCount);
         } else {
-            GLStateManager.glDrawArrays(drawMode, 0, vertexCount);
+            RENDER_BACKEND.drawArrays(drawMode, firstVertex, vertexCount);
         }
     }
 

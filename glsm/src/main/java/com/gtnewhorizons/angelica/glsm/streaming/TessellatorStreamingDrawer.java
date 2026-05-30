@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memAddress0;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memAlloc;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memFree;
+import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACKEND;
 
 /**
  * Replaces the vanilla Tessellator's FFP client-array draw path with a streaming VBO+VAO approach for GL 3.3 core profile compatibility.
@@ -274,8 +275,12 @@ public class TessellatorStreamingDrawer {
     private static void drawWithQuadConversion(int drawMode, int firstVertex, int vertexCount) {
         if (drawMode == GL11.GL_QUADS) {
             QuadConverter.drawQuadsAsTriangles(firstVertex, vertexCount);
+        } else if (drawMode == GL11.GL_QUAD_STRIP) {
+            RENDER_BACKEND.drawArrays(GL11.GL_TRIANGLE_STRIP, firstVertex, vertexCount & ~1);
+        } else if (drawMode == GL11.GL_POLYGON) {
+            RENDER_BACKEND.drawArrays(GL11.GL_TRIANGLE_FAN, firstVertex, vertexCount);
         } else {
-            GLStateManager.glDrawArrays(drawMode, firstVertex, vertexCount);
+            RENDER_BACKEND.drawArrays(drawMode, firstVertex, vertexCount);
         }
     }
 

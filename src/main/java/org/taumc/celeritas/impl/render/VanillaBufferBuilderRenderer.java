@@ -21,6 +21,11 @@ public final class VanillaBufferBuilderRenderer {
     }
 
     public static void draw(BufferBuilder bufferBuilder, String debugSource) {
+        if (BufferBuilderStreamingDrawer.isEnabled()) {
+            BufferBuilderStreamingDrawer.draw(bufferBuilder, debugSource);
+            return;
+        }
+
         if (bufferBuilder.getVertexCount() <= 0) {
             bufferBuilder.reset();
             return;

@@ -3,9 +3,13 @@ package com.dhj.actinium.mixin.features.iris;
 import com.gtnewhorizons.angelica.mixins.interfaces.IModelRenderer;
 import net.minecraft.client.model.ModelBox;
 import net.minecraft.client.model.ModelRenderer;
+import net.minecraft.client.model.PositionTextureVertex;
+import net.minecraft.client.model.TexturedQuad;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -16,6 +20,9 @@ import java.util.List;
 
 @Mixin(ModelRenderer.class)
 public abstract class ModelRendererIrisMixin implements IModelRenderer {
+    private static final boolean BATCH_MODEL_QUADS =
+        Boolean.parseBoolean(System.getProperty("actinium.modelRendererBatching", "true"));
+
     @Shadow public boolean isHidden;
     @Shadow public boolean showModel;
     @Shadow public float offsetX;
@@ -115,8 +122,46 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
 
+        if (BATCH_MODEL_QUADS) {
+            buffer.begin(7, DefaultVertexFormats.OLDMODEL_POSITION_TEX_NORMAL);
+            for (ModelBox cube : this.cubeList) {
+                for (TexturedQuad quad : ((ModelBoxAccessor) cube).actinium$getQuadList()) {
+                    actinium$appendQuad(buffer, quad, scale);
+                }
+            }
+            tessellator.draw();
+            return;
+        }
+
         for (ModelBox cube : this.cubeList) {
             cube.render(buffer, scale);
+        }
+    }
+
+    private static void actinium$appendQuad(BufferBuilder buffer, TexturedQuad quad, float scale) {
+        Vec3d vec3d = quad.vertexPositions[1].vector3D.subtractReverse(quad.vertexPositions[0].vector3D);
+        Vec3d vec3d1 = quad.vertexPositions[1].vector3D.subtractReverse(quad.vertexPositions[2].vector3D);
+        Vec3d normal = vec3d1.crossProduct(vec3d).normalize();
+        float normalX = (float) normal.x;
+        float normalY = (float) normal.y;
+        float normalZ = (float) normal.z;
+
+        if (((TexturedQuadAccessor) quad).actinium$isInvertNormal()) {
+            normalX = -normalX;
+            normalY = -normalY;
+            normalZ = -normalZ;
+        }
+
+        for (int i = 0; i < quad.nVertices; i++) {
+            PositionTextureVertex vertex = quad.vertexPositions[i];
+            buffer.pos(
+                    vertex.vector3D.x * scale,
+                    vertex.vector3D.y * scale,
+                    vertex.vector3D.z * scale
+                )
+                .tex(vertex.texturePositionX, vertex.texturePositionY)
+                .normal(normalX, normalY, normalZ)
+                .endVertex();
         }
     }
 

@@ -3,10 +3,14 @@ package com.gtnewhorizons.angelica.glsm.debug;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public final class GLSMPerfDebug {
     private static final Logger LOGGER = LogManager.getLogger("GLSMPerfDebug");
     private static final long REPORT_INTERVAL_NS = 1_000_000_000L;
     private static final int SAMPLE_MASK = 255;
+    private static final int MAX_BUFFERBUILDER_SOURCE_LINES = 12;
 
     public static final boolean ENABLED = Boolean.getBoolean("actinium.glsmPerfDebug");
 
@@ -24,7 +28,11 @@ public final class GLSMPerfDebug {
         GL_CLIENT_ARRAY_UPLOAD("gl.clientArrayUpload"),
         QUAD_ARRAYS("quad.arrays"),
         QUAD_ELEMENTS("quad.elements"),
-        QUAD_SCRATCH_UPLOAD_DRAW("quad.scratchUploadDraw");
+        QUAD_SCRATCH_UPLOAD_DRAW("quad.scratchUploadDraw"),
+        BUFFERBUILDER_STREAM_DRAW("bufferbuilder.streamDraw"),
+        BUFFERBUILDER_PERSISTENT_UPLOAD("bufferbuilder.persistentUpload"),
+        BUFFERBUILDER_ORPHAN_UPLOAD("bufferbuilder.orphanUpload"),
+        BUFFERBUILDER_DRAW_CALL("bufferbuilder.drawCall");
 
         private final String label;
 
@@ -51,6 +59,8 @@ public final class GLSMPerfDebug {
     private static final int[] sampledCounts = new int[Stage.values().length];
     private static final int[] observedCounts = new int[Stage.values().length];
     private static final int[] sourceCounts = new int[Source.values().length];
+    private static final Map<String, Integer> bufferBuilderSourceCounts = new HashMap<>();
+    private static final Map<String, Integer> bufferBuilderStackSamples = new HashMap<>();
     private static long lastReportNanos;
 
     private GLSMPerfDebug() {}
@@ -76,6 +86,17 @@ public final class GLSMPerfDebug {
 
     public static void count(Source source) {
         sourceCounts[source.ordinal()]++;
+    }
+
+    public static void countBufferBuilder(String source, int drawMode, int vertexCount) {
+        if (!ENABLED) return;
+        final String sourceKey = source + "/mode=" + drawMode;
+        bufferBuilderSourceCounts.put(sourceKey, bufferBuilderSourceCounts.getOrDefault(sourceKey, 0) + 1);
+        final int observed = observedCounts[Stage.BUFFERBUILDER_STREAM_DRAW.ordinal()];
+        if ((observed & SAMPLE_MASK) == 0) {
+            final String stackKey = sourceKey + "/" + findBufferBuilderCaller() + "/vertices~" + bucketVertexCount(vertexCount);
+            bufferBuilderStackSamples.put(stackKey, bufferBuilderStackSamples.getOrDefault(stackKey, 0) + 1);
+        }
     }
 
     public static void record(Stage stage, long startNanos, long endNanos) {
@@ -131,10 +152,74 @@ public final class GLSMPerfDebug {
                 .append("[count=").append(count).append(']');
             sourceCounts[i] = 0;
         }
+        appendTopEntries(sb, "bufferbuilder.source", bufferBuilderSourceCounts, MAX_BUFFERBUILDER_SOURCE_LINES);
+        appendTopEntries(sb, "bufferbuilder.stackSample", bufferBuilderStackSamples, MAX_BUFFERBUILDER_SOURCE_LINES);
         lastReportNanos = now;
         if (hasSamples) {
             LOGGER.info(sb.toString());
         }
+    }
+
+    private static void appendTopEntries(StringBuilder sb, String label, Map<String, Integer> counts, int limit) {
+        if (counts.isEmpty()) return;
+        for (int i = 0; i < limit; i++) {
+            String bestKey = null;
+            int bestCount = 0;
+            for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+                if (entry.getValue() > bestCount) {
+                    bestKey = entry.getKey();
+                    bestCount = entry.getValue();
+                }
+            }
+            if (bestKey == null) {
+                break;
+            }
+            sb.append(' ')
+                .append(label)
+                .append('[')
+                .append(bestKey)
+                .append(",count=")
+                .append(bestCount)
+                .append(']');
+            counts.remove(bestKey);
+        }
+        counts.clear();
+    }
+
+    private static String findBufferBuilderCaller() {
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        for (StackTraceElement element : stack) {
+            String className = element.getClassName();
+            if (className.startsWith("com.gtnewhorizons.angelica.glsm.debug.")
+                || className.startsWith("org.taumc.celeritas.impl.render.")
+                || className.startsWith("org.taumc.celeritas.mixin.core.")
+                || isBufferBuilderBridge(className, element.getMethodName())
+                || className.equals("java.lang.Thread")) {
+                continue;
+            }
+            return shortenClassName(className) + "#" + element.getMethodName();
+        }
+        return "unknown";
+    }
+
+    private static boolean isBufferBuilderBridge(String className, String methodName) {
+        return (className.equals("net.minecraft.client.renderer.Tessellator")
+            || className.equals("net.minecraft.client.renderer.WorldVertexBufferUploader"))
+            && (methodName.equals("draw") || methodName.startsWith("handler$"));
+    }
+
+    private static String shortenClassName(String className) {
+        int index = className.lastIndexOf('.');
+        return index >= 0 ? className.substring(index + 1) : className;
+    }
+
+    private static int bucketVertexCount(int vertexCount) {
+        if (vertexCount <= 0) return 0;
+        int bucket = 1;
+        while (bucket < vertexCount && bucket < 16384) {
+            bucket <<= 1;
+        }
+        return bucket;
     }
 
     private static String formatMicros(long nanos) {

@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.impl.gui.CeleritasWindowModeController;
+import org.taumc.celeritas.impl.render.BufferBuilderStreamingDrawer;
 
 @Mixin(Minecraft.class)
 public class MixinMinecraft {
@@ -31,5 +32,6 @@ public class MixinMinecraft {
             celeritas$renderAheadManager.endFrame();
         }
         TessellatorStreamingDrawer.endFrame();
+        BufferBuilderStreamingDrawer.endFrame();
     }
 }

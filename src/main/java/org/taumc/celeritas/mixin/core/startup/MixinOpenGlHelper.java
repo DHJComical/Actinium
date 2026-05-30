@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.taumc.celeritas.impl.render.BufferBuilderStreamingDrawer;
 
 @Mixin(value = OpenGlHelper.class, priority = 100)
 public class MixinOpenGlHelper {
@@ -26,7 +27,10 @@ public class MixinOpenGlHelper {
             .fboEnabled(mc.gameSettings.fboEnable)
             .streamingUploadStrategy(org.taumc.celeritas.CeleritasVintage.options().advanced.streamingUploadStrategy.glsmStrategy())
             .directDrawer(TessellatorStreamingDrawer::drawDirect)
-            .streamingDrawerDestroy(TessellatorStreamingDrawer::destroy)
+            .streamingDrawerDestroy(() -> {
+                TessellatorStreamingDrawer.destroy();
+                BufferBuilderStreamingDrawer.destroy();
+            })
             .build());
 
         GLSMHooks.LIGHTMAP_COORDS.addListener(event -> {
