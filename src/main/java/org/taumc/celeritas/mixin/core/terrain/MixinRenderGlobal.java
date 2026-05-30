@@ -1,6 +1,7 @@
 package org.taumc.celeritas.mixin.core.terrain;
 
 import com.llamalad7.mixinextras.sugar.Local;
+import com.dhj.actinium.render.EndPortalBatchRenderer;
 import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.dhj.actinium.shadows.ShadowRenderingState;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
@@ -254,12 +255,17 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 if (!this.setTileEntities.isEmpty()) {
                     long setBlockEntityStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
                     TileEntityRendererDispatcher.instance.preDrawBatch();
-                    for (var te : this.setTileEntities) {
-                        if (te.shouldRenderInPass(pass)) {
-                            TileEntityRendererDispatcher.instance.render(te, partialTicks, -1);
+                    EndPortalBatchRenderer.begin();
+                    try {
+                        for (var te : this.setTileEntities) {
+                            if (te.shouldRenderInPass(pass)) {
+                                TileEntityRendererDispatcher.instance.render(te, partialTicks, -1);
+                            }
                         }
+                    } finally {
+                        EndPortalBatchRenderer.end();
+                        TileEntityRendererDispatcher.instance.drawBatch(pass);
                     }
-                    TileEntityRendererDispatcher.instance.drawBatch(pass);
                     IrisGlDebug.recordRenderGlobalStageTiming("block-entities-set", pass, setBlockEntityStartNanos);
                 }
             }

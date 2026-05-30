@@ -1,5 +1,6 @@
 package org.taumc.celeritas.impl.render.terrain;
 
+import com.dhj.actinium.render.EndPortalBatchRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.DestroyBlockProgress;
@@ -199,9 +200,13 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
     public int renderBlockEntities(TileEntityRenderContext tileEntityRenderContext) {
         int pass = MinecraftForgeClient.getRenderPass();
         TileEntityRendererDispatcher.instance.preDrawBatch();
-        int count = super.renderBlockEntities(tileEntityRenderContext);
-        TileEntityRendererDispatcher.instance.drawBatch(pass);
-        return count;
+        EndPortalBatchRenderer.begin();
+        try {
+            return super.renderBlockEntities(tileEntityRenderContext);
+        } finally {
+            EndPortalBatchRenderer.end();
+            TileEntityRendererDispatcher.instance.drawBatch(pass);
+        }
     }
 
     /**
