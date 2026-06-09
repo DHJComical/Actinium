@@ -42,7 +42,7 @@ public final class FontProviderUnicode implements FontProvider {
 
     @Override
     public boolean isGlyphAvailable(char chr) {
-        return true;
+        return this.glyphWidth[chr] != 0;
     }
 
     @Override

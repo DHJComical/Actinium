@@ -12,13 +12,20 @@ import lombok.Setter;
 import net.coderbot.iris.gl.program.Program;
 import net.coderbot.iris.gl.program.ProgramBuilder;
 import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.renderer.texture.ITextureObject;
+import net.minecraft.client.renderer.texture.SimpleTexture;
+import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.ResourceLocation;
 import org.embeddedt.embeddium.impl.render.shader.ShaderLoader;
 import org.joml.Matrix4f;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
+import org.taumc.celeritas.CeleritasVintage;
 
 
 import java.nio.ByteBuffer;
@@ -36,6 +43,15 @@ import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.*;
  * @author eigenraven
  */
 public class BatchingFontRenderer {
+    private static final Logger LOGGER = LogManager.getLogger("ActiniumFontDebug");
+    private static final int MAX_FONT_DEBUG_FLUSHES = 64;
+    private static final int MAX_FONT_DEBUG_SPLASH_FLUSHES = 4;
+    private static final int MAX_FONT_DEBUG_BINDS = 128;
+    private static final int MAX_FONT_DEBUG_SPLASH_BINDS = 8;
+    private static int fontDebugFlushCount;
+    private static int fontDebugSplashFlushCount;
+    private static int fontDebugBindCount;
+    private static int fontDebugSplashBindCount;
 
     /** The underlying FontRenderer object that's being accelerated */
     protected FontRenderer underlying;
@@ -48,11 +64,13 @@ public class BatchingFontRenderer {
     private final int[] colorCode;
     /** Location of the primary font atlas to bind. */
     protected final ResourceLocation locationFontTexture;
+    private final TextureManager textureManager;
 
     private final int AAMode;
     private final int AAStrength;
     private final int alphaTestRefLocation;
     private final int mvpMatrixLocation;
+    private final int samplerLocation;
     private final int fontShaderId;
 
     final boolean isSGA;
@@ -75,11 +93,13 @@ public class BatchingFontRenderer {
         }
     }
 
-    public BatchingFontRenderer(FontRenderer underlying, int[] charWidth, int[] colorCode, ResourceLocation locationFontTexture) {
+    public BatchingFontRenderer(FontRenderer underlying, int[] charWidth, int[] colorCode, ResourceLocation locationFontTexture,
+        TextureManager textureManager) {
         this.underlying = underlying;
         this.charWidth = charWidth;
         this.colorCode = colorCode;
         this.locationFontTexture = locationFontTexture;
+        this.textureManager = textureManager;
 
         for (int i = 0; i < 64; i++) {
             batchCommandPool.add(new FontDrawCmd());
@@ -93,10 +113,26 @@ public class BatchingFontRenderer {
 
         //noinspection deprecation
         fontShaderId = FontAAShader.getProgram().getProgramId();
+        samplerLocation = GLStateManager.glGetUniformLocation(fontShaderId, "sampler");
         AAMode = GLStateManager.glGetUniformLocation(fontShaderId, "aaMode");
         AAStrength = GLStateManager.glGetUniformLocation(fontShaderId, "strength");
         alphaTestRefLocation = GLStateManager.glGetUniformLocation(fontShaderId, "alphaTestRef");
         mvpMatrixLocation = GLStateManager.glGetUniformLocation(fontShaderId, "u_MVPMatrix");
+        logFontDebug(
+            "font-init renderer={} texture={} isSGA={} isSplash={} shader={} samplerLoc={} aaLoc={} strengthLoc={} alphaLoc={} mvpLoc={} charWidthLen={} unicode={}",
+            underlying.getClass().getName(),
+            this.locationFontTexture,
+            this.isSGA,
+            this.isSplash,
+            fontShaderId,
+            samplerLocation,
+            AAMode,
+            AAStrength,
+            alphaTestRefLocation,
+            mvpMatrixLocation,
+            this.charWidth != null ? this.charWidth.length : -1,
+            underlying.getUnicodeFlag()
+        );
         if (ebo == null) {
             ebo = new IndexBuffer();
             vbo = GLStateManager.glGenBuffers();
@@ -205,10 +241,10 @@ public class BatchingFontRenderer {
 
     private void pushUntexRect(float x, float y, float w, float h, int rgba) {
         ensureCapacity();
-        pushVtx(x, y, rgba, 0, 0, 0, 0, 0, 0);
-        pushVtx(x, y + h, rgba, 0, 0, 0, 0, 0, 0);
-        pushVtx(x + w, y, rgba, 0, 0, 0, 0, 0, 0);
-        pushVtx(x + w, y + h, rgba, 0, 0, 0, 0, 0, 0);
+        pushVtx(x, y, rgba, 0, 0, -1, 0, 0, 0);
+        pushVtx(x, y + h, rgba, 0, 0, -1, 0, 0, 0);
+        pushVtx(x + w, y, rgba, 0, 0, -1, 0, 0, 0);
+        pushVtx(x + w, y + h, rgba, 0, 0, -1, 0, 0, 0);
         pushQuadIdx();
     }
 
@@ -334,8 +370,32 @@ public class BatchingFontRenderer {
 
         final boolean isTextureEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_TEXTURE_2D);
         final boolean isBlendEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_BLEND);
+        final int activeTextureBefore = GLStateManager.getActiveTextureUnit();
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
         final int boundTextureBefore = GLStateManager.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         boolean textureChanged = false;
+        final boolean logFlush = shouldLogFontDebugFlush(this.isSplash);
+        if (logFlush) {
+            LOGGER.info(
+                "font-flush-start renderer={} shader={} prevProgram={} vertexBytes={} idx={} cmds={} activeBefore={} tex0Before={} texEnabled={} blendEnabled={} vao={} vbo={} unicode={} aaMode={} aaStrength={} alphaRef={}",
+                underlying.getClass().getName(),
+                fontShaderId,
+                prevProgram,
+                vertexDataPos,
+                idxWriterIndex,
+                batchCommands.size(),
+                activeTextureBefore,
+                boundTextureBefore,
+                isTextureEnabledBefore,
+                isBlendEnabledBefore,
+                fontVAO,
+                vbo,
+                underlying.getUnicodeFlag(),
+                FontConfig.fontAAMode,
+                FontConfig.fontAAStrength,
+                GLStateManager.getAlphaState().getReference()
+            );
+        }
 
         ResourceLocation lastTexture = DUMMY_RESOURCE_LOCATION;
         GLStateManager.enableTexture();
@@ -345,6 +405,7 @@ public class BatchingFontRenderer {
         GLStateManager.glShadeModel(GL11.GL_FLAT);
 
         GLStateManager.glUseProgram(fontShaderId);
+        GLStateManager.glUniform1i(samplerLocation, 0);
         if (FontConfig.fontAAMode != fontAAModeLast) {
             fontAAModeLast = FontConfig.fontAAMode;
             GLStateManager.glUniform1i(AAMode, FontConfig.fontAAMode);
@@ -365,28 +426,22 @@ public class BatchingFontRenderer {
             fontVAO = GLStateManager.glGenVertexArrays();
 
             GLStateManager.glBindVertexArray(fontVAO);
-            GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-
-            ebo.bind();
-
-            // position
-            GLStateManager.glVertexAttribPointer(0, 2, GL11.GL_FLOAT, false, VERTEX_SIZE, 0);
-            GLStateManager.glEnableVertexAttribArray(0);
-
-            // texcoords
-            GLStateManager.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, VERTEX_SIZE, 8);
-            GLStateManager.glEnableVertexAttribArray(1);
-
-            // color
-            GLStateManager.glVertexAttribPointer(2, 4, GL11.GL_UNSIGNED_BYTE, true, VERTEX_SIZE, 16);
-            GLStateManager.glEnableVertexAttribArray(2);
-
-            // tex bounds
-            GLStateManager.glVertexAttribPointer(3, 4, GL11.GL_FLOAT, false, VERTEX_SIZE, 20);
-            GLStateManager.glEnableVertexAttribArray(3);
         }
 
         GLStateManager.glBindVertexArray(fontVAO);
+        setupFontVertexArray();
+        if (logFlush) {
+            LOGGER.info(
+                "font-shader-ready shader={} activeProgram={} samplerLoc={} samplerUnit={} aaMode={} aaStrength={} alphaRef={}",
+                fontShaderId,
+                GLStateManager.glGetInteger(GL20.GL_CURRENT_PROGRAM),
+                samplerLocation,
+                0,
+                FontConfig.fontAAMode,
+                FontConfig.fontAAStrength,
+                GLStateManager.getAlphaState().getReference()
+            );
+        }
 
         // Use plain for loop to avoid allocations
         final FontDrawCmd[] cmdsData = batchCommands.elements();
@@ -400,7 +455,8 @@ public class BatchingFontRenderer {
                     GLStateManager.glDisable(GL11.GL_TEXTURE_2D);
                 }
                 if (cmd.texture != null) {
-                    ((FontRendererAccessor) underlying).angelica$bindTexture(cmd.texture);
+                    final int textureId = bindFontTexture(cmd.texture);
+                    logFontTextureBind(cmd.texture, textureId, cmd.isUnicode, this.isSplash, cmd.startVtx, cmd.idxCount);
                     textureChanged = true;
                 }
                 lastTexture = cmd.texture;
@@ -421,8 +477,20 @@ public class BatchingFontRenderer {
             GLStateManager.disableBlend();
         }
         if (textureChanged) {
-        	GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, boundTextureBefore);
+            net.minecraft.client.renderer.GlStateManager.bindTexture(boundTextureBefore);
         }
+        if (logFlush) {
+            LOGGER.info(
+                "font-flush-end shader={} restoredProgram={} tex0Now={} activeBeforeRestore={} restoreTex={} textureChanged={}",
+                fontShaderId,
+                prevProgram,
+                GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D),
+                GLStateManager.getActiveTextureUnit(),
+                boundTextureBefore,
+                textureChanged
+            );
+        }
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE0 + activeTextureBefore);
 
         clearBatch();
     }
@@ -433,6 +501,30 @@ public class BatchingFontRenderer {
         batchCommands.clear();
         vertexDataPos = 0;
         idxWriterIndex = 0;
+    }
+
+    private static void setupFontVertexArray() {
+        GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
+        ebo.bind();
+
+        // position
+        GLStateManager.glVertexAttribPointer(0, 2, GL11.GL_FLOAT, false, VERTEX_SIZE, 0);
+        GLStateManager.glEnableVertexAttribArray(0);
+
+        // color
+        GLStateManager.glVertexAttribPointer(1, 4, GL11.GL_UNSIGNED_BYTE, true, VERTEX_SIZE, 16);
+        GLStateManager.glEnableVertexAttribArray(1);
+
+        // texcoords
+        GLStateManager.glVertexAttribPointer(2, 2, GL11.GL_FLOAT, false, VERTEX_SIZE, 8);
+        GLStateManager.glEnableVertexAttribArray(2);
+
+        // tex bounds
+        GLStateManager.glVertexAttribPointer(3, 4, GL11.GL_FLOAT, false, VERTEX_SIZE, 20);
+        GLStateManager.glEnableVertexAttribArray(3);
+
+        GLStateManager.glDisableVertexAttribArray(4);
+
     }
 
     // === Actual text mesh generation
@@ -579,6 +671,9 @@ public class BatchingFontRenderer {
                 }
 
                 FontProvider fontProvider = FontStrategist.getFontProvider(this, chr, FontConfig.enableCustomFont, unicodeFlag);
+                if (!fontProvider.isGlyphAvailable(chr)) {
+                    continue;
+                }
 
                 heightNorth = anchorY + (underlying.FONT_HEIGHT - 1.0f) * (0.5f - glyphScaleY * fontProvider.getYScaleMultiplier() / 2);
                 float heightSouth = (underlying.FONT_HEIGHT - 1.0f) * glyphScaleY * fontProvider.getYScaleMultiplier();
@@ -683,5 +778,98 @@ public class BatchingFontRenderer {
     public void resetBlendFunc() {
         blendSrcRGB = GL11.GL_SRC_ALPHA;
         blendDstRGB = GL11.GL_ONE_MINUS_SRC_ALPHA;
+    }
+
+    private int bindFontTexture(ResourceLocation texture) {
+        if (textureManager == null) {
+            ((FontRendererAccessor) underlying).angelica$bindTexture(texture);
+            return GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        }
+
+        ITextureObject textureObject = textureManager.getTexture(texture);
+        if (textureObject == null) {
+            textureObject = new SimpleTexture(texture);
+            textureManager.loadTexture(texture, textureObject);
+        }
+
+        final int textureId = textureObject.getGlTextureId();
+        ((FontRendererAccessor) underlying).angelica$bindTexture(texture);
+        return textureId;
+    }
+
+    private static boolean shouldLogFontDebug() {
+        String override = System.getProperty("actinium.fontDebug");
+        if (override != null) {
+            return Boolean.parseBoolean(override);
+        }
+
+        try {
+            return CeleritasVintage.options().debug.enableActiniumGlDebug;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static void logFontDebug(String message, Object... params) {
+        if (shouldLogFontDebug()) {
+            LOGGER.info(message, params);
+        }
+    }
+
+    private static boolean shouldLogFontDebugFlush(boolean splash) {
+        if (!shouldLogFontDebug()) {
+            return false;
+        }
+        if (splash) {
+            return fontDebugSplashFlushCount++ < MAX_FONT_DEBUG_SPLASH_FLUSHES;
+        }
+        return fontDebugFlushCount++ < MAX_FONT_DEBUG_FLUSHES;
+    }
+
+    private void logFontTextureBind(ResourceLocation texture, int textureId, boolean unicode, boolean splash, int startVtx, int idxCount) {
+        if (!shouldLogFontDebug()) {
+            return;
+        }
+        if (splash) {
+            if (fontDebugSplashBindCount++ >= MAX_FONT_DEBUG_SPLASH_BINDS) {
+                return;
+            }
+        } else if (fontDebugBindCount++ >= MAX_FONT_DEBUG_BINDS) {
+            return;
+        }
+
+        String textureClass = "missing";
+        try {
+            if (textureManager == null) {
+                textureClass = "no-texture-manager";
+            } else {
+                ITextureObject textureObject = textureManager.getTexture(texture);
+                if (textureObject != null) {
+                    textureClass = textureObject.getClass().getName();
+                }
+            }
+        } catch (RuntimeException e) {
+            textureClass = "error:" + e.getClass().getSimpleName();
+        }
+
+        LOGGER.info(
+            "font-bind texture={} unicode={} splash={} managerId={} bound2D={} active={} textureClass={} startVtx={} idxCount={} tex={}x{} internal=0x{} alphaBits={} redBits={} greenBits={} blueBits={}",
+            texture,
+            unicode,
+            splash,
+            textureId,
+            GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D),
+            GLStateManager.getActiveTextureUnit(),
+            textureClass,
+            startVtx,
+            idxCount,
+            GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH),
+            GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT),
+            Integer.toHexString(GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_INTERNAL_FORMAT)),
+            GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_ALPHA_SIZE),
+            GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_RED_SIZE),
+            GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_GREEN_SIZE),
+            GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_BLUE_SIZE)
+        );
     }
 }

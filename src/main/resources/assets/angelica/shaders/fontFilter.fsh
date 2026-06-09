@@ -18,6 +18,12 @@ achieving the produced effects, but this appears to work without noticeable perf
 
 float totalWt;
 
+float fontAlpha(vec2 uv) {
+    vec4 texel = texture(sampler, uv);
+    float rgbMask = max(max(texel.r, texel.g), texel.b);
+    return texel.a >= 0.999 ? rgbMask : texel.a;
+}
+
 float txSample(vec2 uv, float du, float dv, float factorU, float factorV) {
     float distSquared = sqrt(du * du + dv * dv);
     float weight = exp(-distSquared / 6);
@@ -27,16 +33,16 @@ float txSample(vec2 uv, float du, float dv, float factorU, float factorV) {
     if (finalU < tB.x || finalU > tB.y || finalV < tB.z || finalV > tB.w) {
         return 0.0f;
     }
-    return weight * texture(sampler, vec2(finalU, finalV)).a;
+    return weight * fontAlpha(vec2(finalU, finalV));
 }
 
 void main() {
     vec4 col = color;
     float original_alpha = col.a;
-    if (texCoord.s != 0 || texCoord.t != 0) {
+    if (tB.x >= 0.0) {
         if (aaMode == 0) {
             // No AA - single texture sample
-            col.a = original_alpha * texture(sampler, texCoord).a;
+            col.a = original_alpha * fontAlpha(texCoord);
         } else {
             vec2 texScaled = texCoord * strength;
             float res = 0;

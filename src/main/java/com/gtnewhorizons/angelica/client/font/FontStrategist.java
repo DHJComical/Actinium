@@ -26,6 +26,11 @@ public final class FontStrategist {
         } catch (ClassNotFoundException ignored) {
         }
         try {
+            Class<?> forgeSplashClass = Class.forName("net.minecraftforge.fml.client.SplashProgress$SplashFontRenderer");
+            active = active || forgeSplashClass.isInstance(fontRenderer);
+        } catch (ClassNotFoundException ignored) {
+        }
+        try {
             Class<?> customSplashClass = Class.forName("gkappa.modernsplash.CustomSplash$SplashFontRenderer");
             active = active || customSplashClass.isInstance(fontRenderer);
         } catch (ClassNotFoundException ignored) {

@@ -32,14 +32,14 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Shadow private boolean bidiFlag;
 
     @Shadow protected abstract String bidiReorder(String text);
-    @Shadow(remap = false) protected abstract void bindTexture(ResourceLocation location);
+    @Shadow protected abstract void bindTexture(ResourceLocation location);
 
     @Unique private BatchingFontRenderer actinium$batcher;
 
     @Inject(method = "<init>", at = @At("TAIL"))
     private void actinium$injectBatcher(GameSettings settings, ResourceLocation fontLocation, TextureManager texManager,
         boolean unicodeMode, CallbackInfo ci) {
-        actinium$batcher = new BatchingFontRenderer((FontRenderer) (Object) this, this.charWidth, this.colorCode, this.locationFontTexture);
+        actinium$batcher = new BatchingFontRenderer((FontRenderer) (Object) this, this.charWidth, this.colorCode, this.locationFontTexture, texManager);
     }
 
     @Inject(method = "drawString(Ljava/lang/String;FFIZ)I", at = @At("HEAD"), cancellable = true)
