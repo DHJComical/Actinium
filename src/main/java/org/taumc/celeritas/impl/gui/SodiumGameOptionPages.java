@@ -332,6 +332,64 @@ public class SodiumGameOptionPages {
         return new OptionPage(StandardOptions.Pages.ADVANCED, TextComponent.translatable("sodium.options.pages.advanced"), ImmutableList.copyOf(groups));
     }
 
+    public static OptionPage debug() {
+        List<OptionGroup> groups = new ArrayList<>();
+
+        groups.add(OptionGroup.createBuilder()
+                .setId(StandardOptions.Group.ACTINIUM_DEBUG)
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_PRODUCTION_DIAGNOSTICS.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.production_diagnostics.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.production_diagnostics.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.LOW)
+                        .setBinding((opts, value) -> opts.debug.enableProductionDiagnostics = value, opts -> opts.debug.enableProductionDiagnostics)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_GL_DEBUG.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.gl_debug.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.gl_debug.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.HIGH)
+                        .setBinding((opts, value) -> opts.debug.enableActiniumGlDebug = value, opts -> opts.debug.enableActiniumGlDebug)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_PERF_DEBUG.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.perf_debug.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.perf_debug.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.MEDIUM)
+                        .setBinding((opts, value) -> opts.debug.enableActiniumPerfDebug = value, opts -> opts.debug.enableActiniumPerfDebug)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_GPU_PERF_DEBUG.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.gpu_perf_debug.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.gpu_perf_debug.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.HIGH)
+                        .setBinding((opts, value) -> opts.debug.enableActiniumGpuPerfDebug = value, opts -> opts.debug.enableActiniumGpuPerfDebug)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_FRAME_GL_ERROR_CHECK.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.frame_gl_error_check.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.frame_gl_error_check.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.MEDIUM)
+                        .setBinding((opts, value) -> opts.debug.enableFrameGlErrorCheck = value, opts -> opts.debug.enableFrameGlErrorCheck)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_POST_RENDER_GL_ERROR_CHECK.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.post_render_gl_error_check.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.post_render_gl_error_check.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.MEDIUM)
+                        .setBinding((opts, value) -> opts.debug.enablePostRenderGlErrorCheck = value, opts -> opts.debug.enablePostRenderGlErrorCheck)
+                        .build())
+                .build());
+
+        return new OptionPage(StandardOptions.Pages.DEBUG, TextComponent.translatable("sodium.options.pages.debug"), ImmutableList.copyOf(groups));
+    }
+
     private static boolean isIndirectMultiDrawSupported() {
         return LWJGL.isOpenGLVersionSupported(4, 3) || LWJGL.isExtensionSupported(GLExtension.ARB_multi_draw_indirect);
     }

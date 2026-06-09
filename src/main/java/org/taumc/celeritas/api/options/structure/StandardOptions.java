@@ -18,6 +18,7 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> CPU_SAVING = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "cpu_saving");
         public static final OptionIdentifier<Void> SORTING = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "sorting");
         public static final OptionIdentifier<Void> LIGHTING = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "lighting");
+        public static final OptionIdentifier<Void> ACTINIUM_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "debug");
     }
 
     public static class Pages {
@@ -25,6 +26,7 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> QUALITY = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "quality");
         public static final OptionIdentifier<Void> PERFORMANCE = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "performance");
         public static final OptionIdentifier<Void> ADVANCED = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "advanced");
+        public static final OptionIdentifier<Void> DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "debug");
         public static final OptionIdentifier<Void> SHADERS = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "shaders");
     }
 
@@ -71,6 +73,12 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> RENDER_PASS_CONSOLIDATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "render_pass_consolidation");
         public static final OptionIdentifier<Void> USE_FASTER_CLOUDS = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "use_faster_clouds");
         public static final OptionIdentifier<Void> HUD_CACHING = OptionIdentifier.create(ACTINIUM_MOD_NAME, "hud_caching");
+        public static final OptionIdentifier<Void> ACTINIUM_PRODUCTION_DIAGNOSTICS = OptionIdentifier.create(ACTINIUM_MOD_NAME, "production_diagnostics");
+        public static final OptionIdentifier<Void> ACTINIUM_GL_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "gl_debug");
+        public static final OptionIdentifier<Void> ACTINIUM_PERF_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "perf_debug");
+        public static final OptionIdentifier<Void> ACTINIUM_GPU_PERF_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "gpu_perf_debug");
+        public static final OptionIdentifier<Void> ACTINIUM_FRAME_GL_ERROR_CHECK = OptionIdentifier.create(ACTINIUM_MOD_NAME, "frame_gl_error_check");
+        public static final OptionIdentifier<Void> ACTINIUM_POST_RENDER_GL_ERROR_CHECK = OptionIdentifier.create(ACTINIUM_MOD_NAME, "post_render_gl_error_check");
         public static final OptionIdentifier<Void> ASYNC_GRAPH_SEARCH = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "async_graph_search");
         public static final OptionIdentifier<Void> CHUNK_FADE_IN_DURATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "chunk_fade_in_duration");
     }

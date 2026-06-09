@@ -1,5 +1,6 @@
 package org.taumc.celeritas.mixin;
 
+import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -136,6 +137,6 @@ public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-
+        ActiniumDiagnostics.recordMixinApplied(targetClassName, mixinClassName);
     }
 }

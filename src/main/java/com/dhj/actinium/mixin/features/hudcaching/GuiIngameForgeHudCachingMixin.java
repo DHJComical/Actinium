@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(value = GuiIngameForge.class, remap = false)
+@Mixin(GuiIngameForge.class)
 public class GuiIngameForgeHudCachingMixin {
     @Inject(method = "renderGameOverlay", at = @At("HEAD"))
     private void actinium$resetCaptures(float partialTicks, CallbackInfo ci) {
@@ -22,7 +22,7 @@ public class GuiIngameForgeHudCachingMixin {
         }
     }
 
-    @Inject(method = "renderCrosshairs", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "renderCrosshairs", at = @At("HEAD"), cancellable = true, remap = false)
     private void actinium$captureRenderCrosshairs(float partialTicks, CallbackInfo ci) {
         if (ActiniumHudCaching.renderingCacheOverride) {
             ActiniumHudCaching.renderCrosshairsCaptured = true;
@@ -31,7 +31,7 @@ public class GuiIngameForgeHudCachingMixin {
         }
     }
 
-    @Inject(method = "renderHelmet", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "renderHelmet", at = @At("HEAD"), cancellable = true, remap = false)
     private void actinium$captureRenderHelmet(ScaledResolution res, float partialTicks, CallbackInfo ci) {
         if (ActiniumHudCaching.renderingCacheOverride) {
             ActiniumHudCaching.renderHelmetCaptured = true;
@@ -39,7 +39,7 @@ public class GuiIngameForgeHudCachingMixin {
         }
     }
 
-    @Inject(method = "renderPortal", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "renderPortal", at = @At("HEAD"), cancellable = true, remap = false)
     private void actinium$captureRenderPortal(ScaledResolution res, float partialTicks, CallbackInfo ci) {
         if (ActiniumHudCaching.renderingCacheOverride) {
             ActiniumHudCaching.renderPortalCapturedTicks = partialTicks;
@@ -47,7 +47,7 @@ public class GuiIngameForgeHudCachingMixin {
         }
     }
 
-    @Inject(method = "renderBossHealth", at = @At("HEAD"))
+    @Inject(method = "renderBossHealth", at = @At("HEAD"), remap = false)
     private void actinium$bindBossHealthTexture(CallbackInfo ci) {
         if (ActiniumHudCaching.renderingCacheOverride) {
             ((GuiIngameForgeAccessor) this).callBind(Gui.ICONS);

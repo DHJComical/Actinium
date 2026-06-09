@@ -12,10 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Minecraft.class)
 public class MinecraftGlDebugMixin {
     @Unique
-    private static final boolean ACTINIUM_CHECK_FRAME_GL_ERRORS =
-        Boolean.getBoolean("actinium.frameGlErrorCheck") || Boolean.getBoolean("actinium.postRenderGlErrorCheck");
-
-    @Unique
     private TimerQueryManager actinium$frameOutputTimer;
     @Unique
     private TimerQueryManager actinium$frameRenderTimer;
@@ -130,7 +126,9 @@ public class MinecraftGlDebugMixin {
     @Inject(method = "checkGLError(Ljava/lang/String;)V", at = @At("HEAD"), cancellable = true)
     private void actinium$markGlErrorCheck(String message, CallbackInfo ci) {
         IrisGlDebug.markStage("minecraft:check-gl-error:" + message);
-        if (!ACTINIUM_CHECK_FRAME_GL_ERRORS && ("Pre render".equals(message) || "Post render".equals(message))) {
+        if ("Pre render".equals(message) && !IrisGlDebug.shouldCheckPreRenderGlErrors()) {
+            ci.cancel();
+        } else if ("Post render".equals(message) && !IrisGlDebug.shouldCheckPostRenderGlErrors()) {
             ci.cancel();
         }
     }

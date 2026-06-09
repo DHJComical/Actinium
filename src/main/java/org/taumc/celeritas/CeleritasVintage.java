@@ -1,6 +1,7 @@
 package org.taumc.celeritas;
 
 import com.mojang.realmsclient.gui.ChatFormatting;
+import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 
 import java.lang.management.ManagementFactory;
@@ -38,6 +39,7 @@ public class CeleritasVintage {
     public void onConstruct(FMLConstructionEvent event) {
         GLRenderDevice.VANILLA_STATE_RESETTER = () -> OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0);
         VERSION = Loader.instance().getIndexedModList().get(MODID).getVersion();
+        ActiniumDiagnostics.logConstruction();
         MinecraftForge.EVENT_BUS.register(this);
     }
 
@@ -51,6 +53,7 @@ public class CeleritasVintage {
             Iris.INSTANCE.fmlInitEvent();
             MinecraftForge.EVENT_BUS.register(Iris.INSTANCE);
         }
+        ActiniumDiagnostics.logInitialization(VERSION);
     }
 
     @SubscribeEvent

@@ -28,7 +28,8 @@ public class CeleritasVideoOptionsScreen extends GuiScreen {
                 SodiumGameOptionPages.general(),
                 SodiumGameOptionPages.quality(),
                 CommonOptionPages.performance(CeleritasVintage.options()),
-                SodiumGameOptionPages.advanced()
+                SodiumGameOptionPages.advanced(),
+                SodiumGameOptionPages.debug()
         ), new VintageDrawContext()) {
             @Override
             protected void createExtraTabs(Map<String, List<Tab<?>>> tabs) {

@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin;
 
+import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -137,6 +138,6 @@ public class ActiniumVintageMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-
+        ActiniumDiagnostics.recordMixinApplied(targetClassName, mixinClassName);
     }
 }

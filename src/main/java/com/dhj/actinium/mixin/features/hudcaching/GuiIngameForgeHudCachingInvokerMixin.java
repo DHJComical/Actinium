@@ -7,17 +7,17 @@ import net.minecraftforge.client.GuiIngameForge;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-@Mixin(value = GuiIngameForge.class, remap = false)
+@Mixin(GuiIngameForge.class)
 public abstract class GuiIngameForgeHudCachingInvokerMixin implements GuiIngameForgeAccessor {
-    @Invoker
+    @Invoker(remap = false)
     public abstract void callRenderCrosshairs(float partialTicks);
 
-    @Invoker
+    @Invoker(remap = false)
     public abstract void callRenderHelmet(ScaledResolution res, float partialTicks);
 
-    @Invoker
+    @Invoker(remap = false)
     public abstract void callRenderPortal(ScaledResolution res, float partialTicks);
 
-    @Invoker
+    @Invoker(remap = false)
     public abstract void callBind(ResourceLocation res);
 }

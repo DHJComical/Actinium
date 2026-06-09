@@ -49,8 +49,6 @@ public final class IrisGlDebug {
 	private static final Map<String, Integer> WHITE_SCREEN_PROBE_COUNTS = new ConcurrentHashMap<>();
 	private static final boolean ENABLE_TEXTURE_UNIT_LOGS = Boolean.getBoolean("actinium.debug.textureUnitLogs");
 	private static final boolean ENABLE_PORTAL_RENDER_LOGS = Boolean.getBoolean("actinium.debug.portalRenderLogs");
-	private static final boolean ENABLE_PERF_DEBUG = Boolean.getBoolean("actinium.perfDebug");
-	private static final boolean ENABLE_GPU_PERF_DEBUG = Boolean.getBoolean("actinium.gpuPerfDebug");
 	private static long lastShadowEntityLogTime;
 	private static long lastShadowPassLogTime;
     private static long compositeTimingWindowStart;
@@ -686,7 +684,7 @@ public final class IrisGlDebug {
 	}
 
 	public static boolean shouldCapturePerfTiming() {
-		if (!(ENABLE_PERF_DEBUG || isEnabled()) || !Iris.isWorldReadyForShaderpackLoad()) {
+		if (!(isPerfDebugEnabled() || isEnabled()) || !Iris.isWorldReadyForShaderpackLoad()) {
 			return false;
 		}
 
@@ -694,7 +692,59 @@ public final class IrisGlDebug {
 	}
 
 	public static boolean shouldCaptureGpuPerfTiming() {
-		return ENABLE_GPU_PERF_DEBUG && shouldCapturePerfTiming();
+		return isGpuPerfDebugEnabled() && shouldCapturePerfTiming();
+	}
+
+	public static boolean shouldCheckPreRenderGlErrors() {
+		String override = System.getProperty("actinium.frameGlErrorCheck");
+		if (override != null) {
+			return Boolean.parseBoolean(override);
+		}
+
+		try {
+			return CeleritasVintage.options().debug.enableFrameGlErrorCheck;
+		} catch (RuntimeException ignored) {
+			return false;
+		}
+	}
+
+	public static boolean shouldCheckPostRenderGlErrors() {
+		String override = System.getProperty("actinium.postRenderGlErrorCheck");
+		if (override != null) {
+			return Boolean.parseBoolean(override);
+		}
+
+		try {
+			return CeleritasVintage.options().debug.enablePostRenderGlErrorCheck;
+		} catch (RuntimeException ignored) {
+			return false;
+		}
+	}
+
+	private static boolean isPerfDebugEnabled() {
+		String override = System.getProperty("actinium.perfDebug");
+		if (override != null) {
+			return Boolean.parseBoolean(override);
+		}
+
+		try {
+			return CeleritasVintage.options().debug.enableActiniumPerfDebug;
+		} catch (RuntimeException ignored) {
+			return false;
+		}
+	}
+
+	private static boolean isGpuPerfDebugEnabled() {
+		String override = System.getProperty("actinium.gpuPerfDebug");
+		if (override != null) {
+			return Boolean.parseBoolean(override);
+		}
+
+		try {
+			return CeleritasVintage.options().debug.enableActiniumGpuPerfDebug;
+		} catch (RuntimeException ignored) {
+			return false;
+		}
 	}
 
 	public static void logSamplerInitialization(int program, String mode, String name, int location, int assignedUnit) {
