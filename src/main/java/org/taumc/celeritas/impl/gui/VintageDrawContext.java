@@ -110,19 +110,34 @@ public class VintageDrawContext implements DrawContext {
 
     @Override
     public int drawString(TextComponent str, int x, int y, int color, boolean shadow) {
+        boolean blendWasEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
         GlStateManager.enableBlend();
         GlStateManager.tryBlendFuncSeparate(
                 GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO
         );
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         int len = font.drawString(compile(str).getFormattedText(), x, y, color, shadow);
-        GlStateManager.disableBlend();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        if (!blendWasEnabled) {
+            GlStateManager.disableBlend();
+        }
         return len;
     }
 
     @Override
     public void blitWholeImage(String icon, int x, int y, int width, int height) {
+        boolean blendWasEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+        GlStateManager.enableBlend();
+        GlStateManager.tryBlendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO
+        );
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         Minecraft.getMinecraft().getTextureManager().bindTexture(new ResourceLocation(icon));
         Gui.drawModalRectWithCustomSizedTexture(x, y, 0, 0, width, height, (float)width, (float)height);
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        if (!blendWasEnabled) {
+            GlStateManager.disableBlend();
+        }
     }
 
     @Override

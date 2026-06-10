@@ -1,11 +1,11 @@
 package com.gtnewhorizons.angelica.client.font;
-
 import com.google.common.collect.ImmutableSet;
 import com.gtnewhorizon.gtnhlib.bytebuf.MemoryStack;
 import com.gtnewhorizon.gtnhlib.client.renderer.vao.IndexBuffer;
 import com.gtnewhorizons.angelica.config.FontConfig;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.streaming.StreamingUploader;
+import com.gtnewhorizons.angelica.glsm.states.Color4;
 import com.gtnewhorizons.angelica.mixins.interfaces.FontRendererAccessor;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import lombok.Setter;
@@ -369,7 +369,9 @@ public class BatchingFontRenderer {
         batchCommands.sort(FontDrawCmd.DRAW_ORDER_COMPARATOR);
 
         final boolean isTextureEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_TEXTURE_2D);
+        final boolean isAlphaTestEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_ALPHA_TEST);
         final boolean isBlendEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_BLEND);
+        final Color4 colorBefore = GLStateManager.getColor().copy();
         final int activeTextureBefore = GLStateManager.getActiveTextureUnit();
         GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
         final int boundTextureBefore = GLStateManager.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
@@ -377,7 +379,7 @@ public class BatchingFontRenderer {
         final boolean logFlush = shouldLogFontDebugFlush(this.isSplash);
         if (logFlush) {
             LOGGER.info(
-                "font-flush-start renderer={} shader={} prevProgram={} vertexBytes={} idx={} cmds={} activeBefore={} tex0Before={} texEnabled={} blendEnabled={} vao={} vbo={} unicode={} aaMode={} aaStrength={} alphaRef={}",
+                "font-flush-start renderer={} shader={} prevProgram={} vertexBytes={} idx={} cmds={} activeBefore={} tex0Before={} texEnabled={} alphaEnabled={} blendEnabled={} vao={} vbo={} unicode={} aaMode={} aaStrength={} alphaRef={}",
                 underlying.getClass().getName(),
                 fontShaderId,
                 prevProgram,
@@ -387,6 +389,7 @@ public class BatchingFontRenderer {
                 activeTextureBefore,
                 boundTextureBefore,
                 isTextureEnabledBefore,
+                isAlphaTestEnabledBefore,
                 isBlendEnabledBefore,
                 fontVAO,
                 vbo,
@@ -396,7 +399,6 @@ public class BatchingFontRenderer {
                 GLStateManager.getAlphaState().getReference()
             );
         }
-
         ResourceLocation lastTexture = DUMMY_RESOURCE_LOCATION;
         GLStateManager.enableTexture();
         GLStateManager.enableAlphaTest();
@@ -471,7 +473,14 @@ public class BatchingFontRenderer {
         GLStateManager.glBindVertexArray(0);
 
         if (isTextureEnabledBefore) {
-        	GLStateManager.glEnable(GL11.GL_TEXTURE_2D);
+            GLStateManager.glEnable(GL11.GL_TEXTURE_2D);
+        } else {
+            GLStateManager.glDisable(GL11.GL_TEXTURE_2D);
+        }
+        if (isAlphaTestEnabledBefore) {
+            GLStateManager.enableAlphaTest();
+        } else {
+            GLStateManager.disableAlphaTest();
         }
         if (!isBlendEnabledBefore) {
             GLStateManager.disableBlend();
@@ -479,15 +488,20 @@ public class BatchingFontRenderer {
         if (textureChanged) {
             net.minecraft.client.renderer.GlStateManager.bindTexture(boundTextureBefore);
         }
+        GLStateManager.glColor4f(colorBefore.getRed(), colorBefore.getGreen(), colorBefore.getBlue(), colorBefore.getAlpha());
         if (logFlush) {
             LOGGER.info(
-                "font-flush-end shader={} restoredProgram={} tex0Now={} activeBeforeRestore={} restoreTex={} textureChanged={}",
+                "font-flush-end shader={} restoredProgram={} tex0Now={} activeBeforeRestore={} restoreTex={} textureChanged={} restoreColor=[{},{},{},{}]",
                 fontShaderId,
                 prevProgram,
                 GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D),
                 GLStateManager.getActiveTextureUnit(),
                 boundTextureBefore,
-                textureChanged
+                textureChanged,
+                colorBefore.getRed(),
+                colorBefore.getGreen(),
+                colorBefore.getBlue(),
+                colorBefore.getAlpha()
             );
         }
         GLStateManager.glActiveTexture(GL13.GL_TEXTURE0 + activeTextureBefore);
