@@ -3,6 +3,7 @@ package org.taumc.celeritas.impl.gui;
 import net.coderbot.iris.gui.screen.ShaderPackScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.util.text.TextComponentTranslation;
 import org.taumc.celeritas.api.options.OptionIdentifier;
 import org.taumc.celeritas.api.options.structure.OptionFlag;
 import org.embeddedt.embeddium.impl.gui.CeleritasVideoOptionsController;
@@ -60,6 +61,10 @@ public class CeleritasVideoOptionsScreen extends GuiScreen {
                 if (flags.contains(OptionFlag.REQUIRES_ASSET_RELOAD)) {
                     client.getTextureMapBlocks().setMipmapLevels(mc.gameSettings.mipmapLevels);
                     client.refreshResources();
+                }
+
+                if (flags.contains(OptionFlag.REQUIRES_GAME_RESTART) && client.ingameGUI != null) {
+                    client.ingameGUI.setOverlayMessage(new TextComponentTranslation("sodium.console.game_restart"), false);
                 }
             }
         };

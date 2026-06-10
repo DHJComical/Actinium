@@ -1,5 +1,6 @@
 package com.gtnewhorizons.angelica.loading.fml.transformers;
 
+import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
 import com.gtnewhorizons.angelica.glsm.redirect.GLSMRedirector;
 import com.gtnewhorizons.angelica.loading.shared.AngelicaClassDump;
 import net.minecraft.launchwrapper.IClassTransformer;
@@ -13,7 +14,7 @@ import java.util.List;
 
 public class EarlyRedirectorTransformer implements IClassTransformer {
 
-    private static final boolean DEBUG = Boolean.getBoolean("actinium.redirectorDebug");
+    private static final boolean DEBUG = ActiniumStartupDebugConfig.enableRedirectorDebug();
     private static final String[] EARLY_REDIRECTOR_TARGETS = {
         "cn.tesseract.mycelium.",
     };

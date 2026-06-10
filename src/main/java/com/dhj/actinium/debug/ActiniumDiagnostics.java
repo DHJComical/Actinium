@@ -83,6 +83,9 @@ public final class ActiniumDiagnostics {
                 + ",preGlError=" + options.debug.enableFrameGlErrorCheck
                 + ",postGlError=" + options.debug.enablePostRenderGlErrorCheck
                 + ",diagnostics=" + options.debug.enableProductionDiagnostics
+                + ",redirectorDebug=" + options.debug.enableRedirectorDebug
+                + ",redirectorLogSpam=" + options.debug.enableRedirectorLogSpam
+                + ",redirectorClassDump=" + options.debug.enableRedirectorClassDump
                 + "}";
         } catch (RuntimeException e) {
             return "unavailable:" + e.getClass().getSimpleName();

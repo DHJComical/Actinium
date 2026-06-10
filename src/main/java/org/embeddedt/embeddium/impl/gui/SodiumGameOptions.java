@@ -122,6 +122,9 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public boolean enableActiniumGpuPerfDebug = false;
         public boolean enableFrameGlErrorCheck = false;
         public boolean enablePostRenderGlErrorCheck = false;
+        public boolean enableRedirectorDebug = false;
+        public boolean enableRedirectorLogSpam = false;
+        public boolean enableRedirectorClassDump = false;
     }
 
     public static class WindowSettings {
