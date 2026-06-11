@@ -91,7 +91,6 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public int cpuRenderAheadLimit = 0;
         public MultiDrawMode multiDrawMode = MultiDrawMode.DIRECT;
         public StreamingUploadStrategy streamingUploadStrategy = StreamingUploadStrategy.MAP_BUFFER_RANGE;
-        public boolean hudCaching = true;
     }
 
     public static class QualitySettings {

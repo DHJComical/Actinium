@@ -63,6 +63,12 @@ dependencies {
 
     runtimeOnly("curse.maven:catalogue-vintage-1465746:7872634")
     compileOnly("maven.modrinth:DistantHorizonsApi:5.1.0")
+    compileOnly("curse.maven:xaeros-minimap-263420:6310964")
+    compileOnly("curse.maven:better-hud-286066:3327633")
+    compileOnly("curse.maven:voxelmap-225179:3029445")
+    compileOnly("curse.maven:scalingguis-319656:5150678")
+    compileOnly("curse.maven:quark-243121:2924091")
+    compileOnly("curse.maven:valkyrie-874067:5235356")
 //    runtimeOnly("curse.maven:depths-update-1472501:8038246")
     // Example - Dependency descriptor:
     // 'com.google.code.gson:gson:2.8.6' << group: com.google.code.gson, name:gson, version:2.8.6

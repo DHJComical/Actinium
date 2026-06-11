@@ -72,7 +72,6 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> RENDER_PASS_OPTIMIZATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "render_pass_optimization");
         public static final OptionIdentifier<Void> RENDER_PASS_CONSOLIDATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "render_pass_consolidation");
         public static final OptionIdentifier<Void> USE_FASTER_CLOUDS = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "use_faster_clouds");
-        public static final OptionIdentifier<Void> HUD_CACHING = OptionIdentifier.create(ACTINIUM_MOD_NAME, "hud_caching");
         public static final OptionIdentifier<Void> ACTINIUM_PRODUCTION_DIAGNOSTICS = OptionIdentifier.create(ACTINIUM_MOD_NAME, "production_diagnostics");
         public static final OptionIdentifier<Void> ACTINIUM_GL_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "gl_debug");
         public static final OptionIdentifier<Void> ACTINIUM_PERF_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "perf_debug");

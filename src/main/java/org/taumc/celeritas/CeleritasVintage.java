@@ -3,6 +3,7 @@ package org.taumc.celeritas;
 import com.mojang.realmsclient.gui.ChatFormatting;
 import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
+import me.decce.gnetum.Gnetum;
 
 import java.lang.management.ManagementFactory;
 
@@ -17,6 +18,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLConstructionEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,10 +43,18 @@ public class CeleritasVintage {
         VERSION = Loader.instance().getIndexedModList().get(MODID).getVersion();
         ActiniumDiagnostics.logConstruction();
         MinecraftForge.EVENT_BUS.register(this);
+        Gnetum.construct(event);
+        Gnetum.registerEventHandlers();
+    }
+
+    @EventHandler
+    public void onPreInit(FMLPreInitializationEvent event) {
+        Gnetum.preInit(event);
     }
 
     @EventHandler
     public void onInit(FMLInitializationEvent event) {
+        Gnetum.init(event);
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
         }

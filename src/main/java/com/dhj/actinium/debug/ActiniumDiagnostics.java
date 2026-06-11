@@ -40,7 +40,7 @@ public final class ActiniumDiagnostics {
             System.getProperty("java.version"),
             System.getProperty("os.name") + " " + System.getProperty("os.version"),
             System.getProperty("fml.coreMods.load", ""),
-            "mixins.celeritas.json,mixins.actinium.json"
+            "mixins.celeritas.json,mixins.actinium.json,mixins.gnetum.early.json,mixins.gnetum.late.json"
         );
     }
 
@@ -65,10 +65,9 @@ public final class ActiniumDiagnostics {
 
     private static boolean isKeyMixin(String mixinClassName) {
         return mixinClassName.startsWith("com.dhj.actinium.mixin.features.iris.")
-            || mixinClassName.startsWith("com.dhj.actinium.mixin.features.hudcaching.")
+            || mixinClassName.startsWith("me.decce.gnetum.mixins.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.core.terrain.")
-            || mixinClassName.startsWith("org.taumc.celeritas.mixin.core.")
-            || mixinClassName.startsWith("org.taumc.celeritas.mixin.fontrenderer.");
+            || mixinClassName.startsWith("org.taumc.celeritas.mixin.core.");
     }
 
     private static String describeConfig() {
@@ -76,7 +75,6 @@ public final class ActiniumDiagnostics {
             var options = CeleritasVintage.options();
             return "advanced{multiDraw=" + options.advanced.multiDrawMode
                 + ",streaming=" + options.advanced.streamingUploadStrategy
-                + ",hudCaching=" + options.advanced.hudCaching
                 + "} debug{gl=" + options.debug.enableActiniumGlDebug
                 + ",perf=" + options.debug.enableActiniumPerfDebug
                 + ",gpuPerf=" + options.debug.enableActiniumGpuPerfDebug

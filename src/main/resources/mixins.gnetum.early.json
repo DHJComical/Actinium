@@ -1,0 +1,20 @@
+{
+  "package": "me.decce.gnetum.mixins.early",
+  "required": true,
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "client": [
+    "FramebufferMixin",
+    "GlStateManagerMixin",
+    "GuiIngameAccessor",
+    "GuiIngameForgeAccessor",
+    "GuiIngameForgeMixin",
+    "GuiIngameMixin",
+    "ItemRendererMixin",
+    "MinecraftAccessor",
+    "MinecraftMixin",
+    "OpenGlHelperMixin",
+    "compat.EventBusAccessor"
+  ]
+}
