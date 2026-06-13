@@ -368,12 +368,12 @@ public class BatchingFontRenderer {
         // Sort&Draw
         batchCommands.sort(FontDrawCmd.DRAW_ORDER_COMPARATOR);
 
-        final boolean isTextureEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_TEXTURE_2D);
         final boolean isAlphaTestEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_ALPHA_TEST);
         final boolean isBlendEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_BLEND);
         final Color4 colorBefore = GLStateManager.getColor().copy();
         final int activeTextureBefore = GLStateManager.getActiveTextureUnit();
         GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
+        final boolean isTextureEnabledBefore = GLStateManager.glIsEnabled(GL11.GL_TEXTURE_2D);
         final int boundTextureBefore = GLStateManager.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         boolean textureChanged = false;
         final boolean logFlush = shouldLogFontDebugFlush(this.isSplash);

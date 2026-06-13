@@ -20,6 +20,7 @@ import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.ItemRenderer;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.debug.DebugRenderer;
@@ -27,6 +28,7 @@ import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.resources.IResourceManagerReloadListener;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.EntityLivingBase;
+import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -178,6 +180,29 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     )
     private void actinium$checkAfterDrawScreen(float partialTicks, long nanoTime, CallbackInfo ci) {
         IrisGlDebug.markStage("entity-renderer:after-draw-screen");
+    }
+
+    @Inject(
+        method = "updateCameraAndRender(FJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;drawScreen(Lnet/minecraft/client/gui/GuiScreen;IIF)V", remap = false)
+    )
+    private void actinium$restoreGuiScreenState(float partialTicks, long nanoTime, CallbackInfo ci) {
+        GLStateManager.disableLighting();
+        GLStateManager.disableFog();
+        GLStateManager.enableAlphaTest();
+        GLStateManager.glAlphaFunc(GL11.GL_GREATER, 0.1F);
+        GLStateManager.disableBlend();
+
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE3);
+        GLStateManager.disableTexture();
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE2);
+        GLStateManager.disableTexture();
+        GLStateManager.glActiveTexture(OpenGlHelper.lightmapTexUnit);
+        GLStateManager.disableTexture();
+        GLStateManager.glActiveTexture(OpenGlHelper.defaultTexUnit);
+        GLStateManager.enableTexture();
+        GLStateManager.glTexEnvi(GL11.GL_TEXTURE_ENV, GL11.GL_TEXTURE_ENV_MODE, GL11.GL_MODULATE);
+        GLStateManager.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private void actinium$prepareRenderManagerForShadowPass(float partialTicks) {
