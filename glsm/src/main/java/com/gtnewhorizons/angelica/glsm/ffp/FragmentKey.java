@@ -52,6 +52,10 @@ public final class FragmentKey {
     public static final int SRC_CONSTANT      = 1;
     public static final int SRC_PRIMARY_COLOR = 2;
     public static final int SRC_PREVIOUS      = 3;
+    public static final int SRC_TEXTURE0      = 4;
+    public static final int SRC_TEXTURE1      = 5;
+    public static final int SRC_TEXTURE2      = 6;
+    public static final int SRC_TEXTURE3      = 7;
 
     public static final int OP_SRC_COLOR           = 0;
     public static final int OP_ONE_MINUS_SRC_COLOR = 1;
@@ -292,6 +296,10 @@ public final class FragmentKey {
             case GL13.GL_CONSTANT      -> SRC_CONSTANT;
             case GL13.GL_PRIMARY_COLOR -> SRC_PRIMARY_COLOR;
             case GL13.GL_PREVIOUS      -> SRC_PREVIOUS;
+            case GL13.GL_TEXTURE0      -> SRC_TEXTURE0;
+            case GL13.GL_TEXTURE1      -> SRC_TEXTURE1;
+            case GL13.GL_TEXTURE2      -> SRC_TEXTURE2;
+            case GL13.GL_TEXTURE3      -> SRC_TEXTURE3;
             default -> {
                 GLStateManager.LOGGER.debug("Unknown TexEnv source 0x{}, falling back to SRC_PREVIOUS", Integer.toHexString(glSource));
                 yield SRC_PREVIOUS;

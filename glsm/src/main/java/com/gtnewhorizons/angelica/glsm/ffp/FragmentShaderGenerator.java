@@ -102,7 +102,7 @@ public final class FragmentShaderGenerator {
         for (int i = 0; i < key.nrEnabledUnits(); i++) {
             if (!key.unitEnabled(i)) continue;
 
-            final String texVar = "tex" + i + "Color";
+            final String texVar = textureVariable(i);
             final String envColorVar = "u_TexEnvColor" + i;
             final String prevVar = firstUnit ? "v_Color" : "color";
             final String assign = firstUnit ? "  vec4 color = " : "  color = ";
@@ -194,7 +194,7 @@ public final class FragmentShaderGenerator {
             final int source = isRgb ? key.unitSourceRgb(unit, a) : key.unitSourceAlpha(unit, a);
             final int operand = isRgb ? key.unitOperandRgb(unit, a) : key.unitOperandAlpha(unit, a);
             final String argName = "arg" + suffix + a + "_" + unit;
-            final String sourceExpr = resolveSource(source, texVar, envColorVar, prevVar);
+            final String sourceExpr = resolveSource(key, source, texVar, envColorVar, prevVar);
             final String operandExpr = applyOperand(sourceExpr, operand, isRgb);
             sb.append("    ").append(type).append(" ").append(argName).append(" = ").append(operandExpr).append(";\n");
         }
@@ -232,14 +232,30 @@ public final class FragmentShaderGenerator {
             .append(isRgb ? "vec3(0.0), vec3(1.0)" : "0.0, 1.0").append(");\n");
     }
 
-    private static String resolveSource(int source, String texVar, String envColorVar, String prevVar) {
+    private static String resolveSource(FragmentKey key, int source, String texVar, String envColorVar, String prevVar) {
         return switch (source) {
             case FragmentKey.SRC_TEXTURE -> texVar;
             case FragmentKey.SRC_CONSTANT -> envColorVar;
             case FragmentKey.SRC_PRIMARY_COLOR -> "v_Color";
             case FragmentKey.SRC_PREVIOUS -> prevVar;
+            case FragmentKey.SRC_TEXTURE0 -> enabledTextureVariable(key, 0, prevVar);
+            case FragmentKey.SRC_TEXTURE1 -> enabledTextureVariable(key, 1, prevVar);
+            case FragmentKey.SRC_TEXTURE2 -> enabledTextureVariable(key, 2, prevVar);
+            case FragmentKey.SRC_TEXTURE3 -> enabledTextureVariable(key, 3, prevVar);
             default -> prevVar;
         };
+    }
+
+    private static String textureVariable(int unit) {
+        return "tex" + unit + "Color";
+    }
+
+    private static String enabledTextureVariable(FragmentKey key, int unit, String fallback) {
+        if (unit < key.nrEnabledUnits() && key.unitEnabled(unit)) {
+            return textureVariable(unit);
+        }
+
+        return fallback;
     }
 
     private static String applyOperand(String sourceExpr, int operand, boolean isRgb) {
