@@ -73,6 +73,11 @@ sourceSets {
             srcDir("src/lwjgl3/java")
             srcDir("glsm/src/main/java")
             srcDir("GTNHLib/src/main/java")
+            srcDir("celeritas-common/src/main/java")
+            srcDir("shader/src/main/java")
+            srcDir("angelica/src/main/java")
+            srcDir("gnetum/src/main/java")
+
         }
         resources {
             srcDir("glsm/src/main/resources")
