@@ -87,6 +87,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public boolean enableMemoryTracing = false;
         public boolean useAdvancedStagingBuffers = true;
         public boolean disableIncompatibleModWarnings = false;
+        public boolean allowDirectMemoryAccess = true;
 
         public int cpuRenderAheadLimit = 0;
         public MultiDrawMode multiDrawMode = MultiDrawMode.DIRECT;

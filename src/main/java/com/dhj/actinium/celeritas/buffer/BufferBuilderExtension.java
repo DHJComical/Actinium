@@ -8,4 +8,8 @@ public interface BufferBuilderExtension {
     void actinium$setActiveQuadContext(@Nullable VanillaQuadContext context);
 
     List<VanillaQuadContext> actinium$consumeQuadContexts();
+
+    boolean actinium$isDrawing();
+
+    void actinium$discard();
 }

@@ -1,5 +1,6 @@
 package org.taumc.celeritas.impl.render;
 
+import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
@@ -30,7 +31,7 @@ public final class BufferBuilderStreamingDrawer {
     }
 
     public static boolean isEnabled() {
-        return ENABLED;
+        return ENABLED && ActiniumRuntimeOptions.allowDirectMemoryAccess();
     }
 
     public static void draw(BufferBuilder bufferBuilder, String debugSource) {
@@ -46,7 +47,6 @@ public final class BufferBuilderStreamingDrawer {
         init();
 
         VertexFormat format = bufferBuilder.getVertexFormat();
-        DrawState state = ensureDrawState(format);
         int vertexCount = bufferBuilder.getVertexCount();
         int drawMode = bufferBuilder.getDrawMode();
         int stride = format.getSize();
@@ -56,14 +56,35 @@ public final class BufferBuilderStreamingDrawer {
         buffer.position(0);
         buffer.limit(byteCount);
 
+        drawRaw(buffer, format, vertexCount, drawMode, debugSource);
+        bufferBuilder.reset();
+        if (GLSMPerfDebug.ENABLED) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.BUFFERBUILDER_STREAM_DRAW, perfStart);
+        }
+    }
+
+    public static void drawRaw(ByteBuffer buffer, VertexFormat format, int vertexCount, int drawMode, String debugSource) {
+        if (vertexCount <= 0) {
+            return;
+        }
+
+        init();
+
+        DrawState state = ensureDrawState(format);
+        int stride = format.getSize();
+        int byteCount = vertexCount * stride;
+        ByteBuffer upload = buffer.duplicate();
+        upload.position(0);
+        upload.limit(byteCount);
+
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
         int firstVertex = -1;
 
         try {
             if (persistentBuffer != null) {
-                final long uploadStart = perfStart != 0L ? GLSMPerfDebug.now() : 0L;
-                firstVertex = persistentBuffer.upload(buffer, stride);
+                final long uploadStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.now() : 0L;
+                firstVertex = persistentBuffer.upload(upload, stride);
                 if (firstVertex >= 0) {
                     GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_PERSISTENT_UPLOAD, uploadStart, GLSMPerfDebug.now());
                 }
@@ -81,8 +102,8 @@ public final class BufferBuilderStreamingDrawer {
                 vbo = state.orphanBuffer.getBufferId();
                 GLStateManager.glBindVertexArray(vao);
                 GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-                final long uploadStart = perfStart != 0L ? GLSMPerfDebug.now() : 0L;
-                state.orphanBuffer.upload(buffer);
+                final long uploadStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.now() : 0L;
+                state.orphanBuffer.upload(upload);
                 GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_ORPHAN_UPLOAD, uploadStart, GLSMPerfDebug.now());
                 firstVertex = 0;
             }
@@ -92,7 +113,7 @@ public final class BufferBuilderStreamingDrawer {
             GLStateManager.prepareWideLineEmulation(drawMode);
             ShaderManager.getInstance().preDraw(state.vertexFlags);
             IrisGlDebug.checkDrawError("bufferbuilder-stream:after-predraw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, format.toString(), vao, vbo);
-            final long drawStart = perfStart != 0L ? GLSMPerfDebug.now() : 0L;
+            final long drawStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.now() : 0L;
             VanillaVertexBufferRenderer.drawArrays(drawMode, firstVertex, vertexCount);
             GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_DRAW_CALL, drawStart, GLSMPerfDebug.now());
             IrisGlDebug.checkDrawError("bufferbuilder-stream:after-draw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, format.toString(), vao, vbo);
@@ -100,10 +121,6 @@ public final class BufferBuilderStreamingDrawer {
             GLStateManager.glBindVertexArray(savedVao);
             GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
             IrisGlDebug.checkDrawError("bufferbuilder-stream:after-restore", debugSource, drawMode, state.vertexFlags, stride, vertexCount, format.toString(), savedVao, savedVbo);
-            bufferBuilder.reset();
-            if (GLSMPerfDebug.ENABLED) {
-                GLSMPerfDebug.end(GLSMPerfDebug.Stage.BUFFERBUILDER_STREAM_DRAW, perfStart);
-            }
         }
     }
 

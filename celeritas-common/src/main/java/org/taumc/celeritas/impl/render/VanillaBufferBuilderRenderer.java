@@ -45,6 +45,11 @@ public final class VanillaBufferBuilderRenderer {
     }
 
     public static void drawRaw(ByteBuffer buffer, VertexFormat format, int vertexCount, int drawMode, String debugSource) {
+        if (BufferBuilderStreamingDrawer.isEnabled()) {
+            BufferBuilderStreamingDrawer.drawRaw(buffer, format, vertexCount, drawMode, debugSource);
+            return;
+        }
+
         if (vertexCount <= 0) {
             return;
         }

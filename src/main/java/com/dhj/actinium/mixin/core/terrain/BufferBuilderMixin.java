@@ -18,12 +18,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Mixin(BufferBuilder.class)
-public class BufferBuilderMixin implements BufferBuilderExtension {
+public abstract class BufferBuilderMixin implements BufferBuilderExtension {
     @Shadow
     private int vertexCount;
 
     @Shadow
     private int drawMode;
+
+    @Shadow
+    private boolean isDrawing;
+
+    @Shadow
+    public abstract void reset();
 
     @Unique
     private final List<VanillaQuadContext> actinium$quadContexts = new ArrayList<>();
@@ -70,5 +76,16 @@ public class BufferBuilderMixin implements BufferBuilderExtension {
         this.actinium$quadContexts.clear();
         this.actinium$activeQuadContext = null;
         return copy;
+    }
+
+    @Override
+    public boolean actinium$isDrawing() {
+        return this.isDrawing;
+    }
+
+    @Override
+    public void actinium$discard() {
+        this.isDrawing = false;
+        this.reset();
     }
 }

@@ -320,6 +320,19 @@ public class SodiumGameOptionPages {
                 )
                 .build());
 
+        groups.add(OptionGroup.createBuilder()
+                .setId(StandardOptions.Option.ALLOW_DIRECT_MEMORY_ACCESS.cast())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ALLOW_DIRECT_MEMORY_ACCESS.cast())
+                        .setName(TextComponent.translatable("sodium.options.allow_direct_memory_access.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.allow_direct_memory_access.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.HIGH)
+                        .setBinding((opts, value) -> opts.advanced.allowDirectMemoryAccess = value, opts -> opts.advanced.allowDirectMemoryAccess)
+                        .build()
+                )
+                .build());
+
         return new OptionPage(StandardOptions.Pages.ADVANCED, TextComponent.translatable("sodium.options.pages.advanced"), ImmutableList.copyOf(groups));
     }
 

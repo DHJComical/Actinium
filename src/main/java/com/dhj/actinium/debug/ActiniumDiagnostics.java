@@ -1,5 +1,6 @@
 package com.dhj.actinium.debug;
 
+import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import net.minecraft.launchwrapper.Launch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -75,6 +76,7 @@ public final class ActiniumDiagnostics {
             var options = CeleritasVintage.options();
             return "advanced{multiDraw=" + options.advanced.multiDrawMode
                 + ",streaming=" + options.advanced.streamingUploadStrategy
+                + ",directMemory=" + ActiniumRuntimeOptions.allowDirectMemoryAccess()
                 + "} debug{gl=" + options.debug.enableActiniumGlDebug
                 + ",perf=" + options.debug.enableActiniumPerfDebug
                 + ",gpuPerf=" + options.debug.enableActiniumGpuPerfDebug
