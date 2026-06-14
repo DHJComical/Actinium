@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.gtnewhorizons.angelica.client.rendering.DeferredDrawBatcher;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
@@ -8,6 +9,7 @@ import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleManager;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.entity.Entity;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.AxisAlignedBB;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.spongepowered.asm.mixin.Mixin;
@@ -34,6 +36,7 @@ public class ParticleManagerIrisMixin {
 
     @Inject(method = "renderParticles", at = @At("RETURN"))
     private void actinium$endParticles(Entity entityIn, float partialTicks, CallbackInfo ci) {
+        DeferredDrawBatcher.exitAndFlush();
         this.actinium$endParticlePhase();
     }
 
@@ -46,6 +49,29 @@ public class ParticleManagerIrisMixin {
     @Inject(method = "renderLitParticles", at = @At("RETURN"))
     private void actinium$endLitParticles(Entity entityIn, float partialTicks, CallbackInfo ci) {
         this.actinium$endParticlePhase();
+    }
+
+    @Inject(
+        method = "renderParticles",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/BufferBuilder;begin(ILnet/minecraft/client/renderer/vertex/VertexFormat;)V",
+            shift = At.Shift.AFTER
+        )
+    )
+    private void actinium$enterDeferredParticleBatch(Entity entityIn, float partialTicks, CallbackInfo ci) {
+        DeferredDrawBatcher.enter();
+    }
+
+    @Inject(
+        method = "renderParticles",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/Tessellator;draw()V"
+        )
+    )
+    private void actinium$exitDeferredParticleBatch(Entity entityIn, float partialTicks, CallbackInfo ci) {
+        DeferredDrawBatcher.exitAndFlush();
     }
 
     /**
@@ -147,6 +173,7 @@ public class ParticleManagerIrisMixin {
         AxisAlignedBB box = particle.getBoundingBox();
         if (this.actinium$cullingViewport == null
                 || box == null
+                || box == TileEntity.INFINITE_EXTENT_AABB
                 || this.actinium$cullingViewport.isBoxVisible(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ)) {
             particle.renderParticle(buffer, entityIn, partialTicks, rotationX, rotationZ, rotationYZ, rotationXY, rotationXZ);
         }

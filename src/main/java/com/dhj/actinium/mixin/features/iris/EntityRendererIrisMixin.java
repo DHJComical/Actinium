@@ -568,23 +568,14 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
             return;
         }
 
-        WorldRenderingPhase previousPhase = pipeline.getPhase();
-        boolean previousDepthMask = GLStateManager.getDepthState().isEnabled();
-        int previousActiveTexture = GLStateManager.getActiveTextureUnit();
-
-        try {
-            pipeline.setPhase(WorldRenderingPhase.RAIN_SNOW);
-            if (pipeline.shouldWriteRainAndSnowToDepthBuffer()) {
-                GLStateManager.glDepthMask(true);
-            }
-            if (pipeline.shouldRenderWeather()) {
-                this.renderRainSnow(partialTicks);
-            }
-        } finally {
-            GLStateManager.glDepthMask(previousDepthMask);
-            GLStateManager.glActiveTexture(GL13.GL_TEXTURE0 + previousActiveTexture);
-            pipeline.setPhase(previousPhase);
+        pipeline.setPhase(WorldRenderingPhase.RAIN_SNOW);
+        if (pipeline.shouldWriteRainAndSnowToDepthBuffer()) {
+            GLStateManager.glDepthMask(true);
         }
+        if (pipeline.shouldRenderWeather()) {
+            this.renderRainSnow(partialTicks);
+        }
+        pipeline.setPhase(WorldRenderingPhase.NONE);
     }
 
     @Redirect(

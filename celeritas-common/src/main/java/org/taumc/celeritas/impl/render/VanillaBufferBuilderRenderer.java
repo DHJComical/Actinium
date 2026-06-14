@@ -32,10 +32,6 @@ public final class VanillaBufferBuilderRenderer {
         }
 
         VertexFormat format = bufferBuilder.getVertexFormat();
-        ensureDrawState(format);
-        int vao = VAOS.get(format);
-        int vbo = VBOS.get(format);
-        int vertexFlags = VERTEX_FLAGS.get(format);
         int vertexCount = bufferBuilder.getVertexCount();
         int drawMode = bufferBuilder.getDrawMode();
         int stride = format.getSize();
@@ -44,10 +40,29 @@ public final class VanillaBufferBuilderRenderer {
         buffer.position(0);
         buffer.limit(byteCount);
 
+        drawRaw(buffer, format, vertexCount, drawMode, debugSource);
+        bufferBuilder.reset();
+    }
+
+    public static void drawRaw(ByteBuffer buffer, VertexFormat format, int vertexCount, int drawMode, String debugSource) {
+        if (vertexCount <= 0) {
+            return;
+        }
+
+        ensureDrawState(format);
+        int vao = VAOS.get(format);
+        int vbo = VBOS.get(format);
+        int vertexFlags = VERTEX_FLAGS.get(format);
+        int stride = format.getSize();
+        int byteCount = vertexCount * stride;
+        ByteBuffer upload = buffer.duplicate();
+        upload.position(0);
+        upload.limit(byteCount);
+
         int savedVbo = GLStateManager.getBoundVBO();
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-        GLStateManager.glBufferData(GL15.GL_ARRAY_BUFFER, buffer, GL15.GL_STREAM_DRAW);
+        GLStateManager.glBufferData(GL15.GL_ARRAY_BUFFER, upload, GL15.GL_STREAM_DRAW);
         GLSMDebug.logBufferBuilderUpload(format.toString(), drawMode, vertexFlags, stride, vertexCount, byteCount, vao, vbo);
 
         GLStateManager.prepareWideLineEmulation(drawMode);
@@ -59,7 +74,6 @@ public final class VanillaBufferBuilderRenderer {
         GLStateManager.glBindVertexArray(0);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
         IrisGlDebug.checkDrawError("bufferbuilder:after-restore", debugSource, drawMode, vertexFlags, stride, vertexCount, format.toString(), vao, vbo);
-        bufferBuilder.reset();
     }
 
     private static void ensureDrawState(VertexFormat format) {

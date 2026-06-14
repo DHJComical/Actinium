@@ -19,9 +19,11 @@ import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectio
 import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderList;
 import org.embeddedt.embeddium.impl.render.chunk.lists.SortedRenderLists;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
+import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
+import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import com.dhj.actinium.celeritas.ShaderProvider;
 import com.dhj.actinium.celeritas.ShaderProviderHolder;
@@ -95,6 +97,28 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
 
         GlStateManager.resetColor();
         IrisGlDebug.check("celeritas:draw-chunk-layer:" + renderLayer + ":after-reset-color");
+    }
+
+    public void drawChunkLayersDeduplicated(Collection<BlockRenderLayer> renderLayers, double x, double y, double z) {
+        ChunkRenderMatrices matrices = createChunkRenderMatrices();
+        Set<TerrainRenderPass> passes = new LinkedHashSet<>();
+
+        for (BlockRenderLayer renderLayer : renderLayers) {
+            Collection<TerrainRenderPass> layerPasses = this.renderSectionManager.getRenderPassConfiguration().vanillaRenderStages().get(renderLayer);
+            if (layerPasses != null) {
+                passes.addAll(layerPasses);
+            }
+        }
+
+        if (!passes.isEmpty()) {
+            CameraTransform occlusionCamera = this.getLastViewport().getTransform();
+            CameraTransform realCamera = new CameraTransform(x, y, z);
+            for (TerrainRenderPass pass : passes) {
+                this.renderSectionManager.renderLayer(matrices, pass, occlusionCamera, realCamera);
+            }
+        }
+
+        GlStateManager.resetColor();
     }
 
     public void setCurrentViewport(Viewport viewport) {

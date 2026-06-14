@@ -1,5 +1,6 @@
 package org.taumc.celeritas.mixin.core;
 
+import com.gtnewhorizons.angelica.client.rendering.DeferredDrawBatcher;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.Tessellator;
 import org.spongepowered.asm.mixin.Final;
@@ -18,6 +19,11 @@ public class MixinTessellator {
 
     @Inject(method = "draw", at = @At("HEAD"), cancellable = true)
     private void celeritas$coreProfileDraw(CallbackInfo ci) {
+        if (DeferredDrawBatcher.capture(this.buffer)) {
+            ci.cancel();
+            return;
+        }
+
         this.buffer.finishDrawing();
         VanillaBufferBuilderRenderer.draw(this.buffer, "Tessellator");
         ci.cancel();

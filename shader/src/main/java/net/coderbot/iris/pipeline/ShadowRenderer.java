@@ -47,6 +47,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
@@ -82,6 +83,11 @@ public class ShadowRenderer {
 	private static final Comparator<Entity> ENTITY_CLASS_COMPARATOR = Comparator.comparingInt(a -> System.identityHashCode(a.getClass()));
 	private static final NonCullingFrustum NON_CULLING_FRUSTUM = new NonCullingFrustum();
 	private static final CullEverythingFrustum CULL_EVERYTHING_FRUSTUM = new CullEverythingFrustum();
+	private static final List<BlockRenderLayer> OPAQUE_SHADOW_TERRAIN_LAYERS = ImmutableList.of(
+		BlockRenderLayer.SOLID,
+		BlockRenderLayer.CUTOUT_MIPPED,
+		BlockRenderLayer.CUTOUT
+	);
 
 	public static ShadowRenderTargets CURRENT_TARGETS = null;
 	private final float halfPlaneLength;
@@ -867,7 +873,7 @@ public class ShadowRenderer {
 		// Render all opaque terrain unless pack requests not to
 		if (shouldRenderTerrain) {
             mc.renderEngine.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-            CeleritasWorldRenderer.instance().drawChunkLayer(net.minecraft.util.BlockRenderLayer.SOLID, terrainX, terrainY, terrainZ);
+            CeleritasWorldRenderer.instance().drawChunkLayersDeduplicated(OPAQUE_SHADOW_TERRAIN_LAYERS, terrainX, terrainY, terrainZ);
 		}
 
 		// Reset viewport in case terrain rendering changed it
@@ -922,7 +928,7 @@ public class ShadowRenderer {
 		// It doesn't matter a ton, since this just means that they won't be sorted in the getNormal rendering pass.
 		// Just something to watch out for, however...
 		if (shouldRenderTranslucent) {
-            CeleritasWorldRenderer.instance().drawChunkLayer(net.minecraft.util.BlockRenderLayer.TRANSLUCENT, terrainX, terrainY, terrainZ);
+            CeleritasWorldRenderer.instance().drawChunkLayer(BlockRenderLayer.TRANSLUCENT, terrainX, terrainY, terrainZ);
 		}
 
 		if (celeritasManaged) {
