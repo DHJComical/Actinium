@@ -40,7 +40,15 @@ public class GlFence {
 
     public void sync(long timeout) {
         this.checkDisposed();
-        LWJGL.glWaitSync(this.id, GL32.GL_SYNC_FLUSH_COMMANDS_BIT, timeout);
+        int result = LWJGL.glClientWaitSync(this.id, GL32.GL_SYNC_FLUSH_COMMANDS_BIT, timeout);
+
+        if (result == GL32.GL_WAIT_FAILED) {
+            throw new RuntimeException("glClientWaitSync failed");
+        }
+
+        if (result == GL32.GL_TIMEOUT_EXPIRED) {
+            throw new RuntimeException("Timed out while waiting for GL fence");
+        }
     }
 
     public void delete() {

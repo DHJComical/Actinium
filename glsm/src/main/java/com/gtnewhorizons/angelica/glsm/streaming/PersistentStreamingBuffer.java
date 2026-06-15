@@ -43,7 +43,7 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
         this.bufferId = RENDER_BACKEND.genBuffers();
         RENDER_BACKEND.bindBuffer(GL15.GL_ARRAY_BUFFER, bufferId);
 
-        final int storageFlags = GL44.GL_MAP_PERSISTENT_BIT | GL30.GL_MAP_WRITE_BIT | GL44.GL_MAP_COHERENT_BIT | GL44.GL_CLIENT_STORAGE_BIT;
+        final int storageFlags = GL44.GL_MAP_PERSISTENT_BIT | GL30.GL_MAP_WRITE_BIT | GL44.GL_MAP_COHERENT_BIT;
         RenderSystem.bufferStorage(GL15.GL_ARRAY_BUFFER, capacity, storageFlags);
 
         final int mapFlags = GL44.GL_MAP_PERSISTENT_BIT | GL30.GL_MAP_WRITE_BIT | GL44.GL_MAP_COHERENT_BIT;
@@ -133,6 +133,9 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
     public void postDraw() {
         if (pendingBytes > 0) {
             final long fenceId = RENDER_BACKEND.fenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            if (fenceId == 0) {
+                throw new RuntimeException("Failed to create persistent streaming fence");
+            }
             fenceQueue.enqueue(new FencedRegion(new GlFence(fenceId), pendingBytes));
             pendingBytes = 0;
         }
