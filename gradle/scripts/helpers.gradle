@@ -1,0 +1,89 @@
+import groovy.text.SimpleTemplateEngine
+import org.codehaus.groovy.runtime.MethodClosure
+
+ext.propertyString = this.&propertyString as MethodClosure
+ext.propertyBool = this.&propertyBool as MethodClosure
+ext.propertyStringList = this.&propertyStringList as MethodClosure
+ext.interpolate = this.&interpolate as MethodClosure
+ext.assertProperty = this.&assertProperty as MethodClosure
+ext.assertSubProperties = this.&assertSubProperties as MethodClosure
+ext.setDefaultProperty = this.&setDefaultProperty as MethodClosure
+ext.assertEnvironmentVariable = this.&assertEnvironmentVariable as MethodClosure
+
+String propertyString(String key) {
+    def value = propertyValue(key)
+    return value instanceof String ? interpolate(value) : value.toString()
+}
+
+boolean propertyBool(String key) {
+    return propertyString(key).toBoolean()
+}
+
+Collection<String> propertyStringList(String key) {
+    return propertyStringList(key, ' ')
+}
+
+Collection<String> propertyStringList(String key, String delimit) {
+    return propertyString(key).split(delimit).findAll { !it.isBlank() }
+}
+
+private Object propertyValue(String key) {
+    def value = project.findProperty(key)
+    if (value instanceof String) {
+        return interpolate(value)
+    }
+    return value
+}
+
+String interpolate(String value) {
+    if (value.startsWith('${{') && value.endsWith('}}')) {
+        value = value.substring(3, value.length() - 2)
+        Binding newBinding = new Binding(this.binding.getVariables())
+        newBinding.setProperty('it', this)
+        return new GroovyShell(this.class.classLoader, newBinding).evaluate(value)
+    }
+    if (value.contains('${')) {
+        return new SimpleTemplateEngine().createTemplate(value).make(project.properties).toString()
+    }
+    return value
+}
+
+void assertProperty(String propertyName) {
+    def value = project.findProperty(propertyName)
+    if (value == null) {
+        throw new GradleException("Property ${propertyName} is not defined!")
+    }
+    if (value.toString().isEmpty()) {
+        throw new GradleException("Property ${propertyName} is empty!")
+    }
+}
+
+void assertSubProperties(String propertyName, String... subPropertyNames) {
+    assertProperty(propertyName)
+    if (propertyBool(propertyName)) {
+        for (String subPropertyName : subPropertyNames) {
+            assertProperty(subPropertyName)
+        }
+    }
+}
+
+void setDefaultProperty(String propertyName, boolean warn, defaultValue) {
+    def value = project.findProperty(propertyName)
+    def exists = value != null && !value.toString().isEmpty()
+    if (!exists) {
+        if (warn) {
+            project.logger.log(LogLevel.WARN, "Property ${propertyName} is ${value == null ? 'not defined' : 'empty'}!")
+        }
+        project.ext.set(propertyName, defaultValue.toString())
+    }
+}
+
+void assertEnvironmentVariable(String propertyName) {
+    def value = System.getenv(propertyName)
+    if (value == null) {
+        throw new GradleException("System Environment Variable ${propertyName} is not defined!")
+    }
+    if (value.isEmpty()) {
+        throw new GradleException("Property ${propertyName} is empty!")
+    }
+}

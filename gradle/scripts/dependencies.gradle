@@ -1,0 +1,71 @@
+apply from: 'gradle/scripts/helpers.gradle'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'CurseMaven'
+        url = 'https://cursemaven.com'
+    }
+    maven {
+        name = 'CleanroomCurseMaven'
+        url = 'https://curse.cleanroommc.com'
+    }
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+    }
+    maven {
+        name = 'CleanroomMaven'
+        url = 'https://maven.cleanroommc.com'
+    }
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    def lwjglVersion = '3.4.1'
+    def lombokVersion = '1.18.42'
+    def asmVersion = '9.9.1'
+
+    compileOnly 'com.cleanroommc:sponge-mixin:0.20.12+mixin.0.8.7'
+    compileOnly 'org.jetbrains:annotations:24.1.0'
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+    compileOnly 'org.apache.logging.log4j:log4j-api:2.0-beta9'
+
+    implementation 'org.joml:joml:1.10.5'
+    contain 'org.joml:joml:1.10.5'
+    implementation 'it.unimi.dsi:fastutil:7.1.0'
+    contain 'it.unimi.dsi:fastutil:7.1.0'
+    compileOnly "org.ow2.asm:asm:${asmVersion}"
+    compileOnly "org.ow2.asm:asm-commons:${asmVersion}"
+    compileOnly "org.ow2.asm:asm-tree:${asmVersion}"
+    compileOnly "org.ow2.asm:asm-util:${asmVersion}"
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'org.anarres:jcpp:1.4.14'
+    contain 'org.anarres:jcpp:1.4.14'
+
+    modImplementation 'zone.rong:mixinbooter:10.5'
+    modCompileOnly 'maven.modrinth:fluidlogged-api:3.0.6'
+
+    compileOnly "org.lwjgl:lwjgl:${lwjglVersion}"
+    compileOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}"
+    if (propertyBool('enable_lwjglx')) {
+        compileOnly 'com.cleanroommc:lwjglx:1.0.0'
+    }
+    if (propertyBool('enable_junit_testing')) {
+        testImplementation 'org.junit.jupiter:junit-jupiter:6.0.2'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
+    modRuntimeOnly 'curse.maven:catalogue-vintage-1465746:7872634'
+    compileOnly 'maven.modrinth:DistantHorizonsApi:5.1.0'
+    compileOnly 'curse.maven:xaeros-minimap-263420:6310964'
+    compileOnly 'curse.maven:better-hud-286066:3327633'
+    compileOnly 'curse.maven:voxelmap-225179:3029445'
+    compileOnly 'curse.maven:scalingguis-319656:5150678'
+    compileOnly 'curse.maven:quark-243121:2924091'
+    compileOnly 'curse.maven:valkyrie-874067:5235356'
+    modImplementation 'curse.maven:depths-update-1472501:8038246'
+    implementation 'curse.maven:assetmover-571482:4430763'
+}

@@ -1,0 +1,31 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal {
+            content {
+                excludeGroup('org.apache.logging.log4j')
+            }
+        }
+        mavenCentral()
+        maven {
+            url = 'https://maven.arcseekers.com/releases'
+        }
+        maven {
+            url = 'https://maven.minecraftforge.net/'
+        }
+        maven {
+            url = 'https://maven.fabricmc.net/'
+        }
+        maven {
+            url = 'https://maven.wagyourtail.xyz/releases'
+        }
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'Actinium'
+
+include 'glsm'
+include 'GTNHLib'
