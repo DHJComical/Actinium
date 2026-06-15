@@ -67,5 +67,5 @@ dependencies {
     compileOnly 'curse.maven:quark-243121:2924091'
     compileOnly 'curse.maven:valkyrie-874067:5235356'
     modImplementation 'curse.maven:depths-update-1472501:8038246'
-    implementation 'curse.maven:assetmover-571482:4430763'
+    modRuntimeOnly 'curse.maven:assetmover-571482:4430763'
 }
