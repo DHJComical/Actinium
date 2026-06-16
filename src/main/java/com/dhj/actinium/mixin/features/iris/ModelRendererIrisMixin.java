@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.gtnewhorizons.angelica.mixins.interfaces.IModelRenderer;
 import net.minecraft.client.model.ModelBox;
 import net.minecraft.client.model.ModelRenderer;
@@ -10,6 +11,7 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.math.Vec3d;
+import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,9 +22,6 @@ import java.util.List;
 
 @Mixin(ModelRenderer.class)
 public abstract class ModelRendererIrisMixin implements IModelRenderer {
-    private static final boolean BATCH_MODEL_QUADS =
-        Boolean.parseBoolean(System.getProperty("actinium.modelRendererBatching", "true"));
-
     @Shadow public boolean isHidden;
     @Shadow public boolean showModel;
     @Shadow public float offsetX;
@@ -96,6 +95,9 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
 
     @Override
     public void angelica$resetDisplayList() {
+        if (this.displayList > 0) {
+            com.gtnewhorizons.angelica.glsm.GLStateManager.glDeleteLists(this.displayList, 1);
+        }
         this.compiled = false;
         this.displayList = 0;
     }
@@ -119,10 +121,25 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
             return;
         }
 
+        boolean batchModelQuads = ActiniumRuntimeOptions.useModelRendererBatching();
+        boolean useDisplayLists = batchModelQuads && ActiniumRuntimeOptions.useModelRendererDisplayLists();
+
+        if (useDisplayLists) {
+            if (!this.compiled) {
+                this.actinium$compileDisplayList(scale);
+            }
+            com.gtnewhorizons.angelica.glsm.GLStateManager.glCallList(this.displayList);
+            return;
+        }
+
+        if (this.compiled && this.displayList > 0) {
+            this.angelica$resetDisplayList();
+        }
+
         Tessellator tessellator = Tessellator.getInstance();
         BufferBuilder buffer = tessellator.getBuffer();
 
-        if (BATCH_MODEL_QUADS) {
+        if (batchModelQuads) {
             buffer.begin(7, DefaultVertexFormats.OLDMODEL_POSITION_TEX_NORMAL);
             for (ModelBox cube : this.cubeList) {
                 for (TexturedQuad quad : ((ModelBoxAccessor) cube).actinium$getQuadList()) {
@@ -136,6 +153,32 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
         for (ModelBox cube : this.cubeList) {
             cube.render(buffer, scale);
         }
+    }
+
+    private void actinium$compileDisplayList(float scale) {
+        this.displayList = com.gtnewhorizons.angelica.glsm.GLStateManager.glGenLists(1);
+        if (this.displayList == 0) {
+            throw new IllegalStateException("glGenLists returned 0 while compiling a ModelRenderer display list");
+        }
+
+        com.gtnewhorizons.angelica.glsm.GLStateManager.glNewList(this.displayList, GL11.GL_COMPILE);
+
+        try {
+            Tessellator tessellator = Tessellator.getInstance();
+            BufferBuilder buffer = tessellator.getBuffer();
+
+            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.OLDMODEL_POSITION_TEX_NORMAL);
+            for (ModelBox cube : this.cubeList) {
+                for (TexturedQuad quad : ((ModelBoxAccessor) cube).actinium$getQuadList()) {
+                    actinium$appendQuad(buffer, quad, scale);
+                }
+            }
+            tessellator.draw();
+        } finally {
+            com.gtnewhorizons.angelica.glsm.GLStateManager.glEndList();
+        }
+
+        this.compiled = true;
     }
 
     private static void actinium$appendQuad(BufferBuilder buffer, TexturedQuad quad, float scale) {

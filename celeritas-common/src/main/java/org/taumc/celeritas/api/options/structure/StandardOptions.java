@@ -68,6 +68,7 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> MULTIDRAW_MODE = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "multidraw_mode");
         public static final OptionIdentifier<Void> STREAMING_UPLOAD_STRATEGY = OptionIdentifier.create(ACTINIUM_MOD_NAME, "streaming_upload_strategy");
         public static final OptionIdentifier<Void> ALLOW_DIRECT_MEMORY_ACCESS = OptionIdentifier.create(ACTINIUM_MOD_NAME, "allow_direct_memory_access");
+        public static final OptionIdentifier<Void> MODEL_RENDERER_DISPLAY_LISTS = OptionIdentifier.create(ACTINIUM_MOD_NAME, "model_renderer_display_lists");
         public static final OptionIdentifier<Void> TRANSLUCENT_FACE_SORTING = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "translucent_face_sorting");
         public static final OptionIdentifier<Void> USE_QUAD_NORMALS_FOR_LIGHTING = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "use_quad_normals_for_lighting");
         public static final OptionIdentifier<Void> RENDER_PASS_OPTIMIZATION = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "render_pass_optimization");

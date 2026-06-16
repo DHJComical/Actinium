@@ -77,6 +77,8 @@ public final class ActiniumDiagnostics {
             return "advanced{multiDraw=" + options.advanced.multiDrawMode
                 + ",streaming=" + options.advanced.streamingUploadStrategy
                 + ",directMemory=" + ActiniumRuntimeOptions.allowDirectMemoryAccess()
+                + ",modelRendererBatching=" + ActiniumRuntimeOptions.useModelRendererBatching()
+                + ",modelRendererDisplayLists=" + ActiniumRuntimeOptions.useModelRendererDisplayLists()
                 + "} debug{gl=" + options.debug.enableActiniumGlDebug
                 + ",perf=" + options.debug.enableActiniumPerfDebug
                 + ",gpuPerf=" + options.debug.enableActiniumGpuPerfDebug
