@@ -336,6 +336,15 @@ public class SodiumGameOptionPages {
                         .setBinding((opts, value) -> opts.advanced.useFastLitItemRendering = value, opts -> opts.advanced.useFastLitItemRendering)
                         .build()
                 )
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.FAST_LIT_ITEM_DISPLAY_LISTS.cast())
+                        .setName(TextComponent.translatable("sodium.options.fast_lit_item_display_lists.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.fast_lit_item_display_lists.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.MEDIUM)
+                        .setBinding((opts, value) -> opts.advanced.useFastLitItemDisplayLists = value, opts -> opts.advanced.useFastLitItemDisplayLists)
+                        .build()
+                )
                 .build());
 
         groups.add(OptionGroup.createBuilder()

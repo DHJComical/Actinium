@@ -1,15 +1,18 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
+import com.dhj.actinium.render.FastLitItemDisplayListCache;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.RenderItem;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.IBakedModel;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.client.ForgeHooksClient;
+import org.taumc.celeritas.impl.render.terrain.sprite.SpriteUtil;
 import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -56,10 +59,22 @@ public abstract class ForgeHooksClientIrisMixin {
 
         try {
             Tessellator tessellator = Tessellator.getInstance();
-            BufferBuilder buffer = tessellator.getBuffer();
-            buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.ITEM);
-            renderItem.renderQuads(buffer, quads, color, stack);
-            tessellator.draw();
+            FastLitItemDisplayListCache.CachedDisplayList cached = ActiniumRuntimeOptions.useFastLitItemDisplayLists()
+                    ? FastLitItemDisplayListCache.getOrCompile(renderItem, model, quads, color, stack)
+                    : null;
+            if (cached != null) {
+                cached.render();
+            } else if (actinium$canAppendRawItemQuads(quads, color)) {
+                BufferBuilder buffer = tessellator.getBuffer();
+                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.ITEM);
+                actinium$appendRawItemQuads(buffer, quads);
+                tessellator.draw();
+            } else {
+                BufferBuilder buffer = tessellator.getBuffer();
+                buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.ITEM);
+                renderItem.renderQuads(buffer, quads, color, stack);
+                tessellator.draw();
+            }
             ci.cancel();
         } finally {
             quads.clear();
@@ -79,5 +94,31 @@ public abstract class ForgeHooksClientIrisMixin {
         }
 
         return true;
+    }
+
+    @Unique
+    private static boolean actinium$canAppendRawItemQuads(List<BakedQuad> quads, int color) {
+        if (color != -1) {
+            return false;
+        }
+
+        for (BakedQuad quad : quads) {
+            if (!DefaultVertexFormats.ITEM.equals(quad.getFormat()) || quad.hasTintIndex()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    @Unique
+    private static void actinium$appendRawItemQuads(BufferBuilder buffer, List<BakedQuad> quads) {
+        for (BakedQuad quad : quads) {
+            TextureAtlasSprite sprite = quad.getSprite();
+            if (sprite != null) {
+                SpriteUtil.markSpriteActive(sprite);
+            }
+            buffer.addVertexData(quad.getVertexData());
+        }
     }
 }

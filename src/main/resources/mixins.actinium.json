@@ -30,6 +30,7 @@
     "features.iris.RenderDragonIrisMixin",
     "features.iris.RenderGlobalIrisMixin",
     "features.iris.RenderIrisMixin",
+    "features.iris.RenderItemAccessor",
     "features.iris.RenderItemIrisMixin",
     "features.iris.RenderLivingBaseIrisMixin",
     "features.iris.RenderManagerIrisMixin",

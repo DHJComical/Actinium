@@ -90,6 +90,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public boolean allowDirectMemoryAccess = true;
         public boolean useModelRendererDisplayLists = true;
         public boolean useFastLitItemRendering = true;
+        public boolean useFastLitItemDisplayLists = true;
 
         public int cpuRenderAheadLimit = 0;
         public MultiDrawMode multiDrawMode = MultiDrawMode.DIRECT;

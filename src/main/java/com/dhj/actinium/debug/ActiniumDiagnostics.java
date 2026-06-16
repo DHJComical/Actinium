@@ -80,6 +80,7 @@ public final class ActiniumDiagnostics {
                 + ",modelRendererBatching=" + ActiniumRuntimeOptions.useModelRendererBatching()
                 + ",modelRendererDisplayLists=" + ActiniumRuntimeOptions.useModelRendererDisplayLists()
                 + ",fastLitItemRendering=" + ActiniumRuntimeOptions.useFastLitItemRendering()
+                + ",fastLitItemDisplayLists=" + ActiniumRuntimeOptions.useFastLitItemDisplayLists()
                 + "} debug{gl=" + options.debug.enableActiniumGlDebug
                 + ",perf=" + options.debug.enableActiniumPerfDebug
                 + ",gpuPerf=" + options.debug.enableActiniumGpuPerfDebug
