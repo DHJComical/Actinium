@@ -98,6 +98,7 @@ public class Gnetum {
         CacheSetting cacheSetting = getCacheSetting(currentElement, currentElementType);
         if (cacheSetting.enabled.get() && cacheSetting.enabled.value == AnyBooleanValue.AUTO) {
             LOGGER.info("Disabling caching for element {}. Reason: {}", currentElement, reason);
+            GnetumDebug.log("disable-caching currentElement={} type={} pass={} reason={}", currentElement, currentElementType, passManager.current, reason);
             cacheSetting.enabled.defaultValue = false;
             FramebufferManager.getInstance().dropCurrentFrame();
         }

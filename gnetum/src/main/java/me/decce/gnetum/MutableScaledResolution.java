@@ -40,7 +40,7 @@ public class MutableScaledResolution extends ScaledResolution {
 
 		if (flag && this.scaleFactor % 2 != 0 && this.scaleFactor != 1)
 		{
-			--this.scaleFactor;
+			++this.scaleFactor;
 		}
 
 		this.scaledWidthD = (double)this.scaledWidth / (double)this.scaleFactor;

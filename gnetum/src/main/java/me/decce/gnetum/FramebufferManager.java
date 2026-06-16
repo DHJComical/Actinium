@@ -40,6 +40,13 @@ public class FramebufferManager {
     }
 
     public void reset() {
+        GnetumDebug.log("fbo-reset-begin oldWidth={} oldHeight={} oldGuiScale={} oldFullscreen={} oldBack={} oldFront={}",
+                width,
+                height,
+                guiScale,
+                fullscreen,
+                backFramebuffer == null ? -1 : backFramebuffer.framebufferObject,
+                frontFramebuffer == null ? -1 : frontFramebuffer.framebufferObject);
         width = mc.displayWidth;
         height = mc.displayHeight;
         guiScale = mc.gameSettings.guiScale;
@@ -64,6 +71,16 @@ public class FramebufferManager {
         this.unbind();
         this.complete = false;
         Gnetum.passManager.current = 1;
+        GnetumDebug.log("fbo-reset-end width={} height={} guiScale={} fullscreen={} back={} backTex={} front={} frontTex={} pass={}",
+                width,
+                height,
+                guiScale,
+                fullscreen,
+                backFramebuffer.framebufferObject,
+                backFramebuffer.framebufferTexture,
+                frontFramebuffer.framebufferObject,
+                frontFramebuffer.framebufferTexture,
+                Gnetum.passManager.current);
     }
 
     public void ensureSize() {
@@ -71,7 +88,26 @@ public class FramebufferManager {
                 mc.displayHeight != height ||
                 mc.gameSettings.guiScale != guiScale ||
                 mc.gameSettings.fullScreen != fullscreen) {
+            GnetumDebug.log("fbo-ensure-size-reset display={}x{} stored={}x{} guiScale={} storedGuiScale={} fullscreen={} storedFullscreen={}",
+                    mc.displayWidth,
+                    mc.displayHeight,
+                    width,
+                    height,
+                    mc.gameSettings.guiScale,
+                    guiScale,
+                    mc.gameSettings.fullScreen,
+                    fullscreen);
             this.reset();
+        }
+        else {
+            GnetumDebug.log("fbo-ensure-size-ok display={}x{} guiScale={} fullscreen={} complete={} back={} front={}",
+                    width,
+                    height,
+                    guiScale,
+                    fullscreen,
+                    complete,
+                    backFramebuffer.framebufferObject,
+                    frontFramebuffer.framebufferObject);
         }
     }
 
@@ -80,6 +116,7 @@ public class FramebufferManager {
     }
 
     private void clear(int fbo) {
+        GnetumDebug.log("fbo-clear fbo={} gl30={}", fbo, GL30SUPPORT);
         OpenGlHelper.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
         GlStateManager.clearDepth(1.0D);
         if (GL30SUPPORT) {
@@ -106,15 +143,24 @@ public class FramebufferManager {
     }
 
     public void bind(boolean setViewport) {
+        GnetumDebug.log("fbo-bind back={} setViewport={} complete={}", backFramebuffer.framebufferObject, setViewport, complete);
         backFramebuffer.bindFramebuffer(setViewport);
+        GnetumDebug.logGlState("after-fbo-bind");
     }
 
     public void unbind() {
+        GnetumDebug.log("fbo-unbind minecraftFbo={}", mc.getFramebuffer().framebufferObject);
         mc.getFramebuffer().bindFramebuffer(false);
     }
 
     public void blit(double width, double height) {
         mc.profiler.startSection("blit");
+        GnetumDebug.log("fbo-blit-begin front={} frontTex={} width={} height={} complete={}",
+                frontFramebuffer.framebufferObject,
+                frontFramebuffer.framebufferTexture,
+                width,
+                height,
+                complete);
 
         frontFramebuffer.bindFramebufferTexture();
 
@@ -147,17 +193,27 @@ public class FramebufferManager {
         GlStateManager.depthMask(true);
 
         frontFramebuffer.unbindFramebufferTexture();
+        GnetumDebug.log("fbo-blit-end front={} frontTex={}", frontFramebuffer.framebufferObject, frontFramebuffer.framebufferTexture);
 
         mc.profiler.endSection();
     }
 
     public void swapFramebuffers() {
+        GnetumDebug.log("fbo-swap-begin dropCurrentFrame={} back={} front={} complete={}",
+                dropCurrentFrame,
+                backFramebuffer.framebufferObject,
+                frontFramebuffer.framebufferObject,
+                complete);
         if (!this.dropCurrentFrame) {
             Framebuffer temp = backFramebuffer;
             this.backFramebuffer = this.frontFramebuffer;
             this.frontFramebuffer = temp;
             this.complete = true;
             Gnetum.getFpsCounter().tick();
+            GnetumDebug.log("fbo-swap-done back={} front={} complete=true", backFramebuffer.framebufferObject, frontFramebuffer.framebufferObject);
+        }
+        else {
+            GnetumDebug.log("fbo-swap-dropped back={} front={} complete={}", backFramebuffer.framebufferObject, frontFramebuffer.framebufferObject, complete);
         }
         this.clear();
         this.dropCurrentFrame = false;
@@ -166,6 +222,7 @@ public class FramebufferManager {
 
     public void dropCurrentFrame() {
         this.dropCurrentFrame = true;
+        GnetumDebug.log("fbo-drop-current-frame currentElement={} type={} pass={}", Gnetum.currentElement, Gnetum.currentElementType, Gnetum.passManager.current);
     }
 
     public int id() {
@@ -174,5 +231,17 @@ public class FramebufferManager {
 
     public boolean isComplete() {
         return this.complete;
+    }
+
+    public String describe() {
+        return "display=" + width + "x" + height
+                + ",guiScale=" + guiScale
+                + ",fullscreen=" + fullscreen
+                + ",complete=" + complete
+                + ",dropCurrentFrame=" + dropCurrentFrame
+                + ",back=" + (backFramebuffer == null ? -1 : backFramebuffer.framebufferObject)
+                + ",backTex=" + (backFramebuffer == null ? -1 : backFramebuffer.framebufferTexture)
+                + ",front=" + (frontFramebuffer == null ? -1 : frontFramebuffer.framebufferObject)
+                + ",frontTex=" + (frontFramebuffer == null ? -1 : frontFramebuffer.framebufferTexture);
     }
 }

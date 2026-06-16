@@ -34,7 +34,11 @@ public class Hud {
     }
 
     public void render() {
-        if (!condition.get()) return;
+        renderWithResult();
+    }
+
+    public boolean renderWithResult() {
+        if (!condition.get()) return false;
         if (!dummy) {
             if (alpha) GlStateManager.enableAlpha();
             else GlStateManager.disableAlpha();
@@ -46,6 +50,7 @@ public class Hud {
         }
         runnable.run();
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        return true;
     }
 
     public ResourceLocation id() {
