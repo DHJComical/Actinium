@@ -68,4 +68,6 @@ dependencies {
     compileOnly 'curse.maven:valkyrie-874067:5235356'
     modImplementation 'curse.maven:depths-update-1472501:8038246'
     modRuntimeOnly 'curse.maven:assetmover-571482:4430763'
+    modImplementation 'curse.maven:nether-api-1306115:8201135'
+    modRuntimeOnly 'curse.maven:unseens-nether-backport-1109447:7694245'
 }
