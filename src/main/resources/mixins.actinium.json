@@ -9,6 +9,7 @@
     "features.iris.ActiveRenderInfoIrisMixin",
     "features.iris.EntityRendererIrisMixin",
     "features.iris.FramebufferIrisMixin",
+    "features.iris.ForgeHooksClientIrisMixin",
     "features.iris.GlProgramIrisMixin",
     "features.iris.GuiIngameForgeIrisMixin",
     "features.iris.ItemIrisMixin",

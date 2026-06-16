@@ -6,6 +6,7 @@ public final class ActiniumRuntimeOptions {
     private static final String ALLOW_DIRECT_MEMORY_ACCESS_PROPERTY = "actinium.allowDirectMemoryAccess";
     private static final String MODEL_RENDERER_BATCHING_PROPERTY = "actinium.modelRendererBatching";
     private static final String MODEL_RENDERER_DISPLAY_LISTS_PROPERTY = "actinium.modelRendererDisplayLists";
+    private static final String FAST_LIT_ITEM_RENDERING_PROPERTY = "actinium.fastLitItemRendering";
 
     private ActiniumRuntimeOptions() {
     }
@@ -40,6 +41,19 @@ public final class ActiniumRuntimeOptions {
 
         try {
             return CeleritasVintage.options().advanced.useModelRendererDisplayLists;
+        } catch (RuntimeException | LinkageError ignored) {
+            return true;
+        }
+    }
+
+    public static boolean useFastLitItemRendering() {
+        String override = System.getProperty(FAST_LIT_ITEM_RENDERING_PROPERTY);
+        if (override != null) {
+            return Boolean.parseBoolean(override);
+        }
+
+        try {
+            return CeleritasVintage.options().advanced.useFastLitItemRendering;
         } catch (RuntimeException | LinkageError ignored) {
             return true;
         }

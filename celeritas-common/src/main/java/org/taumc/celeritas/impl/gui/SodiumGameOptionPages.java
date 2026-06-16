@@ -327,6 +327,15 @@ public class SodiumGameOptionPages {
                         .setBinding((opts, value) -> opts.advanced.useModelRendererDisplayLists = value, opts -> opts.advanced.useModelRendererDisplayLists)
                         .build()
                 )
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.FAST_LIT_ITEM_RENDERING.cast())
+                        .setName(TextComponent.translatable("sodium.options.fast_lit_item_rendering.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.fast_lit_item_rendering.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.LOW)
+                        .setBinding((opts, value) -> opts.advanced.useFastLitItemRendering = value, opts -> opts.advanced.useFastLitItemRendering)
+                        .build()
+                )
                 .build());
 
         groups.add(OptionGroup.createBuilder()
