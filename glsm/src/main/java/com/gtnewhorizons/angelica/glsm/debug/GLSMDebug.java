@@ -259,6 +259,10 @@ public final class GLSMDebug {
         return isEnabled();
     }
 
+    public static boolean shouldLogDrawDiagnostics() {
+        return shouldLogWorldRender();
+    }
+
     private static boolean readCeleritasDebugOption() {
         try {
             final Class<?> vintage = Class.forName("org.taumc.celeritas.CeleritasVintage");

@@ -68,17 +68,29 @@ public final class VanillaBufferBuilderRenderer {
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         GLStateManager.glBufferData(GL15.GL_ARRAY_BUFFER, upload, GL15.GL_STREAM_DRAW);
-        GLSMDebug.logBufferBuilderUpload(format.toString(), drawMode, vertexFlags, stride, vertexCount, byteCount, vao, vbo);
+
+        boolean logDrawDiagnostics = GLSMDebug.shouldLogDrawDiagnostics();
+        boolean checkDrawErrors = IrisGlDebug.shouldCaptureGlState();
+        String formatDescription = logDrawDiagnostics || checkDrawErrors ? format.toString() : null;
+        if (logDrawDiagnostics) {
+            GLSMDebug.logBufferBuilderUpload(formatDescription, drawMode, vertexFlags, stride, vertexCount, byteCount, vao, vbo);
+        }
 
         GLStateManager.prepareWideLineEmulation(drawMode);
         ShaderManager.getInstance().preDraw(vertexFlags);
-        IrisGlDebug.checkDrawError("bufferbuilder:after-predraw", debugSource, drawMode, vertexFlags, stride, vertexCount, format.toString(), vao, vbo);
+        if (checkDrawErrors) {
+            IrisGlDebug.checkDrawError("bufferbuilder:after-predraw", debugSource, drawMode, vertexFlags, stride, vertexCount, formatDescription, vao, vbo);
+        }
         VanillaVertexBufferRenderer.drawArrays(drawMode, vertexCount);
-        IrisGlDebug.checkDrawError("bufferbuilder:after-draw", debugSource, drawMode, vertexFlags, stride, vertexCount, format.toString(), vao, vbo);
+        if (checkDrawErrors) {
+            IrisGlDebug.checkDrawError("bufferbuilder:after-draw", debugSource, drawMode, vertexFlags, stride, vertexCount, formatDescription, vao, vbo);
+        }
 
         GLStateManager.glBindVertexArray(0);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
-        IrisGlDebug.checkDrawError("bufferbuilder:after-restore", debugSource, drawMode, vertexFlags, stride, vertexCount, format.toString(), vao, vbo);
+        if (checkDrawErrors) {
+            IrisGlDebug.checkDrawError("bufferbuilder:after-restore", debugSource, drawMode, vertexFlags, stride, vertexCount, formatDescription, vao, vbo);
+        }
     }
 
     private static void ensureDrawState(VertexFormat format) {

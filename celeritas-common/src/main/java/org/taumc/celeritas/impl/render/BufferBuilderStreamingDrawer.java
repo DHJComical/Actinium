@@ -80,6 +80,9 @@ public final class BufferBuilderStreamingDrawer {
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
         int firstVertex = -1;
+        boolean logDrawDiagnostics = GLSMDebug.shouldLogDrawDiagnostics();
+        boolean checkDrawErrors = IrisGlDebug.shouldCaptureGlState();
+        String formatDescription = logDrawDiagnostics || checkDrawErrors ? format.toString() : null;
 
         try {
             if (persistentBuffer != null) {
@@ -108,19 +111,27 @@ public final class BufferBuilderStreamingDrawer {
                 firstVertex = 0;
             }
 
-            GLSMDebug.logBufferBuilderUpload(format.toString(), drawMode, state.vertexFlags, stride, vertexCount, byteCount, vao, vbo);
+            if (logDrawDiagnostics) {
+                GLSMDebug.logBufferBuilderUpload(formatDescription, drawMode, state.vertexFlags, stride, vertexCount, byteCount, vao, vbo);
+            }
 
             GLStateManager.prepareWideLineEmulation(drawMode);
             ShaderManager.getInstance().preDraw(state.vertexFlags);
-            IrisGlDebug.checkDrawError("bufferbuilder-stream:after-predraw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, format.toString(), vao, vbo);
+            if (checkDrawErrors) {
+                IrisGlDebug.checkDrawError("bufferbuilder-stream:after-predraw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, formatDescription, vao, vbo);
+            }
             final long drawStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.now() : 0L;
             VanillaVertexBufferRenderer.drawArrays(drawMode, firstVertex, vertexCount);
             GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_DRAW_CALL, drawStart, GLSMPerfDebug.now());
-            IrisGlDebug.checkDrawError("bufferbuilder-stream:after-draw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, format.toString(), vao, vbo);
+            if (checkDrawErrors) {
+                IrisGlDebug.checkDrawError("bufferbuilder-stream:after-draw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, formatDescription, vao, vbo);
+            }
         } finally {
             GLStateManager.glBindVertexArray(savedVao);
             GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
-            IrisGlDebug.checkDrawError("bufferbuilder-stream:after-restore", debugSource, drawMode, state.vertexFlags, stride, vertexCount, format.toString(), savedVao, savedVbo);
+            if (checkDrawErrors) {
+                IrisGlDebug.checkDrawError("bufferbuilder-stream:after-restore", debugSource, drawMode, state.vertexFlags, stride, vertexCount, formatDescription, savedVao, savedVbo);
+            }
         }
     }
 
