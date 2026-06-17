@@ -72,7 +72,7 @@ public final class BlockRenderingSettings {
         }
 
         String typeName = result.getClass().getName().toLowerCase(Locale.ROOT);
-        return !typeName.contains("compact");
+        return !typeName.contains("compat");
     }
 
     public @Nullable Map<Block, BlockRenderLayer> getBlockTypeIds() {

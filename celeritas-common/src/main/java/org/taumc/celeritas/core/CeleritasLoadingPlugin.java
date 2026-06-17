@@ -58,6 +58,14 @@ public class CeleritasLoadingPlugin implements IFMLLoadingPlugin, IEarlyMixinLoa
 
     @Override
     public List<String> getMixinConfigs() {
-        return Arrays.asList("mixins.celeritas.json", "mixins.actinium.json", "mixins.gnetum.early.json");
+        return getEarlyMixinConfigs();
+    }
+
+    public static List<String> getEarlyMixinConfigs() {
+        return Arrays.asList(
+            "mixins.celeritas.json",
+            "mixins.actinium.json",
+            "mixins.gnetum.early.json"
+        );
     }
 }

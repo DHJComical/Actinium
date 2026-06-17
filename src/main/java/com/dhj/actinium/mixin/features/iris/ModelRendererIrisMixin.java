@@ -1,6 +1,7 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
+import com.dhj.actinium.compat.gibbed.ActiniumModelRenderer;
 import com.gtnewhorizons.angelica.mixins.interfaces.IModelRenderer;
 import net.minecraft.client.model.ModelBox;
 import net.minecraft.client.model.ModelRenderer;
@@ -14,6 +15,7 @@ import net.minecraft.util.math.Vec3d;
 import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -21,7 +23,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.List;
 
 @Mixin(ModelRenderer.class)
-public abstract class ModelRendererIrisMixin implements IModelRenderer {
+public abstract class ModelRendererIrisMixin implements IModelRenderer, ActiniumModelRenderer {
     @Shadow public boolean isHidden;
     @Shadow public boolean showModel;
     @Shadow public float offsetX;
@@ -35,8 +37,11 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
     @Shadow public float rotateAngleZ;
     @Shadow public List<ModelBox> cubeList;
     @Shadow public List<ModelRenderer> childModels;
-    @Shadow private boolean compiled;
-    @Shadow private int displayList;
+
+    @Unique
+    private int actinium$displayList;
+    @Unique
+    private int actinium$displayListScaleBits;
 
     @Inject(method = "render(F)V", at = @At("HEAD"), cancellable = true)
     private void actinium$renderWithoutDisplayList(float scale, CallbackInfo ci) {
@@ -95,11 +100,60 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
 
     @Override
     public void angelica$resetDisplayList() {
-        if (this.displayList > 0) {
-            com.gtnewhorizons.angelica.glsm.GLStateManager.glDeleteLists(this.displayList, 1);
+        this.actinium$resetDisplayList();
+    }
+
+    @Override
+    public void actinium$renderGibbedSingleModelPart(float scale) {
+        if (this.isHidden || !this.showModel) {
+            return;
         }
-        this.compiled = false;
-        this.displayList = 0;
+
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(this.rotationPointX * scale, this.rotationPointY * scale, this.rotationPointZ * scale);
+
+        if (this.rotateAngleY != 0.0F) {
+            GlStateManager.rotate(this.rotateAngleY * (180.0F / (float) Math.PI), 0.0F, 1.0F, 0.0F);
+        }
+
+        if (this.rotateAngleX != 0.0F) {
+            GlStateManager.rotate(this.rotateAngleX * (180.0F / (float) Math.PI), 1.0F, 0.0F, 0.0F);
+        }
+
+        if (this.rotateAngleZ != 0.0F) {
+            GlStateManager.rotate(this.rotateAngleZ * (180.0F / (float) Math.PI), 0.0F, 0.0F, 1.0F);
+        }
+
+        this.actinium$drawModel(scale, false);
+        GlStateManager.popMatrix();
+    }
+
+    @Override
+    public void actinium$renderGibbedModel(float scale) {
+        if (this.isHidden || !this.showModel) {
+            return;
+        }
+
+        GlStateManager.translate(this.offsetX, this.offsetY, this.offsetZ);
+
+        if (this.rotateAngleX != 0.0F || this.rotateAngleY != 0.0F || this.rotateAngleZ != 0.0F) {
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(this.rotationPointX * scale, this.rotationPointY * scale, this.rotationPointZ * scale);
+            this.actinium$applyRotation();
+            this.actinium$drawModel(scale, false);
+            this.actinium$renderGibbedChildren(scale);
+            GlStateManager.popMatrix();
+        } else if (this.rotationPointX == 0.0F && this.rotationPointY == 0.0F && this.rotationPointZ == 0.0F) {
+            this.actinium$drawModel(scale, false);
+            this.actinium$renderGibbedChildren(scale);
+        } else {
+            GlStateManager.translate(this.rotationPointX * scale, this.rotationPointY * scale, this.rotationPointZ * scale);
+            this.actinium$drawModel(scale, false);
+            this.actinium$renderGibbedChildren(scale);
+            GlStateManager.translate(-this.rotationPointX * scale, -this.rotationPointY * scale, -this.rotationPointZ * scale);
+        }
+
+        GlStateManager.translate(-this.offsetX, -this.offsetY, -this.offsetZ);
     }
 
     private void actinium$applyRotation() {
@@ -117,23 +171,32 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
     }
 
     private void actinium$drawModel(float scale) {
+        this.actinium$drawModel(scale, true);
+    }
+
+    @Unique
+    private void actinium$drawModel(float scale, boolean allowDisplayLists) {
         if (this.cubeList.isEmpty()) {
             return;
         }
 
         boolean batchModelQuads = ActiniumRuntimeOptions.useModelRendererBatching();
-        boolean useDisplayLists = batchModelQuads && ActiniumRuntimeOptions.useModelRendererDisplayLists();
+        boolean useDisplayLists = allowDisplayLists && batchModelQuads && ActiniumRuntimeOptions.useModelRendererDisplayLists();
 
         if (useDisplayLists) {
-            if (!this.compiled) {
-                this.actinium$compileDisplayList(scale);
+            int scaleBits = Float.floatToIntBits(scale);
+            if (this.actinium$displayList != 0 && this.actinium$displayListScaleBits != scaleBits) {
+                this.actinium$resetDisplayList();
             }
-            com.gtnewhorizons.angelica.glsm.GLStateManager.glCallList(this.displayList);
-            return;
-        }
 
-        if (this.compiled && this.displayList > 0) {
-            this.angelica$resetDisplayList();
+            if (this.actinium$displayList == 0) {
+                this.actinium$compileDisplayList(scale, scaleBits);
+            }
+
+            com.gtnewhorizons.angelica.glsm.GLStateManager.glCallList(this.actinium$displayList);
+            return;
+        } else if (allowDisplayLists) {
+            this.actinium$resetDisplayList();
         }
 
         Tessellator tessellator = Tessellator.getInstance();
@@ -155,13 +218,14 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
         }
     }
 
-    private void actinium$compileDisplayList(float scale) {
-        this.displayList = com.gtnewhorizons.angelica.glsm.GLStateManager.glGenLists(1);
-        if (this.displayList == 0) {
+    @Unique
+    private void actinium$compileDisplayList(float scale, int scaleBits) {
+        int list = com.gtnewhorizons.angelica.glsm.GLStateManager.glGenLists(1);
+        if (list == 0) {
             throw new IllegalStateException("glGenLists returned 0 while compiling a ModelRenderer display list");
         }
 
-        com.gtnewhorizons.angelica.glsm.GLStateManager.glNewList(this.displayList, GL11.GL_COMPILE);
+        com.gtnewhorizons.angelica.glsm.GLStateManager.glNewList(list, GL11.GL_COMPILE);
 
         try {
             Tessellator tessellator = Tessellator.getInstance();
@@ -178,7 +242,17 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
             com.gtnewhorizons.angelica.glsm.GLStateManager.glEndList();
         }
 
-        this.compiled = true;
+        this.actinium$displayList = list;
+        this.actinium$displayListScaleBits = scaleBits;
+    }
+
+    @Unique
+    private void actinium$resetDisplayList() {
+        if (this.actinium$displayList > 0) {
+            com.gtnewhorizons.angelica.glsm.GLStateManager.glDeleteLists(this.actinium$displayList, 1);
+        }
+        this.actinium$displayList = 0;
+        this.actinium$displayListScaleBits = 0;
     }
 
     private static void actinium$appendQuad(BufferBuilder buffer, TexturedQuad quad, float scale) {
@@ -215,6 +289,21 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer {
 
         for (ModelRenderer child : this.childModels) {
             child.render(scale);
+        }
+    }
+
+    @Unique
+    private void actinium$renderGibbedChildren(float scale) {
+        if (this.childModels == null) {
+            return;
+        }
+
+        for (ModelRenderer child : this.childModels) {
+            if (child instanceof ActiniumModelRenderer) {
+                ((ActiniumModelRenderer) child).actinium$renderGibbedModel(scale);
+            } else {
+                child.render(scale);
+            }
         }
     }
 }

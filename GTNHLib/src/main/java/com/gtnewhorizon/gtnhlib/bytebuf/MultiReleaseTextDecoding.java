@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
  * String decoding utilities.
  *
  * <p>
- * On Java 9 different implementations are used that work better with compact strings (JEP 254).
+ * On Java 9 different implementations are used that work better with compat strings (JEP 254).
  * </p>
  */
 final class MultiReleaseTextDecoding {

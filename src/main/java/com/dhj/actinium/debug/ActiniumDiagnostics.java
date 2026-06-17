@@ -1,10 +1,14 @@
 package com.dhj.actinium.debug;
 
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
+import com.dhj.actinium.loading.ActiniumLateMixinLoader;
 import net.minecraft.launchwrapper.Launch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.taumc.celeritas.CeleritasVintage;
+import org.taumc.celeritas.core.CeleritasLoadingPlugin;
+
+import me.decce.gnetum.mixins.LateMixinLoader;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -13,6 +17,7 @@ import java.util.Set;
 public final class ActiniumDiagnostics {
     private static final Logger LOGGER = LogManager.getLogger("ActiniumDiagnostics");
     private static final Set<String> APPLIED_MIXINS = Collections.synchronizedSet(new LinkedHashSet<>());
+    private static final Set<String> GIBBED_RENDER_PATHS = Collections.synchronizedSet(new LinkedHashSet<>());
 
     private ActiniumDiagnostics() {
     }
@@ -41,7 +46,7 @@ public final class ActiniumDiagnostics {
             System.getProperty("java.version"),
             System.getProperty("os.name") + " " + System.getProperty("os.version"),
             System.getProperty("fml.coreMods.load", ""),
-            "mixins.celeritas.json,mixins.actinium.json,mixins.gnetum.early.json,mixins.gnetum.late.json"
+            describeMixinConfigs()
         );
     }
 
@@ -64,11 +69,34 @@ public final class ActiniumDiagnostics {
         }
     }
 
+    public static void recordGibbedRenderPath(String path) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        if (GIBBED_RENDER_PATHS.add(path)) {
+            LOGGER.info("gibbed-render-path {}", path);
+        }
+    }
+
     private static boolean isKeyMixin(String mixinClassName) {
         return mixinClassName.startsWith("com.dhj.actinium.mixin.features.iris.")
+            || mixinClassName.startsWith("com.dhj.actinium.mixin.mod.gibbed.")
             || mixinClassName.startsWith("me.decce.gnetum.mixins.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.core.terrain.")
             || mixinClassName.startsWith("org.taumc.celeritas.mixin.core.");
+    }
+
+    private static String describeMixinConfigs() {
+        String earlyConfigs = String.join(",", CeleritasLoadingPlugin.getEarlyMixinConfigs());
+        String actiniumLateConfigs = String.join(",", new ActiniumLateMixinLoader().getMixinConfigs());
+        String gnetumLateConfigs = String.join(",", new LateMixinLoader().getMixinConfigs());
+
+        if (actiniumLateConfigs.isEmpty()) {
+            return earlyConfigs + "," + gnetumLateConfigs;
+        }
+
+        return earlyConfigs + "," + actiniumLateConfigs + "," + gnetumLateConfigs;
     }
 
     private static String describeConfig() {

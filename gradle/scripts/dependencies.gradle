@@ -70,4 +70,6 @@ dependencies {
     modRuntimeOnly 'curse.maven:assetmover-571482:4430763'
     modImplementation 'curse.maven:nether-api-1306115:8201135'
     modRuntimeOnly 'curse.maven:unseens-nether-backport-1109447:7694245'
+    modImplementation 'curse.maven:gibbed-1480667:7737413'
+    modRuntimeOnly'curse.maven:fermiumbooter2mixinbooter-1163720:7668886'
 }
