@@ -59,7 +59,8 @@ dependencies {
     }
 
     modRuntimeOnly 'curse.maven:catalogue-vintage-1465746:7872634'
-    compileOnly 'maven.modrinth:DistantHorizonsApi:5.1.0'
+//    compileOnly 'maven.modrinth:DistantHorizonsApi:5.1.0'
+    modCompileOnly "curse.maven:distant-horizons-508933:8287383"
     compileOnly 'curse.maven:xaeros-minimap-263420:6310964'
     compileOnly 'curse.maven:better-hud-286066:3327633'
     compileOnly 'curse.maven:voxelmap-225179:3029445'
@@ -68,6 +69,7 @@ dependencies {
     compileOnly 'curse.maven:valkyrie-874067:5235356'
     modImplementation 'curse.maven:depths-update-1472501:8038246'
     modRuntimeOnly 'curse.maven:assetmover-571482:4430763'
-    modImplementation 'curse.maven:nether-api-1306115:8201135'
-    modRuntimeOnly 'curse.maven:unseens-nether-backport-1109447:7694245'
+//    modImplementation 'curse.maven:nether-api-1306115:8201135'
+//    modRuntimeOnly 'curse.maven:unseens-nether-backport-1109447:7694245'
+    modRuntimeOnly "curse.maven:distant-horizons-508933:8287383"
 }
