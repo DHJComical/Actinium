@@ -1,6 +1,7 @@
 package org.taumc.celeritas.mixin.core.terrain;
 
 import com.llamalad7.mixinextras.sugar.Local;
+import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.render.EndPortalBatchRenderer;
 import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.dhj.actinium.shadows.ShadowRenderingState;
@@ -30,6 +31,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
+import net.minecraftforge.fml.common.Loader;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
 import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
@@ -126,6 +128,9 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
      */
     @Overwrite
     public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
+        boolean renderDistantHorizonsLods = Loader.isModLoaded("distanthorizons")
+                && !ShadowRenderingState.areShadowsCurrentlyBeingRendered();
+
         WorldRenderingPipeline pipeline = null;
         if (Iris.enabled) {
             pipeline = Iris.getPipelineManager().getPipelineNullable();
@@ -140,10 +145,16 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                     if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()
                             && IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
                         this.actinium$beginIrisTranslucents(pipeline, (float) partialTicks);
+                        if (renderDistantHorizonsLods) {
+                            DistantHorizonsCompat.renderDeferredLodsForShaders(this.world, partialTicks);
+                        }
                     }
                     pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
                 }
             }
+        }
+        if (blockLayerIn == BlockRenderLayer.SOLID && renderDistantHorizonsLods) {
+            DistantHorizonsCompat.renderVanillaLods(this.world, partialTicks);
         }
 
         RenderDevice.enterManagedCode();

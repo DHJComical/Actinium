@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8.5",
+  "package": "com.dhj.actinium.compat.dh.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "client": [
+    "MixinFogRenderParamFactory",
+    "MixinFullDataToRenderDataTransformer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

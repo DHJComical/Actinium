@@ -59,7 +59,8 @@ dependencies {
     }
 
     modRuntimeOnly 'curse.maven:catalogue-vintage-1465746:7872634'
-    compileOnly 'maven.modrinth:DistantHorizonsApi:5.1.0'
+//    compileOnly 'maven.modrinth:DistantHorizonsApi:5.1.0'
+    modImplementation "curse.maven:distant-horizons-508933:8287383"
     compileOnly 'curse.maven:xaeros-minimap-263420:6310964'
     compileOnly 'curse.maven:better-hud-286066:3327633'
     compileOnly 'curse.maven:voxelmap-225179:3029445'

@@ -2,7 +2,6 @@ package net.coderbot.iris.compat.dh;
 
 import com.google.common.primitives.Ints;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
-import com.mitchej123.lwjgl.MemoryStack;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.objects.math.DhApiVec3f;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
@@ -31,6 +30,7 @@ import org.joml.Matrix4fc;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
+import org.taumc.celeritas.lwjgl.MemoryStack;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
@@ -61,7 +61,7 @@ public class IrisLodRenderProgram {
     private final Matrix3f tempMat3 = new Matrix3f();
 
     // This will bind  AbstractVertexAttribute
-    private IrisLodRenderProgram(String name, boolean isShadowPass, boolean translucent, BlendModeOverride override, BufferBlendOverride[] bufferBlendOverrides, String vertex, String tessControl, String tessEval, String geometry, String fragment, CustomUniforms customUniforms, DeferredWorldRenderingPipeline pipeline) {
+    private IrisLodRenderProgram(String name, boolean isShadowPass, boolean translucent, BlendModeOverride override, BufferBlendOverride[] bufferBlendOverrides, String vertex, String tessControl, String tessEval, String geometry, String fragment, CustomUniforms customUniforms, DeferredWorldRenderingPipeline pipeline, ProgramSource source) {
         id = GLStateManager.glCreateProgram();
 
         GLStateManager.glBindAttribLocation(this.id, 0, "vPosition");
@@ -114,6 +114,7 @@ public class IrisLodRenderProgram {
         blend = override;
         ProgramUniforms.Builder uniformBuilder = ProgramUniforms.builder(name, id);
         ProgramSamplers.Builder samplerBuilder = ProgramSamplers.builder(id, IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+        CommonUniforms.addNonDynamicUniforms(uniformBuilder, source.getParent().getPack().getIdMap(), source.getParent().getPackDirectives(), pipeline.getFrameUpdateNotifier());
         CommonUniforms.addDynamicUniforms(uniformBuilder, FogMode.PER_VERTEX);
         customUniforms.assignTo(uniformBuilder);
         BuiltinReplacementUniforms.addBuiltinReplacementUniforms(uniformBuilder);
@@ -165,7 +166,7 @@ public class IrisLodRenderProgram {
             }
         });
 
-        return new IrisLodRenderProgram(name, isShadowPass, translucent, source.getDirectives().getBlendModeOverride().orElse(null), bufferOverrides.toArray(BufferBlendOverride[]::new), vertex, tessControl, tessEval, geometry, fragment, uniforms, pipeline);
+        return new IrisLodRenderProgram(name, isShadowPass, translucent, source.getDirectives().getBlendModeOverride().orElse(null), bufferOverrides.toArray(BufferBlendOverride[]::new), vertex, tessControl, tessEval, geometry, fragment, uniforms, pipeline, source);
     }
 
     // Noise Uniforms
