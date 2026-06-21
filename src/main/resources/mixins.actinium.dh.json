@@ -5,6 +5,7 @@
   "package": "com.dhj.actinium.compat.dh.mixin",
   "compatibilityLevel": "JAVA_8",
   "client": [
+    "MixinFogRenderParamFactory",
     "MixinFullDataToRenderDataTransformer"
   ],
   "injectors": {

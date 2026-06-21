@@ -20,6 +20,7 @@ import net.minecraftforge.fml.common.Loader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
+import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL32;
 import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
 
@@ -30,6 +31,7 @@ public final class DistantHorizonsCompat {
     private static boolean loggedFirstRender;
     private static boolean warnedRenderFailure;
     private static boolean warnedLightmapSyncFailure;
+    private static boolean warnedFogColorSyncFailure;
     private static String lastDiagnosticSignature = "";
     private static long lastDiagnosticLogTimeMs;
 
@@ -47,6 +49,7 @@ public final class DistantHorizonsCompat {
 
             ClientApi.RENDER_STATE.partialTickTime = (float) partialTicks;
             ClientApi.RENDER_STATE.clientLevelWrapper = ClientLevelWrapper.getWrapperIfDifferent(ClientApi.RENDER_STATE.clientLevelWrapper, world);
+            syncFogColor();
             syncLightmap();
 
             ClientApi.INSTANCE.renderLods();
@@ -109,6 +112,17 @@ public final class DistantHorizonsCompat {
         }
     }
 
+    private static void syncFogColor() {
+        try {
+            Minecraft.getMinecraft().entityRenderer.setupFogColor(false);
+        } catch (Throwable t) {
+            if (!warnedFogColorSyncFailure) {
+                warnedFogColorSyncFailure = true;
+                LOGGER.warn("Failed to sync vanilla fog color before Distant Horizons LOD rendering", t);
+            }
+        }
+    }
+
     private static void logRenderDiagnostics() {
         IClientLevelWrapper levelWrapper = ClientApi.RENDER_STATE.clientLevelWrapper;
         IDhClientWorld dhWorld = SharedApi.tryGetDhClientWorld();
@@ -136,7 +150,10 @@ public final class DistantHorizonsCompat {
                         + ", drawFbo=" + GL32.glGetInteger(GL32.GL_DRAW_FRAMEBUFFER_BINDING)
                         + ", readFbo=" + GL32.glGetInteger(GL32.GL_READ_FRAMEBUFFER_BINDING)
                         + ", program=" + GL32.glGetInteger(GL32.GL_CURRENT_PROGRAM);
-        String message = stableSignature + ", bufferCount=" + bufferCount;
+        String message = stableSignature
+                + ", bufferCount=" + bufferCount
+                + ", entityFogColor=" + getEntityFogColorDiagnostics()
+                + ", glFogColor=" + getGlFogColorDiagnostics();
 
         long now = System.currentTimeMillis();
         if (!stableSignature.equals(lastDiagnosticSignature) || now - lastDiagnosticLogTimeMs > 5000L) {
@@ -144,5 +161,24 @@ public final class DistantHorizonsCompat {
             lastDiagnosticLogTimeMs = now;
             LOGGER.info("Distant Horizons bridge diagnostics: {}", message);
         }
+    }
+
+    private static String getEntityFogColorDiagnostics() {
+        AccessorEntityRenderer entityRenderer = (AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer;
+        return formatColor(
+                entityRenderer.celeritas$getFogColorRed(),
+                entityRenderer.celeritas$getFogColorGreen(),
+                entityRenderer.celeritas$getFogColorBlue(),
+                1.0F);
+    }
+
+    private static String getGlFogColorDiagnostics() {
+        float[] fogColor = new float[4];
+        GL15.glGetFloatv(GL15.GL_FOG_COLOR, fogColor);
+        return formatColor(fogColor[0], fogColor[1], fogColor[2], fogColor[3]);
+    }
+
+    private static String formatColor(float red, float green, float blue, float alpha) {
+        return String.format("%.3f/%.3f/%.3f/%.3f", red, green, blue, alpha);
     }
 }
