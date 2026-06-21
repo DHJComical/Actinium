@@ -1,9 +1,11 @@
 package org.taumc.celeritas;
 
 import com.mojang.realmsclient.gui.ChatFormatting;
+import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
 import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 import me.decce.gnetum.Gnetum;
+import net.coderbot.iris.compat.dh.DHCompat;
 
 import java.lang.management.ManagementFactory;
 
@@ -42,6 +44,7 @@ public class CeleritasVintage {
         GLRenderDevice.VANILLA_STATE_RESETTER = () -> OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0);
         VERSION = Loader.instance().getIndexedModList().get(MODID).getVersion();
         ActiniumDiagnostics.logConstruction();
+        initializeDistantHorizonsIrisCompat();
         MinecraftForge.EVENT_BUS.register(this);
         Gnetum.construct(event);
         Gnetum.registerEventHandlers();
@@ -49,11 +52,13 @@ public class CeleritasVintage {
 
     @EventHandler
     public void onPreInit(FMLPreInitializationEvent event) {
+        initializeDistantHorizonsIrisCompat();
         Gnetum.preInit(event);
     }
 
     @EventHandler
     public void onInit(FMLInitializationEvent event) {
+        initializeDistantHorizonsIrisCompat();
         Gnetum.init(event);
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
@@ -64,6 +69,13 @@ public class CeleritasVintage {
             MinecraftForge.EVENT_BUS.register(Iris.INSTANCE);
         }
         ActiniumDiagnostics.logInitialization(VERSION);
+    }
+
+    private static void initializeDistantHorizonsIrisCompat() {
+        if (Iris.enabled && DHCompat.isDistantHorizonsLoaded()) {
+            ActiniumDHIrisCompat.registerAccessor();
+            DHCompat.run();
+        }
     }
 
     @SubscribeEvent

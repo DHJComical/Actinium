@@ -1,6 +1,7 @@
 package com.dhj.actinium.compat.dh;
 
 import com.gtnewhorizons.angelica.rendering.RenderingState;
+import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.common.wrappers.world.ClientLevelWrapper;
 import com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftRenderWrapper;
 import com.seibel.distanthorizons.core.api.internal.ClientApi;
@@ -29,6 +30,7 @@ public final class DistantHorizonsCompat {
     private static final String MODID = "distanthorizons";
 
     private static boolean loggedFirstRender;
+    private static boolean loggedFirstDeferredRender;
     private static boolean warnedRenderFailure;
     private static boolean warnedLightmapSyncFailure;
     private static boolean warnedFogColorSyncFailure;
@@ -39,11 +41,23 @@ public final class DistantHorizonsCompat {
     }
 
     public static void renderVanillaLods(WorldClient world, double partialTicks) {
+        renderLodPass(world, partialTicks, false);
+    }
+
+    public static void renderDeferredLodsForShaders(WorldClient world, double partialTicks) {
+        renderLodPass(world, partialTicks, true);
+    }
+
+    private static void renderLodPass(WorldClient world, double partialTicks, boolean deferred) {
         if (world == null || !Loader.isModLoaded(MODID)) {
             return;
         }
 
         try {
+            if (deferred && !isDeferredLodRenderingEnabledForShaders()) {
+                return;
+            }
+
             ClientApi.RENDER_STATE.mcProjectionMatrix = copyJomlMatrix(RenderingState.INSTANCE.getProjectionMatrix());
             ClientApi.RENDER_STATE.mcModelViewMatrix = copyJomlMatrix(RenderingState.INSTANCE.getModelViewMatrix());
 
@@ -52,10 +66,18 @@ public final class DistantHorizonsCompat {
             syncFogColor();
             syncLightmap();
 
-            ClientApi.INSTANCE.renderLods();
-            if (!loggedFirstRender) {
-                loggedFirstRender = true;
-                LOGGER.info("Distant Horizons vanilla LOD bridge called renderLods for the first frame");
+            if (deferred) {
+                ClientApi.INSTANCE.renderDeferredLodsForShaders();
+                if (!loggedFirstDeferredRender) {
+                    loggedFirstDeferredRender = true;
+                    LOGGER.info("Distant Horizons shader LOD bridge called renderDeferredLodsForShaders for the first frame");
+                }
+            } else {
+                ClientApi.INSTANCE.renderLods();
+                if (!loggedFirstRender) {
+                    loggedFirstRender = true;
+                    LOGGER.info("Distant Horizons vanilla LOD bridge called renderLods for the first frame");
+                }
             }
             logRenderDiagnostics();
 
@@ -69,6 +91,10 @@ public final class DistantHorizonsCompat {
                 LOGGER.warn("Failed to render Distant Horizons LODs through the Actinium bridge", t);
             }
         }
+    }
+
+    private static boolean isDeferredLodRenderingEnabledForShaders() {
+        return DhApi.Delayed.renderProxy != null && DhApi.Delayed.renderProxy.getDeferTransparentRendering();
     }
 
     private static DhMat4f copyJomlMatrix(Matrix4f sourceMatrix) {
@@ -146,6 +172,7 @@ public final class DistantHorizonsCompat {
                         + ", hasGenericRenderer=" + (dhLevel != null && dhLevel.getGenericRenderer() != null)
                         + ", dhLevelRendering=" + (dhLevel != null && dhLevel.isRendering())
                         + ", vanillaFogEnabled=" + ClientApi.RENDER_STATE.vanillaFogEnabled
+                        + ", deferTransparentRendering=" + isDeferredLodRenderingEnabledForShaders()
                         + ", fbo=" + GL32.glGetInteger(GL32.GL_FRAMEBUFFER_BINDING)
                         + ", drawFbo=" + GL32.glGetInteger(GL32.GL_DRAW_FRAMEBUFFER_BINDING)
                         + ", readFbo=" + GL32.glGetInteger(GL32.GL_READ_FRAMEBUFFER_BINDING)

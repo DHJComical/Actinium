@@ -4,6 +4,7 @@ import com.gtnewhorizons.angelica.rendering.RenderingState;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.pipeline.DeferredWorldRenderingPipeline;
 import net.minecraft.client.Minecraft;
+import net.minecraftforge.fml.common.Loader;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 
@@ -13,6 +14,7 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.InvocationTargetException;
 
 public class DHCompat {
+    private static final String DH_MOD_ID = "distanthorizons";
     private static boolean dhPresent;
     private static boolean lastIncompatible;
     private DHCompatInternal compatInternalInstance;
@@ -48,13 +50,7 @@ public class DHCompat {
     }
 
     public static void run() {
-        try {
-            Class.forName("com.seibel.distanthorizons.DistantHorizonsTweaker");
-            dhPresent = true;
-        }
-        catch (Exception e) {
-            dhPresent = false;
-        }
+        dhPresent = isDistantHorizonsLoaded();
         try {
             if (dhPresent) {
                 LodRendererEvents.setupEventHandlers();
@@ -67,6 +63,10 @@ public class DHCompat {
                 throw new RuntimeException("DH found, but one or more API methods are missing. Iris requires DH [2.0.4] or DH API version [1.1.0] or newer. Please make sure you are on the latest version of DH and Iris.", e);
             }
         }
+    }
+
+    public static boolean isDistantHorizonsLoaded() {
+        return Loader.instance().getIndexedModList().containsKey(DH_MOD_ID);
     }
 
     public static boolean lastPackIncompatible() {

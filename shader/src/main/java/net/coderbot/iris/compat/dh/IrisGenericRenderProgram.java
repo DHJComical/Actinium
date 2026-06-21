@@ -2,7 +2,6 @@ package net.coderbot.iris.compat.dh;
 
 import com.google.common.primitives.Ints;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
-import com.mitchej123.lwjgl.MemoryStack;
 import com.seibel.distanthorizons.api.interfaces.override.rendering.IDhApiGenericObjectShaderProgram;
 import com.seibel.distanthorizons.api.interfaces.render.IDhApiRenderableBoxGroup;
 import com.seibel.distanthorizons.api.methods.events.sharedParameterObjects.DhApiRenderParam;
@@ -37,6 +36,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
+import org.taumc.celeritas.lwjgl.MemoryStack;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;

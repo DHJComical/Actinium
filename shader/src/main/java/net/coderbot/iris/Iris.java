@@ -408,14 +408,8 @@ public class Iris {
         }
         renderSystemInitialized = true;
 
-        boolean isDHLoaded;
-        try {
-            Class.forName("com.seibel.distanthorizons.DistantHorizonsTweaker");
-            isDHLoaded = true;
-        }
-        catch (Exception e) {
-            isDHLoaded = false;
-        }
+        DHCompat.run();
+        boolean isDHLoaded = DHCompat.isDistantHorizonsLoaded();
 
         // Defer shaderpack loading until the first loading-complete stage so the window, splash,
         // and default framebuffer are fully settled before heavy shader initialization starts.

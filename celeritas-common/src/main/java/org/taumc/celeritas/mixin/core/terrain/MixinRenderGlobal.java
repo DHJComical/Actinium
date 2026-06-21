@@ -128,9 +128,9 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
      */
     @Overwrite
     public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
-        if (blockLayerIn == BlockRenderLayer.SOLID
-                && Loader.isModLoaded("distanthorizons")
-                && !ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+        boolean renderDistantHorizonsLods = Loader.isModLoaded("distanthorizons")
+                && !ShadowRenderingState.areShadowsCurrentlyBeingRendered();
+        if (blockLayerIn == BlockRenderLayer.SOLID && renderDistantHorizonsLods) {
             DistantHorizonsCompat.renderVanillaLods(this.world, partialTicks);
         }
 
@@ -148,6 +148,9 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                     if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()
                             && IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
                         this.actinium$beginIrisTranslucents(pipeline, (float) partialTicks);
+                        if (renderDistantHorizonsLods) {
+                            DistantHorizonsCompat.renderDeferredLodsForShaders(this.world, partialTicks);
+                        }
                     }
                     pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
                 }
