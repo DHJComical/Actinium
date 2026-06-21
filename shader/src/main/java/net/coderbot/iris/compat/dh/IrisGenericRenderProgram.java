@@ -73,7 +73,7 @@ public class IrisGenericRenderProgram implements IDhApiGenericObjectShaderProgra
     private final int uSkyLight;
 
     // This will bind  AbstractVertexAttribute
-    private IrisGenericRenderProgram(String name, boolean isShadowPass, boolean translucent, BlendModeOverride override, BufferBlendOverride[] bufferBlendOverrides, String vertex, String tessControl, String tessEval, String geometry, String fragment, CustomUniforms customUniforms, DeferredWorldRenderingPipeline pipeline) {
+    private IrisGenericRenderProgram(String name, boolean isShadowPass, boolean translucent, BlendModeOverride override, BufferBlendOverride[] bufferBlendOverrides, String vertex, String tessControl, String tessEval, String geometry, String fragment, CustomUniforms customUniforms, DeferredWorldRenderingPipeline pipeline, ProgramSource source) {
         id = GLStateManager.glCreateProgram();
 
         GLStateManager.glBindAttribLocation(this.id, 0, "vPosition");
@@ -124,6 +124,7 @@ public class IrisGenericRenderProgram implements IDhApiGenericObjectShaderProgra
         blend = override;
         ProgramUniforms.Builder uniformBuilder = ProgramUniforms.builder(name, id);
         ProgramSamplers.Builder samplerBuilder = ProgramSamplers.builder(id, IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+        CommonUniforms.addNonDynamicUniforms(uniformBuilder, source.getParent().getPack().getIdMap(), source.getParent().getPackDirectives(), pipeline.getFrameUpdateNotifier());
         CommonUniforms.addDynamicUniforms(uniformBuilder, FogMode.PER_VERTEX);
         customUniforms.assignTo(uniformBuilder);
         BuiltinReplacementUniforms.addBuiltinReplacementUniforms(uniformBuilder);
@@ -182,7 +183,7 @@ public class IrisGenericRenderProgram implements IDhApiGenericObjectShaderProgra
             }
         });
 
-        return new IrisGenericRenderProgram(name, isShadowPass, translucent, source.getDirectives().getBlendModeOverride().orElse(null), bufferOverrides.toArray(BufferBlendOverride[]::new), vertex, tessControl, tessEval, geometry, fragment, uniforms, pipeline);
+        return new IrisGenericRenderProgram(name, isShadowPass, translucent, source.getDirectives().getBlendModeOverride().orElse(null), bufferOverrides.toArray(BufferBlendOverride[]::new), vertex, tessControl, tessEval, geometry, fragment, uniforms, pipeline, source);
     }
 
     // Noise Uniforms

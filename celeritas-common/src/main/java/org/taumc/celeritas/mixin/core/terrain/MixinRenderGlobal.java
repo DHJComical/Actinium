@@ -130,9 +130,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
         boolean renderDistantHorizonsLods = Loader.isModLoaded("distanthorizons")
                 && !ShadowRenderingState.areShadowsCurrentlyBeingRendered();
-        if (blockLayerIn == BlockRenderLayer.SOLID && renderDistantHorizonsLods) {
-            DistantHorizonsCompat.renderVanillaLods(this.world, partialTicks);
-        }
 
         WorldRenderingPipeline pipeline = null;
         if (Iris.enabled) {
@@ -155,6 +152,9 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                     pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
                 }
             }
+        }
+        if (blockLayerIn == BlockRenderLayer.SOLID && renderDistantHorizonsLods) {
+            DistantHorizonsCompat.renderVanillaLods(this.world, partialTicks);
         }
 
         RenderDevice.enterManagedCode();
