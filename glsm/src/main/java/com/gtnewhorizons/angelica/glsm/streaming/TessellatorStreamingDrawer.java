@@ -59,9 +59,7 @@ public class TessellatorStreamingDrawer {
         if (initialized) return;
         initialized = true;
 
-        if (RenderSystem.supportsBufferStorage()
-            && !Boolean.getBoolean("angelica.forceOrphanStreaming")
-            && !Boolean.getBoolean("actinium.glsm.forceOrphanStreaming")) {
+        if (StreamingOptions.usePersistentStreaming() && RenderSystem.supportsBufferStorage()) {
             try {
                 persistentBuffer = new PersistentStreamingBuffer();
                 LOGGER.info("Persistent streaming buffer created ({}MB)", PersistentStreamingBuffer.DEFAULT_CAPACITY / (1024 * 1024));
@@ -69,6 +67,8 @@ public class TessellatorStreamingDrawer {
                 LOGGER.warn("Failed to create persistent streaming buffer, using orphan fallback", e);
                 persistentBuffer = null;
             }
+        } else {
+            LOGGER.info("Persistent streaming buffer disabled; using orphan streaming");
         }
     }
 

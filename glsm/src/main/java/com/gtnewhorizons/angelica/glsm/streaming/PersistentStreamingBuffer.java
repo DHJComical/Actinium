@@ -143,6 +143,9 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
 
     @Override
     public void destroy() {
+        if (bufferId != 0 && StreamingOptions.finishBeforePersistentStreamingDestroy() && RENDER_BACKEND.hasContext()) {
+            RENDER_BACKEND.finish();
+        }
         while (!fenceQueue.isEmpty()) {
             fenceQueue.dequeue().fence.delete();
         }

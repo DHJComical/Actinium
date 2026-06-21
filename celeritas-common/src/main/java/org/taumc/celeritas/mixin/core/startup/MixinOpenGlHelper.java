@@ -3,6 +3,7 @@ package org.taumc.celeritas.mixin.core.startup;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;
+import com.gtnewhorizons.angelica.glsm.streaming.StreamingOptions;
 import com.gtnewhorizons.angelica.glsm.streaming.StreamingUploader;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
@@ -53,6 +54,6 @@ public class MixinOpenGlHelper {
             return StreamingUploader.UploadStrategy.BUFFER_DATA;
         }
 
-        return CeleritasVintage.options().advanced.streamingUploadStrategy.glsmStrategy();
+        return StreamingOptions.resolveUploadStrategy(CeleritasVintage.options().advanced.streamingUploadStrategy.glsmStrategy());
     }
 }

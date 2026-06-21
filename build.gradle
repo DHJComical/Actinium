@@ -26,6 +26,11 @@ setDefaultProperty 'generate_sources_jar', true, true
 setDefaultProperty 'generate_javadocs_jar', true, false
 setDefaultProperty 'minecraft_username', true, 'Developer'
 setDefaultProperty 'extra_jvm_args', false, ''
+setDefaultProperty 'enable_actinium_jvm_crash_diagnostics', false, true
+setDefaultProperty 'actinium_jvm_crash_diagnostics_dir', false, 'run/client/crash-diagnostics'
+setDefaultProperty 'enable_actinium_glsm_persistent_streaming', false, false
+setDefaultProperty 'enable_actinium_glsm_finish_before_persistent_streaming_destroy', false, true
+setDefaultProperty 'actinium_glsm_streaming_upload_strategy', false, 'BUFFER_DATA'
 
 version = propertyString('mod_version')
 group = propertyString('root_package')
@@ -118,6 +123,17 @@ unimined.minecraft {
             if (extraArgs != null && !extraArgs.trim().isEmpty()) {
                 jvmArgs += extraArgs.split('\\s+').toList()
             }
+            if (propertyBool('enable_actinium_jvm_crash_diagnostics')) {
+                def crashDiagnosticsDir = file(propertyString('actinium_jvm_crash_diagnostics_dir'))
+                crashDiagnosticsDir.mkdirs()
+                def crashDiagnosticsPath = crashDiagnosticsDir.absolutePath.replace(File.separatorChar, '/' as char)
+                jvmArgs += [
+                    "-XX:ErrorFile=${crashDiagnosticsPath}/hs_err_pid%p.log",
+                    '-XX:+HeapDumpOnOutOfMemoryError',
+                    "-XX:HeapDumpPath=${crashDiagnosticsPath}"
+                ]
+                systemProperty 'actinium.jvmCrashDiagnosticsDir', crashDiagnosticsDir.absolutePath
+            }
             if (propertyBool('enable_foundation_debug')) {
                 systemProperty 'foundation.dump', 'true'
                 systemProperty 'foundation.verbose', 'true'
@@ -132,6 +148,12 @@ unimined.minecraft {
             systemProperty 'actinium.glsmPerfDebug', propertyBool('enable_actinium_glsm_perf_debug').toString()
             systemProperty 'actinium.glsm.verboseDrawLogs', propertyBool('enable_actinium_glsm_verbose_draw_logs').toString()
             systemProperty 'actinium.glsm.forceOrphanStreaming', propertyBool('enable_actinium_glsm_force_orphan_streaming').toString()
+            systemProperty 'actinium.glsm.usePersistentStreaming', propertyBool('enable_actinium_glsm_persistent_streaming').toString()
+            systemProperty 'actinium.glsm.finishBeforePersistentStreamingDestroy', propertyBool('enable_actinium_glsm_finish_before_persistent_streaming_destroy').toString()
+            def glsmStreamingUploadStrategy = propertyString('actinium_glsm_streaming_upload_strategy')
+            if (glsmStreamingUploadStrategy != null && !glsmStreamingUploadStrategy.trim().isEmpty()) {
+                systemProperty 'actinium.glsm.streamingUploadStrategy', glsmStreamingUploadStrategy.trim()
+            }
             systemProperty 'actinium.bufferBuilderStreaming', propertyBool('enable_actinium_bufferbuilder_streaming').toString()
             systemProperty 'actinium.modelRendererBatching', propertyBool('enable_actinium_model_renderer_batching').toString()
             systemProperty 'actinium.endPortalBatching', propertyBool('enable_actinium_end_portal_batching').toString()

@@ -1,6 +1,7 @@
 package com.dhj.actinium.debug;
 
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
+import com.gtnewhorizons.angelica.glsm.streaming.StreamingOptions;
 import com.dhj.actinium.loading.ActiniumLateMixinLoader;
 import net.minecraft.launchwrapper.Launch;
 import org.apache.logging.log4j.LogManager;
@@ -104,6 +105,9 @@ public final class ActiniumDiagnostics {
             var options = CeleritasVintage.options();
             return "advanced{multiDraw=" + options.advanced.multiDrawMode
                 + ",streaming=" + options.advanced.streamingUploadStrategy
+                + ",effectiveStreaming=" + StreamingOptions.resolveUploadStrategy(options.advanced.streamingUploadStrategy.glsmStrategy())
+                + ",persistentStreaming=" + StreamingOptions.usePersistentStreaming()
+                + ",finishBeforePersistentDestroy=" + StreamingOptions.finishBeforePersistentStreamingDestroy()
                 + ",directMemory=" + ActiniumRuntimeOptions.allowDirectMemoryAccess()
                 + ",modelRendererBatching=" + ActiniumRuntimeOptions.useModelRendererBatching()
                 + ",modelRendererDisplayLists=" + ActiniumRuntimeOptions.useModelRendererDisplayLists()

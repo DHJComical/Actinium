@@ -8,6 +8,7 @@ import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import com.gtnewhorizons.angelica.glsm.streaming.OrphanStreamingBuffer;
 import com.gtnewhorizons.angelica.glsm.streaming.PersistentStreamingBuffer;
+import com.gtnewhorizons.angelica.glsm.streaming.StreamingOptions;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.vertex.VertexFormat;
@@ -168,9 +169,7 @@ public final class BufferBuilderStreamingDrawer {
         }
         initialized = true;
 
-        if (RenderSystem.supportsBufferStorage()
-            && !Boolean.getBoolean("angelica.forceOrphanStreaming")
-            && !Boolean.getBoolean("actinium.glsm.forceOrphanStreaming")) {
+        if (StreamingOptions.usePersistentStreaming() && RenderSystem.supportsBufferStorage()) {
             try {
                 persistentBuffer = new PersistentStreamingBuffer();
                 LOGGER.info("Persistent BufferBuilder streaming buffer created ({}MB)", PersistentStreamingBuffer.DEFAULT_CAPACITY / (1024 * 1024));
@@ -178,6 +177,8 @@ public final class BufferBuilderStreamingDrawer {
                 LOGGER.warn("Failed to create persistent BufferBuilder streaming buffer, using orphan fallback", e);
                 persistentBuffer = null;
             }
+        } else {
+            LOGGER.info("Persistent BufferBuilder streaming disabled; using orphan streaming");
         }
     }
 
