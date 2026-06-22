@@ -254,6 +254,7 @@ public class IdMap {
 
 	private static Int2ObjectMap<List<BlockEntry>> parseBlockMap(Properties properties, String keyPrefix, String fileName) {
 		Int2ObjectMap<List<BlockEntry>> entriesById = new Int2ObjectOpenHashMap<>();
+		final boolean modernMinecraftBlockAliases = usesModernMinecraftBlockAliases(properties, keyPrefix, fileName);
 
 		properties.forEach((keyObject, valueObject) -> {
 			final String key = (String) keyObject;
@@ -294,7 +295,9 @@ public class IdMap {
 				}
 
 				try {
-					entries.add(BlockEntry.parse(part));
+					for (String normalizedPart : normalizeBlockEntry(part, modernMinecraftBlockAliases)) {
+						entries.add(BlockEntry.parse(normalizedPart));
+					}
 				} catch (Exception e) {
 					Iris.logger.warn("Unexpected error while parsing an entry from " + fileName + " for the key " + key + ":", e);
 				}
@@ -304,6 +307,105 @@ public class IdMap {
 		});
 
 		return Int2ObjectMaps.unmodifiable(entriesById);
+	}
+
+	static List<String> normalizeBlockEntry(String part, boolean modernMinecraftBlockAliases) {
+		String suffix = getMinecraftBlockSuffix(part, "short_grass");
+		if (suffix != null && !isNumericMetaSuffix(suffix)) {
+			return Collections.singletonList("minecraft:tallgrass:1");
+		}
+
+		suffix = getMinecraftBlockSuffix(part, "fern");
+		if (suffix != null && !isNumericMetaSuffix(suffix)) {
+			return Collections.singletonList("minecraft:tallgrass:2");
+		}
+
+		suffix = getMinecraftBlockSuffix(part, "grass_block");
+		if (suffix != null) {
+			if (hasBlockState(suffix, "snowy", "true")) {
+				return Collections.emptyList();
+			}
+
+			return Collections.singletonList("minecraft:grass");
+		}
+
+		suffix = getMinecraftBlockSuffix(part, "grass");
+		if (modernMinecraftBlockAliases && suffix != null && suffix.isEmpty()) {
+			return Collections.singletonList("minecraft:tallgrass:1");
+		}
+
+		return Collections.singletonList(part);
+	}
+
+	private static boolean usesModernMinecraftBlockAliases(Properties properties, String keyPrefix, String fileName) {
+		final boolean[] usesModernAliases = {false};
+
+		properties.forEach((keyObject, valueObject) -> {
+			if (usesModernAliases[0]) {
+				return;
+			}
+
+			final String key = (String) keyObject;
+
+			if (!key.startsWith(keyPrefix)) {
+				return;
+			}
+
+			for (String part : parseIdentifierList((String) valueObject, fileName, key)) {
+				if (getMinecraftBlockSuffix(part, "short_grass") != null || getMinecraftBlockSuffix(part, "grass_block") != null) {
+					usesModernAliases[0] = true;
+					return;
+				}
+			}
+		});
+
+		return usesModernAliases[0];
+	}
+
+	private static String getMinecraftBlockSuffix(String part, String name) {
+		if (part.equals(name) || part.equals("minecraft:" + name)) {
+			return "";
+		}
+
+		String prefix = name + ":";
+		if (part.startsWith(prefix)) {
+			return part.substring(prefix.length());
+		}
+
+		prefix = "minecraft:" + name + ":";
+		if (part.startsWith(prefix)) {
+			return part.substring(prefix.length());
+		}
+
+		return null;
+	}
+
+	private static boolean isNumericMetaSuffix(String suffix) {
+		if (suffix == null || suffix.isEmpty()) {
+			return false;
+		}
+
+		String firstPart = suffix.split(":", 2)[0];
+		return !firstPart.isEmpty() && Character.isDigit(firstPart.charAt(0));
+	}
+
+	private static boolean hasBlockState(String suffix, String property, String value) {
+		if (suffix == null || suffix.isEmpty() || isNumericMetaSuffix(suffix)) {
+			return false;
+		}
+
+		for (String state : suffix.split(":")) {
+			int equalsIndex = state.indexOf('=');
+			if (equalsIndex == -1) {
+				continue;
+			}
+
+			if (state.substring(0, equalsIndex).equals(property) && state.substring(equalsIndex + 1).equals(value)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
