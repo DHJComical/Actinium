@@ -7,7 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 import net.coderbot.iris.rendertarget.RenderTarget;
 import net.coderbot.iris.rendertarget.RenderTargets;
-import org.taumc.celeritas.CeleritasVintage;
+import com.dhj.actinium.runtime.ActiniumRuntime;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttribute;
@@ -102,7 +102,7 @@ public final class IrisGlDebug {
 		}
 
         try {
-            return CeleritasVintage.options().debug.enableActiniumGlDebug;
+            return ActiniumRuntime.options().debug.enableActiniumGlDebug;
         } catch (RuntimeException ignored) {
             return false;
         }
@@ -702,7 +702,7 @@ public final class IrisGlDebug {
 		}
 
 		try {
-			return CeleritasVintage.options().debug.enableFrameGlErrorCheck;
+			return ActiniumRuntime.options().debug.enableFrameGlErrorCheck;
 		} catch (RuntimeException ignored) {
 			return false;
 		}
@@ -715,7 +715,7 @@ public final class IrisGlDebug {
 		}
 
 		try {
-			return CeleritasVintage.options().debug.enablePostRenderGlErrorCheck;
+			return ActiniumRuntime.options().debug.enablePostRenderGlErrorCheck;
 		} catch (RuntimeException ignored) {
 			return false;
 		}
@@ -728,7 +728,7 @@ public final class IrisGlDebug {
 		}
 
 		try {
-			return CeleritasVintage.options().debug.enableActiniumPerfDebug;
+			return ActiniumRuntime.options().debug.enableActiniumPerfDebug;
 		} catch (RuntimeException ignored) {
 			return false;
 		}
@@ -741,7 +741,7 @@ public final class IrisGlDebug {
 		}
 
 		try {
-			return CeleritasVintage.options().debug.enableActiniumGpuPerfDebug;
+			return ActiniumRuntime.options().debug.enableActiniumGpuPerfDebug;
 		} catch (RuntimeException ignored) {
 			return false;
 		}

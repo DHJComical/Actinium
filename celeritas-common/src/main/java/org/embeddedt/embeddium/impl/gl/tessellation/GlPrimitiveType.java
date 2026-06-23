@@ -1,10 +1,10 @@
 package org.embeddedt.embeddium.impl.gl.tessellation;
 
-import org.taumc.celeritas.lwjgl.GL11;
-import org.taumc.celeritas.lwjgl.GL30;
-import org.taumc.celeritas.lwjgl.GL32;
-import org.taumc.celeritas.lwjgl.GL40;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL11;
+import com.mitchej123.lwjgl.GL30;
+import com.mitchej123.lwjgl.GL32;
+import com.mitchej123.lwjgl.GL40;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 
 /**
@@ -40,3 +40,4 @@ public enum GlPrimitiveType {
         return this.id;
     }
 }
+

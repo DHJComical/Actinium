@@ -1,6 +1,6 @@
 package me.decce.gnetum.compat.celeritas;
 
-import org.taumc.celeritas.api.OptionGUIConstructionEvent;
+import org.embeddedt.embeddium.api.OptionGUIConstructionEvent;
 
 public final class GnetumCeleritasOptionsListener {
     private GnetumCeleritasOptionsListener() {

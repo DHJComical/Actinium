@@ -4,7 +4,6 @@ import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.*;
 import lombok.Getter;
-import net.coderbot.iris.debug.IrisGlDebug;
 import org.embeddedt.embeddium.impl.common.util.TimeUtil;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
@@ -43,6 +42,7 @@ import org.jetbrains.annotations.MustBeInvokedByOverriders;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
 import org.joml.Vector3ic;
+import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -159,7 +159,7 @@ public abstract class RenderSectionManager {
             task.run();
         }
 
-        if (IrisGlDebug.shouldCaptureGpuPerfTiming()) {
+        if (RenderDebugHooksHolder.shouldCaptureGpuPerfTiming()) {
             this.renderPassDrawTimers.values().forEach(TimerQueryManager::updateTime);
         }
     }
@@ -370,7 +370,7 @@ public abstract class RenderSectionManager {
         RenderDevice device = RenderDevice.INSTANCE;
         CommandList commandList = device.createCommandList();
 
-        boolean shouldProfile = isDebugInfoShown() && IrisGlDebug.shouldCaptureGpuPerfTiming();
+        boolean shouldProfile = isDebugInfoShown() && RenderDebugHooksHolder.shouldCaptureGpuPerfTiming();
 
         TimerQueryManager timer = null;
 

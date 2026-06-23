@@ -31,7 +31,7 @@ import org.joml.Vector2f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
 import org.joml.Vector4i;
-import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
+import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_FRAME;
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_TICK;

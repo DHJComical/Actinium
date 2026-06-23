@@ -1,6 +1,6 @@
 package net.coderbot.iris.block_rendering;
 
-import com.dhj.actinium.celeritas.BlockRenderLayer;
+import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntFunction;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
@@ -63,6 +63,17 @@ public class BlockRenderingSettings {
 	@Nullable
 	public Map<Block, BlockRenderLayer> getBlockTypeIds() {
 		return blockTypeIds;
+	}
+
+	public int getBlockStateId(Block block, int metadata) {
+		if (blockMetaMatches != null) {
+			Int2IntMap intMap = blockMetaMatches.get(block);
+			if (intMap != null && intMap.containsKey(metadata)) {
+				return intMap.get(metadata);
+			}
+		}
+
+		return Block.getIdFromBlock(block);
 	}
 
 	@Nullable

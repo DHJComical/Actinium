@@ -12,10 +12,10 @@ import org.joml.Vector3f;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 
+import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 import com.gtnewhorizon.gtnhlib.GTNHLib;
 import com.gtnewhorizon.gtnhlib.client.renderer.shader.ShaderProgram;
 import com.gtnewhorizon.gtnhlib.client.renderer.textures.TextureAtlas;
-import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
 
 // This was largely copied from avaritia
 public final class UniversiumShader extends ShaderProgram {

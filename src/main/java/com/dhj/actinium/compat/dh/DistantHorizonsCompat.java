@@ -27,7 +27,7 @@ import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL32;
-import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
+import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 
 public final class DistantHorizonsCompat {
     private static final Logger LOGGER = LogManager.getLogger("ActiniumDHCompat");

@@ -8,10 +8,10 @@ package org.embeddedt.embeddium.impl.gl.debug;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
-import org.taumc.celeritas.lwjgl.GL43;
-import org.taumc.celeritas.lwjgl.GLExtension;
+import com.mitchej123.lwjgl.GL43;
+import com.mitchej123.lwjgl.GLExtension;
 
 import java.io.PrintStream;
 import java.util.function.Consumer;
@@ -204,3 +204,4 @@ public final class GLDebug {
 		public void popGroup() {}
 	}
 }
+

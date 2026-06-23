@@ -265,8 +265,8 @@ public final class GLSMDebug {
 
     private static boolean readCeleritasDebugOption() {
         try {
-            final Class<?> vintage = Class.forName("org.taumc.celeritas.CeleritasVintage");
-            final Method options = vintage.getMethod("options");
+            final Class<?> actinium = Class.forName("com.dhj.actinium.Actinium");
+            final Method options = actinium.getMethod("options");
             final Object opts = options.invoke(null);
             if (opts == null) return false;
             final Field debugField = opts.getClass().getField("debug");

@@ -9,8 +9,8 @@ import org.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
 import org.embeddedt.embeddium.impl.render.chunk.compile.sorting.QuadPrimitiveType;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.joml.Matrix4fc;
-import org.taumc.celeritas.lwjgl.MemoryStack;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.MemoryStack;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import java.nio.FloatBuffer;
 import java.util.EnumMap;
@@ -108,3 +108,4 @@ public class DefaultChunkShaderInterface implements ChunkShaderInterface {
         }
     }
 }
+

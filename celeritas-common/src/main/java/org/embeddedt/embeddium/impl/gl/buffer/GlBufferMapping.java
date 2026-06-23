@@ -1,6 +1,6 @@
 package org.embeddedt.embeddium.impl.gl.buffer;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import java.nio.ByteBuffer;
 
@@ -35,3 +35,4 @@ public class GlBufferMapping {
         return this.map;
     }
 }
+

@@ -5,7 +5,7 @@ import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 /**
  * This vertex format is less performant and uses more VRAM than {@link CompactChunkVertex}, but should be completely
@@ -70,3 +70,4 @@ public class VanillaLikeChunkVertex implements ChunkVertexType {
         return Math.min(0.99999997F, value);
     }
 }
+

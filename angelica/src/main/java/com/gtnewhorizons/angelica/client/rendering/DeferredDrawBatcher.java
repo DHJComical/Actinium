@@ -1,6 +1,5 @@
 package com.gtnewhorizons.angelica.client.rendering;
 
-import com.dhj.actinium.celeritas.buffer.BufferBuilderExtension;
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -10,7 +9,8 @@ import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
-import org.taumc.celeritas.impl.render.VanillaBufferBuilderRenderer;
+import org.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
+import com.dhj.actinium.render.VanillaBufferBuilderRenderer;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -487,3 +487,4 @@ public final class DeferredDrawBatcher {
     private record DrawRange(long stateKey, int byteOffset, int byteLength, VertexFormat format, int vertexCount, int drawMode) {
     }
 }
+

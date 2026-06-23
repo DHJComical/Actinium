@@ -12,7 +12,7 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.client.ForgeHooksClient;
-import org.taumc.celeritas.impl.render.terrain.sprite.SpriteUtil;
+import com.dhj.actinium.render.terrain.sprite.SpriteUtil;
 import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -122,3 +122,4 @@ public abstract class ForgeHooksClientIrisMixin {
         }
     }
 }
+

@@ -19,6 +19,7 @@ public final class LWJGLServiceProvider {
     }
 
     static LWJGLService createInstance() {
-        return constructInstance("org.taumc.celeritas.lwjgl.lwjgl3.LWJGL3Service");
+        return constructInstance("com.mitchej123.lwjgl.lwjgl3.LWJGL3Service");
     }
 }
+

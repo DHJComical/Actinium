@@ -1,9 +1,9 @@
 package org.embeddedt.embeddium.impl.gl.sync;
 
-import org.taumc.celeritas.lwjgl.GL32;
-import org.taumc.celeritas.lwjgl.MemoryStack;
+import com.mitchej123.lwjgl.GL32;
+import com.mitchej123.lwjgl.MemoryStack;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 
 import java.nio.IntBuffer;
@@ -62,3 +62,4 @@ public class GlFence {
         }
     }
 }
+

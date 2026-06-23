@@ -10,8 +10,8 @@ import org.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlTessellation;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.render.chunk.data.SectionRenderDataUnsafe;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
-import org.taumc.celeritas.lwjgl.LWJGLServiceProvider;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.LWJGLServiceProvider;
 
 /**
  * A multidraw emitter that uses indirect rendering to exploit hardware acceleration, which
@@ -116,3 +116,4 @@ public class IndirectMultiDrawEmitter implements MultiDrawEmitter {
         this.indirectBufferGpu.delete();
     }
 }
+

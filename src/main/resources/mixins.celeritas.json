@@ -1,8 +1,8 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "plugin": "org.taumc.celeritas.mixin.CeleritasVintageMixinPlugin",
-  "package": "org.taumc.celeritas.mixin",
+  "plugin": "com.dhj.actinium.mixin.ActiniumVintageMixinPlugin",
+  "package": "com.dhj.actinium.mixin.vintage",
   "compatibilityLevel": "JAVA_8",
   "client": [
   ],

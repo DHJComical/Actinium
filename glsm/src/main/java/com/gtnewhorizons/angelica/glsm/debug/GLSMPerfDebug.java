@@ -193,6 +193,8 @@ public final class GLSMPerfDebug {
         for (StackTraceElement element : stack) {
             String className = element.getClassName();
             if (className.startsWith("com.gtnewhorizons.angelica.glsm.debug.")
+                || className.startsWith("com.dhj.actinium.render.")
+                || className.startsWith("com.dhj.actinium.mixin.vintage.core.")
                 || className.startsWith("org.taumc.celeritas.impl.render.")
                 || className.startsWith("org.taumc.celeritas.mixin.core.")
                 || isBufferBuilderBridge(className, element.getMethodName())

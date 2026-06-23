@@ -23,14 +23,14 @@ import net.coderbot.iris.uniforms.builtin.BuiltinReplacementUniforms;
 import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
+import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
-import org.taumc.celeritas.lwjgl.MemoryStack;
+import com.mitchej123.lwjgl.MemoryStack;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
@@ -263,3 +263,4 @@ public class IrisLodRenderProgram {
     }
 
 }
+

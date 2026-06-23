@@ -1,7 +1,7 @@
 package org.embeddedt.embeddium.impl.gl.tessellation;
 
-import org.taumc.celeritas.lwjgl.GL32;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL32;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 
 public enum GlIndexType {
@@ -25,3 +25,4 @@ public enum GlIndexType {
         return this.stride;
     }
 }
+

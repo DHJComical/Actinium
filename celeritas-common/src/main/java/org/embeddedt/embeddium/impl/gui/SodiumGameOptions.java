@@ -8,12 +8,11 @@ import com.google.gson.JsonSyntaxException;
 import com.gtnewhorizons.angelica.glsm.streaming.StreamingUploader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.taumc.celeritas.api.options.structure.OptionStorage;
+import org.embeddedt.embeddium.api.options.structure.OptionStorage;
 import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.embeddedt.embeddium.impl.gui.options.TextProvider;
 import org.embeddedt.embeddium.impl.render.chunk.MultiDrawMode;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
-import org.taumc.celeritas.impl.gui.CeleritasFullscreenMode;
 
 import java.io.FileReader;
 import java.io.IOException;
@@ -132,7 +131,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
     }
 
     public static class WindowSettings {
-        public CeleritasFullscreenMode fullscreenMode;
+        public String fullscreenMode;
     }
 
     public enum GraphicsQuality implements TextProvider {

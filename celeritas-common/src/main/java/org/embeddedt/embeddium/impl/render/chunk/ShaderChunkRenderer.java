@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 public abstract class ShaderChunkRenderer implements ChunkRenderer {
     private static final Logger LOGGER = LogManager.getLogger(ShaderChunkRenderer.class);
@@ -159,3 +159,4 @@ public abstract class ShaderChunkRenderer implements ChunkRenderer {
         return this.renderPassConfiguration;
     }
 }
+

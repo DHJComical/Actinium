@@ -1,0 +1,131 @@
+package com.dhj.actinium.render.terrain;
+
+import com.google.common.collect.ImmutableListMultimap;
+import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.client.renderer.texture.TextureMap;
+import net.minecraft.util.BlockRenderLayer;
+import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
+import org.embeddedt.embeddium.impl.render.chunk.compile.sorting.QuadPrimitiveType;
+import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
+import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
+import org.embeddedt.embeddium.impl.render.chunk.terrain.material.parameters.AlphaCutoffParameter;
+import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
+import com.dhj.actinium.runtime.ActiniumRuntime;
+
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
+public class VintageRenderPassConfigurationBuilder {
+
+    private static TerrainRenderPass.PipelineState blocksTextureState(boolean mipped) {
+        return new TerrainRenderPass.PipelineState() {
+            @Override
+            public void setup() {
+                apply(mipped);
+            }
+
+            @Override
+            public void clear() {
+                apply(Minecraft.getMinecraft().gameSettings.mipmapLevels > 0);
+            }
+
+            private void apply(boolean mippedValue) {
+                // Forcefully reset the mipmap state to the expected value for terrain. Mods sometimes manage to corrupt it.
+                Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
+                ((AbstractTexture) Minecraft.getMinecraft().getTextureManager().getTexture(TextureMap.LOCATION_BLOCKS_TEXTURE)).setBlurMipmapDirect(false, mippedValue);
+            }
+        };
+    }
+
+    private static TerrainRenderPass.TerrainRenderPassBuilder builderForRenderType(BlockRenderLayer chunkRenderType, ChunkVertexType vertexType, boolean mipped) {
+        var extraDefines = new HashMap<String, String>();
+
+        if (ActiniumRuntime.options().quality.chunkFadeInDuration > 0) {
+            extraDefines.put("CHUNK_FADE_IN_DURATION_MS", String.valueOf(ActiniumRuntime.options().quality.chunkFadeInDuration));
+        }
+
+        return TerrainRenderPass.builder().extraDefines(extraDefines).pipelineState(blocksTextureState(mipped)).vertexType(vertexType).primitiveType(QuadPrimitiveType.TRIANGULATED);
+    }
+
+    public static RenderPassConfiguration<BlockRenderLayer> build(ChunkVertexType vertexType) {
+        // First, build the main passes
+        TerrainRenderPass solidPass, cutoutMippedPass, translucentPass;
+
+        solidPass = builderForRenderType(BlockRenderLayer.SOLID, vertexType, true)
+                .name("solid")
+                .fragmentDiscard(false)
+                .useReverseOrder(false)
+                .build();
+        cutoutMippedPass = builderForRenderType(BlockRenderLayer.CUTOUT_MIPPED, vertexType, true)
+                .name("cutout_mipped")
+                .fragmentDiscard(true)
+                .useReverseOrder(false)
+                .build();
+        translucentPass = builderForRenderType(BlockRenderLayer.TRANSLUCENT, vertexType, true)
+                .name("translucent")
+                .fragmentDiscard(false)
+                .useReverseOrder(true)
+                .useTranslucencySorting(ActiniumRuntime.options().performance.useTranslucentFaceSorting)
+                .build();
+
+        ImmutableListMultimap.Builder<BlockRenderLayer, TerrainRenderPass> vanillaRenderStages = ImmutableListMultimap.builder();
+
+        // Build the materials for the vanilla render passes
+        Material solidMaterial, cutoutMaterial, cutoutMippedMaterial, translucentMaterial;
+        solidMaterial = new Material(solidPass, AlphaCutoffParameter.ZERO, true);
+        translucentMaterial = new Material(translucentPass, AlphaCutoffParameter.ZERO, true);
+        cutoutMippedMaterial = new Material(cutoutMippedPass, AlphaCutoffParameter.ONE_TENTH, true);
+
+        vanillaRenderStages.put(BlockRenderLayer.SOLID, solidPass);
+        vanillaRenderStages.put(BlockRenderLayer.TRANSLUCENT, translucentPass);
+
+        if (ActiniumRuntime.options().performance.useRenderPassConsolidation) {
+            cutoutMaterial = new Material(cutoutMippedPass, AlphaCutoffParameter.ONE_TENTH, false);
+            vanillaRenderStages.put(BlockRenderLayer.CUTOUT, cutoutMippedPass);
+            vanillaRenderStages.put(BlockRenderLayer.CUTOUT_MIPPED, cutoutMippedPass);
+        } else {
+            TerrainRenderPass cutoutPass;
+
+            cutoutPass = builderForRenderType(BlockRenderLayer.CUTOUT, vertexType, false)
+                    .name("cutout")
+                    .fragmentDiscard(true)
+                    .useReverseOrder(false)
+                    .build();
+
+            cutoutMaterial = new Material(cutoutPass, AlphaCutoffParameter.ONE_TENTH, false);
+            vanillaRenderStages.put(BlockRenderLayer.CUTOUT, cutoutPass);
+            vanillaRenderStages.put(BlockRenderLayer.CUTOUT_MIPPED, cutoutMippedPass);
+        }
+
+        // Now build the material map
+        Map<BlockRenderLayer, Material> renderTypeToMaterialMap = new Reference2ReferenceOpenHashMap<>(4,
+                Reference2ReferenceOpenHashMap.VERY_FAST_LOAD_FACTOR);
+
+        renderTypeToMaterialMap.put(BlockRenderLayer.SOLID, solidMaterial);
+        renderTypeToMaterialMap.put(BlockRenderLayer.CUTOUT, cutoutMaterial);
+        renderTypeToMaterialMap.put(BlockRenderLayer.CUTOUT_MIPPED, cutoutMippedMaterial);
+        renderTypeToMaterialMap.put(BlockRenderLayer.TRANSLUCENT, translucentMaterial);
+
+        for (BlockRenderLayer layer : BlockRenderLayer.values()) {
+            if (!renderTypeToMaterialMap.containsKey(layer)) {
+                ActiniumRuntime.logger().warn("Falling back to cutout-like behavior for custom block render layer '{}'", layer);
+                TerrainRenderPass pass = builderForRenderType(layer, vertexType, true).name(layer.name().toLowerCase(Locale.ROOT)).fragmentDiscard(true).useReverseOrder(false).build();
+                Material material = new Material(pass, AlphaCutoffParameter.ONE_TENTH, true);
+                vanillaRenderStages.put(layer, pass);
+                renderTypeToMaterialMap.put(layer, material);
+            }
+        }
+
+        var vanillaRenderStageMap = vanillaRenderStages.build();
+
+        return new RenderPassConfiguration<>(renderTypeToMaterialMap,
+                vanillaRenderStageMap.asMap(),
+                solidMaterial,
+                cutoutMippedMaterial,
+                translucentMaterial);
+    }
+}
+

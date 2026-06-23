@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
+import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 
 @Mixin(ParticleManager.class)
 public class ParticleManagerIrisMixin {
@@ -123,7 +123,7 @@ public class ParticleManagerIrisMixin {
 
     @Unique
     private void actinium$setupCullingViewport() {
-        CeleritasWorldRenderer renderer = CeleritasWorldRenderer.instanceNullable();
+        ActiniumWorldRenderer renderer = ActiniumWorldRenderer.instanceNullable();
         this.actinium$cullingViewport = renderer != null ? renderer.getLastViewport() : null;
     }
 
@@ -179,3 +179,4 @@ public class ParticleManagerIrisMixin {
         }
     }
 }
+

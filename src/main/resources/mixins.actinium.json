@@ -37,7 +37,8 @@
     "features.iris.TextureUtilIrisMixin",
     "features.iris.TileEntityBeaconRendererIrisMixin",
     "features.iris.TileEntityEndPortalRendererIrisMixin",
-    "features.iris.TileEntityRendererDispatcherIrisMixin",    "features.iris.startup.AbstractTextureIrisMixin",
+    "features.iris.TileEntityRendererDispatcherIrisMixin",
+    "features.iris.startup.AbstractTextureIrisMixin",
     "features.iris.startup.TextureAtlasSpriteIrisMixin",
     "features.iris.startup.TextureMapIrisMixin"
   ],

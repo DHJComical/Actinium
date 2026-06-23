@@ -1,6 +1,6 @@
 package org.embeddedt.embeddium.impl.render.chunk.data;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 // This code is a terrible hack to get around the fact that we are so incredibly memory bound, and that we
 // have no control over memory layout. The chunk rendering code spends an astronomical amount of time chasing

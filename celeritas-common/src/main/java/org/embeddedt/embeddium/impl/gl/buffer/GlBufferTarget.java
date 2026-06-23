@@ -1,10 +1,10 @@
 package org.embeddedt.embeddium.impl.gl.buffer;
 
-import org.taumc.celeritas.lwjgl.GL20;
-import org.taumc.celeritas.lwjgl.GL21;
-import org.taumc.celeritas.lwjgl.GL31;
-import org.taumc.celeritas.lwjgl.GL43;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL20;
+import com.mitchej123.lwjgl.GL21;
+import com.mitchej123.lwjgl.GL31;
+import com.mitchej123.lwjgl.GL43;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 
 public enum GlBufferTarget {
@@ -35,3 +35,4 @@ public enum GlBufferTarget {
         return this.binding;
     }
 }
+

@@ -1,8 +1,8 @@
 package org.embeddedt.embeddium.impl.gl.profiling;
 
-import org.taumc.celeritas.lwjgl.GL32;
-import org.taumc.celeritas.lwjgl.GL33;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL32;
+import com.mitchej123.lwjgl.GL33;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import it.unimi.dsi.fastutil.ints.IntArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
@@ -89,3 +89,4 @@ public class TimerQueryManager implements Closeable {
         }
     }
 }
+

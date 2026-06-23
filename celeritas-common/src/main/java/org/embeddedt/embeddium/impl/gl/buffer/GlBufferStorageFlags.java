@@ -1,8 +1,8 @@
 package org.embeddedt.embeddium.impl.gl.buffer;
 
-import org.taumc.celeritas.lwjgl.GL30;
-import org.taumc.celeritas.lwjgl.GL44;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL30;
+import com.mitchej123.lwjgl.GL44;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import org.embeddedt.embeddium.impl.gl.util.EnumBit;
 
@@ -24,3 +24,4 @@ public enum GlBufferStorageFlags implements EnumBit {
         return this.bits;
     }
 }
+

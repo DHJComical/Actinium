@@ -1,10 +1,10 @@
 package net.coderbot.iris.celeritas;
 
-import com.dhj.actinium.celeritas.BlockRenderLayer;
-import com.dhj.actinium.celeritas.ShaderProvider;
-import com.dhj.actinium.celeritas.vertices.ExtendedChunkVertexType;
+import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
+import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
+import net.coderbot.iris.celeritas.vertices.ExtendedChunkVertexType;
 import net.coderbot.iris.shadows.ShadowRenderingState;
 import net.minecraft.block.Block;
 import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
@@ -57,6 +57,11 @@ public class IrisCeleritasShaderProvider implements ShaderProvider {
     @Override
     public void setRenderPassConfiguration(RenderPassConfiguration<?> configuration) {
         this.renderPassConfiguration = configuration;
+    }
+
+    @Override
+    public int getBlockStateId(Block block, int metadata) {
+        return BlockRenderingSettings.INSTANCE.getBlockStateId(block, metadata);
     }
 
     @Override

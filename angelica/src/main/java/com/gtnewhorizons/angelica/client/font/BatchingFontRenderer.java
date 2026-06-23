@@ -25,7 +25,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
-import org.taumc.celeritas.CeleritasVintage;
+import com.dhj.actinium.runtime.ActiniumRuntime;
 
 
 import java.nio.ByteBuffer;
@@ -818,7 +818,7 @@ public class BatchingFontRenderer {
         }
 
         try {
-            return CeleritasVintage.options().debug.enableActiniumGlDebug;
+            return ActiniumRuntime.options().debug.enableActiniumGlDebug;
         } catch (RuntimeException ignored) {
             return false;
         }

@@ -1,6 +1,6 @@
 package org.embeddedt.embeddium.impl.gl.shader.uniform;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 public class GlUniformInt3v extends GlUniform<int[]> {
     public GlUniformInt3v(int index) {
@@ -20,3 +20,4 @@ public class GlUniformInt3v extends GlUniform<int[]> {
         LWJGL.glUniform3i(this.index, x, y, z);
     }
 }
+

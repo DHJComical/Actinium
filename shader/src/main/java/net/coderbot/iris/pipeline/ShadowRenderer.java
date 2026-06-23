@@ -5,12 +5,12 @@ import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
 import com.dhj.actinium.config.ActiniumConfig;
+import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
-import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.debug.IrisGlDebug;
@@ -838,7 +838,7 @@ public class ShadowRenderer {
 		if (ActiniumConfig.enableCeleritas) {
 			RenderDevice.enterManagedCode();
 			celeritasManaged = true;
-			CeleritasWorldRenderer renderer = CeleritasWorldRenderer.instance();
+			ActiniumWorldRenderer renderer = ActiniumWorldRenderer.instance();
 			var terrainViewport = ((ViewportProvider)terrainFrustumHolder.getFrustum()).sodium$createViewport();
 			renderer.getRenderSectionManager().markGraphDirty();
 			renderer.setupTerrain(
@@ -873,7 +873,7 @@ public class ShadowRenderer {
 		// Render all opaque terrain unless pack requests not to
 		if (shouldRenderTerrain) {
             mc.renderEngine.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-            CeleritasWorldRenderer.instance().drawChunkLayersDeduplicated(OPAQUE_SHADOW_TERRAIN_LAYERS, terrainX, terrainY, terrainZ);
+            ActiniumWorldRenderer.instance().drawChunkLayersDeduplicated(OPAQUE_SHADOW_TERRAIN_LAYERS, terrainX, terrainY, terrainZ);
 		}
 
 		// Reset viewport in case terrain rendering changed it
@@ -899,7 +899,7 @@ public class ShadowRenderer {
 
 		// Set viewport for entity visibility checks during shadow pass (matches modern Celeritas)
 		if (ActiniumConfig.enableCeleritas) {
-			CeleritasWorldRenderer.instance().setCurrentViewport(((ViewportProvider)entityShadowFrustum).sodium$createViewport());
+			ActiniumWorldRenderer.instance().setCurrentViewport(((ViewportProvider)entityShadowFrustum).sodium$createViewport());
 		}
 
 		// Render nearby entities
@@ -928,7 +928,7 @@ public class ShadowRenderer {
 		// It doesn't matter a ton, since this just means that they won't be sorted in the getNormal rendering pass.
 		// Just something to watch out for, however...
 		if (shouldRenderTranslucent) {
-            CeleritasWorldRenderer.instance().drawChunkLayer(BlockRenderLayer.TRANSLUCENT, terrainX, terrainY, terrainZ);
+            ActiniumWorldRenderer.instance().drawChunkLayer(BlockRenderLayer.TRANSLUCENT, terrainX, terrainY, terrainZ);
 		}
 
 		if (celeritasManaged) {
@@ -962,7 +962,7 @@ public class ShadowRenderer {
 			shouldRenderEntities,
 			shouldRenderPlayer,
 			shouldRenderBlockEntities,
-			ActiniumConfig.enableCeleritas ? CeleritasWorldRenderer.instance().getVisibleChunkCount() : -1,
+			ActiniumConfig.enableCeleritas ? ActiniumWorldRenderer.instance().getVisibleChunkCount() : -1,
 			renderedShadowEntities,
 			renderedShadowTileEntities
 		);
@@ -990,7 +990,7 @@ public class ShadowRenderer {
 		messages.add("  Shadow Maps: " + debugStringOverall);
 		messages.add("  Shadow Distance Terrain: " + terrainFrustumHolder.getDistanceInfo() + " Entity: " + entityFrustumHolder.getDistanceInfo());
 		messages.add("  Shadow Culling Terrain: " + terrainFrustumHolder.getCullingInfo() + " Entity: " + entityFrustumHolder.getCullingInfo());
-		messages.add("  Shadow Terrain: " + CeleritasWorldRenderer.instance().getChunksDebugString() + (shouldRenderTerrain ? "" : " (no terrain) ") + (shouldRenderTranslucent ? "" : "(no translucent)"));
+		messages.add("  Shadow Terrain: " + ActiniumWorldRenderer.instance().getChunksDebugString() + (shouldRenderTerrain ? "" : " (no terrain) ") + (shouldRenderTranslucent ? "" : "(no translucent)"));
 		messages.add("  Shadow Entities: " + getEntitiesDebugString());
 		messages.add("  Shadow Block Entities: " + getTileEntitiesDebugString());
 
@@ -1025,3 +1025,4 @@ public class ShadowRenderer {
 		}
 	}
 }
+

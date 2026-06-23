@@ -1,8 +1,8 @@
 package org.embeddedt.embeddium.impl.render.frame;
 
-import org.taumc.celeritas.lwjgl.GL32;
-import org.taumc.celeritas.lwjgl.GL32;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL32;
+import com.mitchej123.lwjgl.GL32;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 
@@ -44,3 +44,4 @@ public class RenderAheadManager {
         this.fences.enqueue(fence);
     }
 }
+

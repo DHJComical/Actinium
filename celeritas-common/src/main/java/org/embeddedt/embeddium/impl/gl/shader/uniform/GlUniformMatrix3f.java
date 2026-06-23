@@ -1,6 +1,6 @@
 package org.embeddedt.embeddium.impl.gl.shader.uniform;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import org.joml.Matrix3f;
 import org.lwjgl.BufferUtils;
@@ -21,3 +21,4 @@ public class GlUniformMatrix3f extends GlUniform<Matrix3f> {
         LWJGL.glUniformMatrix3fv(this.index, false, this.scratchBuffer);
     }
 }
+

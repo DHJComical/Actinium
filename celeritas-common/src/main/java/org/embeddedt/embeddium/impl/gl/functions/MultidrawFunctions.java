@@ -1,10 +1,10 @@
 package org.embeddedt.embeddium.impl.gl.functions;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
-import org.taumc.celeritas.lwjgl.GLExtension;
-import org.taumc.celeritas.lwjgl.LWJGLServiceProvider;
+import com.mitchej123.lwjgl.GLExtension;
+import com.mitchej123.lwjgl.LWJGLServiceProvider;
 
 public enum MultidrawFunctions {
     NONE {
@@ -46,3 +46,4 @@ public enum MultidrawFunctions {
 
     public abstract void multiDrawElementsBaseVertex(int mode, long pCount, int type, long pIndices, int size, long pBaseVertex);
 }
+

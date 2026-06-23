@@ -3,7 +3,7 @@ package org.embeddedt.embeddium.impl.render.chunk.compile.sorting;
 import org.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
 import org.embeddedt.embeddium.impl.util.sorting.MergeSort;
 import org.jetbrains.annotations.Nullable;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import java.nio.ByteBuffer;
 import java.util.BitSet;
@@ -164,3 +164,4 @@ public final class QuadPrimitiveType implements ChunkPrimitiveType {
         generateIndexBuffer(indexBuffer, indicesArray);
     }
 }
+

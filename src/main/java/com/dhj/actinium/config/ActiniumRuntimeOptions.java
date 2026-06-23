@@ -1,6 +1,6 @@
 package com.dhj.actinium.config;
 
-import org.taumc.celeritas.CeleritasVintage;
+import com.dhj.actinium.runtime.ActiniumRuntime;
 
 public final class ActiniumRuntimeOptions {
     private static final String ALLOW_DIRECT_MEMORY_ACCESS_PROPERTY = "actinium.allowDirectMemoryAccess";
@@ -19,7 +19,7 @@ public final class ActiniumRuntimeOptions {
         }
 
         try {
-            return CeleritasVintage.options().advanced.allowDirectMemoryAccess;
+            return ActiniumRuntime.options().advanced.allowDirectMemoryAccess;
         } catch (RuntimeException | LinkageError ignored) {
             return true;
         }
@@ -41,7 +41,7 @@ public final class ActiniumRuntimeOptions {
         }
 
         try {
-            return CeleritasVintage.options().advanced.useModelRendererDisplayLists;
+            return ActiniumRuntime.options().advanced.useModelRendererDisplayLists;
         } catch (RuntimeException | LinkageError ignored) {
             return true;
         }
@@ -54,7 +54,7 @@ public final class ActiniumRuntimeOptions {
         }
 
         try {
-            return CeleritasVintage.options().advanced.useFastLitItemRendering;
+            return ActiniumRuntime.options().advanced.useFastLitItemRendering;
         } catch (RuntimeException | LinkageError ignored) {
             return true;
         }
@@ -67,7 +67,7 @@ public final class ActiniumRuntimeOptions {
         }
 
         try {
-            return CeleritasVintage.options().advanced.useFastLitItemDisplayLists;
+            return ActiniumRuntime.options().advanced.useFastLitItemDisplayLists;
         } catch (RuntimeException | LinkageError ignored) {
             return true;
         }

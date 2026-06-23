@@ -3,7 +3,7 @@ package com.gtnewhorizons.angelica.proxy;
 import com.dhj.actinium.config.AnimationMode;
 import com.dhj.actinium.config.ManagedEnum;
 import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
-import org.taumc.celeritas.CeleritasVintage;
+import com.dhj.actinium.runtime.ActiniumRuntime;
 
 public final class ClientProxy {
     public static final ManagedEnum<AnimationMode> animationsMode = new ManagedEnum<>(AnimationMode.VISIBLE_ONLY);
@@ -12,6 +12,6 @@ public final class ClientProxy {
     }
 
     public static SodiumGameOptions options() {
-        return CeleritasVintage.options();
+        return ActiniumRuntime.options();
     }
 }

@@ -1,8 +1,7 @@
 package net.coderbot.iris;
 
 import com.google.common.base.Throwables;
-import com.dhj.actinium.celeritas.buffer.ShaderMaterialOverrideState;
-import com.dhj.actinium.celeritas.ShaderProviderHolder;
+import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import com.dhj.actinium.config.ActiniumConfig;
 import com.gtnewhorizons.angelica.proxy.ClientProxy;
 import com.gtnewhorizons.angelica.rendering.StateAwareTessellator;
@@ -11,6 +10,8 @@ import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import lombok.Getter;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
+import net.coderbot.iris.celeritas.buffer.ShaderMaterialOverrideState;
+import net.coderbot.iris.celeritas.debug.IrisRenderDebugHooks;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.config.IrisConfig;
 import net.coderbot.iris.celeritas.IrisCeleritasShaderProvider;
@@ -47,6 +48,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.InputEvent;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.input.Keyboard;
+import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -374,6 +376,7 @@ public class Iris {
      * <p>This is called right before options are loaded, so we can add key bindings here.</p>
      */
     public void onEarlyInitialize() {
+        RenderDebugHooksHolder.setHooks(IrisRenderDebugHooks.INSTANCE);
         DHCompat.run();
         try {
             if (!Files.exists(getShaderpacksDirectory())) {

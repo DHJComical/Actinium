@@ -5,7 +5,7 @@ import it.unimi.dsi.fastutil.objects.Reference2ReferenceMaps;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.taumc.celeritas.lwjgl.LWJGLServiceProvider;
+import com.mitchej123.lwjgl.LWJGLServiceProvider;
 
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
@@ -14,7 +14,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 public class NativeBuffer {
     private static final Logger LOGGER = LogManager.getLogger(NativeBuffer.class);
@@ -154,3 +154,4 @@ public class NativeBuffer {
         }
     }
 }
+

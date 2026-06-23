@@ -1,8 +1,8 @@
 package org.embeddedt.embeddium.impl.gl.shader;
 
-import org.taumc.celeritas.lwjgl.GL20;
-import org.taumc.celeritas.lwjgl.GL43;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL20;
+import com.mitchej123.lwjgl.GL43;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import org.embeddedt.embeddium.impl.gl.GlObject;
 import org.apache.logging.log4j.LogManager;
@@ -50,3 +50,4 @@ public class GlShader extends GlObject {
         LWJGL.glDeleteShader(this.handle());
     }
 }
+

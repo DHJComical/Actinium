@@ -1,10 +1,10 @@
 package org.embeddedt.embeddium.impl.gl.shader;
 
-import org.taumc.celeritas.lwjgl.GL20;
-import org.taumc.celeritas.lwjgl.GL32;
-import org.taumc.celeritas.lwjgl.GL42;
-import org.taumc.celeritas.lwjgl.GL43;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL20;
+import com.mitchej123.lwjgl.GL32;
+import com.mitchej123.lwjgl.GL42;
+import com.mitchej123.lwjgl.GL43;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -31,3 +31,4 @@ public enum ShaderType {
     public final int id;
     public final String fileExtension;
 }
+

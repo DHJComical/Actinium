@@ -1,8 +1,6 @@
 package com.dhj.actinium.mixin.core.terrain;
 
-import com.dhj.actinium.celeritas.buffer.BufferBuilderExtension;
-import com.dhj.actinium.celeritas.buffer.ShaderMaterialOverrideState;
-import com.dhj.actinium.celeritas.buffer.VanillaQuadContext;
+import net.coderbot.iris.celeritas.buffer.ShaderMaterialOverrideState;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.vertex.VertexFormat;
 import org.jetbrains.annotations.Nullable;
@@ -13,6 +11,8 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
+import org.embeddedt.embeddium.api.shader.buffer.VanillaQuadContext;
 
 import java.util.ArrayList;
 import java.util.List;

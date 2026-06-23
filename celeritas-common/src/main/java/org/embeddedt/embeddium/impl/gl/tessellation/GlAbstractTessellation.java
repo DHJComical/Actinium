@@ -1,6 +1,6 @@
 package org.embeddedt.embeddium.impl.gl.tessellation;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeBinding;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
@@ -33,3 +33,4 @@ public abstract class GlAbstractTessellation implements GlTessellation {
         }
     }
 }
+

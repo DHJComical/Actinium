@@ -1,12 +1,12 @@
 package org.embeddedt.embeddium.impl.gl.functions;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import org.embeddedt.embeddium.impl.gl.buffer.GlBufferStorageFlags;
 import org.embeddedt.embeddium.impl.gl.buffer.GlBufferTarget;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.gl.util.EnumBitField;
-import org.taumc.celeritas.lwjgl.GLExtension;
+import com.mitchej123.lwjgl.GLExtension;
 
 public enum BufferStorageFunctions {
     NONE {
@@ -41,3 +41,4 @@ public enum BufferStorageFunctions {
 
     public abstract void createBufferStorage(GlBufferTarget target, long length, EnumBitField<GlBufferStorageFlags> flags);
 }
+

@@ -24,7 +24,7 @@ import net.minecraftforge.fml.common.gameevent.InputEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.input.Keyboard;
-import org.taumc.celeritas.api.OptionGUIConstructionEvent;
+import org.embeddedt.embeddium.api.OptionGUIConstructionEvent;
 
 public class Gnetum {
     private static MutableScaledResolution scaledResolution;

@@ -1,7 +1,7 @@
 package org.embeddedt.embeddium.impl.gl.device;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
-import org.taumc.celeritas.lwjgl.LWJGLServiceProvider;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.LWJGLServiceProvider;
 import java.nio.IntBuffer;
 
 /**
@@ -71,3 +71,4 @@ public final class MultiDrawBatch {
         return elements;
     }
 }
+

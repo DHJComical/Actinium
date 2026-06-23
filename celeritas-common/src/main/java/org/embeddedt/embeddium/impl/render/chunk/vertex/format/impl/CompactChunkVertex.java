@@ -4,7 +4,7 @@ import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeFormat;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import java.util.List;
 import java.util.Map;
@@ -89,3 +89,4 @@ public class CompactChunkVertex implements ChunkVertexType {
         return (short) (Math.round(value * TEXTURE_MAX_VALUE) & 0xFFFF);
     }
 }
+

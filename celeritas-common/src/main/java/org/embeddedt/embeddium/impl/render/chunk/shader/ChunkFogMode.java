@@ -1,7 +1,7 @@
 package org.embeddedt.embeddium.impl.render.chunk.shader;
 
-import org.taumc.celeritas.lwjgl.GL20;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import com.mitchej123.lwjgl.GL20;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
 
@@ -44,3 +44,4 @@ public enum ChunkFogMode implements ChunkShaderComponent.Factory<ChunkShaderFogC
         }
     }
 }
+

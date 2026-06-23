@@ -4,7 +4,7 @@ import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
 import org.jetbrains.annotations.Nullable;
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 import java.nio.ByteBuffer;
 
 public class ChunkMeshBufferBuilder {
@@ -110,3 +110,4 @@ public class ChunkMeshBufferBuilder {
         return this.count;
     }
 }
+

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
+import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 
 import java.awt.Color;
 

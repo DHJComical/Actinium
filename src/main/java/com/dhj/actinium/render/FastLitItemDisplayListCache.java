@@ -16,7 +16,7 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.client.model.BakedItemModel;
 import org.lwjgl.opengl.GL11;
-import org.taumc.celeritas.impl.render.terrain.sprite.SpriteUtil;
+import com.dhj.actinium.render.terrain.sprite.SpriteUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -354,3 +354,4 @@ public final class FastLitItemDisplayListCache {
         }
     }
 }
+

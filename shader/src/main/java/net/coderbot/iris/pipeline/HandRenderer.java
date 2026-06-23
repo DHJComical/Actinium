@@ -5,7 +5,7 @@ import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.compat.mojang.InteractionHand;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
-import com.dhj.actinium.celeritas.BlockRenderLayer;
+import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
 import lombok.Getter;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.coderbot.iris.debug.IrisGlDebug;

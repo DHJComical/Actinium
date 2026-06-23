@@ -4,7 +4,7 @@ import com.google.common.base.Stopwatch;
 import com.gtnewhorizons.angelica.glsm.CompatShaderTransformer;
 import com.gtnewhorizons.angelica.glsm.GlslTransformUtils;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
-import com.dhj.actinium.celeritas.vertices.ExtendedChunkVertexType;
+import net.coderbot.iris.celeritas.vertices.ExtendedChunkVertexType;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;

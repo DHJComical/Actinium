@@ -16,7 +16,7 @@ import net.coderbot.iris.shadows.ShadowRenderingState;
 import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import org.taumc.celeritas.mixin.core.terrain.AccessorEntityRenderer;
+import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix3f;

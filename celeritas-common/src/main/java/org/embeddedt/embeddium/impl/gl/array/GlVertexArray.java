@@ -1,7 +1,7 @@
 package org.embeddedt.embeddium.impl.gl.array;
 
 import org.embeddedt.embeddium.impl.gl.GlObject;
-import org.taumc.celeritas.lwjgl.LWJGLServiceProvider;
+import com.mitchej123.lwjgl.LWJGLServiceProvider;
 
 /**
  * Provides Vertex Array functionality on supported platforms.
@@ -18,3 +18,4 @@ public class GlVertexArray extends GlObject {
         LWJGLServiceProvider.LWJGL.glDeleteVertexArrays(this.handle());
     }
 }
+

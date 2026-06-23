@@ -8,11 +8,11 @@ import org.embeddedt.embeddium.impl.gl.sync.GlFence;
 import org.embeddedt.embeddium.impl.gl.tessellation.*;
 import org.embeddedt.embeddium.impl.gl.util.EnumBitField;
 import org.jetbrains.annotations.Nullable;
-import org.taumc.celeritas.lwjgl.GL32;
+import com.mitchej123.lwjgl.GL32;
 
 import java.nio.ByteBuffer;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 public class GLRenderDevice implements RenderDevice {
     private final GlStateTracker stateTracker = new GlStateTracker();
@@ -295,3 +295,4 @@ public class GLRenderDevice implements RenderDevice {
         }
     }
 }
+

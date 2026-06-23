@@ -22,10 +22,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class ActiniumVintageMixinPlugin implements IMixinConfigPlugin {
-    public static final Logger LOGGER = LogManager.getLogger("CeleritasMixins");
+    public static final Logger LOGGER = LogManager.getLogger("ActiniumMixins");
+    private String configuredMixinPackage;
 
     @Override
     public void onLoad(String mixinPackage) {
+        this.configuredMixinPackage = mixinPackage;
         LOGGER.info("Loaded Actinium mixin plugin");
     }
 
@@ -54,47 +56,29 @@ public class ActiniumVintageMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public List<String> getMixins() {
-        if (hasStaticMixinEntries()) {
+        if (!requiresDynamicDiscovery()) {
             return Collections.emptyList();
         }
 
         return discoverMixins();
     }
 
-    private static boolean hasStaticMixinEntries() {
-        try (var stream = ActiniumVintageMixinPlugin.class.getResourceAsStream("/mixins.celeritas.json")) {
-            if (stream == null) {
-                return false;
-            }
-
-            JsonObject config = JsonParser.parseReader(new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject();
-            return hasEntries(config.getAsJsonArray("mixins")) || hasEntries(config.getAsJsonArray("client"));
-        } catch (Exception e) {
-            LOGGER.warn("Failed to inspect mixin config for static entries, falling back to runtime discovery", e);
-            return false;
-        }
+    private boolean requiresDynamicDiscovery() {
+        return "com.dhj.actinium.mixin.vintage".equals(this.configuredMixinPackage)
+            || "org.taumc.celeritas.mixin".equals(this.configuredMixinPackage);
     }
 
-    private static boolean hasEntries(JsonArray entries) {
-        return entries != null && !entries.isEmpty();
-    }
-
-    private static List<String> discoverMixins() {
+    private List<String> discoverMixins() {
         List<Path> rootPaths = new ArrayList<>();
+        String packagePath = this.configuredMixinPackage.replace('.', '/');
 
-        rootPaths.addAll(Stream.of("com.dhj.actinium.mixin", "org.taumc.celeritas.mixin")
-                .flatMap(str -> {
-                    URL url = ActiniumVintageMixinPlugin.class.getResource("/" + str.replace('.', '/'));
-                    if (url == null) {
-                        return Stream.empty();
-                    }
-                    try {
-                        return Stream.of(Paths.get(url.toURI()));
-                    } catch (Exception e) {
-                        return Stream.empty();
-                    }
-                })
-                .collect(Collectors.toList()));
+        URL url = ActiniumVintageMixinPlugin.class.getResource("/" + packagePath);
+        if (url != null) {
+            try {
+                rootPaths.add(Paths.get(url.toURI()));
+            } catch (Exception ignored) {
+            }
+        }
 
         if (rootPaths.isEmpty()) {
             try {
@@ -105,8 +89,7 @@ public class ActiniumVintageMixinPlugin implements IMixinConfigPlugin {
                 } catch (FileSystemNotFoundException var11) {
                     fs = FileSystems.newFileSystem(uri, Collections.emptyMap());
                 }
-                rootPaths.add(fs.getPath("com", "dhj", "actinium", "mixin").toAbsolutePath());
-                rootPaths.add(fs.getPath("org", "taumc", "celeritas", "mixin").toAbsolutePath());
+                rootPaths.add(fs.getPath(packagePath).toAbsolutePath());
             } catch(Exception e) {
                 LOGGER.error("Error finding mixins", e);
             }

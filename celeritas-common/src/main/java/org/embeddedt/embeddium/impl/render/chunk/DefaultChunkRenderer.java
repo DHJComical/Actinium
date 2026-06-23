@@ -3,7 +3,6 @@ package org.embeddedt.embeddium.impl.render.chunk;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import com.gtnewhorizons.angelica.AngelicaMod;
-import net.coderbot.iris.debug.IrisGlDebug;
 import org.embeddedt.embeddium.impl.gl.array.GlVertexArray;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeBinding;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
@@ -26,11 +25,12 @@ import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.util.BitwiseMath;
-import org.taumc.celeritas.CeleritasVintage;
-import org.taumc.celeritas.lwjgl.GLExtension;
+import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import com.dhj.actinium.runtime.ActiniumRuntime;
+import com.mitchej123.lwjgl.GLExtension;
 import java.util.Iterator;
 
-import static org.taumc.celeritas.lwjgl.LWJGLServiceProvider.LWJGL;
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
     private static boolean loggedMultiDrawMode;
@@ -55,7 +55,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
     private static MultiDrawEmitter createEmitter(RenderDevice device) {
         String override = System.getProperty("actinium.chunkMultiDrawMode", "").trim();
-        MultiDrawMode configuredMode = CeleritasVintage.options().advanced.multiDrawMode;
+        MultiDrawMode configuredMode = ActiniumRuntime.options().advanced.multiDrawMode;
         MultiDrawMode mode = override.isEmpty() ? configuredMode : MultiDrawMode.fromProperty(override);
         boolean gl32 = LWJGL.isOpenGLVersionSupported(3, 2);
         boolean gl43 = LWJGL.isOpenGLVersionSupported(4, 3);
@@ -116,7 +116,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
         // If there is no active program, shader compilation probably failed, and we can't render anything.
         if (this.activeProgram != null) {
-            long totalStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
+            long totalStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
             long fillNanos = 0L;
             long tessellationNanos = 0L;
             long uniformsNanos = 0L;
@@ -154,7 +154,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
                 }
 
                 regions++;
-                long fillStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
+                long fillStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
                 fillCommandBuffer(this.emitter, region, storage, renderList, occlusionCamera, renderPass, useBlockFaceCulling && !renderPass.isSorted());
                 if (fillStartNanos != 0L) {
                     fillNanos += System.nanoTime() - fillStartNanos;
@@ -170,20 +170,20 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
                    getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, this.emitter.getIndexBufferSize());
                 }
 
-                long tessellationStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
+                long tessellationStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
                 var tessellation = this.prepareTessellation(commandList, region);
                 if (tessellationStartNanos != 0L) {
                     tessellationNanos += System.nanoTime() - tessellationStartNanos;
                 }
 
-                long uniformsStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
+                long uniformsStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
                 setModelMatrixUniforms(shader, region, camera);
                 shader.setSectionAges(timestamp, region.getSectionLoadTimes());
                 if (uniformsStartNanos != 0L) {
                     uniformsNanos += System.nanoTime() - uniformsStartNanos;
                 }
 
-                long drawStartNanos = IrisGlDebug.beginRenderGlobalStageTiming();
+                long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
                 this.emitter.executeBatch(commandList, tessellation, primitiveType);
                 if (drawStartNanos != 0L) {
                     drawNanos += System.nanoTime() - drawStartNanos;
@@ -195,7 +195,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
             GLDebug.popGroup();
             if (totalStartNanos != 0L) {
-                IrisGlDebug.recordTerrainRendererTiming(
+                RenderDebugHooksHolder.recordTerrainRendererTiming(
                     renderPass.name(),
                     System.nanoTime() - totalStartNanos,
                     fillNanos,
@@ -387,3 +387,4 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
         this.emitter.delete();
     }
 }
+

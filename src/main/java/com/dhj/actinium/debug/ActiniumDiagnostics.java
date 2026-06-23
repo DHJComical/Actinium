@@ -1,12 +1,12 @@
 package com.dhj.actinium.debug;
 
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
+import com.dhj.actinium.core.ActiniumLoadingPlugin;
 import com.dhj.actinium.loading.ActiniumLateMixinLoader;
 import net.minecraft.launchwrapper.Launch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.taumc.celeritas.CeleritasVintage;
-import org.taumc.celeritas.core.CeleritasLoadingPlugin;
+import com.dhj.actinium.runtime.ActiniumRuntime;
 
 import me.decce.gnetum.mixins.LateMixinLoader;
 
@@ -29,7 +29,7 @@ public final class ActiniumDiagnostics {
         }
 
         try {
-            return CeleritasVintage.options().debug.enableProductionDiagnostics;
+            return ActiniumRuntime.options().debug.enableProductionDiagnostics;
         } catch (RuntimeException ignored) {
             return true;
         }
@@ -84,11 +84,11 @@ public final class ActiniumDiagnostics {
             || mixinClassName.startsWith("com.dhj.actinium.mixin.mod.gibbed.")
             || mixinClassName.startsWith("me.decce.gnetum.mixins.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.core.terrain.")
-            || mixinClassName.startsWith("org.taumc.celeritas.mixin.core.");
+            || mixinClassName.startsWith("com.dhj.actinium.mixin.vintage.core.");
     }
 
     private static String describeMixinConfigs() {
-        String earlyConfigs = String.join(",", CeleritasLoadingPlugin.getEarlyMixinConfigs());
+        String earlyConfigs = String.join(",", ActiniumLoadingPlugin.getEarlyMixinConfigs());
         String actiniumLateConfigs = String.join(",", new ActiniumLateMixinLoader().getMixinConfigs());
         String gnetumLateConfigs = String.join(",", new LateMixinLoader().getMixinConfigs());
 
@@ -101,7 +101,7 @@ public final class ActiniumDiagnostics {
 
     private static String describeConfig() {
         try {
-            var options = CeleritasVintage.options();
+            var options = ActiniumRuntime.options();
             return "advanced{multiDraw=" + options.advanced.multiDrawMode
                 + ",streaming=" + options.advanced.streamingUploadStrategy
                 + ",directMemory=" + ActiniumRuntimeOptions.allowDirectMemoryAccess()

@@ -6,7 +6,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL14;
-import org.taumc.celeritas.CeleritasVintage;
+import com.dhj.actinium.runtime.ActiniumRuntime;
 
 public final class GnetumDebug {
     private static final Logger LOGGER = LogManager.getLogger("GnetumHudDebug");
@@ -32,7 +32,7 @@ public final class GnetumDebug {
         }
 
         try {
-            return CeleritasVintage.options().debug.enableGnetumHudDebug;
+            return ActiniumRuntime.options().debug.enableGnetumHudDebug;
         } catch (RuntimeException | LinkageError ignored) {
             return false;
         }
