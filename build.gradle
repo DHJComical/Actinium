@@ -1,6 +1,3 @@
-import groovy.io.FileType
-import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
 import org.jetbrains.gradle.ext.Gradle
 
 plugins {
@@ -72,7 +69,6 @@ sourceSets {
         resources {
             srcDir 'glsm/src/main/resources'
             srcDir 'src/lwjgl3/resources'
-            exclude 'mixins.celeritas.json'
         }
     }
 }
@@ -165,56 +161,7 @@ unimined.minecraft {
 
 apply from: 'gradle/scripts/dependencies.gradle'
 
-def generatedMixinConfigDir = layout.buildDirectory.dir('generated/actinium/mixins')
-
-def generateMixinConfig = tasks.register('generateMixinConfig') {
-    def templateFile = layout.projectDirectory.file('src/main/resources/mixins.celeritas.json')
-    def outputFile = generatedMixinConfigDir.map { it.file('mixins.celeritas.json') }
-
-    inputs.file(templateFile)
-    inputs.files(sourceSets.main.allJava.srcDirs)
-    outputs.file(outputFile)
-
-    doLast {
-        def mixinConfig = new JsonSlurper().parse(templateFile.asFile)
-        def mixinPackage = mixinConfig.package
-        if (mixinPackage == null) {
-            throw new GradleException('mixins.celeritas.json is missing a package field')
-        }
-        def mixinPackagePath = mixinPackage.replace('.', '/') + '/'
-
-        def mixinClasses = [] as Set
-        sourceSets.main.allJava.srcDirs.findAll { it.exists() }.each { sourceRoot ->
-            sourceRoot.eachFileRecurse(FileType.FILES) { sourceFile ->
-                if (!sourceFile.name.endsWith('.java')) {
-                    return
-                }
-
-                def relativePath = sourceRoot.toPath().relativize(sourceFile.toPath()).toString().replace(File.separatorChar, '/' as char)
-                if (!relativePath.startsWith(mixinPackagePath)) {
-                    return
-                }
-
-                if (!sourceFile.getText('UTF-8').contains('@Mixin')) {
-                    return
-                }
-
-                mixinClasses.add(relativePath
-                    .substring(mixinPackagePath.length(), relativePath.length() - '.java'.length())
-                    .replace('/', '.'))
-            }
-        }
-
-        mixinConfig.client = mixinClasses.sort()
-
-        def output = outputFile.get().asFile
-        output.parentFile.mkdirs()
-        output.setText(JsonOutput.prettyPrint(JsonOutput.toJson(mixinConfig)) + System.lineSeparator(), 'UTF-8')
-    }
-}
-
 processResources {
-    dependsOn generateMixinConfig
     def resourceProperties = [
         mod_id         : propertyString('mod_id'),
         mod_name       : propertyString('mod_name'),
@@ -229,7 +176,6 @@ processResources {
 
     inputs.properties(resourceProperties)
     filteringCharset = 'UTF-8'
-    from(generateMixinConfig)
 
     filesMatching(['mcmod.info', 'pack.mcmeta']) {
         expand(resourceProperties)

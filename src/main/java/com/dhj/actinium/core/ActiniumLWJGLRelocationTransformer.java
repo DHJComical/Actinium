@@ -1,13 +1,15 @@
 package com.dhj.actinium.core;
 
-import com.dhj.actinium.mixin.ActiniumVintageMixinPlugin;
 import net.minecraft.launchwrapper.IClassTransformer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.Remapper;
 
 public class ActiniumLWJGLRelocationTransformer implements IClassTransformer {
+    private static final Logger LOGGER = LogManager.getLogger("ActiniumLWJGLRelocation");
     private static final Remapper LWJGL_REMAPPER = new LwjglRemapper();
 
     @Override
@@ -23,7 +25,7 @@ public class ActiniumLWJGLRelocationTransformer implements IClassTransformer {
                 reader.accept(remapper, 0);
                 return writer.toByteArray();
             } catch (Exception e) {
-                ActiniumVintageMixinPlugin.LOGGER.error("Exception remapping class", e);
+                LOGGER.error("Exception remapping class", e);
                 return basicClass;
             }
         }

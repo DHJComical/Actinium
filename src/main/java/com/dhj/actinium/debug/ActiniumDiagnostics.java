@@ -1,15 +1,13 @@
 package com.dhj.actinium.debug;
 
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
-import com.dhj.actinium.core.ActiniumLoadingPlugin;
-import com.dhj.actinium.loading.ActiniumLateMixinLoader;
+import com.dhj.actinium.mixins.MixinEarly;
+import com.dhj.actinium.mixins.MixinLate;
+import com.dhj.actinium.runtime.ActiniumRuntime;
+import me.decce.gnetum.mixins.LateMixinLoader;
 import net.minecraft.launchwrapper.Launch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import com.dhj.actinium.runtime.ActiniumRuntime;
-
-import me.decce.gnetum.mixins.LateMixinLoader;
-
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -81,6 +79,7 @@ public final class ActiniumDiagnostics {
 
     private static boolean isKeyMixin(String mixinClassName) {
         return mixinClassName.startsWith("com.dhj.actinium.mixin.features.iris.")
+            || mixinClassName.startsWith("com.dhj.actinium.mixin.mod.dh.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.mod.gibbed.")
             || mixinClassName.startsWith("me.decce.gnetum.mixins.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.core.terrain.")
@@ -88,8 +87,8 @@ public final class ActiniumDiagnostics {
     }
 
     private static String describeMixinConfigs() {
-        String earlyConfigs = String.join(",", ActiniumLoadingPlugin.getEarlyMixinConfigs());
-        String actiniumLateConfigs = String.join(",", new ActiniumLateMixinLoader().getMixinConfigs());
+        String earlyConfigs = String.join(",", MixinEarly.getEarlyMixinConfigs());
+        String actiniumLateConfigs = String.join(",", new MixinLate().getMixinConfigs());
         String gnetumLateConfigs = String.join(",", new LateMixinLoader().getMixinConfigs());
 
         if (actiniumLateConfigs.isEmpty()) {

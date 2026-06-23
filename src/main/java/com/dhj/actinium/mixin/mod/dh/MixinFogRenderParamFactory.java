@@ -1,5 +1,6 @@
-package com.dhj.actinium.compat.dh.mixin;
+package com.dhj.actinium.mixin.mod.dh;
 
+import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 import com.seibel.distanthorizons.api.enums.rendering.EDhApiFogColorMode;
 import com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftRenderWrapper;
 import com.seibel.distanthorizons.core.config.Config;
@@ -10,7 +11,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 
 import java.awt.Color;
 
@@ -24,17 +24,17 @@ public class MixinFogRenderParamFactory {
         }
 
         boolean usingSkyColor = Config.Client.Advanced.Graphics.Fog.colorMode.get() == EDhApiFogColorMode.USE_SKY_COLOR
-                && !MinecraftRenderWrapper.INSTANCE.isFogStateSpecial();
+            && !MinecraftRenderWrapper.INSTANCE.isFogStateSpecial();
         if (usingSkyColor) {
             return;
         }
 
         AccessorEntityRenderer entityRenderer = (AccessorEntityRenderer) minecraft.entityRenderer;
         cir.setReturnValue(new Color(
-                actinium$clampColor(entityRenderer.celeritas$getFogColorRed()),
-                actinium$clampColor(entityRenderer.celeritas$getFogColorGreen()),
-                actinium$clampColor(entityRenderer.celeritas$getFogColorBlue()),
-                1.0F));
+            actinium$clampColor(entityRenderer.celeritas$getFogColorRed()),
+            actinium$clampColor(entityRenderer.celeritas$getFogColorGreen()),
+            actinium$clampColor(entityRenderer.celeritas$getFogColorBlue()),
+            1.0F));
     }
 
     @Unique

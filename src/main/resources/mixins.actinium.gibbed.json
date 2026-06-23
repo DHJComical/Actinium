@@ -4,7 +4,6 @@
   "refmap": "mixins.actinium-refmap.json",
   "target": "@env(DEFAULT)",
   "minVersion": "0.8.5",
-  "plugin": "com.dhj.actinium.mixin.ActiniumVintageMixinPlugin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [],
   "server": [],

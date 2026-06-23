@@ -1,4 +1,4 @@
-package com.dhj.actinium.compat.dh.mixin;
+package com.dhj.actinium.mixin.mod.dh;
 
 import com.seibel.distanthorizons.core.dataObjects.transformers.FullDataToRenderDataTransformer;
 import com.seibel.distanthorizons.core.wrapperInterfaces.IWrapperFactory;
@@ -16,9 +16,9 @@ public class MixinFullDataToRenderDataTransformer {
     private static final Object actinium$dhBlockStateCacheLock = new Object();
 
     @Redirect(
-            method = "setRenderColumnView",
-            at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getRendererIgnoredBlocks(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lit/unimi/dsi/fastutil/objects/ObjectOpenHashSet;"),
-            remap = false)
+        method = "setRenderColumnView",
+        at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getRendererIgnoredBlocks(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lit/unimi/dsi/fastutil/objects/ObjectOpenHashSet;"),
+        remap = false)
     private static ObjectOpenHashSet<IBlockStateWrapper> actinium$getRendererIgnoredBlocks(IWrapperFactory instance, ILevelWrapper levelWrapper) {
         synchronized (actinium$dhBlockStateCacheLock) {
             return instance.getRendererIgnoredBlocks(levelWrapper);
@@ -26,9 +26,9 @@ public class MixinFullDataToRenderDataTransformer {
     }
 
     @Redirect(
-            method = "setRenderColumnView",
-            at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getRendererIgnoredCaveBlocks(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lit/unimi/dsi/fastutil/objects/ObjectOpenHashSet;"),
-            remap = false)
+        method = "setRenderColumnView",
+        at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getRendererIgnoredCaveBlocks(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lit/unimi/dsi/fastutil/objects/ObjectOpenHashSet;"),
+        remap = false)
     private static ObjectOpenHashSet<IBlockStateWrapper> actinium$getRendererIgnoredCaveBlocks(IWrapperFactory instance, ILevelWrapper levelWrapper) {
         synchronized (actinium$dhBlockStateCacheLock) {
             return instance.getRendererIgnoredCaveBlocks(levelWrapper);
@@ -36,9 +36,9 @@ public class MixinFullDataToRenderDataTransformer {
     }
 
     @Redirect(
-            method = "setRenderColumnView",
-            at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getWaterSubsurfaceReplacementBlocks(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lit/unimi/dsi/fastutil/objects/ObjectOpenHashSet;"),
-            remap = false)
+        method = "setRenderColumnView",
+        at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getWaterSubsurfaceReplacementBlocks(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lit/unimi/dsi/fastutil/objects/ObjectOpenHashSet;"),
+        remap = false)
     private static ObjectOpenHashSet<IBlockStateWrapper> actinium$getWaterSubsurfaceReplacementBlocks(IWrapperFactory instance, ILevelWrapper levelWrapper) {
         synchronized (actinium$dhBlockStateCacheLock) {
             return instance.getWaterSubsurfaceReplacementBlocks(levelWrapper);
@@ -46,9 +46,9 @@ public class MixinFullDataToRenderDataTransformer {
     }
 
     @Redirect(
-            method = "setRenderColumnView",
-            at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getWaterSurfaceReplacementBlocks(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lit/unimi/dsi/fastutil/objects/ObjectOpenHashSet;"),
-            remap = false)
+        method = "setRenderColumnView",
+        at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getWaterSurfaceReplacementBlocks(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lit/unimi/dsi/fastutil/objects/ObjectOpenHashSet;"),
+        remap = false)
     private static ObjectOpenHashSet<IBlockStateWrapper> actinium$getWaterSurfaceReplacementBlocks(IWrapperFactory instance, ILevelWrapper levelWrapper) {
         synchronized (actinium$dhBlockStateCacheLock) {
             return instance.getWaterSurfaceReplacementBlocks(levelWrapper);
@@ -56,9 +56,9 @@ public class MixinFullDataToRenderDataTransformer {
     }
 
     @Redirect(
-            method = "setRenderColumnView",
-            at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getWaterBlockStateWrapper(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lcom/seibel/distanthorizons/core/wrapperInterfaces/block/IBlockStateWrapper;"),
-            remap = false)
+        method = "setRenderColumnView",
+        at = @At(value = "INVOKE", target = "Lcom/seibel/distanthorizons/core/wrapperInterfaces/IWrapperFactory;getWaterBlockStateWrapper(Lcom/seibel/distanthorizons/core/wrapperInterfaces/world/ILevelWrapper;)Lcom/seibel/distanthorizons/core/wrapperInterfaces/block/IBlockStateWrapper;"),
+        remap = false)
     private static IBlockStateWrapper actinium$getWaterBlockStateWrapper(IWrapperFactory instance, ILevelWrapper levelWrapper) {
         synchronized (actinium$dhBlockStateCacheLock) {
             return instance.getWaterBlockStateWrapper(levelWrapper);

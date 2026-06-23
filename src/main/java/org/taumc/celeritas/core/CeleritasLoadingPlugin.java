@@ -1,7 +1,7 @@
 package org.taumc.celeritas.core;
 
-import com.dhj.actinium.core.ActiniumLoadingPlugin;
+import com.dhj.actinium.mixins.MixinEarly;
 
 @Deprecated
-public class CeleritasLoadingPlugin extends ActiniumLoadingPlugin {
+public class CeleritasLoadingPlugin extends MixinEarly {
 }

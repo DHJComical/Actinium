@@ -1,0 +1,30 @@
+package com.dhj.actinium.mixins;
+
+import net.minecraftforge.fml.common.Loader;
+import zone.rong.mixinbooter.ILateMixinLoader;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@SuppressWarnings("unused")
+public class MixinLate implements ILateMixinLoader {
+    private static final String DISTANT_HORIZONS_MOD_ID = "distanthorizons";
+    private static final String DISTANT_HORIZONS_MIXIN_CONFIG = "mixins.actinium.dh.json";
+    private static final String GIBBED_MOD_ID = "gibbed";
+    private static final String GIBBED_MIXIN_CONFIG = "mixins.actinium.gibbed.json";
+
+    @Override
+    public List<String> getMixinConfigs() {
+        List<String> mixins = new ArrayList<>();
+
+        if (Loader.isModLoaded(DISTANT_HORIZONS_MOD_ID)) {
+            mixins.add(DISTANT_HORIZONS_MIXIN_CONFIG);
+        }
+
+        if (Loader.isModLoaded(GIBBED_MOD_ID)) {
+            mixins.add(GIBBED_MIXIN_CONFIG);
+        }
+
+        return mixins;
+    }
+}
