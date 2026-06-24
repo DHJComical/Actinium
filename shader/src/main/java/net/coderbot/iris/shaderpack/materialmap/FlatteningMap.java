@@ -23,6 +23,7 @@ public final class FlatteningMap {
         rename("powered_rail", "golden_rail");
         rename("cobweb", "web");
         rename("dead_bush", "deadbush");
+        rename("moving_piston", "piston_extension");
         rename("dandelion", "yellow_flower");
         rename("bricks", "brick_block");
         rename("spawner", "mob_spawner");
@@ -128,6 +129,7 @@ public final class FlatteningMap {
         metas("smooth_red_sandstone", "red_sandstone", 2);
 
         meta("grass", "tallgrass", 1);
+        meta("short_grass", "tallgrass", 1);
         meta("fern", "tallgrass", 2);
         metas("tall_grass", "double_plant", 2, 10);
         metas("large_fern", "double_plant", 3, 11);
@@ -185,8 +187,27 @@ public final class FlatteningMap {
             rename(color + "_bed", "bed");
         }
 
+        metas("brown_mushroom_block", "brown_mushroom_block", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14);
+        metas("red_mushroom_block", "red_mushroom_block", 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14);
+        multi("mushroom_stem",
+                entryMetas("brown_mushroom_block", 10, 15),
+                entryMetas("red_mushroom_block", 10, 15));
+
+        meta("infested_stone", "monster_egg", 0);
+        meta("infested_cobblestone", "monster_egg", 1);
+        meta("infested_stone_bricks", "monster_egg", 2);
+        meta("infested_mossy_stone_bricks", "monster_egg", 3);
+        meta("infested_cracked_stone_bricks", "monster_egg", 4);
+        meta("infested_chiseled_stone_bricks", "monster_egg", 5);
+
+        meta("stone_bricks", "stonebrick", 0);
+        meta("mossy_stone_bricks", "stonebrick", 1);
+        meta("cracked_stone_bricks", "stonebrick", 2);
+        meta("chiseled_stone_bricks", "stonebrick", 3);
+
         slabVariants("stone_slab", "stone_slab", 0);
         slabVariants("sandstone_slab", "stone_slab", 1);
+        slabVariants("petrified_oak_slab", "stone_slab", 2);
         slabVariants("cobblestone_slab", "stone_slab", 3);
         slabVariants("brick_slab", "stone_slab", 4);
         slabVariants("stone_brick_slab", "stone_slab", 5);
@@ -202,6 +223,7 @@ public final class FlatteningMap {
         slabVariants("dark_oak_slab", "wooden_slab", 5);
         slabStates("stone_slab", "stone_slab", 0, "double_stone_slab", 0);
         slabStates("sandstone_slab", "stone_slab", 1, "double_stone_slab", 1);
+        slabStates("petrified_oak_slab", "stone_slab", 2, "double_stone_slab", 2);
         slabStates("cobblestone_slab", "stone_slab", 3, "double_stone_slab", 3);
         slabStates("brick_slab", "stone_slab", 4, "double_stone_slab", 4);
         slabStates("stone_brick_slab", "stone_slab", 5, "double_stone_slab", 5);
@@ -248,6 +270,9 @@ public final class FlatteningMap {
         state("piston", "extended", "true", entryMetas("piston", 8, 9, 10, 11, 12, 13));
         state("sticky_piston", "extended", "false", entryMetas("sticky_piston", 0, 1, 2, 3, 4, 5));
         state("sticky_piston", "extended", "true", entryMetas("sticky_piston", 8, 9, 10, 11, 12, 13));
+
+        metas("chipped_anvil", "anvil", 4, 5, 6, 7);
+        metas("damaged_anvil", "anvil", 8, 9, 10, 11);
     }
 
     private FlatteningMap() {
