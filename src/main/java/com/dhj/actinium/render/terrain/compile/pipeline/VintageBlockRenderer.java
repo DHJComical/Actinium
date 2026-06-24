@@ -109,11 +109,11 @@ public class VintageBlockRenderer {
             state = state.getActualState(blockAccess, pos);
         }
         var model = this.shapes.getModelForState(state);
+        this.currentBlockAccess = blockAccess;
         this.currentMetadata = state.getBlock().getMetaFromState(state);
-        this.currentShaderMetadata = applyShaderStateBits(state, pos, this.currentMetadata);
+        this.currentShaderMetadata = applyShaderStateBits(state, pos, blockAccess, this.currentMetadata);
         state = state.getBlock().getExtendedState(state, blockAccess, pos);
         this.currentState = state;
-        this.currentBlockAccess = blockAccess;
         this.currentShaderBlockId = resolveShaderBlockId(state, pos);
 
         var buffers = this.context.buffers;
@@ -248,10 +248,10 @@ public class VintageBlockRenderer {
         this.usedContextEncoders.add(encoder);
     }
 
-    private int applyShaderStateBits(IBlockState state, BlockPos pos, int metadata) {
+    private int applyShaderStateBits(IBlockState state, BlockPos pos, ActiniumBlockAccess blockAccess, int metadata) {
         if (BlockRenderingSettings.INSTANCE.hasSnowyEntries()
                 && BlockRenderingSettings.INSTANCE.getSnowyBlocks().contains(state.getBlock())
-                && isSnowCovered(pos)) {
+                && isSnowCovered(blockAccess, pos)) {
             return metadata | net.coderbot.iris.block_rendering.BlockMaterialMapping.SNOWY_META_BIT;
         }
 
@@ -281,8 +281,8 @@ public class VintageBlockRenderer {
         return shaderBlockId;
     }
 
-    private boolean isSnowCovered(BlockPos pos) {
-        Block topBlock = this.currentBlockAccess.getBlockState(pos.up()).getBlock();
+    private boolean isSnowCovered(ActiniumBlockAccess blockAccess, BlockPos pos) {
+        Block topBlock = blockAccess.getBlockState(pos.up()).getBlock();
         return topBlock == Blocks.SNOW_LAYER || topBlock == Blocks.SNOW;
     }
 
