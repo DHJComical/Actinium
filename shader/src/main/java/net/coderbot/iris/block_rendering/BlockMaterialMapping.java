@@ -35,16 +35,18 @@ public class BlockMaterialMapping {
 	public static Reference2ObjectMap<Block, Int2IntMap> createBlockMetaIdMap(Int2ObjectMap<List<BlockEntry>> blockPropertiesMap) {
 		Reference2ObjectMap<Block, Int2IntMap> blockMatches = new Reference2ObjectOpenHashMap<>();
 		ReferenceSet<Block> snowyBlocks = new ReferenceOpenHashSet<>();
+		BlockStateConditionalIdMap blockStateMap = new BlockStateConditionalIdMap();
 		NbtConditionalIdMap<Block> blockNbtMap = new NbtConditionalIdMap<>();
 
 		blockPropertiesMap.forEach((intId, entries) -> {
 			for (BlockEntry entry : entries) {
-				addBlockMetasWithFlattening(entry, blockMatches, blockNbtMap, intId, snowyBlocks);
+				addBlockMetasWithFlattening(entry, blockMatches, blockStateMap, blockNbtMap, intId, snowyBlocks);
 			}
 		});
 
 		BlockRenderingSettings.INSTANCE.setHasSnowyEntries(!snowyBlocks.isEmpty());
 		BlockRenderingSettings.INSTANCE.setSnowyBlocks(snowyBlocks);
+		BlockRenderingSettings.INSTANCE.setBlockStateMap(blockStateMap.isEmpty() ? null : blockStateMap);
 		BlockRenderingSettings.INSTANCE.setBlockNbtMap(blockNbtMap.isEmpty() ? null : blockNbtMap);
 		return blockMatches;
 	}
@@ -82,18 +84,19 @@ public class BlockMaterialMapping {
 	}
 
 	private static void addBlockMetasWithFlattening(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap,
+	                                                BlockStateConditionalIdMap blockStateMap,
 	                                                NbtConditionalIdMap<Block> blockNbtMap, int intId,
 	                                                ReferenceSet<Block> snowyBlocks) {
 		List<BlockEntry> flattenedEntries = resolveFlattenedEntries(entry);
 		if (flattenedEntries != null) {
 			Map<String, String> inheritedRuntimeProperties = extractRuntimeStateProperties(entry.getStateProperties());
 			for (BlockEntry flattenedEntry : flattenedEntries) {
-				addBlockMetas(flattenedEntry, idMap, blockNbtMap, intId, inheritedRuntimeProperties, snowyBlocks);
+				addBlockMetas(flattenedEntry, idMap, blockStateMap, blockNbtMap, intId, inheritedRuntimeProperties, snowyBlocks);
 			}
 			return;
 		}
 
-		addBlockMetas(entry, idMap, blockNbtMap, intId, entry.getStateProperties(), snowyBlocks);
+		addBlockMetas(entry, idMap, blockStateMap, blockNbtMap, intId, entry.getStateProperties(), snowyBlocks);
 	}
 
 	/**
@@ -101,7 +104,8 @@ public class BlockMaterialMapping {
 	 * Based on Iris's addBlockStates method, adapted for 1.7.10 metadata system.
 	 */
 	private static void addBlockMetas(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap,
-	                                  NbtConditionalIdMap<Block> blockNbtMap, int intId,
+	                                  BlockStateConditionalIdMap blockStateMap, NbtConditionalIdMap<Block> blockNbtMap,
+	                                  int intId,
 	                                  Map<String, String> effectiveStateProperties, ReferenceSet<Block> snowyBlocks) {
 		final NamespacedId id = entry.getId();
 		final ResourceLocation resourceLocation = new ResourceLocation(id.getNamespace(), id.getName());
@@ -134,18 +138,19 @@ public class BlockMaterialMapping {
 		if (!stateProperties.isEmpty()) {
 			Set<Integer> matchedMetas = resolveMetasFromStateProperties(block, stateProperties);
 			if (matchedMetas.isEmpty()) {
-				return;
-			}
-
-			if (metas.isEmpty()) {
-				metas = matchedMetas;
+				blockStateMap.addCondition(block, metas, stateProperties, intId);
 			} else {
-				Set<Integer> intersection = new HashSet<>(metas);
-				intersection.retainAll(matchedMetas);
-				if (intersection.isEmpty()) {
-					return;
+				if (metas.isEmpty()) {
+					metas = matchedMetas;
+				} else {
+					Set<Integer> intersection = new HashSet<>(metas);
+					intersection.retainAll(matchedMetas);
+					if (intersection.isEmpty()) {
+						blockStateMap.addCondition(block, metas, stateProperties, intId);
+						return;
+					}
+					metas = Set.copyOf(intersection);
 				}
-				metas = Set.copyOf(intersection);
 			}
 		}
 
@@ -231,12 +236,7 @@ public class BlockMaterialMapping {
 	}
 
 	private static Map<String, String> extractRuntimeStateProperties(Map<String, String> stateProperties) {
-		String snowy = stateProperties.get("snowy");
-		if (snowy == null) {
-			return Collections.emptyMap();
-		}
-
-		return Collections.singletonMap("snowy", snowy);
+		return stateProperties;
 	}
 
 	private static Map<String, String> withoutStateProperty(Map<String, String> stateProperties, String propertyName) {

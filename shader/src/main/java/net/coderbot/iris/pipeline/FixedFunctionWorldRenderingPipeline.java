@@ -29,6 +29,9 @@ public class FixedFunctionWorldRenderingPipeline implements WorldRenderingPipeli
 		BlockRenderingSettings.INSTANCE.setUseSeparateAo(false);
 		BlockRenderingSettings.INSTANCE.setAmbientOcclusionLevel(1.0f);
 		BlockRenderingSettings.INSTANCE.setUseExtendedVertexFormat(false);
+		BlockRenderingSettings.INSTANCE.setBlockMetaMatches(null);
+		BlockRenderingSettings.INSTANCE.setBlockStateMap(null);
+		BlockRenderingSettings.INSTANCE.setBlockNbtMap(null);
 		BlockRenderingSettings.INSTANCE.setBlockTypeIds(null);
 	}
 

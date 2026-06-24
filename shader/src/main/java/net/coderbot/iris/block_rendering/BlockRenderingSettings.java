@@ -36,6 +36,7 @@ public class BlockRenderingSettings {
 	@Getter
     private boolean reloadRequired;
 	private Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches;
+	private BlockStateConditionalIdMap blockStateMap;
 	private NbtConditionalIdMap<Block> blockNbtMap;
 	private Map<Block, BlockRenderLayer> blockTypeIds;
     // note: no reload needed, entities are rebuilt every frame.
@@ -57,6 +58,7 @@ public class BlockRenderingSettings {
 	public BlockRenderingSettings() {
 		reloadRequired = false;
 		blockMetaMatches = null;
+		blockStateMap = null;
 		blockNbtMap = null;
 		blockTypeIds = null;
 		ambientOcclusionLevel = 1.0F;
@@ -92,6 +94,11 @@ public class BlockRenderingSettings {
 	@Nullable
 	public NbtConditionalIdMap<Block> getBlockNbtMap() {
 		return blockNbtMap;
+	}
+
+	@Nullable
+	public BlockStateConditionalIdMap getBlockStateMap() {
+		return blockStateMap;
 	}
 
 	public int getBlockStateId(Block block, int metadata) {
@@ -142,6 +149,11 @@ public class BlockRenderingSettings {
 	public void setBlockMetaMatches(Reference2ObjectMap<Block, Int2IntMap> blockMetaIds) {
 		this.reloadRequired = true;
 		this.blockMetaMatches = blockMetaIds;
+	}
+
+	public void setBlockStateMap(@Nullable BlockStateConditionalIdMap blockStateMap) {
+		this.reloadRequired = true;
+		this.blockStateMap = blockStateMap;
 	}
 
 	public void setBlockNbtMap(@Nullable NbtConditionalIdMap<Block> blockNbtMap) {
