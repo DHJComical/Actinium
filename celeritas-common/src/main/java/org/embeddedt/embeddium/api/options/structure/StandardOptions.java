@@ -67,6 +67,7 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> CPU_FRAMES_AHEAD = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "cpu_render_ahead_limit");
         public static final OptionIdentifier<Void> MULTIDRAW_MODE = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "multidraw_mode");
         public static final OptionIdentifier<Void> STREAMING_UPLOAD_STRATEGY = OptionIdentifier.create(ACTINIUM_MOD_NAME, "streaming_upload_strategy");
+        public static final OptionIdentifier<Void> DEFERRED_PARTICLE_BATCHING = OptionIdentifier.create(ACTINIUM_MOD_NAME, "deferred_particle_batching");
         public static final OptionIdentifier<Void> ALLOW_DIRECT_MEMORY_ACCESS = OptionIdentifier.create(ACTINIUM_MOD_NAME, "allow_direct_memory_access");
         public static final OptionIdentifier<Void> MODEL_RENDERER_DISPLAY_LISTS = OptionIdentifier.create(ACTINIUM_MOD_NAME, "model_renderer_display_lists");
         public static final OptionIdentifier<Void> FAST_LIT_ITEM_RENDERING = OptionIdentifier.create(ACTINIUM_MOD_NAME, "fast_lit_item_rendering");

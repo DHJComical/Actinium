@@ -3,6 +3,7 @@ package com.dhj.actinium.mixin.vintage.core;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import net.minecraft.client.Minecraft;
 import org.embeddedt.embeddium.impl.render.frame.RenderAheadManager;
+import com.mitchej123.lwjgl.LWJGLServiceProvider;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,7 +25,7 @@ public class MixinMinecraft {
 
     @Inject(method = "runGameLoop", at = @At("HEAD"))
     private void beginRenderFrame(CallbackInfo ci) {
-        final int limit = ActiniumRuntime.options().advanced.cpuRenderAheadLimit;
+        final int limit = supportsCpuRenderAhead() ? ActiniumRuntime.options().advanced.cpuRenderAheadLimit : 0;
         if (limit > 0) {
             celeritas$renderAheadManager.startFrame(limit);
         }
@@ -39,11 +40,16 @@ public class MixinMinecraft {
             )
     )
     private void endStreamingFrame(CallbackInfo ci) {
-        if (ActiniumRuntime.options().advanced.cpuRenderAheadLimit > 0) {
+        if (supportsCpuRenderAhead() && ActiniumRuntime.options().advanced.cpuRenderAheadLimit > 0) {
             celeritas$renderAheadManager.endFrame();
         }
         TessellatorStreamingDrawer.endFrame();
         BufferBuilderStreamingDrawer.endFrame();
+    }
+
+    @Unique
+    private static boolean supportsCpuRenderAhead() {
+        return LWJGLServiceProvider.LWJGL.isOpenGLVersionSupported(3, 2);
     }
 }
 

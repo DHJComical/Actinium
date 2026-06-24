@@ -36,10 +36,10 @@ public final class ActiniumRuntime {
     private static SodiumGameOptions loadConfig() {
         try {
             return SodiumGameOptions.load();
-        } catch (Exception e) {
-            LOGGER.error("Failed to load configuration file", e);
+        } catch (Throwable t) {
+            LOGGER.error("Failed to load configuration file", t);
             LOGGER.error("Using default configuration file in read-only mode");
-            SodiumGameOptions config = new SodiumGameOptions();
+            SodiumGameOptions config = SodiumGameOptions.defaults();
             config.setReadOnly();
             return config;
         }

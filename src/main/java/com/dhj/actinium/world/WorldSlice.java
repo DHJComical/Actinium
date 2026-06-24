@@ -227,6 +227,9 @@ public class WorldSlice implements ActiniumBlockAccess {
 
     public void reset() {
         this.extraClonedSections.clear();
+        this.sections = new ClonedChunkSection[SECTION_TABLE_ARRAY_SIZE];
+        this.origin = null;
+        this.volume = null;
     }
 
     private void unpackBlockData(IBlockState[] states, ClonedChunkSection section, StructureBoundingBox box) {

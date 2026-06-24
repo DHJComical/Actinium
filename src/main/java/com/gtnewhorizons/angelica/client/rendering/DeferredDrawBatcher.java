@@ -36,7 +36,6 @@ import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memPutInt;
  * modelview delta pre-transform while copying 1.12 vertex bytes directly.</p>
  */
 public final class DeferredDrawBatcher {
-    private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty("actinium.deferredParticleBatching", "true"));
     private static final int INITIAL_BUFFER_SIZE = 64 * 1024;
 
     private static final List<DrawRange> RANGES = new ArrayList<>();
@@ -65,7 +64,7 @@ public final class DeferredDrawBatcher {
     }
 
     public static void enter() {
-        if (!ENABLED || flushing || !ActiniumRuntimeOptions.allowDirectMemoryAccess()) {
+        if (!ActiniumRuntimeOptions.useDeferredParticleBatching() || flushing || !ActiniumRuntimeOptions.allowDirectMemoryAccess()) {
             return;
         }
 

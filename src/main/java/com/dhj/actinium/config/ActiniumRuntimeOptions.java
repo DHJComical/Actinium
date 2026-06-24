@@ -8,6 +8,7 @@ public final class ActiniumRuntimeOptions {
     private static final String MODEL_RENDERER_DISPLAY_LISTS_PROPERTY = "actinium.modelRendererDisplayLists";
     private static final String FAST_LIT_ITEM_RENDERING_PROPERTY = "actinium.fastLitItemRendering";
     private static final String FAST_LIT_ITEM_DISPLAY_LISTS_PROPERTY = "actinium.fastLitItemDisplayLists";
+    private static final String DEFERRED_PARTICLE_BATCHING_PROPERTY = "actinium.deferredParticleBatching";
 
     private ActiniumRuntimeOptions() {
     }
@@ -68,6 +69,19 @@ public final class ActiniumRuntimeOptions {
 
         try {
             return ActiniumRuntime.options().advanced.useFastLitItemDisplayLists;
+        } catch (RuntimeException | LinkageError ignored) {
+            return true;
+        }
+    }
+
+    public static boolean useDeferredParticleBatching() {
+        String override = System.getProperty(DEFERRED_PARTICLE_BATCHING_PROPERTY);
+        if (override != null) {
+            return Boolean.parseBoolean(override);
+        }
+
+        try {
+            return ActiniumRuntime.options().advanced.enableDeferredBatching;
         } catch (RuntimeException | LinkageError ignored) {
             return true;
         }
