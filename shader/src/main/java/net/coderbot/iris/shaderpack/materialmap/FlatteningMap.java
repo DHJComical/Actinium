@@ -184,6 +184,19 @@ public final class FlatteningMap {
         state("repeater", "powered", "true", entry("powered_repeater"));
         state("comparator", "powered", "false", entry("unpowered_comparator"));
         state("comparator", "powered", "true", entry("powered_comparator"));
+
+        for (int power = 0; power <= 15; power++) {
+            state("redstone_wire", "power", String.valueOf(power), entryMetas("redstone_wire", power));
+        }
+
+        for (int layers = 1; layers <= 8; layers++) {
+            state("snow", "layers", String.valueOf(layers), entryMetas("snow_layer", layers - 1));
+        }
+
+        state("piston", "extended", "false", entryMetas("piston", 0, 1, 2, 3, 4, 5));
+        state("piston", "extended", "true", entryMetas("piston", 8, 9, 10, 11, 12, 13));
+        state("sticky_piston", "extended", "false", entryMetas("sticky_piston", 0, 1, 2, 3, 4, 5));
+        state("sticky_piston", "extended", "true", entryMetas("sticky_piston", 8, 9, 10, 11, 12, 13));
     }
 
     private FlatteningMap() {
