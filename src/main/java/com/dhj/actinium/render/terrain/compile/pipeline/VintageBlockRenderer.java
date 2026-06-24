@@ -77,7 +77,7 @@ public class VintageBlockRenderer {
         this.shapes = Minecraft.getMinecraft().getBlockRendererDispatcher().getBlockModelShapes();
         this.consumer = new VertexBufferConsumer();
         this.context = context;
-        this.lighters = new LightPipelineProvider(cache, VintageDiffuseProvider.INSTANCE, true);
+        this.lighters = new LightPipelineProvider(cache, VintageDiffuseProvider.INSTANCE, false);
         this.blockColors = ((AccessorBlockColors)Minecraft.getMinecraft().getBlockColors()).getBlockColorMap();
         this.useRenderPassOptimization = ActiniumRuntime.options().performance.useRenderPassOptimization;
     }
