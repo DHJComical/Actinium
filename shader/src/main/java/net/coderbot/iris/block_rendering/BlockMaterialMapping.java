@@ -35,15 +35,17 @@ public class BlockMaterialMapping {
 	public static Reference2ObjectMap<Block, Int2IntMap> createBlockMetaIdMap(Int2ObjectMap<List<BlockEntry>> blockPropertiesMap) {
 		Reference2ObjectMap<Block, Int2IntMap> blockMatches = new Reference2ObjectOpenHashMap<>();
 		ReferenceSet<Block> snowyBlocks = new ReferenceOpenHashSet<>();
+		NbtConditionalIdMap<Block> blockNbtMap = new NbtConditionalIdMap<>();
 
 		blockPropertiesMap.forEach((intId, entries) -> {
 			for (BlockEntry entry : entries) {
-				addBlockMetasWithFlattening(entry, blockMatches, intId, snowyBlocks);
+				addBlockMetasWithFlattening(entry, blockMatches, blockNbtMap, intId, snowyBlocks);
 			}
 		});
 
 		BlockRenderingSettings.INSTANCE.setHasSnowyEntries(!snowyBlocks.isEmpty());
 		BlockRenderingSettings.INSTANCE.setSnowyBlocks(snowyBlocks);
+		BlockRenderingSettings.INSTANCE.setBlockNbtMap(blockNbtMap.isEmpty() ? null : blockNbtMap);
 		return blockMatches;
 	}
 
@@ -80,24 +82,26 @@ public class BlockMaterialMapping {
 	}
 
 	private static void addBlockMetasWithFlattening(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap,
-	                                                int intId, ReferenceSet<Block> snowyBlocks) {
+	                                                NbtConditionalIdMap<Block> blockNbtMap, int intId,
+	                                                ReferenceSet<Block> snowyBlocks) {
 		List<BlockEntry> flattenedEntries = resolveFlattenedEntries(entry);
 		if (flattenedEntries != null) {
 			Map<String, String> inheritedRuntimeProperties = extractRuntimeStateProperties(entry.getStateProperties());
 			for (BlockEntry flattenedEntry : flattenedEntries) {
-				addBlockMetas(flattenedEntry, idMap, intId, inheritedRuntimeProperties, snowyBlocks);
+				addBlockMetas(flattenedEntry, idMap, blockNbtMap, intId, inheritedRuntimeProperties, snowyBlocks);
 			}
 			return;
 		}
 
-		addBlockMetas(entry, idMap, intId, entry.getStateProperties(), snowyBlocks);
+		addBlockMetas(entry, idMap, blockNbtMap, intId, entry.getStateProperties(), snowyBlocks);
 	}
 
 	/**
 	 * Adds block+metadata combinations to the material ID map.
 	 * Based on Iris's addBlockStates method, adapted for 1.7.10 metadata system.
 	 */
-	private static void addBlockMetas(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap, int intId,
+	private static void addBlockMetas(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap,
+	                                  NbtConditionalIdMap<Block> blockNbtMap, int intId,
 	                                  Map<String, String> effectiveStateProperties, ReferenceSet<Block> snowyBlocks) {
 		final NamespacedId id = entry.getId();
 		final ResourceLocation resourceLocation = new ResourceLocation(id.getNamespace(), id.getName());
@@ -107,6 +111,11 @@ public class BlockMaterialMapping {
 		// If the block doesn't exist, by default the registry will return AIR. That probably isn't what we want.
 		// TODO: Assuming that Registry.BLOCK.getDefaultId() == "minecraft:air" here
 		if (block == null || block == Blocks.AIR) {
+			return;
+		}
+
+		if (entry.hasNbtProperties()) {
+			blockNbtMap.addCondition(block, entry.getNbtProperties(), intId);
 			return;
 		}
 

@@ -120,6 +120,10 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         int metadata = state.getBlock().getMetaFromState(state);
         int effectiveMetadata = applyShaderStateBits(state, pos, metadata);
         int shaderBlockId = resolveShaderBlockStateId(state.getBlock(), effectiveMetadata);
+        int nbtBlockId = resolveBlockNbtId(state, pos);
+        if (nbtBlockId != -1) {
+            shaderBlockId = nbtBlockId;
+        }
         short renderType = state.getMaterial() == net.minecraft.block.material.Material.WATER
                 ? ExtendedDataHelper.FLUID_RENDER_TYPE
                 : ExtendedDataHelper.BLOCK_RENDER_TYPE;
@@ -289,6 +293,15 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     private boolean isSnowCovered(BlockPos pos) {
         Block topBlock = this.worldSlice.getBlockState(pos.up()).getBlock();
         return topBlock == Blocks.SNOW_LAYER || topBlock == Blocks.SNOW;
+    }
+
+    private int resolveBlockNbtId(IBlockState state, BlockPos pos) {
+        if (BlockRenderingSettings.INSTANCE.getBlockNbtMap() == null || !state.getBlock().hasTileEntity(state)) {
+            return -1;
+        }
+
+        TileEntity tileEntity = this.worldSlice.getTileEntity(pos);
+        return BlockRenderingSettings.INSTANCE.resolveBlockNbtId(state.getBlock(), tileEntity);
     }
 }
 

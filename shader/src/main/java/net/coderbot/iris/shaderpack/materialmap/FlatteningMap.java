@@ -127,6 +127,27 @@ public final class FlatteningMap {
         meta("white_tulip", "red_flower", 6);
         meta("pink_tulip", "red_flower", 7);
         meta("oxeye_daisy", "red_flower", 8);
+        pot("potted_oak_sapling", "sapling", 0);
+        pot("potted_spruce_sapling", "sapling", 1);
+        pot("potted_birch_sapling", "sapling", 2);
+        pot("potted_jungle_sapling", "sapling", 3);
+        pot("potted_acacia_sapling", "sapling", 4);
+        pot("potted_dark_oak_sapling", "sapling", 5);
+        pot("potted_fern", "tallgrass", 2);
+        pot("potted_dandelion", "yellow_flower", 0);
+        pot("potted_poppy", "red_flower", 0);
+        pot("potted_blue_orchid", "red_flower", 1);
+        pot("potted_allium", "red_flower", 2);
+        pot("potted_azure_bluet", "red_flower", 3);
+        pot("potted_red_tulip", "red_flower", 4);
+        pot("potted_orange_tulip", "red_flower", 5);
+        pot("potted_white_tulip", "red_flower", 6);
+        pot("potted_pink_tulip", "red_flower", 7);
+        pot("potted_oxeye_daisy", "red_flower", 8);
+        pot("potted_red_mushroom", "red_mushroom", 0);
+        pot("potted_brown_mushroom", "brown_mushroom", 0);
+        pot("potted_dead_bush", "deadbush", 0);
+        pot("potted_cactus", "cactus", 0);
 
         for (int i = 0; i < COLORS.length; i++) {
             String color = COLORS[i];
@@ -283,6 +304,17 @@ public final class FlatteningMap {
             metaList.add(metaValue);
         }
         MODERN_TO_LEGACY.put(modern, List.of(new BlockEntry(new NamespacedId("minecraft", legacy), Set.copyOf(metaList))));
+    }
+
+    private static void pot(String modern, String itemName, int data) {
+        MODERN_TO_LEGACY.put(modern, List.of(new BlockEntry(
+                new NamespacedId("minecraft", "flower_pot"),
+                Collections.emptySet(),
+                Collections.emptyMap(),
+                Map.of(
+                        "Item", new PropertiesTokenizer.NbtValue("minecraft:" + itemName, false),
+                        "Data", new PropertiesTokenizer.NbtValue(String.valueOf(data), false)
+                ))));
     }
 
     private static void multi(String modern, BlockEntry... entries) {

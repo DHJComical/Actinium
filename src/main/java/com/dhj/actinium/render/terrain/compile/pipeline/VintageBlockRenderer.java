@@ -36,12 +36,17 @@ import org.embeddedt.embeddium.impl.util.ModelQuadUtil;
 import org.embeddedt.embeddium.api.shader.vertex.BlockRenderContext;
 import org.embeddedt.embeddium.api.shader.vertex.ContextAwareChunkVertexEncoder;
 import org.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
+import org.embeddedt.embeddium.api.shader.ShaderProvider;
+import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
 import com.dhj.actinium.render.terrain.compile.VintageChunkBuildContext;
 import com.dhj.actinium.render.terrain.compile.light.LightDataCache;
 import com.dhj.actinium.render.terrain.compile.light.VintageDiffuseProvider;
 import com.dhj.actinium.mixin.vintage.core.terrain.AccessorBlockColors;
+import net.minecraft.init.Blocks;
+import net.minecraft.tileentity.TileEntity;
 
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -67,6 +72,8 @@ public class VintageBlockRenderer {
     private IBlockState currentState;
     private ActiniumBlockAccess currentBlockAccess;
     private int currentMetadata;
+    private int currentShaderMetadata;
+    private int currentShaderBlockId;
 
     private final BakedQuadGroupAnalyzer analyzer = new BakedQuadGroupAnalyzer();
 
@@ -103,9 +110,11 @@ public class VintageBlockRenderer {
         }
         var model = this.shapes.getModelForState(state);
         this.currentMetadata = state.getBlock().getMetaFromState(state);
+        this.currentShaderMetadata = applyShaderStateBits(state, pos, this.currentMetadata);
         state = state.getBlock().getExtendedState(state, blockAccess, pos);
         this.currentState = state;
         this.currentBlockAccess = blockAccess;
+        this.currentShaderBlockId = resolveShaderBlockId(state, pos);
 
         var buffers = this.context.buffers;
         var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
@@ -144,6 +153,8 @@ public class VintageBlockRenderer {
         this.blockRenderContext.reset();
         this.currentState = null;
         this.currentBlockAccess = null;
+        this.currentShaderMetadata = 0;
+        this.currentShaderBlockId = -1;
     }
 
     private QuadLightData getVertexLight(LightPipeline lighter, BlockPos pos, EnumFacing cullFace, BakedQuadView quad) {
@@ -227,11 +238,45 @@ public class VintageBlockRenderer {
 
         this.blockRenderContext.set(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, blockId, renderType, lightValue);
         if (isFluid) {
-            encoder.prepareToRenderFluid(this.blockRenderContext, block, this.currentMetadata, lightValue);
+            encoder.prepareToRenderFluid(this.blockRenderContext, block, this.currentShaderMetadata, lightValue);
         } else {
-            encoder.prepareToRenderBlock(this.blockRenderContext, block, this.currentMetadata, renderType, lightValue);
+            encoder.prepareToRenderBlock(this.blockRenderContext, block, this.currentShaderMetadata, renderType, lightValue);
+            if (this.currentShaderBlockId != -1) {
+                this.blockRenderContext.blockId = this.currentShaderBlockId;
+            }
         }
         this.usedContextEncoders.add(encoder);
+    }
+
+    private int applyShaderStateBits(IBlockState state, BlockPos pos, int metadata) {
+        if (BlockRenderingSettings.INSTANCE.hasSnowyEntries()
+                && BlockRenderingSettings.INSTANCE.getSnowyBlocks().contains(state.getBlock())
+                && isSnowCovered(pos)) {
+            return metadata | net.coderbot.iris.block_rendering.BlockMaterialMapping.SNOWY_META_BIT;
+        }
+
+        return metadata;
+    }
+
+    private int resolveShaderBlockId(IBlockState state, BlockPos pos) {
+        Block block = state.getBlock();
+        ShaderProvider provider = ShaderProviderHolder.getProvider();
+        int shaderBlockId = provider != null ? provider.getBlockStateId(block, this.currentShaderMetadata) : Block.getIdFromBlock(block);
+
+        if (BlockRenderingSettings.INSTANCE.getBlockNbtMap() != null && block.hasTileEntity(state)) {
+            TileEntity tileEntity = this.currentBlockAccess.getTileEntity(pos);
+            int nbtBlockId = BlockRenderingSettings.INSTANCE.resolveBlockNbtId(block, tileEntity);
+            if (nbtBlockId != -1) {
+                shaderBlockId = nbtBlockId;
+            }
+        }
+
+        return shaderBlockId;
+    }
+
+    private boolean isSnowCovered(BlockPos pos) {
+        Block topBlock = this.currentBlockAccess.getBlockState(pos.up()).getBlock();
+        return topBlock == Blocks.SNOW_LAYER || topBlock == Blocks.SNOW;
     }
 
     private void writeGeometry(int localX, int localY, int localZ, ChunkModelBuilder builder,

@@ -11,16 +11,32 @@ import lombok.Setter;
 import net.coderbot.iris.shaderpack.materialmap.NamespacedId;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class BlockRenderingSettings {
 	public static final BlockRenderingSettings INSTANCE = new BlockRenderingSettings();
+	public static final int CACHE_MISS = Integer.MIN_VALUE;
+
+	private static final int NBT_CACHE_INTERVAL_TICKS = 20;
+	private static final int TE_NBT_CACHE_MAX = 8192;
+	private static final Object TE_NBT_CACHE_LOCK = new Object();
+	private static final Map<Long, Long> TE_NBT_ID_CACHE = new LinkedHashMap<Long, Long>(256, 0.75F, true) {
+		@Override
+		protected boolean removeEldestEntry(Map.Entry<Long, Long> eldest) {
+			return size() > TE_NBT_CACHE_MAX;
+		}
+	};
 
 	@Getter
     private boolean reloadRequired;
 	private Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches;
+	private NbtConditionalIdMap<Block> blockNbtMap;
 	private Map<Block, BlockRenderLayer> blockTypeIds;
     // note: no reload needed, entities are rebuilt every frame.
     @Setter
@@ -41,6 +57,7 @@ public class BlockRenderingSettings {
 	public BlockRenderingSettings() {
 		reloadRequired = false;
 		blockMetaMatches = null;
+		blockNbtMap = null;
 		blockTypeIds = null;
 		ambientOcclusionLevel = 1.0F;
 		disableDirectionalShading = false;
@@ -72,6 +89,11 @@ public class BlockRenderingSettings {
 		return blockTypeIds;
 	}
 
+	@Nullable
+	public NbtConditionalIdMap<Block> getBlockNbtMap() {
+		return blockNbtMap;
+	}
+
 	public int getBlockStateId(Block block, int metadata) {
 		if (blockMetaMatches != null) {
 			Int2IntMap intMap = blockMetaMatches.get(block);
@@ -81,6 +103,26 @@ public class BlockRenderingSettings {
 		}
 
 		return -1;
+	}
+
+	public int resolveBlockNbtId(Block block, @Nullable TileEntity tileEntity) {
+		if (blockNbtMap == null || tileEntity == null || !blockNbtMap.hasConditions(block)) {
+			return -1;
+		}
+
+		BlockPos pos = tileEntity.getPos();
+		long packedPos = packBlockPos(pos.getX(), pos.getY(), pos.getZ());
+		long currentTick = tileEntity.getWorld() != null ? tileEntity.getWorld().getTotalWorldTime() : 0L;
+		int cachedId = getCachedTeNbtId(packedPos, currentTick);
+		if (cachedId != CACHE_MISS) {
+			return cachedId;
+		}
+
+		NBTTagCompound nbt = new NBTTagCompound();
+		tileEntity.writeToNBT(nbt);
+		int resolvedId = blockNbtMap.resolve(block, nbt);
+		cacheTeNbtId(packedPos, resolvedId, currentTick);
+		return resolvedId;
 	}
 
 	public boolean hasSnowyEntries() {
@@ -100,6 +142,12 @@ public class BlockRenderingSettings {
 	public void setBlockMetaMatches(Reference2ObjectMap<Block, Int2IntMap> blockMetaIds) {
 		this.reloadRequired = true;
 		this.blockMetaMatches = blockMetaIds;
+	}
+
+	public void setBlockNbtMap(@Nullable NbtConditionalIdMap<Block> blockNbtMap) {
+		this.reloadRequired = true;
+		this.blockNbtMap = blockNbtMap;
+		clearTeNbtCache();
 	}
 
 	public void setSnowyBlocks(ReferenceSet<Block> snowyBlocks) {
@@ -161,5 +209,39 @@ public class BlockRenderingSettings {
 
 		this.reloadRequired = true;
 		this.useExtendedVertexFormat = useExtendedVertexFormat;
+	}
+
+	public static long packBlockPos(int x, int y, int z) {
+		return ((long) x & 0x3FFFFFFL) << 38 | ((long) y & 0xFFFL) << 26 | ((long) z & 0x3FFFFFFL);
+	}
+
+	public static void clearTeNbtCache() {
+		synchronized (TE_NBT_CACHE_LOCK) {
+			TE_NBT_ID_CACHE.clear();
+		}
+	}
+
+	private static int getCachedTeNbtId(long packedPos, long currentTick) {
+		synchronized (TE_NBT_CACHE_LOCK) {
+			Long entry = TE_NBT_ID_CACHE.get(packedPos);
+			if (entry == null) {
+				return CACHE_MISS;
+			}
+
+			long entryTick = entry >>> 32;
+			if (currentTick - entryTick >= NBT_CACHE_INTERVAL_TICKS) {
+				TE_NBT_ID_CACHE.remove(packedPos);
+				return CACHE_MISS;
+			}
+
+			return (int) (long) entry;
+		}
+	}
+
+	private static void cacheTeNbtId(long packedPos, int shaderId, long currentTick) {
+		long packedValue = ((currentTick & 0x7FFFFFFFL) << 32) | (shaderId & 0xFFFFFFFFL);
+		synchronized (TE_NBT_CACHE_LOCK) {
+			TE_NBT_ID_CACHE.put(packedPos, packedValue);
+		}
 	}
 }
