@@ -78,14 +78,10 @@ public class ItemMaterialHelper {
             final Block block = itemBlock.getBlock();
 
             if (block != null) {
-                Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches = BlockRenderingSettings.INSTANCE.getBlockMetaMatches();
-                if (blockMetaMatches != null) {
-                    Int2IntMap metaMap = blockMetaMatches.get(block);
-                    if (metaMap != null) {
-                        int id = metaMap.get(itemBlock.getMetadata(metadata));
-                        if (id != -1) {
-                            return id;
-                        }
+                if (BlockRenderingSettings.INSTANCE.getBlockMetaMatches() != null) {
+                    int id = BlockRenderingSettings.INSTANCE.getBlockStateId(block, itemBlock.getMetadata(metadata));
+                    if (id != -1) {
+                        return id;
                     }
                 }
             }

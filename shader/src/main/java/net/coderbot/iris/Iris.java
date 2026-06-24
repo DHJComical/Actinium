@@ -946,8 +946,7 @@ public class Iris {
         if (blockMetaMatches == null)
             return;
 
-        final Int2IntMap metaMap = blockMetaMatches.get(block);
-        final int blockId = metaMap != null ? metaMap.get(meta) : -1;
+        final int blockId = BlockRenderingSettings.INSTANCE.getBlockStateId(block, meta);
 
         ShaderMaterialOverrideState.setBlockId(blockId);
 
