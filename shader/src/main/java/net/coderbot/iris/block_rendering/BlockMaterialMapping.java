@@ -89,7 +89,7 @@ public class BlockMaterialMapping {
 	                                                ReferenceSet<Block> snowyBlocks) {
 		List<BlockEntry> flattenedEntries = resolveFlattenedEntries(entry);
 		if (flattenedEntries != null) {
-			Map<String, String> inheritedRuntimeProperties = extractRuntimeStateProperties(entry.getStateProperties());
+			Map<String, String> inheritedRuntimeProperties = extractRuntimeStateProperties(entry);
 			for (BlockEntry flattenedEntry : flattenedEntries) {
 				addBlockMetas(flattenedEntry, idMap, blockStateMap, blockNbtMap, intId, inheritedRuntimeProperties, snowyBlocks);
 			}
@@ -235,8 +235,18 @@ public class BlockMaterialMapping {
 		return property.getName(value);
 	}
 
-	private static Map<String, String> extractRuntimeStateProperties(Map<String, String> stateProperties) {
-		return stateProperties;
+	private static Map<String, String> extractRuntimeStateProperties(BlockEntry entry) {
+		Map<String, String> stateProperties = entry.getStateProperties();
+		if (stateProperties.isEmpty()) {
+			return stateProperties;
+		}
+
+		NamespacedId id = entry.getId();
+		if (!"minecraft".equals(id.getNamespace())) {
+			return stateProperties;
+		}
+
+		return FlatteningMap.getUnmappedStateProperties(id.getName(), stateProperties);
 	}
 
 	private static Map<String, String> withoutStateProperty(Map<String, String> stateProperties, String propertyName) {

@@ -223,6 +223,10 @@ public final class FlatteningMap {
 
         state("furnace", "lit", "false", entry("furnace"));
         state("furnace", "lit", "true", entry("lit_furnace"));
+        state("redstone_torch", "lit", "false", entry("unlit_redstone_torch"));
+        state("redstone_torch", "lit", "true", entry("redstone_torch"));
+        state("redstone_wall_torch", "lit", "false", entryMetas("unlit_redstone_torch", 1, 2, 3, 4));
+        state("redstone_wall_torch", "lit", "true", entryMetas("redstone_torch", 1, 2, 3, 4));
         state("redstone_ore", "lit", "false", entry("redstone_ore"));
         state("redstone_ore", "lit", "true", entry("lit_redstone_ore"));
         state("redstone_lamp", "lit", "false", entry("redstone_lamp"));
@@ -251,6 +255,32 @@ public final class FlatteningMap {
 
     public static List<BlockEntry> toLegacy(String modernName) {
         return MODERN_TO_LEGACY.get(modernName);
+    }
+
+    public static Map<String, String> getUnmappedStateProperties(String modernName, Map<String, String> stateProperties) {
+        if (stateProperties == null || stateProperties.isEmpty()) {
+            return stateProperties;
+        }
+
+        Map<String, String> remaining = null;
+
+        for (Map.Entry<String, String> property : stateProperties.entrySet()) {
+            if (!STATE_MAPPINGS.containsKey(stateKey(modernName, property.getKey(), property.getValue()))) {
+                continue;
+            }
+
+            if (remaining == null) {
+                remaining = new java.util.LinkedHashMap<>(stateProperties);
+            }
+
+            remaining.remove(property.getKey());
+        }
+
+        if (remaining == null) {
+            return stateProperties;
+        }
+
+        return remaining.isEmpty() ? Collections.emptyMap() : remaining;
     }
 
     public static List<BlockEntry> toLegacy(String modernName, Map<String, String> stateProperties) {
