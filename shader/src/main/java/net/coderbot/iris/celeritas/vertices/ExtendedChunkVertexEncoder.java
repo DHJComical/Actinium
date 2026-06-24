@@ -23,6 +23,9 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
     private static final int NORMAL_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("iris_Normal").getPointer();
     private static final int MC_ENTITY_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("mc_Entity").getPointer();
     private static final int MID_BLOCK_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("at_midBlock").getPointer();
+    private static final int A_TEXCOORD_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("a_TexCoord").getPointer();
+
+    private static final float TEX_CENTROID_BIAS = 1.0f / 32768.0f;
 
     private final ChunkVertexEncoder baseEncoder = ExtendedChunkVertexType.BASE_TYPE.createEncoder();
     private final LwjglQuadView quad = new LwjglQuadView();
@@ -105,6 +108,18 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
             LWJGL.memPutInt(ptr + MID_TEX_OFFSET - ExtendedChunkVertexType.STRIDE, midUV);
             LWJGL.memPutInt(ptr + MID_TEX_OFFSET - (ExtendedChunkVertexType.STRIDE * 2L), midUV);
             LWJGL.memPutInt(ptr + MID_TEX_OFFSET - (ExtendedChunkVertexType.STRIDE * 3L), midUV);
+
+            float midU = this.uSum * 0.25f;
+            float midV = this.vSum * 0.25f;
+
+            for (int vertexIndex = 0; vertexIndex < 4; vertexIndex++) {
+                long uvBase = ptr - (long) (3 - vertexIndex) * ExtendedChunkVertexType.STRIDE + A_TEXCOORD_OFFSET;
+                float vertexU = LWJGL.memGetFloat(uvBase);
+                float vertexV = LWJGL.memGetFloat(uvBase + 4L);
+
+                LWJGL.memPutFloat(uvBase, vertexU + (vertexU < midU ? TEX_CENTROID_BIAS : -TEX_CENTROID_BIAS));
+                LWJGL.memPutFloat(uvBase + 4L, vertexV + (vertexV < midV ? TEX_CENTROID_BIAS : -TEX_CENTROID_BIAS));
+            }
 
             this.quad.setup(ptr, ExtendedChunkVertexType.STRIDE);
             NormalHelper.computeFaceNormal(this.normal, this.quad);
