@@ -4,7 +4,6 @@ import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.dhj.actinium.mixins.MixinEarly;
 import com.dhj.actinium.mixins.MixinLate;
 import com.dhj.actinium.runtime.ActiniumRuntime;
-import me.decce.gnetum.mixins.LateMixinLoader;
 import net.minecraft.launchwrapper.Launch;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -81,7 +80,6 @@ public final class ActiniumDiagnostics {
         return mixinClassName.startsWith("com.dhj.actinium.mixin.features.iris.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.mod.dh.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.mod.gibbed.")
-            || mixinClassName.startsWith("me.decce.gnetum.mixins.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.core.terrain.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.vintage.core.");
     }
@@ -89,13 +87,12 @@ public final class ActiniumDiagnostics {
     private static String describeMixinConfigs() {
         String earlyConfigs = String.join(",", MixinEarly.getEarlyMixinConfigs());
         String actiniumLateConfigs = String.join(",", new MixinLate().getMixinConfigs());
-        String gnetumLateConfigs = String.join(",", new LateMixinLoader().getMixinConfigs());
 
         if (actiniumLateConfigs.isEmpty()) {
-            return earlyConfigs + "," + gnetumLateConfigs;
+            return earlyConfigs;
         }
 
-        return earlyConfigs + "," + actiniumLateConfigs + "," + gnetumLateConfigs;
+        return earlyConfigs + "," + actiniumLateConfigs;
     }
 
     private static String describeConfig() {

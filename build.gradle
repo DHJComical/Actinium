@@ -64,7 +64,6 @@ sourceSets {
             srcDir 'celeritas-common/src/main/java'
             srcDir 'shader/src/main/java'
             srcDir 'angelica/src/main/java'
-            srcDir 'gnetum/src/main/java'
         }
     }
 }

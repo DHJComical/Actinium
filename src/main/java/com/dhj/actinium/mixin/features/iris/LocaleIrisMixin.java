@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -65,20 +64,6 @@ public class LocaleIrisMixin {
         new LinkedList<>(languageList).descendingIterator().forEachRemaining(actinium$languageCodes::add);
     }
 
-    @Inject(method = "loadLocaleDataFiles(Lnet/minecraft/client/resources/IResourceManager;Ljava/util/List;)V", at = @At("RETURN"))
-    private void actinium$loadGnetumFallbackLanguageFiles(IResourceManager resourceManager, List<String> languageList, CallbackInfo ci) {
-        Map<String, String> fallbackTranslations = new LinkedHashMap<>();
-        for (String code : languageList) {
-            actinium$loadGnetumFallbackLanguageFile(fallbackTranslations, code);
-        }
-
-        for (Map.Entry<String, String> entry : fallbackTranslations.entrySet()) {
-            if (entry.getKey().startsWith("gnetum.")) {
-                this.properties.putIfAbsent(entry.getKey(), entry.getValue());
-            }
-        }
-    }
-
     @Inject(method = "checkUnicode()V", at = @At("HEAD"), cancellable = true)
     private void actinium$disableShaderpackUnicodeOverride(CallbackInfo ci) {
         this.unicode = false;
@@ -120,18 +105,6 @@ public class LocaleIrisMixin {
         }
 
         return code.substring(0, separator).toLowerCase(java.util.Locale.ROOT) + "_" + code.substring(separator + 1).toUpperCase(java.util.Locale.ROOT);
-    }
-
-    @Unique
-    private static void actinium$loadGnetumFallbackLanguageFile(Map<String, String> translations, String code) {
-        String path = "/assets/gnetum/lang/" + code.toLowerCase(java.util.Locale.ROOT) + ".lang";
-        try (InputStream inputStream = LocaleIrisMixin.class.getResourceAsStream(path)) {
-            if (inputStream != null) {
-                actinium$loadLanguageData(translations, inputStream);
-            }
-        } catch (IOException e) {
-            Iris.logger.warn("Failed to load fallback Gnetum language file {}", path, e);
-        }
     }
 
     @Unique

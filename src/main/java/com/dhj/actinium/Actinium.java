@@ -4,7 +4,6 @@ import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
 import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 import com.mojang.realmsclient.gui.ChatFormatting;
-import me.decce.gnetum.Gnetum;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.minecraft.client.Minecraft;
@@ -45,20 +44,16 @@ public class Actinium {
         ActiniumDiagnostics.logConstruction();
         initializeDistantHorizonsIrisCompat();
         MinecraftForge.EVENT_BUS.register(this);
-        Gnetum.construct(event);
-        Gnetum.registerEventHandlers();
     }
 
     @EventHandler
     public void onPreInit(FMLPreInitializationEvent event) {
         initializeDistantHorizonsIrisCompat();
-        Gnetum.preInit(event);
     }
 
     @EventHandler
     public void onInit(FMLInitializationEvent event) {
         initializeDistantHorizonsIrisCompat();
-        Gnetum.init(event);
 
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
