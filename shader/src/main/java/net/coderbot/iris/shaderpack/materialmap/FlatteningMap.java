@@ -271,6 +271,35 @@ public final class FlatteningMap {
         state("piston", "extended", "true", entryMetas("piston", 8, 9, 10, 11, 12, 13));
         state("sticky_piston", "extended", "false", entryMetas("sticky_piston", 0, 1, 2, 3, 4, 5));
         state("sticky_piston", "extended", "true", entryMetas("sticky_piston", 8, 9, 10, 11, 12, 13));
+        repeaterFacing("repeater", "south", 0, 4, 8, 12);
+        repeaterFacing("repeater", "west", 1, 5, 9, 13);
+        repeaterFacing("repeater", "north", 2, 6, 10, 14);
+        repeaterFacing("repeater", "east", 3, 7, 11, 15);
+        repeaterDelay("repeater", "1", 0, 1, 2, 3);
+        repeaterDelay("repeater", "2", 4, 5, 6, 7);
+        repeaterDelay("repeater", "3", 8, 9, 10, 11);
+        repeaterDelay("repeater", "4", 12, 13, 14, 15);
+
+        comparatorFacing("comparator", "south", 0, 4, 8, 12);
+        comparatorFacing("comparator", "west", 1, 5, 9, 13);
+        comparatorFacing("comparator", "north", 2, 6, 10, 14);
+        comparatorFacing("comparator", "east", 3, 7, 11, 15);
+        comparatorMode("compare", 0, 1, 2, 3, 8, 9, 10, 11);
+        comparatorMode("subtract", 4, 5, 6, 7, 12, 13, 14, 15);
+
+        railShape("north_south", 0);
+        railShape("east_west", 1);
+        railShape("ascending_east", 2);
+        railShape("ascending_west", 3);
+        railShape("ascending_north", 4);
+        railShape("ascending_south", 5);
+        railShape("north_east", 6);
+        railShape("south_east", 7);
+        railShape("south_west", 8);
+        railShape("north_west", 9);
+        poweredRailStates("powered_rail", "golden_rail");
+        poweredRailStates("detector_rail", "detector_rail");
+        poweredRailStates("activator_rail", "activator_rail");
 
         state("end_portal_frame", "eye", "true", entryMetas("end_portal_frame", 4, 5, 6, 7));
         state("end_portal_frame", "eye", "false", entryMetas("end_portal_frame", 0, 1, 2, 3));
@@ -508,5 +537,44 @@ public final class FlatteningMap {
         state(modern, "facing", "south", entryMetas(legacy, 3));
         state(modern, "facing", "west", entryMetas(legacy, 4));
         state(modern, "facing", "east", entryMetas(legacy, 5));
+    }
+
+    private static void railShape(String shape, int meta) {
+        state("rail", "shape", shape, entryMetas("rail", meta));
+    }
+
+    private static void repeaterFacing(String modern, String facing, int... metas) {
+        state(modern, "facing", facing,
+                entryMetas("unpowered_repeater", metas),
+                entryMetas("powered_repeater", metas));
+    }
+
+    private static void repeaterDelay(String modern, String delay, int... metas) {
+        state(modern, "delay", delay,
+                entryMetas("unpowered_repeater", metas),
+                entryMetas("powered_repeater", metas));
+    }
+
+    private static void comparatorFacing(String modern, String facing, int... metas) {
+        state(modern, "facing", facing,
+                entryMetas("unpowered_comparator", metas),
+                entryMetas("powered_comparator", metas));
+    }
+
+    private static void comparatorMode(String mode, int... metas) {
+        state("comparator", "mode", mode,
+                entryMetas("unpowered_comparator", metas),
+                entryMetas("powered_comparator", metas));
+    }
+
+    private static void poweredRailStates(String modern, String legacy) {
+        state(modern, "shape", "north_south", entryMetas(legacy, 0, 8));
+        state(modern, "shape", "east_west", entryMetas(legacy, 1, 9));
+        state(modern, "shape", "ascending_east", entryMetas(legacy, 2, 10));
+        state(modern, "shape", "ascending_west", entryMetas(legacy, 3, 11));
+        state(modern, "shape", "ascending_north", entryMetas(legacy, 4, 12));
+        state(modern, "shape", "ascending_south", entryMetas(legacy, 5, 13));
+        state(modern, "powered", "false", entryMetas(legacy, 0, 1, 2, 3, 4, 5));
+        state(modern, "powered", "true", entryMetas(legacy, 8, 9, 10, 11, 12, 13));
     }
 }
