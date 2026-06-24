@@ -63,7 +63,6 @@ sourceSets {
             srcDir 'GTNHLib/src/main/java'
             srcDir 'celeritas-common/src/main/java'
             srcDir 'shader/src/main/java'
-            srcDir 'angelica/src/main/java'
         }
     }
 }
