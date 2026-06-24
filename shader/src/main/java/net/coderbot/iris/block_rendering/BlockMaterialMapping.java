@@ -12,9 +12,12 @@ import net.coderbot.iris.shaderpack.materialmap.BlockRenderType;
 import net.coderbot.iris.shaderpack.materialmap.FlatteningMap;
 import net.coderbot.iris.shaderpack.materialmap.NamespacedId;
 import net.minecraft.block.Block;
+import net.minecraft.block.properties.IProperty;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.ResourceLocation;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -97,6 +100,24 @@ public class BlockMaterialMapping {
 		}
 
 		Set<Integer> metas = entry.getMetas();
+		Map<String, String> stateProperties = entry.getStateProperties();
+		if (!stateProperties.isEmpty()) {
+			Set<Integer> matchedMetas = resolveMetasFromStateProperties(block, stateProperties);
+			if (matchedMetas.isEmpty()) {
+				return;
+			}
+
+			if (metas.isEmpty()) {
+				metas = matchedMetas;
+			} else {
+				Set<Integer> intersection = new HashSet<>(metas);
+				intersection.retainAll(matchedMetas);
+				if (intersection.isEmpty()) {
+					return;
+				}
+				metas = Set.copyOf(intersection);
+			}
+		}
 
 		Int2IntMap metaMap = idMap.get(block);
 		if (metaMap == null) {
@@ -125,6 +146,58 @@ public class BlockMaterialMapping {
 		}
 
 		return FlatteningMap.toLegacy(id.getName(), entry.getStateProperties());
+	}
+
+	private static Set<Integer> resolveMetasFromStateProperties(Block block, Map<String, String> stateProperties) {
+		Set<Integer> metas = new HashSet<>();
+
+		for (int meta = 0; meta < 16; meta++) {
+			IBlockState state;
+			try {
+				state = block.getStateFromMeta(meta);
+			} catch (RuntimeException ignored) {
+				continue;
+			}
+
+			if (matchesStateProperties(state, stateProperties)) {
+				metas.add(meta);
+			}
+		}
+
+		return metas;
+	}
+
+	private static boolean matchesStateProperties(IBlockState state, Map<String, String> stateProperties) {
+		Map<IProperty<?>, Comparable<?>> properties = state.getProperties();
+
+		for (Map.Entry<String, String> required : stateProperties.entrySet()) {
+			IProperty<?> property = findProperty(properties, required.getKey());
+			if (property == null) {
+				return false;
+			}
+
+			Comparable<?> value = properties.get(property);
+			if (value == null || !required.getValue().equalsIgnoreCase(getPropertyValueName(property, value))) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static IProperty<?> findProperty(Map<IProperty<?>, Comparable<?>> properties, String propertyName) {
+		for (IProperty<?> property : properties.keySet()) {
+			if (property.getName().equalsIgnoreCase(propertyName)) {
+				return property;
+			}
+		}
+
+		return null;
+	}
+
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	private static String getPropertyValueName(IProperty property, Comparable value) {
+		return property.getName(value);
 	}
 
 	private static Block resolveBlockOrNull(NamespacedId id) {
