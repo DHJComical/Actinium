@@ -45,7 +45,31 @@ public final class FlatteningMap {
         rename("oak_button", "wooden_button");
         rename("nether_quartz_ore", "quartz_ore");
         rename("terracotta", "hardened_clay");
+        metas("wall_torch", "torch", 1, 2, 3, 4);
         rename("snow", "snow_layer");
+        metas("redstone_wall_torch", "redstone_torch", 1, 2, 3, 4);
+        rename("oak_sign", "standing_sign");
+        rename("oak_wall_sign", "wall_sign");
+        rename("spruce_sign", "standing_sign");
+        rename("spruce_wall_sign", "wall_sign");
+        rename("birch_sign", "standing_sign");
+        rename("birch_wall_sign", "wall_sign");
+        rename("jungle_sign", "standing_sign");
+        rename("jungle_wall_sign", "wall_sign");
+        rename("acacia_sign", "standing_sign");
+        rename("acacia_wall_sign", "wall_sign");
+        rename("dark_oak_sign", "standing_sign");
+        rename("dark_oak_wall_sign", "wall_sign");
+        head("skeleton_skull", 0);
+        head("skeleton_wall_skull", 0);
+        head("wither_skeleton_skull", 1);
+        head("wither_skeleton_wall_skull", 1);
+        head("zombie_head", 2);
+        head("zombie_wall_head", 2);
+        head("player_head", 3);
+        head("player_wall_head", 3);
+        head("creeper_head", 4);
+        head("creeper_wall_head", 4);
 
         meta("granite", "stone", 1);
         meta("polished_granite", "stone", 2);
@@ -127,6 +151,8 @@ public final class FlatteningMap {
         meta("white_tulip", "red_flower", 6);
         meta("pink_tulip", "red_flower", 7);
         meta("oxeye_daisy", "red_flower", 8);
+        metas("water_cauldron", "cauldron", 1, 2, 3);
+        meta("mossy_cobblestone_wall", "cobblestone_wall", 1);
         pot("potted_oak_sapling", "sapling", 0);
         pot("potted_spruce_sapling", "sapling", 1);
         pot("potted_birch_sapling", "sapling", 2);
@@ -315,6 +341,15 @@ public final class FlatteningMap {
                         "Item", new PropertiesTokenizer.NbtValue("minecraft:" + itemName, false),
                         "Data", new PropertiesTokenizer.NbtValue(String.valueOf(data), false)
                 ))));
+    }
+
+    private static void head(String modern, int skullType) {
+        MODERN_TO_LEGACY.put(modern, List.of(new BlockEntry(
+                new NamespacedId("minecraft", "skull"),
+                Collections.emptySet(),
+                Collections.emptyMap(),
+                Map.of("SkullType", new PropertiesTokenizer.NbtValue(String.valueOf(skullType), false))
+        )));
     }
 
     private static void multi(String modern, BlockEntry... entries) {
