@@ -61,3 +61,5 @@ gnetum.config.element.minecraft.fps_graph=FPS 图表
 gnetum.config.element.minecraft.record_overlay=录制提示
 gnetum.config.element.gnetum.minecraft_hand=手部（实验性）
 gnetum.config.element.gnetum_unknown=其他模组
+gnetum.options.hud_debug.name=Gnetum HUD DEBUG
+gnetum.options.hud_debug.tooltip=记录 Gnetum HUD 缓存分段、覆盖层事件分发、原版 HUD 元素 render/skip 判定、帧缓冲交换和采样 GL 状态。日志很多，只在复现 HUD 消失时开启。

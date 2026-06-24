@@ -61,3 +61,5 @@ gnetum.config.element.minecraft.fps_graph=FPS Graph
 gnetum.config.element.minecraft.record_overlay=Record Overlay
 gnetum.config.element.gnetum.minecraft_hand=Hand (Experimental)
 gnetum.config.element.gnetum_unknown=Other Mods
+gnetum.options.hud_debug.name=Gnetum HUD Debug
+gnetum.options.hud_debug.tooltip=Logs Gnetum HUD cache passes, overlay event dispatch, vanilla HUD element decisions, framebuffer swaps, and sampled GL state. Very noisy; enable only while reproducing HUD disappearance.

@@ -66,10 +66,6 @@ sourceSets {
             srcDir 'angelica/src/main/java'
             srcDir 'gnetum/src/main/java'
         }
-        resources {
-            srcDir 'glsm/src/main/resources'
-            srcDir 'src/lwjgl3/resources'
-        }
     }
 }
 
