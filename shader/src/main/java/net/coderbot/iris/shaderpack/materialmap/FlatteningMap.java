@@ -272,6 +272,34 @@ public final class FlatteningMap {
         state("sticky_piston", "extended", "false", entryMetas("sticky_piston", 0, 1, 2, 3, 4, 5));
         state("sticky_piston", "extended", "true", entryMetas("sticky_piston", 8, 9, 10, 11, 12, 13));
 
+        state("end_portal_frame", "eye", "true", entryMetas("end_portal_frame", 4, 5, 6, 7));
+        state("end_portal_frame", "eye", "false", entryMetas("end_portal_frame", 0, 1, 2, 3));
+        state("end_portal_frame", "facing", "south", entryMetas("end_portal_frame", 0, 4));
+        state("end_portal_frame", "facing", "west", entryMetas("end_portal_frame", 1, 5));
+        state("end_portal_frame", "facing", "north", entryMetas("end_portal_frame", 2, 6));
+        state("end_portal_frame", "facing", "east", entryMetas("end_portal_frame", 3, 7));
+
+        for (int rotation = 0; rotation <= 15; rotation++) {
+            signRotation("oak_sign", rotation);
+            signRotation("spruce_sign", rotation);
+            signRotation("birch_sign", rotation);
+            signRotation("jungle_sign", rotation);
+            signRotation("acacia_sign", rotation);
+            signRotation("dark_oak_sign", rotation);
+        }
+
+        wallFacing("oak_wall_sign", "wall_sign");
+        wallFacing("spruce_wall_sign", "wall_sign");
+        wallFacing("birch_wall_sign", "wall_sign");
+        wallFacing("jungle_wall_sign", "wall_sign");
+        wallFacing("acacia_wall_sign", "wall_sign");
+        wallFacing("dark_oak_wall_sign", "wall_sign");
+        wallFacing("skeleton_wall_skull", "skull");
+        wallFacing("wither_skeleton_wall_skull", "skull");
+        wallFacing("zombie_wall_head", "skull");
+        wallFacing("player_wall_head", "skull");
+        wallFacing("creeper_wall_head", "skull");
+
         metas("chipped_anvil", "anvil", 4, 5, 6, 7);
         metas("damaged_anvil", "anvil", 8, 9, 10, 11);
     }
@@ -469,5 +497,16 @@ public final class FlatteningMap {
         int upper = 0x8 | variant;
         state(modern, "half", "lower", entryMetas("double_plant", variant));
         state(modern, "half", "upper", entryMetas("double_plant", upper));
+    }
+
+    private static void signRotation(String modern, int rotation) {
+        state(modern, "rotation", String.valueOf(rotation), entryMetas("standing_sign", rotation));
+    }
+
+    private static void wallFacing(String modern, String legacy) {
+        state(modern, "facing", "north", entryMetas(legacy, 2));
+        state(modern, "facing", "south", entryMetas(legacy, 3));
+        state(modern, "facing", "west", entryMetas(legacy, 4));
+        state(modern, "facing", "east", entryMetas(legacy, 5));
     }
 }
