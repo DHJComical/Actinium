@@ -78,7 +78,7 @@ public final class FlatteningMap {
         meta("polished_diorite", "stone", 4);
         meta("andesite", "stone", 5);
         meta("polished_andesite", "stone", 6);
-        meta("smooth_stone", "stone", 0);
+        meta("smooth_stone", "double_stone_slab", 8);
 
         meta("coarse_dirt", "dirt", 1);
         meta("podzol", "dirt", 2);
@@ -183,6 +183,7 @@ public final class FlatteningMap {
             meta(color + "_stained_glass", "stained_glass", i);
             meta(color + "_stained_glass_pane", "stained_glass_pane", i);
             meta(color + "_carpet", "carpet", i);
+            meta(color + "_terracotta", "stained_hardened_clay", i);
             meta(color + "_stained_hardened_clay", "stained_hardened_clay", i);
             rename(color + "_bed", "bed");
         }
