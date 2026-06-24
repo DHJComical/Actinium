@@ -35,8 +35,7 @@ dependencies {
 
     implementation 'org.joml:joml:1.10.5'
     contain 'org.joml:joml:1.10.5'
-    implementation 'it.unimi.dsi:fastutil:7.1.0'
-    contain 'it.unimi.dsi:fastutil:7.1.0'
+    compileOnly 'it.unimi.dsi:fastutil:8.5.18'
     compileOnly "org.ow2.asm:asm:${asmVersion}"
     compileOnly "org.ow2.asm:asm-commons:${asmVersion}"
     compileOnly "org.ow2.asm:asm-tree:${asmVersion}"

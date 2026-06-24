@@ -47,7 +47,7 @@ public class PackRenderTargetDirectives {
 		this.renderTargetSettings = new Int2ObjectOpenHashMap<>();
 
 		supportedRenderTargets.forEach(
-				(index) -> renderTargetSettings.put(index.intValue(), new RenderTargetSettings()));
+				(index) -> renderTargetSettings.put(index, new RenderTargetSettings()));
 	}
 
 	public IntList getBuffersToBeCleared() {
@@ -55,7 +55,7 @@ public class PackRenderTargetDirectives {
 
 		renderTargetSettings.forEach((index, settings) -> {
 			if (settings.shouldClear()) {
-				buffersToBeCleared.add(index.intValue());
+				buffersToBeCleared.add(index);
 			}
 		});
 
