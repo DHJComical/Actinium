@@ -68,12 +68,12 @@ public class BlockRenderingSettings {
 	public int getBlockStateId(Block block, int metadata) {
 		if (blockMetaMatches != null) {
 			Int2IntMap intMap = blockMetaMatches.get(block);
-			if (intMap != null && intMap.containsKey(metadata)) {
+			if (intMap != null) {
 				return intMap.get(metadata);
 			}
 		}
 
-		return Block.getIdFromBlock(block);
+		return -1;
 	}
 
 	@Nullable
