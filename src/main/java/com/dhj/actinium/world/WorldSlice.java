@@ -1,9 +1,6 @@
 package com.dhj.actinium.world;
 
 import git.jbredwards.fluidlogged_api.api.util.FluidState;
-import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
-import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
-import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.init.Biomes;
@@ -22,13 +19,10 @@ import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.structure.StructureBoundingBox;
 import net.minecraftforge.client.model.pipeline.LightUtil;
 import net.minecraftforge.fml.common.Optional;
-import org.embeddedt.embeddium.impl.util.PositionUtil;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Vector3i;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
-import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.world.biome.BiomeColorCache;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
 import com.dhj.actinium.world.cloned.ChunkRenderContext;
@@ -36,11 +30,6 @@ import com.dhj.actinium.world.cloned.ClonedChunkSection;
 import com.dhj.actinium.world.cloned.ClonedChunkSectionCache;
 
 import java.util.Arrays;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Takes a slice of world state (block states, biome and light data arrays) and copies the data for use in off-thread
@@ -113,9 +102,6 @@ public class WorldSlice implements ActiniumBlockAccess {
 
     // A fallback BlockPos object to use when retrieving data from the level directly
     private final BlockPos.MutableBlockPos fallbackPos = new BlockPos.MutableBlockPos();
-
-    // Extra cloned chunk sections that the slice needed
-    private final Long2ReferenceMap<ClonedChunkSection> extraClonedSections = new Long2ReferenceOpenHashMap<>();
 
     public static ChunkRenderContext prepare(World world, SectionPos origin, ClonedChunkSectionCache sectionCache) {
         Chunk chunk = world.getChunk(origin.x(), origin.z());
@@ -226,7 +212,6 @@ public class WorldSlice implements ActiniumBlockAccess {
     }
 
     public void reset() {
-        this.extraClonedSections.clear();
         this.sections = new ClonedChunkSection[SECTION_TABLE_ARRAY_SIZE];
         this.origin = null;
         this.volume = null;
@@ -491,58 +476,17 @@ public class WorldSlice implements ActiniumBlockAccess {
         return LightUtil.diffuseLight(direction);
     }
 
-    @Nullable
-    private ClonedChunkSection fetchFallbackSectionForPos(int x, int y, int z) {
-        int sX = PositionUtil.posToSectionCoord(x);
-        int sY = PositionUtil.posToSectionCoord(y);
-        int sZ = PositionUtil.posToSectionCoord(z);
-        long key = PositionUtil.packSection(sX, sY, sZ);
-        var section = this.extraClonedSections.get(key);
-        if (section != null) {
-            return section;
-        }
-        var renderer = ActiniumWorldRenderer.instanceNullable();
-        if (renderer == null) {
-            return null;
-        }
-        var manager = renderer.getRenderSectionManager();
-        if (manager == null) {
-            return null;
-        }
-        var sectionFuture = CompletableFuture.supplyAsync(() -> {
-            return manager.getSectionCache().acquire(sX, sY, sZ);
-        }, manager::scheduleAsyncTask);
-        // The game will discard the future if the player disconnects, so we need to check that they are still connected.
-        while (Minecraft.getMinecraft().world == this.world) {
-            try {
-                section = sectionFuture.get(500, TimeUnit.MILLISECONDS);
-                break;
-            } catch (ExecutionException e) {
-                throw new RuntimeException("Failed to fetch fallback section", e);
-            } catch (InterruptedException | TimeoutException ignored) {
-            }
-        }
-        if (section != null) {
-            this.extraClonedSections.put(key, section);
-        }
-        return section;
-    }
-
     /**
-     * Read the block state off the main thread (safely) by cloning the needed section.
+     * Outside the captured slice, return live data only on the main thread. Worker threads must stay within the
+     * snapshot to avoid mixing freshly cloned world data into an in-flight chunk build.
      */
     private IBlockState getBlockStateFallback(int x, int y, int z) {
         if (Minecraft.getMinecraft().isCallingFromMinecraftThread()) {
             this.fallbackPos.setPos(x, y, z);
             return this.world.getBlockState(this.fallbackPos);
-        } else {
-            ClonedChunkSection sectionSnapshot = this.fetchFallbackSectionForPos(x, y, z);
-            if (sectionSnapshot != null) {
-                return sectionSnapshot.getBlockState(x & 15, y & 15, z & 15);
-            } else {
-                return EMPTY_BLOCK_STATE;
-            }
         }
+
+        return EMPTY_BLOCK_STATE;
     }
 
     // Fluidlogged compat
