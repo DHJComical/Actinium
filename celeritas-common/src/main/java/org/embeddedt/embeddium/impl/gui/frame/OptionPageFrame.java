@@ -114,7 +114,7 @@ public class OptionPageFrame extends AbstractFrame {
             return null;
         } else {
             return switch(mod) {
-                case "minecraft" -> "embeddium";
+                case "minecraft", "embeddium", "celeritas", "actinium" -> "actinium";
                 default -> mod;
             };
         }
@@ -147,7 +147,7 @@ public class OptionPageFrame extends AbstractFrame {
         var id = option.getId();
 
         if (OptionIdentifier.isPresent(page.getId()) && OptionIdentifier.isPresent(id) && !Objects.equals(normalizeModForTooltip(page.getId().getModId()), normalizeModForTooltip(id.getModId()))) {
-            var addedByModString = TextComponent.translatable("embeddium.options.added_by_mod_string", TextComponent.literal(id.getModId()).withStyle(TextFormattingStyle.WHITE)).withStyle(TextFormattingStyle.GRAY);
+            var addedByModString = TextComponent.translatable("embeddium.options.added_by_mod_string", drawContext.getFriendlyModName(id.getModId()).withStyle(TextFormattingStyle.WHITE)).withStyle(TextFormattingStyle.GRAY);
             tooltip.add(addedByModString);
         }
 

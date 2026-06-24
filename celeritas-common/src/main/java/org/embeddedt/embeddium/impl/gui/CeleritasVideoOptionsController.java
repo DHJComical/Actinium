@@ -143,6 +143,10 @@ public class CeleritasVideoOptionsController implements Renderable {
 
     }
 
+    protected String normalizeTabHostId(String modId) {
+        return modId;
+    }
+
     private AbstractFrame createTabFrame(Dim2i tabFrameDim) {
         // TabFrame will automatically expand its height to fit all tabs, so the scrollable frame can handle it
         return TabFrame.createBuilder()
@@ -153,7 +157,7 @@ public class CeleritasVideoOptionsController implements Renderable {
                 .addTabs(tabs -> this.pages
                         .stream()
                         .filter(this::canShowPage)
-                        .forEach(page -> tabs.computeIfAbsent(page.getId().getModId(), $ -> new ArrayList<>()).add(Tab.from(page, o -> true, optionPageScrollBarOffset)))
+                        .forEach(page -> tabs.computeIfAbsent(this.normalizeTabHostId(page.getId().getModId()), $ -> new ArrayList<>()).add(Tab.from(page, o -> true, optionPageScrollBarOffset)))
                 )
                 .addTabs(this::createExtraTabs)
                 .onSetTab(() -> {

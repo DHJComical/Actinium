@@ -26,7 +26,8 @@ import java.util.List;
 public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    private static final String DEFAULT_FILE_NAME = "embeddium-options.json";
+    private static final String DEFAULT_FILE_NAME = "actinium-options.json";
+    private static final List<String> LEGACY_FILE_NAMES = List.of("embeddium-options.json");
 
     public final QualitySettings quality = new QualitySettings();
     public final AdvancedSettings advanced = new AdvancedSettings();
@@ -59,7 +60,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
             throw new RuntimeException("Couldn't save configuration changes", e);
         }
 
-        LOGGER.info("Flushed changes to Embeddium configuration");
+        LOGGER.info("Flushed changes to Actinium configuration");
     }
 
     public static class PerformanceSettings {
@@ -193,11 +194,12 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
 
     public static SodiumGameOptions load(String name) {
         Path path = getConfigPath(name);
+        Path readPath = getReadPath(name, path);
         SodiumGameOptions config;
         boolean resaveConfig = true;
 
-        if (Files.exists(path)) {
-            try (FileReader reader = new FileReader(path.toFile())) {
+        if (Files.exists(readPath)) {
+            try (FileReader reader = new FileReader(readPath.toFile())) {
                 config = GSON.fromJson(reader, SodiumGameOptions.class);
             } catch (IOException e) {
                 throw new RuntimeException("Could not parse config", e);
@@ -220,13 +222,32 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         }
 
         try {
-            if(resaveConfig)
+            if (resaveConfig || !readPath.equals(path)) {
                 config.writeChanges();
+                if (!readPath.equals(path)) {
+                    LOGGER.info("Migrated Actinium configuration from {} to {}", readPath.getFileName(), path.getFileName());
+                }
+            }
         } catch (IOException e) {
             throw new RuntimeException("Couldn't update config file", e);
         }
 
         return config;
+    }
+
+    private static Path getReadPath(String name, Path defaultPath) {
+        if (Files.exists(defaultPath) || !DEFAULT_FILE_NAME.equals(name)) {
+            return defaultPath;
+        }
+
+        for (String legacyFileName : LEGACY_FILE_NAMES) {
+            Path legacyPath = getConfigPath(legacyFileName);
+            if (Files.exists(legacyPath)) {
+                return legacyPath;
+            }
+        }
+
+        return defaultPath;
     }
 
     private static Path getConfigPath(String name) {

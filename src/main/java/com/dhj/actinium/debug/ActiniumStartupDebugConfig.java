@@ -11,7 +11,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 public final class ActiniumStartupDebugConfig {
-    private static final Path CONFIG_PATH = Paths.get("config", "embeddium-options.json");
+    private static final Path CONFIG_PATH = Paths.get("config", "actinium-options.json");
+    private static final Path LEGACY_CONFIG_PATH = Paths.get("config", "embeddium-options.json");
     private static final Snapshot SNAPSHOT = loadSnapshot();
 
     private ActiniumStartupDebugConfig() {
@@ -35,11 +36,12 @@ public final class ActiniumStartupDebugConfig {
     }
 
     private static Snapshot loadSnapshot() {
-        if (!Files.isRegularFile(CONFIG_PATH)) {
+        Path path = Files.isRegularFile(CONFIG_PATH) ? CONFIG_PATH : LEGACY_CONFIG_PATH;
+        if (!Files.isRegularFile(path)) {
             return Snapshot.DEFAULT;
         }
 
-        try (Reader reader = Files.newBufferedReader(CONFIG_PATH)) {
+        try (Reader reader = Files.newBufferedReader(path)) {
             JsonElement root = JsonParser.parseReader(reader);
             if (!root.isJsonObject()) {
                 return Snapshot.DEFAULT;

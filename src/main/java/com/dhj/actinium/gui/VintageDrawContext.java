@@ -44,6 +44,10 @@ public class VintageDrawContext implements DrawContext {
         this.componentCache = new HashMap<>();
     }
 
+    private static boolean isActiniumGuiOwner(String modId) {
+        return ActiniumRuntime.MODID.equals(modId) || "embeddium".equals(modId) || "celeritas".equals(modId);
+    }
+
     private ITextComponent applyStyles(ITextComponent c, Set<TextFormattingStyle> styles) {
         if (styles.isEmpty()) {
             return c;
@@ -198,7 +202,7 @@ public class VintageDrawContext implements DrawContext {
 
     @Override
     public TextComponent getFriendlyModName(String modId) {
-        if (ActiniumRuntime.MODID.equals(modId)) {
+        if (isActiniumGuiOwner(modId)) {
             return TextComponent.literal("Actinium");
         }
 
@@ -211,6 +215,10 @@ public class VintageDrawContext implements DrawContext {
 
     @Override
     public @Nullable String getModLogoPath(String modId) {
+        if (isActiniumGuiOwner(modId)) {
+            return new ResourceLocation(ActiniumRuntime.MODID, "icon.png").toString();
+        }
+
         return MOD_LOGOS.computeIfAbsent(modId, id -> {
             var container = Loader.instance().getIndexedModList().get(id);
             if (container == null) {

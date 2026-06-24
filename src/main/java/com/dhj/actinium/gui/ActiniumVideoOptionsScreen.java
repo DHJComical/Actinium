@@ -33,6 +33,14 @@ public class ActiniumVideoOptionsScreen extends GuiScreen {
                 ActiniumGameOptionPages.debug()
         ), new VintageDrawContext()) {
             @Override
+            protected String normalizeTabHostId(String modId) {
+                return switch (modId) {
+                    case "embeddium", "celeritas", ActiniumRuntime.MODID -> ActiniumRuntime.MODID;
+                    default -> modId;
+                };
+            }
+
+            @Override
             protected void createExtraTabs(Map<String, List<Tab<?>>> tabs) {
                 tabs.computeIfAbsent(ActiniumRuntime.MODID, $ -> new ArrayList<>()).add(Tab.createBuilder()
                         .setTitle(TextComponent.translatable("options.actinium.shaderPackSelection"))
