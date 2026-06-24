@@ -124,7 +124,7 @@ public class BlockMaterialMapping {
 			return null;
 		}
 
-		return FlatteningMap.toLegacy(id.getName());
+		return FlatteningMap.toLegacy(id.getName(), entry.getStateProperties());
 	}
 
 	private static Block resolveBlockOrNull(NamespacedId id) {

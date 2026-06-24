@@ -9,6 +9,7 @@ import java.util.Set;
 
 public final class FlatteningMap {
     private static final Map<String, List<BlockEntry>> MODERN_TO_LEGACY = new HashMap<>();
+    private static final Map<String, List<BlockEntry>> STATE_MAPPINGS = new HashMap<>();
 
     private static final String[] COLORS = {
             "white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
@@ -110,6 +111,12 @@ public final class FlatteningMap {
         metas("lilac", "double_plant", 1, 9);
         metas("rose_bush", "double_plant", 4, 12);
         metas("peony", "double_plant", 5, 13);
+        doublePlant("sunflower", 0);
+        doublePlant("lilac", 1);
+        doublePlant("tall_grass", 2);
+        doublePlant("large_fern", 3);
+        doublePlant("rose_bush", 4);
+        doublePlant("peony", 5);
 
         meta("poppy", "red_flower", 0);
         meta("blue_orchid", "red_flower", 1);
@@ -146,6 +153,37 @@ public final class FlatteningMap {
         slabVariants("jungle_slab", "wooden_slab", 3);
         slabVariants("acacia_slab", "wooden_slab", 4);
         slabVariants("dark_oak_slab", "wooden_slab", 5);
+        slabStates("stone_slab", "stone_slab", 0, "double_stone_slab", 0);
+        slabStates("sandstone_slab", "stone_slab", 1, "double_stone_slab", 1);
+        slabStates("cobblestone_slab", "stone_slab", 3, "double_stone_slab", 3);
+        slabStates("brick_slab", "stone_slab", 4, "double_stone_slab", 4);
+        slabStates("stone_brick_slab", "stone_slab", 5, "double_stone_slab", 5);
+        slabStates("nether_brick_slab", "stone_slab", 6, "double_stone_slab", 6);
+        slabStates("quartz_slab", "stone_slab", 7, "double_stone_slab", 7);
+        slabStates("red_sandstone_slab", "stone_slab2", 0, "double_stone_slab2", 0);
+        slabStates("purpur_slab", "stone_slab2", 1, "double_stone_slab2", 1);
+        slabStates("oak_slab", "wooden_slab", 0, "double_wooden_slab", 0);
+        slabStates("spruce_slab", "wooden_slab", 1, "double_wooden_slab", 1);
+        slabStates("birch_slab", "wooden_slab", 2, "double_wooden_slab", 2);
+        slabStates("jungle_slab", "wooden_slab", 3, "double_wooden_slab", 3);
+        slabStates("acacia_slab", "wooden_slab", 4, "double_wooden_slab", 4);
+        slabStates("dark_oak_slab", "wooden_slab", 5, "double_wooden_slab", 5);
+
+        multi("water", entry("water"), entry("flowing_water"));
+        multi("lava", entry("lava"), entry("flowing_lava"));
+        liquidLevels("water", "water", "flowing_water");
+        liquidLevels("lava", "lava", "flowing_lava");
+
+        state("furnace", "lit", "false", entry("furnace"));
+        state("furnace", "lit", "true", entry("lit_furnace"));
+        state("redstone_ore", "lit", "false", entry("redstone_ore"));
+        state("redstone_ore", "lit", "true", entry("lit_redstone_ore"));
+        state("redstone_lamp", "lit", "false", entry("redstone_lamp"));
+        state("redstone_lamp", "lit", "true", entry("lit_redstone_lamp"));
+        state("repeater", "powered", "false", entry("unpowered_repeater"));
+        state("repeater", "powered", "true", entry("powered_repeater"));
+        state("comparator", "powered", "false", entry("unpowered_comparator"));
+        state("comparator", "powered", "true", entry("powered_comparator"));
     }
 
     private FlatteningMap() {
@@ -153,6 +191,69 @@ public final class FlatteningMap {
 
     public static List<BlockEntry> toLegacy(String modernName) {
         return MODERN_TO_LEGACY.get(modernName);
+    }
+
+    public static List<BlockEntry> toLegacy(String modernName, Map<String, String> stateProperties) {
+        if (stateProperties != null && !stateProperties.isEmpty()) {
+            List<List<BlockEntry>> propertyResults = new ArrayList<>();
+
+            for (Map.Entry<String, String> property : stateProperties.entrySet()) {
+                List<BlockEntry> result = STATE_MAPPINGS.get(stateKey(modernName, property.getKey(), property.getValue()));
+                if (result != null) {
+                    propertyResults.add(result);
+                }
+            }
+
+            if (propertyResults.size() == 1) {
+                return propertyResults.get(0);
+            }
+
+            if (propertyResults.size() > 1) {
+                List<BlockEntry> combined = propertyResults.get(0);
+                for (int i = 1; i < propertyResults.size(); i++) {
+                    combined = intersectBlockEntries(combined, propertyResults.get(i));
+                    if (combined.isEmpty()) {
+                        break;
+                    }
+                }
+
+                if (!combined.isEmpty()) {
+                    return combined;
+                }
+            }
+        }
+
+        return MODERN_TO_LEGACY.get(modernName);
+    }
+
+    private static List<BlockEntry> intersectBlockEntries(List<BlockEntry> a, List<BlockEntry> b) {
+        List<BlockEntry> result = new ArrayList<>(Math.min(a.size(), b.size()));
+        for (BlockEntry entryA : a) {
+            for (BlockEntry entryB : b) {
+                if (!entryA.getId().equals(entryB.getId())) {
+                    continue;
+                }
+
+                Set<Integer> metasA = entryA.getMetas();
+                Set<Integer> metasB = entryB.getMetas();
+
+                if (metasA.isEmpty() && metasB.isEmpty()) {
+                    result.add(new BlockEntry(entryA.getId(), Collections.emptySet()));
+                } else if (metasA.isEmpty()) {
+                    result.add(new BlockEntry(entryA.getId(), metasB));
+                } else if (metasB.isEmpty()) {
+                    result.add(new BlockEntry(entryA.getId(), metasA));
+                } else {
+                    Set<Integer> intersection = new java.util.HashSet<>(metasA);
+                    intersection.retainAll(metasB);
+                    if (!intersection.isEmpty()) {
+                        result.add(new BlockEntry(entryA.getId(), Set.copyOf(intersection)));
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 
     private static void rename(String modern, String legacy) {
@@ -169,6 +270,36 @@ public final class FlatteningMap {
             metaList.add(metaValue);
         }
         MODERN_TO_LEGACY.put(modern, List.of(new BlockEntry(new NamespacedId("minecraft", legacy), Set.copyOf(metaList))));
+    }
+
+    private static void multi(String modern, BlockEntry... entries) {
+        MODERN_TO_LEGACY.put(modern, List.of(entries));
+    }
+
+    private static void state(String modern, String property, String value, BlockEntry... entries) {
+        STATE_MAPPINGS.put(stateKey(modern, property, value), List.of(entries));
+    }
+
+    private static String stateKey(String modern, String property, String value) {
+        return modern + "|" + property + "=" + value;
+    }
+
+    private static void liquidLevels(String modern, String legacyStatic, String legacyDynamic) {
+        for (int level = 0; level <= 15; level++) {
+            state(modern, "level", String.valueOf(level), entryMetas(legacyStatic, level), entryMetas(legacyDynamic, level));
+        }
+    }
+
+    private static BlockEntry entry(String legacyName) {
+        return new BlockEntry(new NamespacedId("minecraft", legacyName), Collections.emptySet());
+    }
+
+    private static BlockEntry entryMetas(String legacyName, int... metaValues) {
+        ArrayList<Integer> metaList = new ArrayList<>(metaValues.length);
+        for (int metaValue : metaValues) {
+            metaList.add(metaValue);
+        }
+        return new BlockEntry(new NamespacedId("minecraft", legacyName), Set.copyOf(metaList));
     }
 
     private static void logVariants(String logName, String woodName, int typeOffset) {
@@ -190,5 +321,17 @@ public final class FlatteningMap {
 
     private static void slabVariants(String modern, String legacy, int typeOffset) {
         metas(modern, legacy, typeOffset, typeOffset + 8);
+    }
+
+    private static void slabStates(String modern, String slabBlock, int typeOffset, String doubleBlock, int doubleMeta) {
+        state(modern, "type", "bottom", entryMetas(slabBlock, typeOffset));
+        state(modern, "type", "top", entryMetas(slabBlock, typeOffset + 8));
+        state(modern, "type", "double", entryMetas(doubleBlock, doubleMeta));
+    }
+
+    private static void doublePlant(String modern, int variant) {
+        int upper = 0x8 | variant;
+        state(modern, "half", "lower", entryMetas("double_plant", variant));
+        state(modern, "half", "upper", entryMetas("double_plant", upper));
     }
 }
