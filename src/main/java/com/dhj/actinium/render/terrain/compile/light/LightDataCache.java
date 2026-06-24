@@ -27,7 +27,7 @@ public class LightDataCache extends LightDataAccess {
             em = false;
         }
 
-        boolean op = !state.isTranslucent() && state.getLightOpacity(world, pos) == 0;
+        boolean op = state.getMaterial().isOpaque() && state.getLightOpacity(world, pos) > 0;
         boolean fo = state.isOpaqueCube();
         boolean fc = state.isBlockNormalCube();
 
