@@ -9,6 +9,7 @@ import org.embeddedt.embeddium.api.shader.vertex.BlockRenderContext;
 import org.embeddedt.embeddium.api.shader.vertex.ContextAwareChunkVertexEncoder;
 import org.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
 import lombok.Getter;
+import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -16,6 +17,7 @@ import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.init.Blocks;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
@@ -116,7 +118,8 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         }
 
         int metadata = state.getBlock().getMetaFromState(state);
-        int shaderBlockId = resolveShaderBlockStateId(state.getBlock(), metadata);
+        int effectiveMetadata = applyShaderStateBits(state, pos, metadata);
+        int shaderBlockId = resolveShaderBlockStateId(state.getBlock(), effectiveMetadata);
         short renderType = state.getMaterial() == net.minecraft.block.material.Material.WATER
                 ? ExtendedDataHelper.FLUID_RENDER_TYPE
                 : ExtendedDataHelper.BLOCK_RENDER_TYPE;
@@ -136,11 +139,12 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             return;
         }
 
+        int effectiveMetadata = applyShaderStateBits(state, pos, state.getBlock().getMetaFromState(state));
         extension.actinium$setActiveQuadContext(new VanillaQuadContext(
                 pos.getX() & 15,
                 pos.getY() & 15,
                 pos.getZ() & 15,
-                resolveShaderBlockStateId(state.getBlock(), state.getBlock().getMetaFromState(state)),
+                resolveShaderBlockStateId(state.getBlock(), effectiveMetadata),
                 ExtendedDataHelper.FLUID_RENDER_TYPE,
                 (byte) state.getLightValue(this.worldSlice, pos)
         ));
@@ -270,6 +274,21 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     private static int resolveShaderBlockStateId(Block block, int metadata) {
         ShaderProvider provider = ShaderProviderHolder.getProvider();
         return provider != null ? provider.getBlockStateId(block, metadata) : Block.getIdFromBlock(block);
+    }
+
+    private int applyShaderStateBits(IBlockState state, BlockPos pos, int metadata) {
+        if (BlockRenderingSettings.INSTANCE.hasSnowyEntries()
+                && BlockRenderingSettings.INSTANCE.getSnowyBlocks().contains(state.getBlock())
+                && isSnowCovered(pos)) {
+            return metadata | net.coderbot.iris.block_rendering.BlockMaterialMapping.SNOWY_META_BIT;
+        }
+
+        return metadata;
+    }
+
+    private boolean isSnowCovered(BlockPos pos) {
+        Block topBlock = this.worldSlice.getBlockState(pos.up()).getBlock();
+        return topBlock == Blocks.SNOW_LAYER || topBlock == Blocks.SNOW;
     }
 }
 

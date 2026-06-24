@@ -7,6 +7,8 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.coderbot.iris.shaderpack.materialmap.BlockEntry;
 import net.coderbot.iris.shaderpack.materialmap.BlockRenderType;
 import net.coderbot.iris.shaderpack.materialmap.FlatteningMap;
@@ -17,25 +19,31 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.ResourceLocation;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public class BlockMaterialMapping {
+	public static final int SNOWY_META_BIT = 1 << 16;
+
 	/**
 	 * Creates a two-level map structure for block material IDs.
 	 * Based on Iris's BlockState mapping approach adapted for 1.7.10's metadata system.
 	 */
 	public static Reference2ObjectMap<Block, Int2IntMap> createBlockMetaIdMap(Int2ObjectMap<List<BlockEntry>> blockPropertiesMap) {
 		Reference2ObjectMap<Block, Int2IntMap> blockMatches = new Reference2ObjectOpenHashMap<>();
+		ReferenceSet<Block> snowyBlocks = new ReferenceOpenHashSet<>();
 
 		blockPropertiesMap.forEach((intId, entries) -> {
 			for (BlockEntry entry : entries) {
-				addBlockMetasWithFlattening(entry, blockMatches, intId);
+				addBlockMetasWithFlattening(entry, blockMatches, intId, snowyBlocks);
 			}
 		});
 
+		BlockRenderingSettings.INSTANCE.setHasSnowyEntries(!snowyBlocks.isEmpty());
+		BlockRenderingSettings.INSTANCE.setSnowyBlocks(snowyBlocks);
 		return blockMatches;
 	}
 
@@ -71,23 +79,26 @@ public class BlockMaterialMapping {
 		};
 	}
 
-	private static void addBlockMetasWithFlattening(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap, int intId) {
+	private static void addBlockMetasWithFlattening(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap,
+	                                                int intId, ReferenceSet<Block> snowyBlocks) {
 		List<BlockEntry> flattenedEntries = resolveFlattenedEntries(entry);
 		if (flattenedEntries != null) {
+			Map<String, String> inheritedRuntimeProperties = extractRuntimeStateProperties(entry.getStateProperties());
 			for (BlockEntry flattenedEntry : flattenedEntries) {
-				addBlockMetas(flattenedEntry, idMap, intId);
+				addBlockMetas(flattenedEntry, idMap, intId, inheritedRuntimeProperties, snowyBlocks);
 			}
 			return;
 		}
 
-		addBlockMetas(entry, idMap, intId);
+		addBlockMetas(entry, idMap, intId, entry.getStateProperties(), snowyBlocks);
 	}
 
 	/**
 	 * Adds block+metadata combinations to the material ID map.
 	 * Based on Iris's addBlockStates method, adapted for 1.7.10 metadata system.
 	 */
-	private static void addBlockMetas(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap, int intId) {
+	private static void addBlockMetas(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap, int intId,
+	                                  Map<String, String> effectiveStateProperties, ReferenceSet<Block> snowyBlocks) {
 		final NamespacedId id = entry.getId();
 		final ResourceLocation resourceLocation = new ResourceLocation(id.getNamespace(), id.getName());
 
@@ -100,7 +111,17 @@ public class BlockMaterialMapping {
 		}
 
 		Set<Integer> metas = entry.getMetas();
-		Map<String, String> stateProperties = entry.getStateProperties();
+		Map<String, String> stateProperties = effectiveStateProperties;
+		int extraBits = 0;
+		String snowy = stateProperties.get("snowy");
+		if (snowy != null) {
+			snowyBlocks.add(block);
+			if ("true".equalsIgnoreCase(snowy)) {
+				extraBits |= SNOWY_META_BIT;
+			}
+			stateProperties = withoutStateProperty(stateProperties, "snowy");
+		}
+
 		if (!stateProperties.isEmpty()) {
 			Set<Integer> matchedMetas = resolveMetasFromStateProperties(block, stateProperties);
 			if (matchedMetas.isEmpty()) {
@@ -129,12 +150,12 @@ public class BlockMaterialMapping {
 		if (metas.isEmpty()) {
 			// Add all metadata values (0-15) if there aren't any specific ones
 			for (int meta = 0; meta < 16; meta++) {
-				metaMap.putIfAbsent(meta, intId);
+				metaMap.putIfAbsent(meta | extraBits, intId);
 			}
 		} else {
 			// Add only specific metadata values
 			for (int meta : metas) {
-				metaMap.putIfAbsent(meta, intId);
+				metaMap.putIfAbsent(meta | extraBits, intId);
 			}
 		}
 	}
@@ -198,6 +219,29 @@ public class BlockMaterialMapping {
 	@SuppressWarnings({"rawtypes", "unchecked"})
 	private static String getPropertyValueName(IProperty property, Comparable value) {
 		return property.getName(value);
+	}
+
+	private static Map<String, String> extractRuntimeStateProperties(Map<String, String> stateProperties) {
+		String snowy = stateProperties.get("snowy");
+		if (snowy == null) {
+			return Collections.emptyMap();
+		}
+
+		return Collections.singletonMap("snowy", snowy);
+	}
+
+	private static Map<String, String> withoutStateProperty(Map<String, String> stateProperties, String propertyName) {
+		if (!stateProperties.containsKey(propertyName)) {
+			return stateProperties;
+		}
+
+		if (stateProperties.size() == 1) {
+			return Collections.emptyMap();
+		}
+
+		Map<String, String> copy = new java.util.LinkedHashMap<>(stateProperties);
+		copy.remove(propertyName);
+		return copy;
 	}
 
 	private static Block resolveBlockOrNull(NamespacedId id) {

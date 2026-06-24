@@ -4,6 +4,8 @@ import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntFunction;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import lombok.Getter;
 import lombok.Setter;
 import net.coderbot.iris.shaderpack.materialmap.NamespacedId;
@@ -31,6 +33,10 @@ public class BlockRenderingSettings {
 	private boolean disableDirectionalShading;
 	private boolean useSeparateAo;
 	private boolean useExtendedVertexFormat;
+	@Setter
+	private boolean hasSnowyEntries;
+	@Getter
+	private ReferenceSet<Block> snowyBlocks = new ReferenceOpenHashSet<>();
 
 	public BlockRenderingSettings() {
 		reloadRequired = false;
@@ -40,6 +46,7 @@ public class BlockRenderingSettings {
 		disableDirectionalShading = false;
 		useSeparateAo = false;
 		useExtendedVertexFormat = false;
+		hasSnowyEntries = false;
 	}
 
     public void clearReloadRequired() {
@@ -76,6 +83,10 @@ public class BlockRenderingSettings {
 		return -1;
 	}
 
+	public boolean hasSnowyEntries() {
+		return hasSnowyEntries;
+	}
+
 	@Nullable
 	public Object2IntFunction<NamespacedId> getEntityIds() {
 		return entityIds;
@@ -89,6 +100,10 @@ public class BlockRenderingSettings {
 	public void setBlockMetaMatches(Reference2ObjectMap<Block, Int2IntMap> blockMetaIds) {
 		this.reloadRequired = true;
 		this.blockMetaMatches = blockMetaIds;
+	}
+
+	public void setSnowyBlocks(ReferenceSet<Block> snowyBlocks) {
+		this.snowyBlocks = snowyBlocks != null ? snowyBlocks : new ReferenceOpenHashSet<>();
 	}
 
 	public void setBlockTypeIds(Map<Block, BlockRenderLayer> blockTypeIds) {
