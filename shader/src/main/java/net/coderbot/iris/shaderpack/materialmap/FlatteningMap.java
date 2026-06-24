@@ -358,6 +358,56 @@ public final class FlatteningMap {
 
         metas("chipped_anvil", "anvil", 4, 5, 6, 7);
         metas("damaged_anvil", "anvil", 8, 9, 10, 11);
+        wallFacing("chest", "chest");
+        wallFacing("trapped_chest", "trapped_chest");
+        wallFacing("ender_chest", "ender_chest");
+        wallFacing("ladder", "ladder");
+
+        state("lever", "face", "floor", entryMetas("lever", 5, 6, 13, 14));
+        state("lever", "face", "wall", entryMetas("lever", 1, 2, 3, 4, 9, 10, 11, 12));
+        state("lever", "face", "ceiling", entryMetas("lever", 0, 7, 8, 15));
+        state("lever", "powered", "false", entryMetas("lever", 0, 1, 2, 3, 4, 5, 6, 7));
+        state("lever", "powered", "true", entryMetas("lever", 8, 9, 10, 11, 12, 13, 14, 15));
+        state("lever", "facing", "east", entryMetas("lever", 1, 6, 0, 9, 14, 8));
+        state("lever", "facing", "west", entryMetas("lever", 2, 6, 0, 10, 14, 8));
+        state("lever", "facing", "south", entryMetas("lever", 3, 5, 7, 11, 13, 15));
+        state("lever", "facing", "north", entryMetas("lever", 4, 5, 7, 12, 13, 15));
+
+        buttonStates("stone_button", "stone_button");
+        buttonStates("oak_button", "wooden_button");
+        pumpkinFacingStates("carved_pumpkin", "pumpkin");
+        pumpkinFacingStates("jack_o_lantern", "lit_pumpkin");
+        anvilFacingStates("anvil", 0);
+        anvilFacingStates("chipped_anvil", 4);
+        anvilFacingStates("damaged_anvil", 8);
+
+        logAxisStates("oak_log", 0);
+        logAxisStates("spruce_log", 1);
+        logAxisStates("birch_log", 2);
+        logAxisStates("jungle_log", 3);
+        logAxisStates("stripped_oak_log", 0);
+        logAxisStates("stripped_spruce_log", 1);
+        logAxisStates("stripped_birch_log", 2);
+        logAxisStates("stripped_jungle_log", 3);
+        log2AxisStates("acacia_log", 0);
+        log2AxisStates("dark_oak_log", 1);
+        log2AxisStates("stripped_acacia_log", 0);
+        log2AxisStates("stripped_dark_oak_log", 1);
+        woodAxisStates("oak_wood", 12);
+        woodAxisStates("spruce_wood", 13);
+        woodAxisStates("birch_wood", 14);
+        woodAxisStates("jungle_wood", 15);
+        woodAxisStates("stripped_oak_wood", 12);
+        woodAxisStates("stripped_spruce_wood", 13);
+        woodAxisStates("stripped_birch_wood", 14);
+        woodAxisStates("stripped_jungle_wood", 15);
+        wood2AxisStates("acacia_wood", 12, 14);
+        wood2AxisStates("dark_oak_wood", 13, 15);
+        wood2AxisStates("stripped_acacia_wood", 12, 14);
+        wood2AxisStates("stripped_dark_oak_wood", 13, 15);
+        state("hay_block", "axis", "y", entryMetas("hay_block", 0));
+        state("hay_block", "axis", "x", entryMetas("hay_block", 4));
+        state("hay_block", "axis", "z", entryMetas("hay_block", 8));
     }
 
     private FlatteningMap() {
@@ -603,5 +653,56 @@ public final class FlatteningMap {
         state(modern, "shape", "ascending_south", entryMetas(legacy, 5, 13));
         state(modern, "powered", "false", entryMetas(legacy, 0, 1, 2, 3, 4, 5));
         state(modern, "powered", "true", entryMetas(legacy, 8, 9, 10, 11, 12, 13));
+    }
+
+    private static void buttonStates(String modern, String legacy) {
+        state(modern, "face", "floor", entryMetas(legacy, 5, 13));
+        state(modern, "face", "wall", entryMetas(legacy, 1, 2, 3, 4, 9, 10, 11, 12));
+        state(modern, "face", "ceiling", entryMetas(legacy, 0, 8));
+        state(modern, "powered", "false", entryMetas(legacy, 0, 1, 2, 3, 4, 5));
+        state(modern, "powered", "true", entryMetas(legacy, 8, 9, 10, 11, 12, 13));
+        state(modern, "facing", "east", entryMetas(legacy, 1, 9));
+        state(modern, "facing", "west", entryMetas(legacy, 2, 10));
+        state(modern, "facing", "south", entryMetas(legacy, 3, 11));
+        state(modern, "facing", "north", entryMetas(legacy, 4, 12));
+    }
+
+    private static void logAxisStates(String modern, int typeOffset) {
+        state(modern, "axis", "y", entryMetas("log", typeOffset));
+        state(modern, "axis", "x", entryMetas("log", typeOffset + 4));
+        state(modern, "axis", "z", entryMetas("log", typeOffset + 8));
+    }
+
+    private static void woodAxisStates(String modern, int meta) {
+        state(modern, "axis", "y", entryMetas("log", meta));
+        state(modern, "axis", "x", entryMetas("log", meta));
+        state(modern, "axis", "z", entryMetas("log", meta));
+    }
+
+    private static void wood2AxisStates(String modern, int meta, int phantomMeta) {
+        state(modern, "axis", "y", entryMetas("log2", meta, phantomMeta));
+        state(modern, "axis", "x", entryMetas("log2", meta, phantomMeta));
+        state(modern, "axis", "z", entryMetas("log2", meta, phantomMeta));
+    }
+
+    private static void log2AxisStates(String modern, int typeOffset) {
+        int phantom = typeOffset + 2;
+        state(modern, "axis", "y", entryMetas("log2", typeOffset, phantom));
+        state(modern, "axis", "x", entryMetas("log2", typeOffset + 4, phantom + 4));
+        state(modern, "axis", "z", entryMetas("log2", typeOffset + 8, phantom + 8));
+    }
+
+    private static void pumpkinFacingStates(String modern, String legacy) {
+        state(modern, "facing", "south", entryMetas(legacy, 0));
+        state(modern, "facing", "west", entryMetas(legacy, 1));
+        state(modern, "facing", "north", entryMetas(legacy, 2));
+        state(modern, "facing", "east", entryMetas(legacy, 3));
+    }
+
+    private static void anvilFacingStates(String modern, int damageOffset) {
+        state(modern, "facing", "south", entryMetas("anvil", damageOffset));
+        state(modern, "facing", "west", entryMetas("anvil", damageOffset + 1));
+        state(modern, "facing", "north", entryMetas("anvil", damageOffset + 2));
+        state(modern, "facing", "east", entryMetas("anvil", damageOffset + 3));
     }
 }
