@@ -254,6 +254,8 @@ public final class FlatteningMap {
         state("redstone_ore", "lit", "true", entry("lit_redstone_ore"));
         state("redstone_lamp", "lit", "false", entry("redstone_lamp"));
         state("redstone_lamp", "lit", "true", entry("lit_redstone_lamp"));
+        state("daylight_detector", "inverted", "false", entry("daylight_detector"));
+        state("daylight_detector", "inverted", "true", entry("daylight_detector_inverted"));
         state("repeater", "powered", "false", entry("unpowered_repeater"));
         state("repeater", "powered", "true", entry("powered_repeater"));
         state("comparator", "powered", "false", entry("unpowered_comparator"));
@@ -266,6 +268,31 @@ public final class FlatteningMap {
         for (int layers = 1; layers <= 8; layers++) {
             state("snow", "layers", String.valueOf(layers), entryMetas("snow_layer", layers - 1));
         }
+
+        state("farmland", "moisture", "0", entryMetas("farmland", 0));
+        state("farmland", "moisture", "1", entryMetas("farmland", 0));
+        state("farmland", "moisture", "2", entryMetas("farmland", 0));
+        state("farmland", "moisture", "3", entryMetas("farmland", 0));
+        state("farmland", "moisture", "4", entryMetas("farmland", 0));
+        state("farmland", "moisture", "5", entryMetas("farmland", 0));
+        state("farmland", "moisture", "6", entryMetas("farmland", 0));
+        state("farmland", "moisture", "7", entryMetas("farmland", 1, 2, 3, 4, 5, 6, 7));
+
+        for (int age = 0; age <= 7; age++) {
+            state("wheat", "age", String.valueOf(age), entryMetas("wheat", age));
+            state("carrots", "age", String.valueOf(age), entryMetas("carrots", age));
+            state("potatoes", "age", String.valueOf(age), entryMetas("potatoes", age));
+            state("pumpkin_stem", "age", String.valueOf(age), entryMetas("pumpkin_stem", age));
+            state("melon_stem", "age", String.valueOf(age), entryMetas("melon_stem", age));
+        }
+
+        state("cocoa", "facing", "south", entryMetas("cocoa", 0, 4, 8));
+        state("cocoa", "facing", "west", entryMetas("cocoa", 1, 5, 9));
+        state("cocoa", "facing", "north", entryMetas("cocoa", 2, 6, 10));
+        state("cocoa", "facing", "east", entryMetas("cocoa", 3, 7, 11));
+        state("cocoa", "age", "0", entryMetas("cocoa", 0, 1, 2, 3));
+        state("cocoa", "age", "1", entryMetas("cocoa", 4, 5, 6, 7));
+        state("cocoa", "age", "2", entryMetas("cocoa", 8, 9, 10, 11));
 
         state("piston", "extended", "false", entryMetas("piston", 0, 1, 2, 3, 4, 5));
         state("piston", "extended", "true", entryMetas("piston", 8, 9, 10, 11, 12, 13));
