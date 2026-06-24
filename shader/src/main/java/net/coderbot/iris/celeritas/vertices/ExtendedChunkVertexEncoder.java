@@ -3,6 +3,8 @@ package net.coderbot.iris.celeritas.vertices;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.vertices.NormalHelper;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockDynamicLiquid;
+import net.minecraft.block.BlockStaticLiquid;
 import org.embeddedt.embeddium.api.util.NormI8;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
@@ -42,7 +44,7 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
     @Override
     public void prepareToRenderFluid(BlockRenderContext ctx, Block block, int metadata, byte lightValue) {
         this.context = ctx;
-        ctx.blockId = resolveBlockStateId(block, metadata);
+        ctx.blockId = resolveFluidBlockStateId(block, metadata);
         ctx.renderType = ExtendedDataHelper.FLUID_RENDER_TYPE;
         ctx.lightValue = lightValue;
     }
@@ -128,6 +130,28 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
     private static int resolveBlockStateId(Block block, int metadata) {
         ShaderProvider provider = ShaderProviderHolder.getProvider();
         return provider != null ? provider.getBlockStateId(block, metadata) : Block.getIdFromBlock(block);
+    }
+
+    private static int resolveFluidBlockStateId(Block block, int metadata) {
+        int blockStateId = resolveBlockStateId(block, metadata);
+        if (blockStateId != -1) {
+            return blockStateId;
+        }
+
+        Block counterpart = liquidCounterpart(block);
+        return counterpart != null ? resolveBlockStateId(counterpart, metadata) : -1;
+    }
+
+    private static Block liquidCounterpart(Block block) {
+        if (block instanceof BlockStaticLiquid) {
+            return Block.getBlockById(Block.getIdFromBlock(block) - 1);
+        }
+
+        if (block instanceof BlockDynamicLiquid) {
+            return Block.getBlockById(Block.getIdFromBlock(block) + 1);
+        }
+
+        return null;
     }
 }
 
