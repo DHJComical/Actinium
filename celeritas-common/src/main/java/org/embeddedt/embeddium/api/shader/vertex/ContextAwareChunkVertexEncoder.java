@@ -6,7 +6,7 @@ import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncode
 public interface ContextAwareChunkVertexEncoder extends ChunkVertexEncoder {
     void prepareToRenderBlock(BlockRenderContext ctx, Block block, int metadata, short renderType, byte lightValue);
 
-    void prepareToRenderFluid(BlockRenderContext ctx, Block block, byte lightValue);
+    void prepareToRenderFluid(BlockRenderContext ctx, Block block, int metadata, byte lightValue);
 
     void prepareToRenderVanilla(BlockRenderContext ctx);
 

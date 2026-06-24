@@ -40,9 +40,9 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
     }
 
     @Override
-    public void prepareToRenderFluid(BlockRenderContext ctx, Block block, byte lightValue) {
+    public void prepareToRenderFluid(BlockRenderContext ctx, Block block, int metadata, byte lightValue) {
         this.context = ctx;
-        ctx.blockId = resolveBlockStateId(block, 0);
+        ctx.blockId = resolveBlockStateId(block, metadata);
         ctx.renderType = ExtendedDataHelper.FLUID_RENDER_TYPE;
         ctx.lightValue = lightValue;
     }

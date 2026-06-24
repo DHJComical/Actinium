@@ -227,7 +227,7 @@ public class VintageBlockRenderer {
 
         this.blockRenderContext.set(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, blockId, renderType, lightValue);
         if (isFluid) {
-            encoder.prepareToRenderFluid(this.blockRenderContext, block, lightValue);
+            encoder.prepareToRenderFluid(this.blockRenderContext, block, this.currentMetadata, lightValue);
         } else {
             encoder.prepareToRenderBlock(this.blockRenderContext, block, this.currentMetadata, renderType, lightValue);
         }
