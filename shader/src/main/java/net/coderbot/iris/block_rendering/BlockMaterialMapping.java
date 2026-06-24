@@ -9,6 +9,7 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import net.coderbot.iris.shaderpack.materialmap.BlockEntry;
 import net.coderbot.iris.shaderpack.materialmap.BlockRenderType;
+import net.coderbot.iris.shaderpack.materialmap.FlatteningMap;
 import net.coderbot.iris.shaderpack.materialmap.NamespacedId;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
@@ -28,7 +29,7 @@ public class BlockMaterialMapping {
 
 		blockPropertiesMap.forEach((intId, entries) -> {
 			for (BlockEntry entry : entries) {
-				addBlockMetas(entry, blockMatches, intId);
+				addBlockMetasWithFlattening(entry, blockMatches, intId);
 			}
 		});
 
@@ -39,8 +40,7 @@ public class BlockMaterialMapping {
 		Map<Block, BlockRenderLayer> blockTypeIds = new Reference2ReferenceOpenHashMap<>();
 
 		blockPropertiesMap.forEach((id, blockType) -> {
-			final ResourceLocation resourceLocation = new ResourceLocation(id.getNamespace(), id.getName());
-			final Block block = Block.getBlockFromName(resourceLocation.toString());
+			final Block block = resolveBlockOrNull(id);
 
 			if (block == null || block == Blocks.AIR) {
 				return;
@@ -66,6 +66,18 @@ public class BlockMaterialMapping {
 			case CUTOUT_MIPPED -> BlockRenderLayer.CUTOUT_MIPPED;
 			case TRANSLUCENT -> BlockRenderLayer.TRANSLUCENT;
 		};
+	}
+
+	private static void addBlockMetasWithFlattening(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap, int intId) {
+		List<BlockEntry> flattenedEntries = resolveFlattenedEntries(entry);
+		if (flattenedEntries != null) {
+			for (BlockEntry flattenedEntry : flattenedEntries) {
+				addBlockMetas(flattenedEntry, idMap, intId);
+			}
+			return;
+		}
+
+		addBlockMetas(entry, idMap, intId);
 	}
 
 	/**
@@ -104,5 +116,30 @@ public class BlockMaterialMapping {
 				metaMap.putIfAbsent(meta, intId);
 			}
 		}
+	}
+
+	private static List<BlockEntry> resolveFlattenedEntries(BlockEntry entry) {
+		NamespacedId id = entry.getId();
+		if (!"minecraft".equals(id.getNamespace())) {
+			return null;
+		}
+
+		return FlatteningMap.toLegacy(id.getName());
+	}
+
+	private static Block resolveBlockOrNull(NamespacedId id) {
+		final ResourceLocation resourceLocation = new ResourceLocation(id.getNamespace(), id.getName());
+		final Block block = Block.getBlockFromName(resourceLocation.toString());
+		if (block != null && block != Blocks.AIR) {
+			return block;
+		}
+
+		List<BlockEntry> flattenedEntries = FlatteningMap.toLegacy(id.getName());
+		if (flattenedEntries == null || flattenedEntries.isEmpty()) {
+			return block;
+		}
+
+		BlockEntry legacyEntry = flattenedEntries.get(0);
+		return Block.getBlockFromName(new ResourceLocation(legacyEntry.getId().getNamespace(), legacyEntry.getId().getName()).toString());
 	}
 }
