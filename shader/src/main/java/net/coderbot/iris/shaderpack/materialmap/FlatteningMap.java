@@ -437,11 +437,57 @@ public final class FlatteningMap {
         state("hay_block", "axis", "y", entryMetas("hay_block", 0));
         state("hay_block", "axis", "x", entryMetas("hay_block", 4));
         state("hay_block", "axis", "z", entryMetas("hay_block", 8));
+        state("quartz_pillar", "axis", "y", entryMetas("quartz_block", 2));
+        state("quartz_pillar", "axis", "x", entryMetas("quartz_block", 3));
+        state("quartz_pillar", "axis", "z", entryMetas("quartz_block", 4));
 
         for (int i = 0; i < 6; i++) {
             state(WOOD_TYPES[i] + "_sapling", "stage", "0", entryMetas("sapling", i));
             state(WOOD_TYPES[i] + "_sapling", "stage", "1", entryMetas("sapling", i + 8));
         }
+
+        state("acacia_leaves", "persistent", "true", entryMetas("leaves2", 4, 12));
+        state("acacia_leaves", "persistent", "false", entryMetas("leaves2", 0, 8));
+        state("dark_oak_leaves", "persistent", "true", entryMetas("leaves2", 5, 13));
+        state("dark_oak_leaves", "persistent", "false", entryMetas("leaves2", 1, 9));
+
+        state("wall_torch", "facing", "east", entryMetas("torch", 1));
+        state("wall_torch", "facing", "west", entryMetas("torch", 2));
+        state("wall_torch", "facing", "south", entryMetas("torch", 3));
+        state("wall_torch", "facing", "north", entryMetas("torch", 4));
+        state("redstone_wall_torch", "facing", "east",
+                entryMetas("redstone_torch", 1), entryMetas("unlit_redstone_torch", 1));
+        state("redstone_wall_torch", "facing", "west",
+                entryMetas("redstone_torch", 2), entryMetas("unlit_redstone_torch", 2));
+        state("redstone_wall_torch", "facing", "south",
+                entryMetas("redstone_torch", 3), entryMetas("unlit_redstone_torch", 3));
+        state("redstone_wall_torch", "facing", "north",
+                entryMetas("redstone_torch", 4), entryMetas("unlit_redstone_torch", 4));
+
+        state("tripwire_hook", "facing", "south", entryMetas("tripwire_hook", 0, 4, 8, 12));
+        state("tripwire_hook", "facing", "west", entryMetas("tripwire_hook", 1, 5, 9, 13));
+        state("tripwire_hook", "facing", "north", entryMetas("tripwire_hook", 2, 6, 10, 14));
+        state("tripwire_hook", "facing", "east", entryMetas("tripwire_hook", 3, 7, 11, 15));
+        state("tripwire_hook", "attached", "false", entryMetas("tripwire_hook", 0, 1, 2, 3, 8, 9, 10, 11));
+        state("tripwire_hook", "attached", "true", entryMetas("tripwire_hook", 4, 5, 6, 7, 12, 13, 14, 15));
+        state("tripwire_hook", "powered", "false", entryMetas("tripwire_hook", 0, 1, 2, 3, 4, 5, 6, 7));
+        state("tripwire_hook", "powered", "true", entryMetas("tripwire_hook", 8, 9, 10, 11, 12, 13, 14, 15));
+
+        state("tripwire", "powered", "true", entryMetas("tripwire", 1, 5, 9, 13));
+        state("tripwire", "powered", "false", entryMetas("tripwire", 0, 4, 8, 12));
+        state("tripwire", "attached", "true", entryMetas("tripwire", 4, 5, 12, 13));
+        state("tripwire", "attached", "false", entryMetas("tripwire", 0, 1, 8, 9));
+        state("tripwire", "disarmed", "true", entryMetas("tripwire", 8, 9, 12, 13));
+        state("tripwire", "disarmed", "false", entryMetas("tripwire", 0, 1, 4, 5));
+
+        state("vine", "south", "true", entryMetas("vine", 1, 3, 5, 7, 9, 11, 13, 15));
+        state("vine", "west", "true", entryMetas("vine", 2, 3, 6, 7, 10, 11, 14, 15));
+        state("vine", "north", "true", entryMetas("vine", 4, 5, 6, 7, 12, 13, 14, 15));
+        state("vine", "east", "true", entryMetas("vine", 8, 9, 10, 11, 12, 13, 14, 15));
+        state("vine", "south", "false", entryMetas("vine", 0, 2, 4, 6, 8, 10, 12, 14));
+        state("vine", "west", "false", entryMetas("vine", 0, 1, 4, 5, 8, 9, 12, 13));
+        state("vine", "north", "false", entryMetas("vine", 0, 1, 2, 3, 8, 9, 10, 11));
+        state("vine", "east", "false", entryMetas("vine", 0, 1, 2, 3, 4, 5, 6, 7));
 
         trapdoorStates();
         fenceGateStates();
