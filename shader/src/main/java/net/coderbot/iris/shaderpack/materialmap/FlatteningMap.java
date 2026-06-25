@@ -450,6 +450,14 @@ public final class FlatteningMap {
         state("acacia_leaves", "persistent", "false", entryMetas("leaves2", 0, 8));
         state("dark_oak_leaves", "persistent", "true", entryMetas("leaves2", 5, 13));
         state("dark_oak_leaves", "persistent", "false", entryMetas("leaves2", 1, 9));
+        state("oak_leaves", "persistent", "true", entryMetas("leaves", 4, 12));
+        state("oak_leaves", "persistent", "false", entryMetas("leaves", 0, 8));
+        state("spruce_leaves", "persistent", "true", entryMetas("leaves", 5, 13));
+        state("spruce_leaves", "persistent", "false", entryMetas("leaves", 1, 9));
+        state("birch_leaves", "persistent", "true", entryMetas("leaves", 6, 14));
+        state("birch_leaves", "persistent", "false", entryMetas("leaves", 2, 10));
+        state("jungle_leaves", "persistent", "true", entryMetas("leaves", 7, 15));
+        state("jungle_leaves", "persistent", "false", entryMetas("leaves", 3, 11));
 
         state("wall_torch", "facing", "east", entryMetas("torch", 1));
         state("wall_torch", "facing", "west", entryMetas("torch", 2));
@@ -508,6 +516,10 @@ public final class FlatteningMap {
         sixDirectionalStates("piston_head", "piston_head", "type", "normal", "sticky");
         sixDirectionalStates("dispenser", "dispenser", "triggered", "false", "true");
         sixDirectionalStates("dropper", "dropper", "triggered", "false", "true");
+
+        for (String color : COLORS) {
+            bedStates(color + "_bed");
+        }
 
         trapdoorStates();
         fenceGateStates();
@@ -863,5 +875,16 @@ public final class FlatteningMap {
         state(modern, "facing", "west", entryMetas("anvil", damageOffset + 1));
         state(modern, "facing", "north", entryMetas("anvil", damageOffset + 2));
         state(modern, "facing", "east", entryMetas("anvil", damageOffset + 3));
+    }
+
+    private static void bedStates(String modern) {
+        state(modern, "facing", "south", entryMetas("bed", 0, 4, 8, 12));
+        state(modern, "facing", "west", entryMetas("bed", 1, 5, 9, 13));
+        state(modern, "facing", "north", entryMetas("bed", 2, 6, 10, 14));
+        state(modern, "facing", "east", entryMetas("bed", 3, 7, 11, 15));
+        state(modern, "occupied", "false", entryMetas("bed", 0, 1, 2, 3, 8, 9, 10, 11));
+        state(modern, "occupied", "true", entryMetas("bed", 4, 5, 6, 7, 12, 13, 14, 15));
+        state(modern, "part", "foot", entryMetas("bed", 0, 1, 2, 3, 4, 5, 6, 7));
+        state(modern, "part", "head", entryMetas("bed", 8, 9, 10, 11, 12, 13, 14, 15));
     }
 }
