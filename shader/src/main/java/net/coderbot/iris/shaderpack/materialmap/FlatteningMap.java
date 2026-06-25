@@ -489,6 +489,26 @@ public final class FlatteningMap {
         state("vine", "north", "false", entryMetas("vine", 0, 1, 2, 3, 8, 9, 10, 11));
         state("vine", "east", "false", entryMetas("vine", 0, 1, 2, 3, 4, 5, 6, 7));
 
+        stairStates("oak_stairs", "oak_stairs");
+        stairStates("cobblestone_stairs", "stone_stairs");
+        stairStates("brick_stairs", "brick_stairs");
+        stairStates("stone_brick_stairs", "stone_brick_stairs");
+        stairStates("nether_brick_stairs", "nether_brick_stairs");
+        stairStates("sandstone_stairs", "sandstone_stairs");
+        stairStates("spruce_stairs", "spruce_stairs");
+        stairStates("birch_stairs", "birch_stairs");
+        stairStates("jungle_stairs", "jungle_stairs");
+        stairStates("quartz_stairs", "quartz_stairs");
+        stairStates("acacia_stairs", "acacia_stairs");
+        stairStates("dark_oak_stairs", "dark_oak_stairs");
+        doorStates("oak_door", "wooden_door");
+        doorStates("iron_door", "iron_door");
+        sixDirectionalStates("piston", "piston", "extended", "false", "true");
+        sixDirectionalStates("sticky_piston", "sticky_piston", "extended", "false", "true");
+        sixDirectionalStates("piston_head", "piston_head", "type", "normal", "sticky");
+        sixDirectionalStates("dispenser", "dispenser", "triggered", "false", "true");
+        sixDirectionalStates("dropper", "dropper", "triggered", "false", "true");
+
         trapdoorStates();
         fenceGateStates();
     }
@@ -768,6 +788,42 @@ public final class FlatteningMap {
         state("oak_fence_gate", "facing", "east", entryMetas("fence_gate", 3, 7));
         state("oak_fence_gate", "open", "false", entryMetas("fence_gate", 0, 1, 2, 3));
         state("oak_fence_gate", "open", "true", entryMetas("fence_gate", 4, 5, 6, 7));
+    }
+
+    private static void stairStates(String modern, String legacy) {
+        state(modern, "facing", "east", entryMetas(legacy, 0, 4));
+        state(modern, "facing", "west", entryMetas(legacy, 1, 5));
+        state(modern, "facing", "south", entryMetas(legacy, 2, 6));
+        state(modern, "facing", "north", entryMetas(legacy, 3, 7));
+        state(modern, "half", "bottom", entryMetas(legacy, 0, 1, 2, 3));
+        state(modern, "half", "top", entryMetas(legacy, 4, 5, 6, 7));
+    }
+
+    private static void doorStates(String modern, String legacy) {
+        state(modern, "half", "lower", entryMetas(legacy, 0, 1, 2, 3, 4, 5, 6, 7));
+        state(modern, "half", "upper", entryMetas(legacy, 8, 9, 10, 11));
+        state(modern, "facing", "east", entryMetas(legacy, 0, 4));
+        state(modern, "facing", "south", entryMetas(legacy, 1, 5));
+        state(modern, "facing", "west", entryMetas(legacy, 2, 6));
+        state(modern, "facing", "north", entryMetas(legacy, 3, 7));
+        state(modern, "open", "false", entryMetas(legacy, 0, 1, 2, 3));
+        state(modern, "open", "true", entryMetas(legacy, 4, 5, 6, 7));
+        state(modern, "hinge", "left", entryMetas(legacy, 8, 10));
+        state(modern, "hinge", "right", entryMetas(legacy, 9, 11));
+        state(modern, "powered", "false", entryMetas(legacy, 8, 9));
+        state(modern, "powered", "true", entryMetas(legacy, 10, 11));
+    }
+
+    private static void sixDirectionalStates(String modern, String legacy,
+                                             String flagProp, String flagFalse, String flagTrue) {
+        state(modern, "facing", "down", entryMetas(legacy, 0, 8));
+        state(modern, "facing", "up", entryMetas(legacy, 1, 9));
+        state(modern, "facing", "north", entryMetas(legacy, 2, 10));
+        state(modern, "facing", "south", entryMetas(legacy, 3, 11));
+        state(modern, "facing", "west", entryMetas(legacy, 4, 12));
+        state(modern, "facing", "east", entryMetas(legacy, 5, 13));
+        state(modern, flagProp, flagFalse, entryMetas(legacy, 0, 1, 2, 3, 4, 5));
+        state(modern, flagProp, flagTrue, entryMetas(legacy, 8, 9, 10, 11, 12, 13));
     }
 
     private static void logAxisStates(String modern, int typeOffset) {
