@@ -159,7 +159,8 @@ public class VintageBlockRenderer {
 
     private QuadLightData getVertexLight(LightPipeline lighter, BlockPos pos, EnumFacing cullFace, BakedQuadView quad) {
         QuadLightData light = this.quadLightData;
-        lighter.calculate(quad, pos.getX(), pos.getY(), pos.getZ(), light, VintageDiffuseProvider.fromEnumFacingOrUnassigned(cullFace), quad.getLightFace(), quad.hasShade(), true);
+        boolean applyDirectionalShading = quad.hasShade() && !BlockRenderingSettings.INSTANCE.shouldDisableDirectionalShading();
+        lighter.calculate(quad, pos.getX(), pos.getY(), pos.getZ(), light, VintageDiffuseProvider.fromEnumFacingOrUnassigned(cullFace), quad.getLightFace(), applyDirectionalShading, true);
 
         return light;
     }
@@ -295,6 +296,9 @@ public class VintageBlockRenderer {
                                ModelQuadOrientation orientation)
     {
         var vertices = this.vertices;
+        ChunkColorWriter colorWriter = BlockRenderingSettings.INSTANCE.shouldUseSeparateAo()
+                ? ChunkColorWriter.SEPARATE_AO
+                : ChunkColorWriter.EMBEDDIUM;
 
         ModelQuadFacing normalFace = quad.getNormalFace();
 
@@ -309,7 +313,7 @@ public class VintageBlockRenderer {
             out.y = localY + quad.getY(srcIndex) + (float) offset.y;
             out.z = localZ + quad.getZ(srcIndex) + (float) offset.z;
 
-            out.color = ChunkColorWriter.EMBEDDIUM.writeColor(ModelQuadUtil.mixARGBColors(colors[srcIndex], quad.getColor(srcIndex)), light.br[srcIndex]);
+            out.color = colorWriter.writeColor(ModelQuadUtil.mixARGBColors(colors[srcIndex], quad.getColor(srcIndex)), light.br[srcIndex]);
 
             out.u = quad.getTexU(srcIndex);
             out.v = quad.getTexV(srcIndex);
