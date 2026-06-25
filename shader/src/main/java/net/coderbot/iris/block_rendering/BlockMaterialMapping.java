@@ -91,12 +91,12 @@ public class BlockMaterialMapping {
 		if (flattenedEntries != null) {
 			Map<String, String> inheritedRuntimeProperties = extractRuntimeStateProperties(entry);
 			for (BlockEntry flattenedEntry : flattenedEntries) {
-				addBlockMetas(flattenedEntry, idMap, blockStateMap, blockNbtMap, intId, inheritedRuntimeProperties, snowyBlocks);
+				addBlockMetas(flattenedEntry, idMap, blockStateMap, blockNbtMap, intId, inheritedRuntimeProperties, snowyBlocks, true);
 			}
 			return;
 		}
 
-		addBlockMetas(entry, idMap, blockStateMap, blockNbtMap, intId, entry.getStateProperties(), snowyBlocks);
+		addBlockMetas(entry, idMap, blockStateMap, blockNbtMap, intId, entry.getStateProperties(), snowyBlocks, false);
 	}
 
 	/**
@@ -106,7 +106,8 @@ public class BlockMaterialMapping {
 	private static void addBlockMetas(BlockEntry entry, Reference2ObjectMap<Block, Int2IntMap> idMap,
 	                                  BlockStateConditionalIdMap blockStateMap, NbtConditionalIdMap<Block> blockNbtMap,
 	                                  int intId,
-	                                  Map<String, String> effectiveStateProperties, ReferenceSet<Block> snowyBlocks) {
+	                                  Map<String, String> effectiveStateProperties, ReferenceSet<Block> snowyBlocks,
+	                                  boolean flattenedRuntimeProperties) {
 		final NamespacedId id = entry.getId();
 		final ResourceLocation resourceLocation = new ResourceLocation(id.getNamespace(), id.getName());
 
@@ -125,6 +126,15 @@ public class BlockMaterialMapping {
 
 		Set<Integer> metas = entry.getMetas();
 		Map<String, String> stateProperties = effectiveStateProperties;
+
+		// Any modern-state properties left over after flattening must stay runtime-conditional.
+		// Feeding them back into metadata matching over-broadens mappings for connectivity and
+		// other actual-state-driven blocks, which can corrupt terrain material IDs.
+		if (flattenedRuntimeProperties && !stateProperties.isEmpty()) {
+			blockStateMap.addCondition(block, metas, stateProperties, intId);
+			return;
+		}
+
 		int extraBits = 0;
 		String snowy = stateProperties.get("snowy");
 		if (snowy != null) {
