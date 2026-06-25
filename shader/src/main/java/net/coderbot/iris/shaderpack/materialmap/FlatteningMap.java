@@ -15,6 +15,9 @@ public final class FlatteningMap {
             "white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray",
             "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"
     };
+    private static final String[] WOOD_TYPES = {
+            "oak", "spruce", "birch", "jungle", "acacia", "dark_oak"
+    };
 
     static {
         rename("grass_block", "grass");
@@ -294,6 +297,32 @@ public final class FlatteningMap {
         state("cocoa", "age", "1", entryMetas("cocoa", 4, 5, 6, 7));
         state("cocoa", "age", "2", entryMetas("cocoa", 8, 9, 10, 11));
 
+        state("hopper", "facing", "down", entryMetas("hopper", 0, 8));
+        state("hopper", "facing", "north", entryMetas("hopper", 2, 10));
+        state("hopper", "facing", "south", entryMetas("hopper", 3, 11));
+        state("hopper", "facing", "west", entryMetas("hopper", 4, 12));
+        state("hopper", "facing", "east", entryMetas("hopper", 5, 13));
+        state("hopper", "enabled", "true", entryMetas("hopper", 0, 2, 3, 4, 5));
+        state("hopper", "enabled", "false", entryMetas("hopper", 8, 10, 11, 12, 13));
+
+        state("furnace", "facing", "north", entryMetas("furnace", 2), entryMetas("lit_furnace", 2));
+        state("furnace", "facing", "south", entryMetas("furnace", 3), entryMetas("lit_furnace", 3));
+        state("furnace", "facing", "west", entryMetas("furnace", 4), entryMetas("lit_furnace", 4));
+        state("furnace", "facing", "east", entryMetas("furnace", 5), entryMetas("lit_furnace", 5));
+
+        state("brewing_stand", "has_bottle_0", "true", entryMetas("brewing_stand", 1, 3, 5, 7));
+        state("brewing_stand", "has_bottle_0", "false", entryMetas("brewing_stand", 0, 2, 4, 6));
+        state("brewing_stand", "has_bottle_1", "true", entryMetas("brewing_stand", 2, 3, 6, 7));
+        state("brewing_stand", "has_bottle_1", "false", entryMetas("brewing_stand", 0, 1, 4, 5));
+        state("brewing_stand", "has_bottle_2", "true", entryMetas("brewing_stand", 4, 5, 6, 7));
+        state("brewing_stand", "has_bottle_2", "false", entryMetas("brewing_stand", 0, 1, 2, 3));
+
+        state("jukebox", "has_record", "false", entryMetas("jukebox", 0));
+        state("jukebox", "has_record", "true", entryMetas("jukebox", 1));
+        state("water_cauldron", "level", "1", entryMetas("cauldron", 1));
+        state("water_cauldron", "level", "2", entryMetas("cauldron", 2));
+        state("water_cauldron", "level", "3", entryMetas("cauldron", 3));
+
         state("piston", "extended", "false", entryMetas("piston", 0, 1, 2, 3, 4, 5));
         state("piston", "extended", "true", entryMetas("piston", 8, 9, 10, 11, 12, 13));
         state("sticky_piston", "extended", "false", entryMetas("sticky_piston", 0, 1, 2, 3, 4, 5));
@@ -408,6 +437,14 @@ public final class FlatteningMap {
         state("hay_block", "axis", "y", entryMetas("hay_block", 0));
         state("hay_block", "axis", "x", entryMetas("hay_block", 4));
         state("hay_block", "axis", "z", entryMetas("hay_block", 8));
+
+        for (int i = 0; i < 6; i++) {
+            state(WOOD_TYPES[i] + "_sapling", "stage", "0", entryMetas("sapling", i));
+            state(WOOD_TYPES[i] + "_sapling", "stage", "1", entryMetas("sapling", i + 8));
+        }
+
+        trapdoorStates();
+        fenceGateStates();
     }
 
     private FlatteningMap() {
@@ -665,6 +702,26 @@ public final class FlatteningMap {
         state(modern, "facing", "west", entryMetas(legacy, 2, 10));
         state(modern, "facing", "south", entryMetas(legacy, 3, 11));
         state(modern, "facing", "north", entryMetas(legacy, 4, 12));
+    }
+
+    private static void trapdoorStates() {
+        state("oak_trapdoor", "facing", "south", entryMetas("trapdoor", 0, 4, 8, 12));
+        state("oak_trapdoor", "facing", "north", entryMetas("trapdoor", 1, 5, 9, 13));
+        state("oak_trapdoor", "facing", "east", entryMetas("trapdoor", 2, 6, 10, 14));
+        state("oak_trapdoor", "facing", "west", entryMetas("trapdoor", 3, 7, 11, 15));
+        state("oak_trapdoor", "open", "false", entryMetas("trapdoor", 0, 1, 2, 3, 8, 9, 10, 11));
+        state("oak_trapdoor", "open", "true", entryMetas("trapdoor", 4, 5, 6, 7, 12, 13, 14, 15));
+        state("oak_trapdoor", "half", "bottom", entryMetas("trapdoor", 0, 1, 2, 3, 4, 5, 6, 7));
+        state("oak_trapdoor", "half", "top", entryMetas("trapdoor", 8, 9, 10, 11, 12, 13, 14, 15));
+    }
+
+    private static void fenceGateStates() {
+        state("oak_fence_gate", "facing", "south", entryMetas("fence_gate", 0, 4));
+        state("oak_fence_gate", "facing", "west", entryMetas("fence_gate", 1, 5));
+        state("oak_fence_gate", "facing", "north", entryMetas("fence_gate", 2, 6));
+        state("oak_fence_gate", "facing", "east", entryMetas("fence_gate", 3, 7));
+        state("oak_fence_gate", "open", "false", entryMetas("fence_gate", 0, 1, 2, 3));
+        state("oak_fence_gate", "open", "true", entryMetas("fence_gate", 4, 5, 6, 7));
     }
 
     private static void logAxisStates(String modern, int typeOffset) {
