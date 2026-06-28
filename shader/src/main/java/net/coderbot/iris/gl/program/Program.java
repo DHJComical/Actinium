@@ -1,8 +1,11 @@
 package net.coderbot.iris.gl.program;
 
+import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import net.coderbot.iris.gl.GlResource;
 import net.coderbot.iris.gl.blending.DepthColorStorage;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import org.lwjgl.opengl.GL42;
+import org.lwjgl.opengl.GL43;
 
 public final class Program extends GlResource {
 	private final ProgramUniforms uniforms;
@@ -20,6 +23,7 @@ public final class Program extends GlResource {
 	}
 
 	public void use() {
+		RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
 		GLStateManager.glUseProgram(getGlId());
 
 		uniforms.update();

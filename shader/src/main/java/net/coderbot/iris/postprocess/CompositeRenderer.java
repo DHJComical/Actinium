@@ -9,6 +9,8 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import lombok.Getter;
 import net.coderbot.iris.features.FeatureFlags;
 import net.coderbot.iris.debug.IrisGlDebug;
+import net.coderbot.iris.gl.blending.BlendModeOverride;
+import net.coderbot.iris.gl.blending.BufferBlendOverride;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.gl.framebuffer.ViewportData;
@@ -45,10 +47,13 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL42;
+import org.lwjgl.opengl.GL43;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Supplier;
@@ -125,6 +130,8 @@ public class CompositeRenderer {
 			pass.sourceName = source.getName();
 			pass.program = createProgramFromTransformed(source, transformed, flipped, flippedAtLeastOnceSnapshot, context.shadowTargetsSupplier());
 			pass.computes = createComputes(computes[i], flipped, flippedAtLeastOnceSnapshot, context.shadowTargetsSupplier());
+			pass.blendModeOverride = directives.getBlendModeOverride().orElse(null);
+			pass.bufferBlendOverrides = createBufferBlendOverrides(directives);
 			final int[] drawBuffers = directives.getDrawBuffers();
             IrisGlDebug.logFullscreenProgram(this.textureStage.name(), pass.sourceName, pass.program.getProgramId(), drawBuffers);
 
@@ -226,6 +233,9 @@ public class CompositeRenderer {
 		ImmutableSet<Integer> stageReadsFromAlt;
 		ImmutableSet<Integer> mipmappedBuffers;
 		ViewportData viewportScale;
+		@Nullable
+		BlendModeOverride blendModeOverride;
+		List<BufferBlendOverride> bufferBlendOverrides = List.of();
 
 		protected void destroy() {
 			this.program.destroy();
@@ -234,6 +244,31 @@ public class CompositeRenderer {
 					compute.destroy();
 				}
 			}
+		}
+	}
+
+	private static List<BufferBlendOverride> createBufferBlendOverrides(ProgramDirectives directives) {
+		List<BufferBlendOverride> overrides = new ArrayList<>();
+		directives.getBufferBlendOverrides().forEach(information ->
+			overrides.add(new BufferBlendOverride(information.getIndex(), information.getBlendMode())));
+		return overrides;
+	}
+
+	private static void applyBlendOverrides(Pass pass) {
+		if (pass.blendModeOverride != null) {
+			pass.blendModeOverride.apply();
+		} else if (!pass.bufferBlendOverrides.isEmpty()) {
+			BlendModeOverride.OFF.apply();
+		} else {
+			BlendModeOverride.restore();
+		}
+
+		pass.bufferBlendOverrides.forEach(BufferBlendOverride::apply);
+	}
+
+	private static void restoreBlendOverrides(Pass pass) {
+		if (pass.blendModeOverride != null || !pass.bufferBlendOverrides.isEmpty()) {
+			BlendModeOverride.restore();
 		}
 	}
 
@@ -268,7 +303,7 @@ public class CompositeRenderer {
 			}
 
 			if (ranCompute) {
-				RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT);
+				RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
                 IrisGlDebug.check("composite:compute-barrier");
 			}
 
@@ -296,19 +331,29 @@ public class CompositeRenderer {
             IrisGlDebug.markStage("composite:draw");
 			renderPass.framebuffer.bind();
             IrisGlDebug.check("composite:bind-fbo");
+			applyBlendOverrides(renderPass);
 			renderPass.program.use();
             IrisGlDebug.check("composite:use-program");
 
             this.customUniforms.push(renderPass.program);
             IrisGlDebug.check("composite:uniforms");
             IrisGlDebug.logFullscreenPassState(this.textureStage.name(), renderPass.sourceName, renderPass.program.getProgramId(), renderPass.drawBuffers, renderPass.stageReadsFromAlt, this.renderTargets);
+            IrisGlDebug.logWorldPassState(this.textureStage.name(), "fullscreen", renderPass.sourceName);
             IrisGlDebug.logFullscreenSamplerSamples(this.textureStage.name(), renderPass.sourceName, renderPass.program.getProgramId());
+            IrisGlDebug.logCloudControlPixels(this.textureStage.name(), renderPass.sourceName, this.renderTargets);
+            IrisGlDebug.logCompositeChainPixels(this.textureStage.name(), renderPass.sourceName, this.renderTargets);
+            if (this.pipeline != null) {
+                IrisGlDebug.logCompositeDepthPixels(this.textureStage.name(), renderPass.sourceName, this.renderTargets, this.pipeline.getDHCompat().getDepthTex(), this.pipeline.getDHCompat().getDepthTexNoTranslucent());
+            }
 			FullScreenQuadRenderer.uploadCompositeMatrices();
             IrisGlDebug.check("composite:matrices");
 
+            String previousSamplePhase = IrisGlDebug.replaceFramebufferSamplePhase("composite-pass");
 			FullScreenQuadRenderer.INSTANCE.renderQuad();
             IrisGlDebug.check("composite:render-quad");
             IrisGlDebug.logCurrentFramebufferSamples("composite:" + renderPass.sourceName, renderPass.drawBuffers.length);
+            IrisGlDebug.restoreFramebufferSamplePhase(previousSamplePhase);
+			restoreBlendOverrides(renderPass);
 		}
 
 		FullScreenQuadRenderer.end();
@@ -320,6 +365,7 @@ public class CompositeRenderer {
         IrisGlDebug.check("composite:restore-main");
 		ProgramUniforms.clearActiveUniforms();
 		ProgramSamplers.clearActiveSamplers();
+		BlendModeOverride.restore();
 		GLStateManager.glUseProgram(0);
 
 		// NB: Unbinding all of these textures is necessary for proper shaderpack reloading.

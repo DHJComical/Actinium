@@ -84,7 +84,7 @@ public final class DistantHorizonsCompat {
                     LOGGER.info("Distant Horizons vanilla LOD bridge called renderLods for the first frame");
                 }
             }
-            logRenderDiagnostics();
+//            logRenderDiagnostics();
 
             GL32.glBindVertexArray(0);
             GL32.glBindBuffer(GL32.GL_ARRAY_BUFFER, 0);

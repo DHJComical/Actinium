@@ -8,6 +8,8 @@ import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import net.coderbot.iris.features.FeatureFlags;
 import net.coderbot.iris.debug.IrisGlDebug;
+import net.coderbot.iris.gl.blending.BlendModeOverride;
+import net.coderbot.iris.gl.blending.BufferBlendOverride;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.gl.image.GlImage;
@@ -44,10 +46,13 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL42;
+import org.lwjgl.opengl.GL43;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Supplier;
@@ -102,6 +107,8 @@ public class FinalPassRenderer {
 			pass.computes = createComputes(pack.getFinalCompute(), flippedBuffers, flippedAtLeastOnce, context.shadowTargetsSupplier());
 			pass.stageReadsFromAlt = flippedBuffers;
 			pass.mipmappedBuffers = directives.getMipmappedBuffers();
+			pass.blendModeOverride = directives.getBlendModeOverride().orElse(null);
+			pass.bufferBlendOverrides = createBufferBlendOverrides(directives);
             IrisGlDebug.logFullscreenProgram("FINAL", pass.sourceName, pass.program.getProgramId(), directives.getDrawBuffers());
 
 			return pass;
@@ -177,9 +184,37 @@ public class FinalPassRenderer {
 		ImmutableSet<Integer> stageReadsFromAlt;
 		ImmutableSet<Integer> mipmappedBuffers;
 		String sourceName;
+		@Nullable
+		BlendModeOverride blendModeOverride;
+		List<BufferBlendOverride> bufferBlendOverrides = List.of();
 
 		private void destroy() {
 			this.program.destroy();
+		}
+	}
+
+	private static List<BufferBlendOverride> createBufferBlendOverrides(ProgramDirectives directives) {
+		List<BufferBlendOverride> overrides = new ArrayList<>();
+		directives.getBufferBlendOverrides().forEach(information ->
+			overrides.add(new BufferBlendOverride(information.getIndex(), information.getBlendMode())));
+		return overrides;
+	}
+
+	private static void applyBlendOverrides(Pass pass) {
+		if (pass.blendModeOverride != null) {
+			pass.blendModeOverride.apply();
+		} else if (!pass.bufferBlendOverrides.isEmpty()) {
+			BlendModeOverride.OFF.apply();
+		} else {
+			BlendModeOverride.restore();
+		}
+
+		pass.bufferBlendOverrides.forEach(BufferBlendOverride::apply);
+	}
+
+	private static void restoreBlendOverrides(Pass pass) {
+		if (pass.blendModeOverride != null || !pass.bufferBlendOverrides.isEmpty()) {
+			BlendModeOverride.restore();
 		}
 	}
 
@@ -242,7 +277,7 @@ public class FinalPassRenderer {
 				}
 			}
 
-			RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT);
+			RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
             IrisGlDebug.check("final:memory-barrier");
 
 			if (!finalPass.mipmappedBuffers.isEmpty()) {
@@ -253,19 +288,26 @@ public class FinalPassRenderer {
 				}
 			}
 
+			applyBlendOverrides(finalPass);
 			finalPass.program.use();
             IrisGlDebug.check("final:use-program");
 
             this.customUniforms.push(finalPass.program);
             IrisGlDebug.check("final:uniforms");
             IrisGlDebug.logFullscreenPassState("FINAL", finalPass.sourceName, finalPass.program.getProgramId(), new int[] {0}, finalPass.stageReadsFromAlt, this.renderTargets);
+            IrisGlDebug.logWorldPassState("FINAL", "fullscreen", finalPass.sourceName);
             IrisGlDebug.logFullscreenSamplerSamples("FINAL", finalPass.sourceName, finalPass.program.getProgramId());
+            IrisGlDebug.logCloudControlPixels("FINAL", finalPass.sourceName, this.renderTargets);
+            IrisGlDebug.logCompositeChainPixels("FINAL", finalPass.sourceName, this.renderTargets);
 			FullScreenQuadRenderer.uploadCompositeMatrices();
             IrisGlDebug.check("final:matrices");
 
+            String previousSamplePhase = IrisGlDebug.replaceFramebufferSamplePhase("final-pass");
 			FullScreenQuadRenderer.INSTANCE.renderQuad();
             IrisGlDebug.check("final:render-quad");
             IrisGlDebug.logCurrentFramebufferSamples("final:" + finalPass.sourceName, 1);
+            IrisGlDebug.restoreFramebufferSamplePhase(previousSamplePhase);
+			restoreBlendOverrides(finalPass);
 
 			FullScreenQuadRenderer.end();
             IrisGlDebug.check("final:quad-end");
@@ -320,6 +362,7 @@ public class FinalPassRenderer {
         IrisGlDebug.check("final:restore-main");
 		ProgramUniforms.clearActiveUniforms();
 		ProgramSamplers.clearActiveSamplers();
+		BlendModeOverride.restore();
 		GLStateManager.glUseProgram(0);
 
 		for (int i = 0; i < SamplerLimits.get().getMaxTextureUnits(); i++) {

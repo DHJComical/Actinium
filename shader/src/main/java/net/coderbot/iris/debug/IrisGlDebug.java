@@ -3,6 +3,7 @@ package net.coderbot.iris.debug;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
+import net.coderbot.iris.compat.dh.DHCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 import net.coderbot.iris.rendertarget.RenderTarget;
@@ -21,6 +22,7 @@ import org.lwjgl.opengl.GL30;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ByteBuffer;
+import java.util.Locale;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Map;
@@ -41,6 +43,7 @@ public final class IrisGlDebug {
 	private static final Map<String, Integer> ENTITY_PHASE_SAMPLE_COUNTS = new ConcurrentHashMap<>();
 	private static final Map<String, Integer> SAMPLER_INIT_COUNTS = new ConcurrentHashMap<>();
 	private static final Map<String, Integer> GLSM_EVENT_COUNTS = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> CLOUD_CONTROL_SAMPLE_COUNTS = new ConcurrentHashMap<>();
 	private static final Map<String, WorldPassStageTiming> WORLD_PASS_STAGE_TIMINGS = new ConcurrentHashMap<>();
 	private static final Map<String, WorldPassStageTiming> RENDER_GLOBAL_STAGE_TIMINGS = new ConcurrentHashMap<>();
 	private static final Map<String, RenderGlobalCounterTiming> RENDER_GLOBAL_COUNTER_TIMINGS = new ConcurrentHashMap<>();
@@ -103,6 +106,19 @@ public final class IrisGlDebug {
 
         try {
             return ActiniumRuntime.options().debug.enableActiniumGlDebug;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    public static boolean isCloudControlDebugEnabled() {
+        String override = System.getProperty("actinium.cloudControlDebug");
+        if (override != null) {
+            return Boolean.parseBoolean(override);
+        }
+
+        try {
+            return ActiniumRuntime.options().debug.enableCloudControlDebug;
         } catch (RuntimeException ignored) {
             return false;
         }
@@ -855,6 +871,16 @@ public final class IrisGlDebug {
         framebufferSamplePhase = null;
     }
 
+    public static String replaceFramebufferSamplePhase(String phase) {
+        String previous = framebufferSamplePhase;
+        framebufferSamplePhase = phase;
+        return previous;
+    }
+
+    public static void restoreFramebufferSamplePhase(String phase) {
+        framebufferSamplePhase = phase;
+    }
+
     public static void logMinecraftGlError(String message, int error) {
         if (error == 0) {
             return;
@@ -935,11 +961,11 @@ public final class IrisGlDebug {
         int height = Math.max(1, VIEWPORT.get(3));
 
         int[][] pixels = new int[5][4];
-        readPixel(width / 2, height / 2, pixels[0]);
-        readPixel(width / 4, height / 4, pixels[1]);
-        readPixel((width * 3) / 4, height / 4, pixels[2]);
-        readPixel(width / 4, (height * 3) / 4, pixels[3]);
-        readPixel((width * 3) / 4, (height * 3) / 4, pixels[4]);
+        readPixelUnsignedByte(width / 2, height / 2, pixels[0]);
+        readPixelUnsignedByte(width / 4, height / 4, pixels[1]);
+        readPixelUnsignedByte((width * 3) / 4, height / 4, pixels[2]);
+        readPixelUnsignedByte(width / 4, (height * 3) / 4, pixels[3]);
+        readPixelUnsignedByte((width * 3) / 4, (height * 3) / 4, pixels[4]);
 
         int minR = 255;
         int minG = 255;
@@ -1747,22 +1773,31 @@ public final class IrisGlDebug {
         }
 
         logDebugInfo(
-            "fullscreen-program stage={} source={} program={} drawBuffers={} uniforms=[colortex1={}, colortex3={}, depthtex1={}, frameMod={}, cameraPosition={}, previousCameraPosition={}, gbufferProjection={}, gbufferProjectionInverse={}, gbufferModelViewInverse={}, gbufferPreviousModelView={}, gbufferPreviousProjection={}, pixelSizeX={}, pixelSizeY={}]",
+            "fullscreen-program stage={} source={} program={} drawBuffers={} uniforms=[colortex1={}, colortex3={}, colortex12={}, colortex14={}, depthtex1={}, dhDepthTex={}, dhDepthTex1={}, frameMod={}, cameraPosition={}, previousCameraPosition={}, gbufferProjection={}, gbufferProjectionInverse={}, dhProjection={}, dhProjectionInverse={}, gbufferModelViewInverse={}, gbufferPreviousModelView={}, gbufferPreviousProjection={}, dhNearPlane={}, dhFarPlane={}, dhRenderDistance={}, pixelSizeX={}, pixelSizeY={}]",
             stageName,
             sourceName,
             program,
             java.util.Arrays.toString(drawBuffers),
             GL20.glGetUniformLocation(program, "colortex1"),
             GL20.glGetUniformLocation(program, "colortex3"),
+            GL20.glGetUniformLocation(program, "colortex12"),
+            GL20.glGetUniformLocation(program, "colortex14"),
             GL20.glGetUniformLocation(program, "depthtex1"),
+            GL20.glGetUniformLocation(program, "dhDepthTex"),
+            GL20.glGetUniformLocation(program, "dhDepthTex1"),
             GL20.glGetUniformLocation(program, "frameMod"),
             GL20.glGetUniformLocation(program, "cameraPosition"),
             GL20.glGetUniformLocation(program, "previousCameraPosition"),
             GL20.glGetUniformLocation(program, "gbufferProjection"),
             GL20.glGetUniformLocation(program, "gbufferProjectionInverse"),
+            GL20.glGetUniformLocation(program, "dhProjection"),
+            GL20.glGetUniformLocation(program, "dhProjectionInverse"),
             GL20.glGetUniformLocation(program, "gbufferModelViewInverse"),
             GL20.glGetUniformLocation(program, "gbufferPreviousModelView"),
             GL20.glGetUniformLocation(program, "gbufferPreviousProjection"),
+            GL20.glGetUniformLocation(program, "dhNearPlane"),
+            GL20.glGetUniformLocation(program, "dhFarPlane"),
+            GL20.glGetUniformLocation(program, "dhRenderDistance"),
             GL20.glGetUniformLocation(program, "pixelSizeX"),
             GL20.glGetUniformLocation(program, "pixelSizeY")
         );
@@ -1785,7 +1820,7 @@ public final class IrisGlDebug {
         int historyWrite = history == null ? -1 : (readsFromAlt.contains(3) ? history.getMainTexture() : history.getAltTexture());
 
         logDebugInfo(
-            "fullscreen-state stage={} source={} program={} currentProgram={} drawBuffers={} readsFromAlt={} fb={} drawBuffer={} viewport=[{},{},{},{}] colortex3[main={}, alt={}, sampled={}, written={}] samplers[colortex1={}, colortex3={}, depthtex1={}] values[frameMod={}, pixelSizeX={}, pixelSizeY={}]",
+            "fullscreen-state stage={} source={} program={} currentProgram={} drawBuffers={} readsFromAlt={} fb={} drawBuffer={} viewport=[{},{},{},{}] colortex3[main={}, alt={}, sampled={}, written={}] samplers[colortex1={}, colortex3={}, colortex12={}, colortex14={}, depthtex1={}, dhDepthTex={}, dhDepthTex1={}] values[frameMod={}, pixelSizeX={}, pixelSizeY={}, dhNearPlane={}, dhFarPlane={}, dhRenderDistance={}] dhState[loaded={}, renderingEnabled={}]",
             stageName,
             sourceName,
             program,
@@ -1804,10 +1839,19 @@ public final class IrisGlDebug {
             historyWrite,
             getSamplerUniform(program, "colortex1"),
             getSamplerUniform(program, "colortex3"),
+            getSamplerUniform(program, "colortex12"),
+            getSamplerUniform(program, "colortex14"),
             getSamplerUniform(program, "depthtex1"),
+            getSamplerUniform(program, "dhDepthTex"),
+            getSamplerUniform(program, "dhDepthTex1"),
             getIntUniform(program, "frameMod"),
             getFloatUniform(program, "pixelSizeX"),
-            getFloatUniform(program, "pixelSizeY")
+            getFloatUniform(program, "pixelSizeY"),
+            getFloatUniform(program, "dhNearPlane"),
+            getFloatUniform(program, "dhFarPlane"),
+            getIntUniform(program, "dhRenderDistance"),
+            DHCompat.isDistantHorizonsLoaded(),
+            DHCompat.hasRenderingEnabled()
         );
     }
 
@@ -1845,12 +1889,16 @@ public final class IrisGlDebug {
         appendSamplerTexture(samples, program, "gaux2");
         appendSamplerTexture(samples, program, "gaux3");
         appendSamplerTexture(samples, program, "gaux4");
+        appendSamplerBinding(samples, program, "colortex12");
+        appendSamplerBinding(samples, program, "colortex14");
         appendSamplerBinding(samples, program, "depthtex0");
         appendSamplerBinding(samples, program, "depthtex1");
         appendSamplerBinding(samples, program, "depthtex2");
+        appendSamplerBinding(samples, program, "dhDepthTex");
+        appendSamplerBinding(samples, program, "dhDepthTex1");
 
         logDebugInfo(
-            "fullscreen-sampler-sample label={} count={} fb={} readFb={} drawFb={} viewport=[{},{},{},{}]{}",
+            "fullscreen-sampler-sample label={} count={} fb={} readFb={} drawFb={} viewport=[{},{},{},{}] values[dhNearPlane={}, dhFarPlane={}, dhRenderDistance={}] dhState[loaded={}, renderingEnabled={}]{}",
             label,
             count,
             previousFramebuffer,
@@ -1860,6 +1908,11 @@ public final class IrisGlDebug {
             VIEWPORT.get(1),
             VIEWPORT.get(2),
             VIEWPORT.get(3),
+            getFloatUniform(program, "dhNearPlane"),
+            getFloatUniform(program, "dhFarPlane"),
+            getIntUniform(program, "dhRenderDistance"),
+            DHCompat.isDistantHorizonsLoaded(),
+            DHCompat.hasRenderingEnabled(),
             samples
         );
 
@@ -1869,7 +1922,7 @@ public final class IrisGlDebug {
         GL13.glActiveTexture(previousActiveTexture);
     }
 
-	public static void logCurrentFramebufferSamples(String label, int localColorAttachments) {
+    public static void logCurrentFramebufferSamples(String label, int localColorAttachments) {
 		if (!shouldCaptureGlState()) {
 			return;
 		}
@@ -1925,6 +1978,156 @@ public final class IrisGlDebug {
         );
 
         GL11.glReadBuffer(previousReadBuffer);
+    }
+
+    public static void logCompositeChainPixels(String stage, String subject, RenderTargets renderTargets) {
+        if (!isCloudControlDebugEnabled() || renderTargets == null) {
+            return;
+        }
+
+        int requiredTargets = 15;
+        if (renderTargets.getRenderTargetCount() <= requiredTargets) {
+            return;
+        }
+
+        String label = "chain:" + stage + ":" + subject;
+        int count = CLOUD_CONTROL_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 6) {
+            return;
+        }
+
+        RenderTarget target3 = renderTargets.get(3);
+        RenderTarget target5 = renderTargets.get(5);
+        RenderTarget target7 = renderTargets.get(7);
+        RenderTarget target14 = renderTargets.get(14);
+        if (target3 == null || target5 == null || target7 == null || target14 == null) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+
+        StringBuilder builder = new StringBuilder();
+        appendUpperScreenTargetPixels(builder, "colortex3.main", target3.getMainTexture(), target3.getWidth(), target3.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex3.alt", target3.getAltTexture(), target3.getWidth(), target3.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex5.main", target5.getMainTexture(), target5.getWidth(), target5.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex5.alt", target5.getAltTexture(), target5.getWidth(), target5.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex7.main", target7.getMainTexture(), target7.getWidth(), target7.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex7.alt", target7.getAltTexture(), target7.getWidth(), target7.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex14.main", target14.getMainTexture(), target14.getWidth(), target14.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex14.alt", target14.getAltTexture(), target14.getWidth(), target14.getHeight());
+
+        LOGGER.info("composite-chain-sample label={} count={}{}", label, count, builder);
+
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
+        GLStateManager.glActiveTexture(previousActiveTexture);
+    }
+
+    public static void logCompositeDepthPixels(String stage, String subject, RenderTargets renderTargets, int dhDepthTex, int dhDepthTex1) {
+        if (!isCloudControlDebugEnabled() || renderTargets == null || renderTargets.getRenderTargetCount() <= 12) {
+            return;
+        }
+
+        String label = "depth:" + stage + ":" + subject;
+        int count = TEXTURE_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 6) {
+            return;
+        }
+
+        RenderTarget target12 = renderTargets.get(12);
+        if (target12 == null) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+
+        StringBuilder builder = new StringBuilder();
+        appendUpperScreenTargetPixels(builder, "colortex12.main", target12.getMainTexture(), target12.getWidth(), target12.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex12.alt", target12.getAltTexture(), target12.getWidth(), target12.getHeight());
+        appendUpperScreenTargetPixels(builder, "dhDepthTex", dhDepthTex, target12.getWidth(), target12.getHeight());
+        appendUpperScreenTargetPixels(builder, "dhDepthTex1", dhDepthTex1, target12.getWidth(), target12.getHeight());
+
+        LOGGER.info("composite-depth-sample label={} count={}{}", label, count, builder);
+
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
+        GLStateManager.glActiveTexture(previousActiveTexture);
+    }
+
+    public static void logCloudControlPixels(String stage, String subject, RenderTargets renderTargets) {
+        if (!isCloudControlDebugEnabled() || renderTargets == null || renderTargets.getRenderTargetCount() <= 14) {
+            return;
+        }
+
+        String label = stage + ":" + subject;
+        int count = CLOUD_CONTROL_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 6) {
+            return;
+        }
+
+        RenderTarget target0 = renderTargets.get(0);
+        RenderTarget target4 = renderTargets.get(4);
+        RenderTarget target14 = renderTargets.get(14);
+        if (target0 == null || target4 == null || target14 == null) {
+            return;
+        }
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+
+        StringBuilder builder = new StringBuilder();
+        appendTargetPixel(builder, "colortex4.main", target4.getMainTexture(), 0, 37);
+        appendTargetPixel(builder, "colortex4.main", target4.getMainTexture(), 1, 37);
+        appendTargetPixel(builder, "colortex4.main", target4.getMainTexture(), 6, 37);
+        appendTargetPixel(builder, "colortex4.main", target4.getMainTexture(), 1, 1);
+        appendTargetPixel(builder, "colortex4.main", target4.getMainTexture(), 2, 1);
+        appendTargetPixel(builder, "colortex4.main", target4.getMainTexture(), 3, 1);
+        appendTargetPixel(builder, "colortex4.alt", target4.getAltTexture(), 0, 37);
+        appendTargetPixel(builder, "colortex4.alt", target4.getAltTexture(), 1, 37);
+        appendTargetPixel(builder, "colortex4.alt", target4.getAltTexture(), 6, 37);
+        appendTargetPixel(builder, "colortex4.alt", target4.getAltTexture(), 1, 1);
+        appendTargetPixel(builder, "colortex4.alt", target4.getAltTexture(), 2, 1);
+        appendTargetPixel(builder, "colortex4.alt", target4.getAltTexture(), 3, 1);
+        appendUpperScreenTargetPixels(builder, "colortex0.main", target0.getMainTexture(), target0.getWidth(), target0.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex0.alt", target0.getAltTexture(), target0.getWidth(), target0.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex14.main", target14.getMainTexture(), target14.getWidth(), target14.getHeight());
+        appendUpperScreenTargetPixels(builder, "colortex14.alt", target14.getAltTexture(), target14.getWidth(), target14.getHeight());
+
+        LOGGER.info("cloud-control-sample label={} count={}{}", label, count, builder);
+
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
+        GLStateManager.glActiveTexture(previousActiveTexture);
+    }
+
+    private static void appendUpperScreenTargetPixels(StringBuilder builder, String name, int texture, int width, int height) {
+        int centerX = Math.max(0, width / 2);
+        int quarterX = Math.max(0, width / 4);
+        int threeQuarterX = Math.max(0, (width * 3) / 4);
+        int upperY = Math.max(0, (height * 3) / 4);
+        int topY = Math.max(0, (height * 7) / 8);
+
+        appendTargetPixel(builder, name, texture, centerX, upperY);
+        appendTargetPixel(builder, name, texture, quarterX, upperY);
+        appendTargetPixel(builder, name, texture, threeQuarterX, upperY);
+        appendTargetPixel(builder, name, texture, centerX, topY);
     }
 
     public static void logFramebufferOutputState(
@@ -2236,6 +2439,72 @@ public final class IrisGlDebug {
         GLStateManager.glActiveTexture(previousActiveTexture);
     }
 
+    private static void appendTargetPixel(StringBuilder builder, String name, int texture, int x, int y) {
+        builder.append(" ").append(name).append("@(").append(x).append(",").append(y).append(")=");
+        if (texture <= 0) {
+            builder.append("missing");
+            return;
+        }
+
+        float[] pixel = readTexturePixel(texture, x, y);
+        if (pixel == null) {
+            builder.append("unavailable");
+            return;
+        }
+
+        builder.append("(")
+            .append(formatFloat(pixel[0])).append(",")
+            .append(formatFloat(pixel[1])).append(",")
+            .append(formatFloat(pixel[2])).append(",")
+            .append(formatFloat(pixel[3])).append(")");
+    }
+
+    private static float[] readTexturePixel(int texture, int x, int y) {
+        int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
+        int previousTexture0 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, texture);
+        int width = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
+        int height = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
+        if (width <= 0 || height <= 0) {
+            GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+            GL11.glReadBuffer(previousReadBuffer);
+            GLStateManager.glActiveTexture(previousActiveTexture);
+            return null;
+        }
+
+        if (debugFramebuffer == 0) {
+            debugFramebuffer = GL30.glGenFramebuffers();
+        }
+
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, debugFramebuffer);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, texture, 0);
+        int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+        float[] pixel = null;
+        if (status == GL30.GL_FRAMEBUFFER_COMPLETE) {
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            pixel = new float[4];
+            readPixel(Math.max(0, Math.min(x, width - 1)), Math.max(0, Math.min(y, height - 1)), pixel);
+        }
+
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
+        GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
+        GLStateManager.glActiveTexture(previousActiveTexture);
+        return pixel;
+    }
+
     private static void appendPixel(StringBuilder builder, int x, int y) {
         ByteBuffer pixel = BufferUtils.createByteBuffer(4);
         GL11.glReadPixels(Math.max(0, x), Math.max(0, y), 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, pixel);
@@ -2246,13 +2515,30 @@ public final class IrisGlDebug {
             .append(Byte.toUnsignedInt(pixel.get(3))).append(")");
     }
 
-    private static void readPixel(int x, int y, int[] out) {
+    private static void readPixel(int x, int y, float[] out) {
+        FloatBuffer pixel = BufferUtils.createFloatBuffer(4);
+        GL11.glReadPixels(Math.max(0, x), Math.max(0, y), 1, 1, GL11.GL_RGBA, GL11.GL_FLOAT, pixel);
+        out[0] = pixel.get(0);
+        out[1] = pixel.get(1);
+        out[2] = pixel.get(2);
+        out[3] = pixel.get(3);
+    }
+
+    private static void readPixelUnsignedByte(int x, int y, int[] out) {
         ByteBuffer pixel = BufferUtils.createByteBuffer(4);
         GL11.glReadPixels(Math.max(0, x), Math.max(0, y), 1, 1, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, pixel);
         out[0] = Byte.toUnsignedInt(pixel.get(0));
         out[1] = Byte.toUnsignedInt(pixel.get(1));
         out[2] = Byte.toUnsignedInt(pixel.get(2));
         out[3] = Byte.toUnsignedInt(pixel.get(3));
+    }
+
+    private static String formatFloat(float value) {
+        if (Float.isNaN(value) || Float.isInfinite(value)) {
+            return Float.toString(value);
+        }
+
+        return String.format(Locale.ROOT, "%.4f", value);
     }
 
     private static void logGlState(String stage, int error) {

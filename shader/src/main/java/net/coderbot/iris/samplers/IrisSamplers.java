@@ -88,7 +88,7 @@ public class IrisSamplers {
 			}
 		}
 
-		// Add the DH depth textures (stub implementation returns 0 until DH is integrated)
+		// Expose DH depth samplers using the same semantics as Angelica/Iris.
 		if (pipeline != null) {
 			samplers.addDynamicSampler(TextureType.TEXTURE_2D, () -> pipeline.getDHCompat().getDepthTex(), (GlSampler) null, "dhDepthTex", "dhDepthTex0");
 			samplers.addDynamicSampler(TextureType.TEXTURE_2D, () -> pipeline.getDHCompat().getDepthTexNoTranslucent(), (GlSampler) null, "dhDepthTex1");

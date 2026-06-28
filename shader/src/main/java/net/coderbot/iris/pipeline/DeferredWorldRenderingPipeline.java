@@ -93,6 +93,7 @@ import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL42;
+import org.lwjgl.opengl.GL43;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -522,7 +523,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		}
 		if (hasSetup) {
 			ComputeProgram.unbind();
-			RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT);
+			RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
 		}
 
 		// Terrain pipeline sampler/image factory setup follows.
@@ -1405,7 +1406,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			}
 			if (ranSetup) {
 				ComputeProgram.unbind();
-				RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT);
+				RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
 			}
 		}
 
