@@ -1,14 +1,12 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import com.dhj.actinium.debug.ShaderRegressionDebug;
-import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.coderbot.iris.uniforms.CapturedRenderingState;
 import net.coderbot.iris.uniforms.ItemIdManager;
 import net.minecraft.client.renderer.entity.RenderLivingBase;
 import net.minecraft.entity.EntityLivingBase;
-import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,32 +14,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(RenderLivingBase.class)
 public abstract class RenderLivingBaseIrisMixin<T extends EntityLivingBase> {
-    @Inject(
-        method = {
-            "doRender(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V",
-            "func_76986_a(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V",
-            "a(Lvp;DDDFF)V"
-        },
-        at = @At("HEAD"),
-        require = 0
-    )
-    private void actinium$resetEntityColorAtRenderStart(
-        T entity,
-        double x,
-        double y,
-        double z,
-        float entityYaw,
-        float partialTicks,
-        CallbackInfo ci
-    ) {
-        GLStateManager.glDisable(GL11.GL_BLEND);
-        GLStateManager.enableAlphaTest();
-        GLStateManager.glDepthFunc(GL11.GL_LEQUAL);
-        GLStateManager.glDepthMask(true);
-        CapturedRenderingState.INSTANCE.setCurrentEntityColor(0.0F, 0.0F, 0.0F, 0.0F);
-        ShaderRegressionDebug.logEntityColor("render-start-reset", entity, 0.0F, 0.0F, 0.0F, 0.0F);
-    }
-
     @WrapOperation(
         method = {
             "setBrightness(Lnet/minecraft/entity/EntityLivingBase;FZ)Z",
@@ -69,19 +41,6 @@ public abstract class RenderLivingBaseIrisMixin<T extends EntityLivingBase> {
         CapturedRenderingState.INSTANCE.setCurrentEntityColor(r, g, b, a);
         ShaderRegressionDebug.logEntityColor("setBrightness-color-multiplier", entity, r, g, b, a);
         return color;
-    }
-
-    @Inject(
-        method = {
-            "unsetBrightness()V",
-            "func_177091_f()V",
-            "c()V"
-        },
-        at = @At("RETURN"),
-        require = 0
-    )
-    private void actinium$resetEntityColor(CallbackInfo ci) {
-        CapturedRenderingState.INSTANCE.setCurrentEntityColor(0.0F, 0.0F, 0.0F, 0.0F);
     }
 
     @Inject(

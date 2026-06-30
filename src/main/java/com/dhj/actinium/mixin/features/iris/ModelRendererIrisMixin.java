@@ -3,6 +3,7 @@ package com.dhj.actinium.mixin.features.iris;
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.dhj.actinium.compat.gibbed.ActiniumModelRenderer;
 import com.gtnewhorizons.angelica.mixins.interfaces.IModelRenderer;
+import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.model.ModelBox;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.client.model.PositionTextureVertex;
@@ -45,6 +46,10 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer, Actinium
 
     @Inject(method = "render(F)V", at = @At("HEAD"), cancellable = true)
     private void actinium$renderWithoutDisplayList(float scale, CallbackInfo ci) {
+        if (IrisApi.getInstance().isShaderPackInUse() || !ActiniumRuntimeOptions.useModelRendererBatching()) {
+            return;
+        }
+
         ci.cancel();
         if (this.isHidden || !this.showModel) {
             return;
@@ -74,6 +79,10 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer, Actinium
 
     @Inject(method = "renderWithRotation(F)V", at = @At("HEAD"), cancellable = true)
     private void actinium$renderWithRotationWithoutDisplayList(float scale, CallbackInfo ci) {
+        if (IrisApi.getInstance().isShaderPackInUse() || !ActiniumRuntimeOptions.useModelRendererBatching()) {
+            return;
+        }
+
         ci.cancel();
         if (this.isHidden || !this.showModel) {
             return;
@@ -178,6 +187,17 @@ public abstract class ModelRendererIrisMixin implements IModelRenderer, Actinium
     private void actinium$drawModel(float scale, boolean allowDisplayLists) {
         if (this.cubeList.isEmpty()) {
             return;
+        }
+
+        // Batched model formats do not carry per-vertex color, so they inherit the managed current color state.
+        // Refreshing it here keeps the default color attribute and u_CurrentColor in sync with vanilla-style model draws.
+        if (ActiniumRuntimeOptions.useModelRendererBatching()) {
+            final var color = com.gtnewhorizons.angelica.glsm.GLStateManager.getColor();
+            if (color.getRed() < 0.0F || color.getGreen() < 0.0F || color.getBlue() < 0.0F || color.getAlpha() < 0.0F) {
+                com.gtnewhorizons.angelica.glsm.GLStateManager.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+            } else {
+                com.gtnewhorizons.angelica.glsm.GLStateManager.glColor4f(color.getRed(), color.getGreen(), color.getBlue(), color.getAlpha());
+            }
         }
 
         boolean batchModelQuads = ActiniumRuntimeOptions.useModelRendererBatching();

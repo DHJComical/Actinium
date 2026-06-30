@@ -2,6 +2,7 @@ package com.dhj.actinium.mixin.features.iris;
 
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.dhj.actinium.render.FastLitItemDisplayListCache;
+import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.RenderItem;
 import net.minecraft.client.renderer.Tessellator;
@@ -35,6 +36,10 @@ public abstract class ForgeHooksClientIrisMixin {
         cancellable = true
     )
     private static void actinium$renderSimpleLitItem(RenderItem renderItem, IBakedModel model, int color, ItemStack stack, CallbackInfo ci) {
+        if (IrisApi.getInstance().isShaderPackInUse()) {
+            return;
+        }
+
         if (!ActiniumRuntimeOptions.useFastLitItemRendering()) {
             return;
         }

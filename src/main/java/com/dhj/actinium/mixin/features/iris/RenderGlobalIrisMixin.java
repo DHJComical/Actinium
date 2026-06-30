@@ -16,7 +16,6 @@ import net.minecraft.client.renderer.vertex.VertexBuffer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.RayTraceResult;
-import org.lwjgl.opengl.GL20;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,9 +25,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(RenderGlobal.class)
 public class RenderGlobalIrisMixin {
-    @Unique
-    private static float actinium$skyRainAlpha = 1.0F;
-
     @Inject(method = "renderSky(FI)V", at = @At("HEAD"))
     private void actinium$beginSky(float partialTicks, int pass, CallbackInfo ci) {
         if (!Iris.enabled) {
@@ -39,7 +35,6 @@ public class RenderGlobalIrisMixin {
         if (pipeline != null) {
             pipeline.setPhase(WorldRenderingPhase.CUSTOM_SKY);
         }
-        actinium$skyRainAlpha = 1.0F - net.minecraft.client.Minecraft.getMinecraft().world.getRainStrength(partialTicks);
     }
 
     @Inject(method = "renderSky(FI)V", at = @At("RETURN"))
@@ -136,7 +131,6 @@ public class RenderGlobalIrisMixin {
         boolean directive = pipeline == null || pipeline.shouldRenderSun();
         if (directive) {
             actinium$refreshCurrentProgramCompatUniforms(pipeline);
-            actinium$applyCurrentColorAttribute();
             tessellator.draw();
         } else {
             actinium$discard(tessellator.getBuffer());
@@ -152,7 +146,6 @@ public class RenderGlobalIrisMixin {
         boolean directive = pipeline == null || pipeline.shouldRenderMoon();
         if (directive) {
             actinium$refreshCurrentProgramCompatUniforms(pipeline);
-            actinium$applyCurrentColorAttribute();
             tessellator.draw();
         } else {
             actinium$discard(tessellator.getBuffer());
@@ -250,10 +243,6 @@ public class RenderGlobalIrisMixin {
                 CompatUniformManager.onUseProgram(program);
             }
         }
-    }
-
-    private static void actinium$applyCurrentColorAttribute() {
-        GL20.glVertexAttrib4f(1, 1.0F, 1.0F, 1.0F, actinium$skyRainAlpha);
     }
 
     private static void actinium$discard(BufferBuilder bufferBuilder) {

@@ -88,6 +88,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
         WorldRenderingPipeline pipeline = Iris.getPipelineManager().preparePipeline(Iris.getCurrentDimensionName());
         BlockRenderingSettings.INSTANCE.reloadRendererIfRequired();
+        GLStateManager.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         pipeline.beginLevelRendering();
         IrisGlDebug.markStage("mixin:begin-world:done");
         pipeline.renderPreSkyPrepare();

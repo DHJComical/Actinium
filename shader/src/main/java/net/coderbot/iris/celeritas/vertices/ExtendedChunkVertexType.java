@@ -6,9 +6,6 @@ import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class ExtendedChunkVertexType implements ChunkVertexType {
     public static final ChunkVertexType BASE_TYPE = ChunkMeshFormats.VANILLA_LIKE;
     public static final int STRIDE = 48;
@@ -51,13 +48,5 @@ public class ExtendedChunkVertexType implements ChunkVertexType {
     @Override
     public GlVertexFormat getVertexFormat() {
         return VERTEX_FORMAT;
-    }
-
-    @Override
-    public Map<String, String> getDefines() {
-        Map<String, String> defines = new HashMap<>(ChunkVertexType.super.getDefines());
-        defines.put("ACTINIUM_EXTENDED_VERTEX_FORMAT", "");
-        defines.put("ACTINIUM_MID_TEX_SCALE", String.valueOf(MID_TEX_SCALE));
-        return defines;
     }
 }
