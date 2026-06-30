@@ -519,18 +519,12 @@ public class ShadowRenderer {
 		profiler.endStartSection("build geometry");
 
 		setupEntityShadowState(modelView, cameraX, cameraY, cameraZ);
-		boolean beganEntities = false;
 		try {
-			GbufferPrograms.beginEntities();
-			beganEntities = true;
 			RenderManager renderManager = Minecraft.getMinecraft().getRenderManager();
 			for (Entity entity : renderedEntitiesList) {
 				renderManager.renderEntityStatic(entity, tickDelta, false);
 			}
 		} finally {
-			if (beganEntities) {
-				GbufferPrograms.endEntities();
-			}
 			teardownEntityShadowState();
 		}
 
@@ -644,10 +638,7 @@ public class ShadowRenderer {
 		int shadowEntities = 0;
 
 		setupEntityShadowState(modelView, cameraX, cameraY, cameraZ);
-		boolean beganEntities = false;
 		try {
-			GbufferPrograms.beginEntities();
-			beganEntities = true;
 			RenderManager renderManager = Minecraft.getMinecraft().getRenderManager();
 			for (Entity passenger : player.getPassengers()) {
 				renderManager.renderEntityStatic(passenger, tickDelta, false);
@@ -662,9 +653,6 @@ public class ShadowRenderer {
 			renderManager.renderEntityStatic(player, tickDelta, false);
 			shadowEntities++;
 		} finally {
-			if (beganEntities) {
-				GbufferPrograms.endEntities();
-			}
 			teardownEntityShadowState();
 		}
 

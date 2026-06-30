@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.dhj.actinium.debug.ShaderRegressionDebug;
 import com.gtnewhorizons.angelica.compat.mojang.InteractionHand;
 import net.coderbot.iris.pipeline.HandRenderer;
 import net.coderbot.iris.uniforms.ItemIdManager;
@@ -44,6 +45,7 @@ public class ItemRendererIrisMixin {
         CallbackInfo ci
     ) {
         ItemIdManager.setItemId(stack);
+        ShaderRegressionDebug.logItemState("first-person-head", stack);
     }
 
     @Inject(
@@ -60,6 +62,7 @@ public class ItemRendererIrisMixin {
         float equipProgress,
         CallbackInfo ci
     ) {
+        ShaderRegressionDebug.logItemState("first-person-return", stack);
         ItemIdManager.resetItemId();
     }
 
@@ -75,6 +78,7 @@ public class ItemRendererIrisMixin {
         CallbackInfo ci
     ) {
         ItemIdManager.setItemId(stack);
+        ShaderRegressionDebug.logItemState("held-item-head", stack);
     }
 
     @Inject(
@@ -88,6 +92,7 @@ public class ItemRendererIrisMixin {
         boolean leftHanded,
         CallbackInfo ci
     ) {
+        ShaderRegressionDebug.logItemState("held-item-return", stack);
         ItemIdManager.resetItemId();
     }
 }

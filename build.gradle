@@ -60,6 +60,8 @@ def embeddedLibraryProjects = [
     project(':celeritas-common')
 ]
 
+def mergedEmbeddedLibraryClassesDir = layout.buildDirectory.dir('embedded-library-classes/main')
+
 ext.sharedMinecraftCompileClasspath = {
     rootProject.files(rootProject.provider {
         rootProject.tasks.named('compileJava', JavaCompile).get().classpath.files.findAll { it.isFile() }
@@ -70,7 +72,7 @@ def mergeEmbeddedLibraryClasses = tasks.register('mergeEmbeddedLibraryClasses', 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     dependsOn tasks.named('compileJava')
     dependsOn embeddedLibraryProjects.collect { it.tasks.named('classes') }
-    into tasks.named('compileJava', JavaCompile).flatMap { it.destinationDirectory }
+    into mergedEmbeddedLibraryClassesDir
 
     embeddedLibraryProjects.each { libraryProject ->
         from(libraryProject.sourceSets.main.output)
@@ -84,6 +86,8 @@ sourceSets {
         }
     }
 }
+
+sourceSets.main.output.dir(mergedEmbeddedLibraryClassesDir, builtBy: mergeEmbeddedLibraryClasses)
 
 subprojects {
     apply plugin: 'java-library'
@@ -164,30 +168,6 @@ unimined.minecraft {
             def extraArgs = propertyString('extra_jvm_args')
             if (extraArgs != null && !extraArgs.trim().isEmpty()) {
                 jvmArgs += extraArgs.split('\\s+').toList()
-            }
-            if (propertyBool('enable_foundation_debug')) {
-                systemProperty 'foundation.dump', 'true'
-                systemProperty 'foundation.verbose', 'true'
-            }
-            if (propertyBool('enable_actinium_redirector_debug')) {
-                systemProperty 'actinium.redirectorDebug', 'true'
-            }
-            systemProperty 'actinium.glDebug', propertyBool('enable_actinium_gl_debug').toString()
-            systemProperty 'actinium.frameGlErrorCheck', propertyBool('enable_actinium_frame_gl_error_check').toString()
-            systemProperty 'actinium.postRenderGlErrorCheck', propertyBool('enable_actinium_post_render_gl_error_check').toString()
-            systemProperty 'actinium.gpuPerfDebug', propertyBool('enable_actinium_gpu_perf_debug').toString()
-            systemProperty 'actinium.glsmPerfDebug', propertyBool('enable_actinium_glsm_perf_debug').toString()
-            systemProperty 'actinium.glsm.verboseDrawLogs', propertyBool('enable_actinium_glsm_verbose_draw_logs').toString()
-            systemProperty 'actinium.glsm.forceOrphanStreaming', propertyBool('enable_actinium_glsm_force_orphan_streaming').toString()
-            systemProperty 'actinium.bufferBuilderStreaming', propertyBool('enable_actinium_bufferbuilder_streaming').toString()
-            systemProperty 'actinium.modelRendererBatching', propertyBool('enable_actinium_model_renderer_batching').toString()
-            systemProperty 'actinium.endPortalBatching', propertyBool('enable_actinium_end_portal_batching').toString()
-            def chunkMultiDrawMode = propertyString('actinium_chunk_multidraw_mode')
-            if (chunkMultiDrawMode != null && !chunkMultiDrawMode.trim().isEmpty()) {
-                systemProperty 'actinium.chunkMultiDrawMode', chunkMultiDrawMode
-            }
-            if (propertyBool('enable_actinium_perf_debug')) {
-                systemProperty 'actinium.perfDebug', 'true'
             }
             if (propertyBool('is_coremod')) {
                 systemProperty 'fml.coreMods.load', propertyString('coremod_plugin_class_name')

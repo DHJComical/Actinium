@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.dhj.actinium.debug.ShaderRegressionDebug;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
@@ -36,6 +37,7 @@ public class RenderManagerIrisMixin {
         int previousEntity = CapturedRenderingState.INSTANCE.getCurrentRenderedEntity();
         WorldRenderingPhase previousPhase = GbufferPrograms.getCurrentPhase();
         boolean beganEntityPhase = previousPhase == WorldRenderingPhase.NONE;
+        ShaderRegressionDebug.logEntityPhase("renderEntity:before", entity, render, previousPhase.name(), beganEntityPhase);
         CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
         try {
             if (beganEntityPhase) {
@@ -46,6 +48,7 @@ public class RenderManagerIrisMixin {
             if (beganEntityPhase) {
                 GbufferPrograms.endEntities();
             }
+            ShaderRegressionDebug.logEntityPhase("renderEntity:after", entity, render, previousPhase.name(), beganEntityPhase);
             CapturedRenderingState.INSTANCE.setCurrentEntity(previousEntity);
         }
     }
@@ -88,6 +91,7 @@ public class RenderManagerIrisMixin {
         int previousEntity = CapturedRenderingState.INSTANCE.getCurrentRenderedEntity();
         WorldRenderingPhase previousPhase = GbufferPrograms.getCurrentPhase();
         boolean beganEntityPhase = previousPhase == WorldRenderingPhase.NONE;
+        ShaderRegressionDebug.logEntityPhase("renderMultipass:before", entity, render, previousPhase.name(), beganEntityPhase);
         CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
         try {
             if (beganEntityPhase) {
@@ -98,6 +102,7 @@ public class RenderManagerIrisMixin {
             if (beganEntityPhase) {
                 GbufferPrograms.endEntities();
             }
+            ShaderRegressionDebug.logEntityPhase("renderMultipass:after", entity, render, previousPhase.name(), beganEntityPhase);
             CapturedRenderingState.INSTANCE.setCurrentEntity(previousEntity);
         }
     }

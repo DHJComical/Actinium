@@ -36,15 +36,18 @@ public class BlockRenderingSettings {
 	@Getter
     private boolean reloadRequired;
 	private Reference2ObjectMap<Block, Int2IntMap> blockMetaMatches;
-	private BlockStateConditionalIdMap blockStateMap;
 	private NbtConditionalIdMap<Block> blockNbtMap;
 	private Map<Block, BlockRenderLayer> blockTypeIds;
     // note: no reload needed, entities are rebuilt every frame.
     @Setter
     private Object2IntFunction<NamespacedId> entityIds;
+    @Setter
+    private NbtConditionalIdMap<NamespacedId> entityNbtMap;
     // note: no reload needed, items are rendered every frame.
     @Setter
     private Object2IntFunction<NamespacedId> itemIds;
+    @Setter
+    private NbtConditionalIdMap<NamespacedId> itemNbtMap;
 	@Getter
     private float ambientOcclusionLevel;
 	private boolean disableDirectionalShading;
@@ -58,7 +61,6 @@ public class BlockRenderingSettings {
 	public BlockRenderingSettings() {
 		reloadRequired = false;
 		blockMetaMatches = null;
-		blockStateMap = null;
 		blockNbtMap = null;
 		blockTypeIds = null;
 		ambientOcclusionLevel = 1.0F;
@@ -96,16 +98,11 @@ public class BlockRenderingSettings {
 		return blockNbtMap;
 	}
 
-	@Nullable
-	public BlockStateConditionalIdMap getBlockStateMap() {
-		return blockStateMap;
-	}
-
 	public int getBlockStateId(Block block, int metadata) {
 		if (blockMetaMatches != null) {
 			Int2IntMap intMap = blockMetaMatches.get(block);
 			if (intMap != null) {
-				return intMap.get(metadata);
+				return BlockMaterialMapping.resolveId(intMap, metadata);
 			}
 		}
 
@@ -142,18 +139,23 @@ public class BlockRenderingSettings {
 	}
 
 	@Nullable
+	public NbtConditionalIdMap<NamespacedId> getEntityNbtMap() {
+		return entityNbtMap;
+	}
+
+	@Nullable
 	public Object2IntFunction<NamespacedId> getItemIds() {
 		return itemIds;
+	}
+
+	@Nullable
+	public NbtConditionalIdMap<NamespacedId> getItemNbtMap() {
+		return itemNbtMap;
 	}
 
 	public void setBlockMetaMatches(Reference2ObjectMap<Block, Int2IntMap> blockMetaIds) {
 		this.reloadRequired = true;
 		this.blockMetaMatches = blockMetaIds;
-	}
-
-	public void setBlockStateMap(@Nullable BlockStateConditionalIdMap blockStateMap) {
-		this.reloadRequired = true;
-		this.blockStateMap = blockStateMap;
 	}
 
 	public void setBlockNbtMap(@Nullable NbtConditionalIdMap<Block> blockNbtMap) {

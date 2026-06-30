@@ -22,6 +22,7 @@ import org.embeddedt.embeddium.api.options.structure.OptionPage;
 import org.embeddedt.embeddium.api.options.structure.OptionStorage;
 import org.embeddedt.embeddium.api.options.structure.StandardOptions;
 import com.dhj.actinium.compat.modernui.MuiGuiScaleHook;
+import com.dhj.actinium.render.FastLitItemDisplayListCache;
 import com.dhj.actinium.render.terrain.compile.task.ChunkBuilderMeshingTask;
 import com.mitchej123.lwjgl.GLExtension;
 
@@ -36,6 +37,76 @@ public class ActiniumGameOptionPages {
 
     private static int computeMaxRangeForRenderDistance(@SuppressWarnings("SameParameterValue") int injectedRenderDistance) {
         return injectedRenderDistance;
+    }
+
+    private static void setFastLitItemRendering(SodiumGameOptions opts, boolean value) {
+        if (opts.advanced.useFastLitItemRendering != value) {
+            opts.advanced.useFastLitItemRendering = value;
+            FastLitItemDisplayListCache.clear();
+        }
+    }
+
+    private static void setFastLitItemDisplayLists(SodiumGameOptions opts, boolean value) {
+        if (opts.advanced.useFastLitItemDisplayLists != value) {
+            opts.advanced.useFastLitItemDisplayLists = value;
+            FastLitItemDisplayListCache.clear();
+        }
+    }
+
+    private static OptionImpl<SodiumGameOptions, Boolean> createModelRendererBatchingOption(TextComponent tooltip) {
+        return OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                .setId(StandardOptions.Option.MODEL_RENDERER_BATCHING.cast())
+                .setName(TextComponent.translatable("sodium.options.actinium.model_renderer_batching.name"))
+                .setTooltip(tooltip)
+                .setControl(TickBoxControl::new)
+                .setImpact(OptionImpact.MEDIUM)
+                .setBinding((opts, value) -> opts.advanced.useModelRendererBatching = value, opts -> opts.advanced.useModelRendererBatching)
+                .build();
+    }
+
+    private static OptionImpl<SodiumGameOptions, Boolean> createModelRendererDisplayListsOption(TextComponent tooltip) {
+        return OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                .setId(StandardOptions.Option.MODEL_RENDERER_DISPLAY_LISTS.cast())
+                .setName(TextComponent.translatable("sodium.options.model_renderer_display_lists.name"))
+                .setTooltip(tooltip)
+                .setControl(TickBoxControl::new)
+                .setImpact(OptionImpact.MEDIUM)
+                .setBinding((opts, value) -> opts.advanced.useModelRendererDisplayLists = value, opts -> opts.advanced.useModelRendererDisplayLists)
+                .build();
+    }
+
+    private static OptionImpl<SodiumGameOptions, Boolean> createFastLitItemRenderingOption(TextComponent tooltip) {
+        return OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                .setId(StandardOptions.Option.FAST_LIT_ITEM_RENDERING.cast())
+                .setName(TextComponent.translatable("sodium.options.fast_lit_item_rendering.name"))
+                .setTooltip(tooltip)
+                .setControl(TickBoxControl::new)
+                .setImpact(OptionImpact.LOW)
+                .setBinding(ActiniumGameOptionPages::setFastLitItemRendering, opts -> opts.advanced.useFastLitItemRendering)
+                .build();
+    }
+
+    private static OptionImpl<SodiumGameOptions, Boolean> createFastLitItemDisplayListsOption(TextComponent tooltip) {
+        return OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                .setId(StandardOptions.Option.FAST_LIT_ITEM_DISPLAY_LISTS.cast())
+                .setName(TextComponent.translatable("sodium.options.fast_lit_item_display_lists.name"))
+                .setTooltip(tooltip)
+                .setControl(TickBoxControl::new)
+                .setImpact(OptionImpact.MEDIUM)
+                .setBinding(ActiniumGameOptionPages::setFastLitItemDisplayLists, opts -> opts.advanced.useFastLitItemDisplayLists)
+                .build();
+    }
+
+    private static OptionImpl<SodiumGameOptions, Boolean> createRenderPassOptimizationOption(TextComponent tooltip) {
+        return OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                .setId(StandardOptions.Option.RENDER_PASS_OPTIMIZATION.cast())
+                .setName(TextComponent.translatable("embeddium.options.use_render_pass_optimization.name"))
+                .setTooltip(tooltip)
+                .setControl(TickBoxControl::new)
+                .setImpact(OptionImpact.LOW)
+                .setBinding((opts, value) -> opts.performance.useRenderPassOptimization = value, opts -> opts.performance.useRenderPassOptimization)
+                .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                .build();
     }
 
     public static OptionPage general() {
@@ -328,33 +399,10 @@ public class ActiniumGameOptionPages {
                         .setBinding((opts, value) -> opts.advanced.enableDeferredBatching = value, opts -> opts.advanced.enableDeferredBatching)
                         .build()
                 )
-                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
-                        .setId(StandardOptions.Option.MODEL_RENDERER_DISPLAY_LISTS.cast())
-                        .setName(TextComponent.translatable("sodium.options.model_renderer_display_lists.name"))
-                        .setTooltip(TextComponent.translatable("sodium.options.model_renderer_display_lists.tooltip"))
-                        .setControl(TickBoxControl::new)
-                        .setImpact(OptionImpact.MEDIUM)
-                        .setBinding((opts, value) -> opts.advanced.useModelRendererDisplayLists = value, opts -> opts.advanced.useModelRendererDisplayLists)
-                        .build()
-                )
-                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
-                        .setId(StandardOptions.Option.FAST_LIT_ITEM_RENDERING.cast())
-                        .setName(TextComponent.translatable("sodium.options.fast_lit_item_rendering.name"))
-                        .setTooltip(TextComponent.translatable("sodium.options.fast_lit_item_rendering.tooltip"))
-                        .setControl(TickBoxControl::new)
-                        .setImpact(OptionImpact.LOW)
-                        .setBinding((opts, value) -> opts.advanced.useFastLitItemRendering = value, opts -> opts.advanced.useFastLitItemRendering)
-                        .build()
-                )
-                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
-                        .setId(StandardOptions.Option.FAST_LIT_ITEM_DISPLAY_LISTS.cast())
-                        .setName(TextComponent.translatable("sodium.options.fast_lit_item_display_lists.name"))
-                        .setTooltip(TextComponent.translatable("sodium.options.fast_lit_item_display_lists.tooltip"))
-                        .setControl(TickBoxControl::new)
-                        .setImpact(OptionImpact.MEDIUM)
-                        .setBinding((opts, value) -> opts.advanced.useFastLitItemDisplayLists = value, opts -> opts.advanced.useFastLitItemDisplayLists)
-                        .build()
-                )
+                .add(createModelRendererBatchingOption(TextComponent.translatable("sodium.options.actinium.model_renderer_batching.tooltip")))
+                .add(createModelRendererDisplayListsOption(TextComponent.translatable("sodium.options.model_renderer_display_lists.tooltip")))
+                .add(createFastLitItemRenderingOption(TextComponent.translatable("sodium.options.fast_lit_item_rendering.tooltip")))
+                .add(createFastLitItemDisplayListsOption(TextComponent.translatable("sodium.options.fast_lit_item_display_lists.tooltip")))
                 .build());
 
         groups.add(OptionGroup.createBuilder()
@@ -375,6 +423,15 @@ public class ActiniumGameOptionPages {
 
     public static OptionPage debug() {
         List<OptionGroup> groups = new ArrayList<>();
+
+        groups.add(OptionGroup.createBuilder()
+                .setId(OptionIdentifier.create(ActiniumRuntime.MODID, "shader_regression_debug"))
+                .add(createModelRendererBatchingOption(TextComponent.translatable("sodium.options.actinium.model_renderer_batching.tooltip")))
+                .add(createModelRendererDisplayListsOption(TextComponent.translatable("sodium.options.actinium.shader_debug.model_renderer_display_lists.tooltip")))
+                .add(createFastLitItemRenderingOption(TextComponent.translatable("sodium.options.actinium.shader_debug.fast_lit_item_rendering.tooltip")))
+                .add(createFastLitItemDisplayListsOption(TextComponent.translatable("sodium.options.actinium.shader_debug.fast_lit_item_display_lists.tooltip")))
+                .add(createRenderPassOptimizationOption(TextComponent.translatable("sodium.options.actinium.shader_debug.render_pass_optimization.tooltip")))
+                .build());
 
         groups.add(OptionGroup.createBuilder()
                 .setId(StandardOptions.Group.ACTINIUM_DEBUG)

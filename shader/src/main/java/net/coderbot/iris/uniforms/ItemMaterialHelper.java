@@ -6,11 +6,13 @@ import it.unimi.dsi.fastutil.objects.Object2IntFunction;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
+import net.coderbot.iris.block_rendering.NbtConditionalIdMap;
 import net.coderbot.iris.shaderpack.materialmap.NamespacedId;
 import net.minecraft.block.Block;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
 
 /**
@@ -29,7 +31,7 @@ public class ItemMaterialHelper {
      * @return The material ID, or -1 if not found
      */
     public static int getMaterialId(ItemStack itemStack) {
-        if (itemStack == null || itemStack.getItem() == null) {
+        if (itemStack == null || itemStack.isEmpty() || itemStack.getItem() == null) {
             return -1;
         }
         return getMaterialId(itemStack.getItem(), itemStack.getItemDamage());
@@ -82,6 +84,22 @@ public class ItemMaterialHelper {
                     int id = BlockRenderingSettings.INSTANCE.getBlockStateId(block, itemBlock.getMetadata(metadata));
                     if (id != -1) {
                         return id;
+                    }
+                }
+            }
+        }
+
+        NbtConditionalIdMap<NamespacedId> itemNbtMap = BlockRenderingSettings.INSTANCE.getItemNbtMap();
+        if (itemNbtMap != null) {
+            ResourceLocation itemId = Item.REGISTRY.getNameForObject(item);
+            if (itemId != null) {
+                NamespacedId key = new NamespacedId(itemId.getNamespace(), itemId.getPath());
+                if (itemNbtMap.hasConditions(key)) {
+                    ItemStack probe = new ItemStack(item, 1, metadata);
+                    NBTTagCompound nbt = probe.serializeNBT();
+                    int nbtId = itemNbtMap.resolve(key, nbt);
+                    if (nbtId != -1) {
+                        return nbtId;
                     }
                 }
             }

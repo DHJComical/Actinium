@@ -1,42 +1,74 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.dhj.actinium.debug.ShaderRegressionDebug;
+import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.coderbot.iris.uniforms.CapturedRenderingState;
 import net.coderbot.iris.uniforms.ItemIdManager;
 import net.minecraft.client.renderer.entity.RenderLivingBase;
 import net.minecraft.entity.EntityLivingBase;
+import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(RenderLivingBase.class)
 public abstract class RenderLivingBaseIrisMixin<T extends EntityLivingBase> {
-    @Shadow
-    protected abstract int getColorMultiplier(T entitylivingbaseIn, float lightBrightness, float partialTickTime);
-
     @Inject(
+        method = {
+            "doRender(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V",
+            "func_76986_a(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V",
+            "a(Lvp;DDDFF)V"
+        },
+        at = @At("HEAD"),
+        require = 0
+    )
+    private void actinium$resetEntityColorAtRenderStart(
+        T entity,
+        double x,
+        double y,
+        double z,
+        float entityYaw,
+        float partialTicks,
+        CallbackInfo ci
+    ) {
+        GLStateManager.glDisable(GL11.GL_BLEND);
+        GLStateManager.enableAlphaTest();
+        GLStateManager.glDepthFunc(GL11.GL_LEQUAL);
+        GLStateManager.glDepthMask(true);
+        CapturedRenderingState.INSTANCE.setCurrentEntityColor(0.0F, 0.0F, 0.0F, 0.0F);
+        ShaderRegressionDebug.logEntityColor("render-start-reset", entity, 0.0F, 0.0F, 0.0F, 0.0F);
+    }
+
+    @WrapOperation(
         method = {
             "setBrightness(Lnet/minecraft/entity/EntityLivingBase;FZ)Z",
             "func_177092_a(Lnet/minecraft/entity/EntityLivingBase;FZ)Z",
             "a(Lvp;FZ)Z"
         },
-        at = @At(value = "INVOKE", target = "Ljava/nio/FloatBuffer;flip()Ljava/nio/Buffer;"),
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/entity/RenderLivingBase;getColorMultiplier(Lnet/minecraft/entity/EntityLivingBase;FF)I"
+        ),
         require = 0
     )
-    private void actinium$captureEntityColor(T entity, float partialTicks, boolean combineTextures, CallbackInfoReturnable<Boolean> cir) {
-        if (entity.hurtTime > 0 || entity.deathTime > 0) {
-            CapturedRenderingState.INSTANCE.setCurrentEntityColor(1.0F, 0.0F, 0.0F, 0.3F);
-            return;
-        }
-
-        int color = this.getColorMultiplier(entity, entity.getBrightness(), partialTicks);
+    private int actinium$captureEntityColor(
+        RenderLivingBase<T> instance,
+        T entity,
+        float lightBrightness,
+        float partialTicks,
+        Operation<Integer> original
+    ) {
+        int color = original.call(instance, entity, lightBrightness, partialTicks);
         float a = (color >> 24 & 255) / 255.0F;
         float r = (color >> 16 & 255) / 255.0F;
         float g = (color >> 8 & 255) / 255.0F;
         float b = (color & 255) / 255.0F;
         CapturedRenderingState.INSTANCE.setCurrentEntityColor(r, g, b, a);
+        ShaderRegressionDebug.logEntityColor("setBrightness-color-multiplier", entity, r, g, b, a);
+        return color;
     }
 
     @Inject(
@@ -50,6 +82,28 @@ public abstract class RenderLivingBaseIrisMixin<T extends EntityLivingBase> {
     )
     private void actinium$resetEntityColor(CallbackInfo ci) {
         CapturedRenderingState.INSTANCE.setCurrentEntityColor(0.0F, 0.0F, 0.0F, 0.0F);
+    }
+
+    @Inject(
+        method = {
+            "doRender(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V",
+            "func_76986_a(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V",
+            "a(Lvp;DDDFF)V"
+        },
+        at = @At("RETURN"),
+        require = 0
+    )
+    private void actinium$resetEntityColorAtRenderEnd(
+        T entity,
+        double x,
+        double y,
+        double z,
+        float entityYaw,
+        float partialTicks,
+        CallbackInfo ci
+    ) {
+        CapturedRenderingState.INSTANCE.setCurrentEntityColor(0.0F, 0.0F, 0.0F, 0.0F);
+        ShaderRegressionDebug.logEntityColor("render-end-reset", entity, 0.0F, 0.0F, 0.0F, 0.0F);
     }
 
     @Inject(

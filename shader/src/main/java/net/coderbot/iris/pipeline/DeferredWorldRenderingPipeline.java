@@ -1,5 +1,6 @@
 package net.coderbot.iris.pipeline;
 
+import com.dhj.actinium.debug.ShaderRegressionDebug;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.Ints;
@@ -83,6 +84,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.shader.Framebuffer;
+import net.minecraft.init.Blocks;
 import org.apache.commons.lang3.tuple.Pair;
 import org.embeddedt.embeddium.impl.gl.profiling.TimerQueryManager;
 import org.jetbrains.annotations.Nullable;
@@ -289,13 +291,20 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
             holder -> CommonUniforms.addNonDynamicUniforms(holder, programs.getPack().getIdMap(), programs.getPackDirectives(), this.updateNotifier)
         );
 
-		BlockRenderingSettings.INSTANCE.setBlockMetaMatches(BlockMaterialMapping.createBlockMetaIdMap(programs.getPack().getIdMap().getBlockProperties()));
+		final BlockMaterialMapping.BlockIdMaps blockIdMaps = BlockMaterialMapping.createBlockIdMaps(
+			programs.getPack().getIdMap().getBlockProperties(),
+			programs.getPack().getIdMap().hasLegacySection());
+		BlockRenderingSettings.INSTANCE.setBlockMetaMatches(blockIdMaps.blockMetaMap());
+		BlockRenderingSettings.INSTANCE.setBlockNbtMap(blockIdMaps.blockNbtMap());
 		BlockRenderingSettings.INSTANCE.setBlockTypeIds(BlockMaterialMapping.createBlockTypeMap(programs.getPack().getIdMap().getBlockRenderTypeMap()));
+		logBlockMappingSummary();
 
 		BlockRenderingSettings.INSTANCE.setEntityIds(programs.getPack().getIdMap().getEntityIdMap());
+		BlockRenderingSettings.INSTANCE.setEntityNbtMap(BlockMaterialMapping.createNamespacedNbtMap(programs.getPack().getIdMap().getEntityNbtEntries()));
 
 		ItemMaterialHelper.clearCache();
 		BlockRenderingSettings.INSTANCE.setItemIds(programs.getPack().getIdMap().getItemIdMap());
+		BlockRenderingSettings.INSTANCE.setItemNbtMap(BlockMaterialMapping.createNamespacedNbtMap(programs.getPack().getIdMap().getItemNbtEntries()));
 		BlockRenderingSettings.INSTANCE.setAmbientOcclusionLevel(programs.getPackDirectives().getAmbientOcclusionLevel());
 		BlockRenderingSettings.INSTANCE.setDisableDirectionalShading(shouldDisableDirectionalShading());
 		BlockRenderingSettings.INSTANCE.setUseSeparateAo(programs.getPackDirectives().shouldUseSeparateAo());
@@ -1973,5 +1982,18 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			}
 		}
 		return Optional.empty();
+	}
+
+	private static void logBlockMappingSummary() {
+		if (!ShaderRegressionDebug.isEnabled()) {
+			return;
+		}
+
+		ShaderRegressionDebug.logBlockMetaMap("minecraft:web", Blocks.WEB, 0);
+		ShaderRegressionDebug.logBlockMetaMap("minecraft:reeds", Blocks.REEDS, 0, 1, 2, 4, 6);
+		ShaderRegressionDebug.logBlockMetaMap("minecraft:leaves", Blocks.LEAVES, 0, 1, 2, 8, 9, 10);
+		ShaderRegressionDebug.logBlockMetaMap("minecraft:leaves2", Blocks.LEAVES2, 0, 1, 8, 9);
+		ShaderRegressionDebug.logBlockMetaMap("minecraft:rail", Blocks.RAIL, 0, 1, 9);
+		ShaderRegressionDebug.logBlockMetaMap("minecraft:lit_redstone_ore", Blocks.LIT_REDSTONE_ORE, 0);
 	}
 }

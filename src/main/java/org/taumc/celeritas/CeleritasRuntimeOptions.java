@@ -29,7 +29,11 @@ public final class CeleritasRuntimeOptions {
             return Boolean.parseBoolean(override);
         }
 
-        return true;
+        try {
+            return CeleritasRuntime.options().advanced.useModelRendererBatching;
+        } catch (RuntimeException | LinkageError ignored) {
+            return true;
+        }
     }
 
     public static boolean useModelRendererDisplayLists() {

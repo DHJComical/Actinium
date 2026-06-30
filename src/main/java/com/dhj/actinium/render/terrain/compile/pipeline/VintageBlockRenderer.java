@@ -1,5 +1,6 @@
 package com.dhj.actinium.render.terrain.compile.pipeline;
 
+import com.dhj.actinium.debug.ShaderRegressionDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -73,6 +74,7 @@ public class VintageBlockRenderer {
     private int currentMetadata;
     private int currentShaderMetadata;
     private int currentShaderBlockId;
+    private BlockRenderLayer currentRenderLayer;
 
     private final BakedQuadGroupAnalyzer analyzer = new BakedQuadGroupAnalyzer();
 
@@ -113,6 +115,7 @@ public class VintageBlockRenderer {
         state = state.getBlock().getExtendedState(state, blockAccess, pos);
         this.currentState = state;
         this.currentShaderBlockId = resolveShaderBlockId(state, pos);
+        this.currentRenderLayer = layer;
 
         var buffers = this.context.buffers;
         var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
@@ -153,6 +156,7 @@ public class VintageBlockRenderer {
         this.currentBlockAccess = null;
         this.currentShaderMetadata = 0;
         this.currentShaderBlockId = -1;
+        this.currentRenderLayer = null;
     }
 
     private QuadLightData getVertexLight(LightPipeline lighter, BlockPos pos, EnumFacing cullFace, BakedQuadView quad) {
@@ -233,6 +237,18 @@ public class VintageBlockRenderer {
                 : ExtendedDataHelper.BLOCK_RENDER_TYPE;
 
         this.blockRenderContext.set(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, blockId, renderType, lightValue);
+        ShaderRegressionDebug.logTerrainState(
+                "prepare-encoder",
+                block,
+                pos,
+                this.currentRenderLayer,
+                this.currentMetadata,
+                this.currentShaderMetadata,
+                blockId,
+                this.currentShaderBlockId,
+                renderType,
+                lightValue
+        );
         if (isFluid) {
             encoder.prepareToRenderFluid(this.blockRenderContext, block, this.currentShaderMetadata, lightValue);
         } else {
@@ -257,22 +273,28 @@ public class VintageBlockRenderer {
     private int resolveShaderBlockId(IBlockState state, BlockPos pos) {
         Block block = state.getBlock();
         ShaderProvider provider = ShaderProviderHolder.getProvider();
-        int shaderBlockId = provider != null ? provider.getBlockStateId(block, this.currentShaderMetadata) : Block.getIdFromBlock(block);
-
-        if (BlockRenderingSettings.INSTANCE.getBlockStateMap() != null) {
-            int actualStateBlockId = BlockRenderingSettings.INSTANCE.getBlockStateMap().resolve(block, this.currentMetadata, state);
-            if (actualStateBlockId != -1) {
-                shaderBlockId = actualStateBlockId;
-            }
-        }
+        int providerId = provider != null ? provider.getBlockStateId(block, this.currentShaderMetadata) : Block.getIdFromBlock(block);
+        int shaderBlockId = providerId;
+        int nbtBlockId = -1;
 
         if (BlockRenderingSettings.INSTANCE.getBlockNbtMap() != null && block.hasTileEntity(state)) {
             TileEntity tileEntity = this.currentBlockAccess.getTileEntity(pos);
-            int nbtBlockId = BlockRenderingSettings.INSTANCE.resolveBlockNbtId(block, tileEntity);
+            nbtBlockId = BlockRenderingSettings.INSTANCE.resolveBlockNbtId(block, tileEntity);
             if (nbtBlockId != -1) {
                 shaderBlockId = nbtBlockId;
             }
         }
+
+        ShaderRegressionDebug.logTerrainIdResolution(
+                block,
+                pos,
+                this.currentMetadata,
+                this.currentShaderMetadata,
+                providerId,
+                -1,
+                nbtBlockId,
+                shaderBlockId
+        );
 
         return shaderBlockId;
     }

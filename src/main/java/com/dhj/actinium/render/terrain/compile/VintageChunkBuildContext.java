@@ -120,10 +120,6 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         int metadata = state.getBlock().getMetaFromState(state);
         int effectiveMetadata = applyShaderStateBits(state, pos, metadata);
         int shaderBlockId = resolveShaderBlockStateId(state.getBlock(), effectiveMetadata);
-        int actualStateBlockId = resolveActualStateId(state, pos, metadata);
-        if (actualStateBlockId != -1) {
-            shaderBlockId = actualStateBlockId;
-        }
         int nbtBlockId = resolveBlockNbtId(state, pos);
         if (nbtBlockId != -1) {
             shaderBlockId = nbtBlockId;
@@ -306,21 +302,6 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
 
         TileEntity tileEntity = this.worldSlice.getTileEntity(pos);
         return BlockRenderingSettings.INSTANCE.resolveBlockNbtId(state.getBlock(), tileEntity);
-    }
-
-    private int resolveActualStateId(IBlockState state, BlockPos pos, int metadata) {
-        if (BlockRenderingSettings.INSTANCE.getBlockStateMap() == null) {
-            return -1;
-        }
-
-        IBlockState actualState;
-        try {
-            actualState = state.getActualState(this.worldSlice, pos);
-        } catch (RuntimeException ignored) {
-            return -1;
-        }
-
-        return BlockRenderingSettings.INSTANCE.getBlockStateMap().resolve(state.getBlock(), metadata, actualState);
     }
 }
 

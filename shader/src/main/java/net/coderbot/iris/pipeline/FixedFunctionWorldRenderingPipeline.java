@@ -30,9 +30,12 @@ public class FixedFunctionWorldRenderingPipeline implements WorldRenderingPipeli
 		BlockRenderingSettings.INSTANCE.setAmbientOcclusionLevel(1.0f);
 		BlockRenderingSettings.INSTANCE.setUseExtendedVertexFormat(false);
 		BlockRenderingSettings.INSTANCE.setBlockMetaMatches(null);
-		BlockRenderingSettings.INSTANCE.setBlockStateMap(null);
 		BlockRenderingSettings.INSTANCE.setBlockNbtMap(null);
 		BlockRenderingSettings.INSTANCE.setBlockTypeIds(null);
+		BlockRenderingSettings.INSTANCE.setEntityIds(null);
+		BlockRenderingSettings.INSTANCE.setEntityNbtMap(null);
+		BlockRenderingSettings.INSTANCE.setItemIds(null);
+		BlockRenderingSettings.INSTANCE.setItemNbtMap(null);
 	}
 
 	@Override

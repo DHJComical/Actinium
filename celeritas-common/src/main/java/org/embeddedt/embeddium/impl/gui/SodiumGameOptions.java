@@ -89,6 +89,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public boolean disableIncompatibleModWarnings = false;
         public boolean allowDirectMemoryAccess = true;
         public boolean enableDeferredBatching = true;
+        public boolean useModelRendererBatching = true;
         public boolean useModelRendererDisplayLists = true;
         public boolean useFastLitItemRendering = true;
         public boolean useFastLitItemDisplayLists = true;

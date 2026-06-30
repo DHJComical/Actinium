@@ -14,7 +14,7 @@ public class ItemIdManager {
      * @param itemStack The armor or item being rendered
      */
     public static void setItemId(ItemStack itemStack) {
-        if (itemStack == null || itemStack.getItem() == null) {
+        if (itemStack == null || itemStack.isEmpty() || itemStack.getItem() == null) {
             CapturedRenderingState.INSTANCE.setCurrentRenderedItem(0);
             return;
         }

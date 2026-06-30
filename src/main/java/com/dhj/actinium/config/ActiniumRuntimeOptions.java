@@ -32,7 +32,11 @@ public final class ActiniumRuntimeOptions {
             return Boolean.parseBoolean(override);
         }
 
-        return true;
+        try {
+            return ActiniumRuntime.options().advanced.useModelRendererBatching;
+        } catch (RuntimeException | LinkageError ignored) {
+            return true;
+        }
     }
 
     public static boolean useModelRendererDisplayLists() {

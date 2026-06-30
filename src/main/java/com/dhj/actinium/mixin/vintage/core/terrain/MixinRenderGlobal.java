@@ -13,8 +13,6 @@ import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.pipeline.HandRenderer;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
-import net.coderbot.iris.uniforms.CapturedRenderingState;
-import net.coderbot.iris.uniforms.EntityIdHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.multiplayer.WorldClient;
@@ -336,9 +334,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         boolean irisEntities = Iris.enabled && IrisApiV0Impl.INSTANCE.isShaderPackInUse();
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
         GlStateManager.enableTexture2D();
-        if (irisEntities) {
-            GbufferPrograms.beginEntities();
-        }
         long entitiesStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
         long renderCallNanos = 0L;
         int checkedEntities = 0;
@@ -370,9 +365,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                         && (entity.posY < 0.0D || entity.posY >= 256.0D || this.world.isBlockLoaded(entityBlockPos.setPos(entity))))
                 {
                     ++this.countEntitiesRendered;
-                    if (irisEntities) {
-                        CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
-                    }
                     long renderCallStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
                     this.renderManager.renderEntityStatic(entity, partialTicks, false);
                     if (renderCallStartNanos != 0L) {
@@ -393,10 +385,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 }
             }
         } finally {
-            if (irisEntities) {
-                CapturedRenderingState.INSTANCE.setCurrentEntity(-1);
-                GbufferPrograms.endEntities();
-            }
             RenderDebugHooksHolder.recordRenderGlobalStageTiming("entities", pass, entitiesStartNanos);
             RenderDebugHooksHolder.recordRenderGlobalCounterTiming(
                     "entities-loop-total",
