@@ -2,7 +2,6 @@ package com.gtnewhorizons.angelica.glsm.streaming;
 
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
-import org.embeddedt.embeddium.impl.gl.sync.GlFence;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL32;

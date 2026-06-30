@@ -1,6 +1,6 @@
 package com.gtnewhorizons.angelica.loading.shared;
 
-import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
+import com.gtnewhorizons.angelica.glsm.redirect.RedirectorDebugOptions;
 import net.minecraft.launchwrapper.Launch;
 
 import java.io.IOException;
@@ -9,7 +9,7 @@ import java.nio.file.Path;
 
 public final class AngelicaClassDump {
 
-    private static final boolean DUMP_CLASS = ActiniumStartupDebugConfig.enableClassDump();
+    private static final boolean DUMP_CLASS = RedirectorDebugOptions.enableClassDump();
 
     public static void dumpClass(String className, byte[] originalBytes, byte[] transformedBytes, Object transformer) {
         if (!DUMP_CLASS) {

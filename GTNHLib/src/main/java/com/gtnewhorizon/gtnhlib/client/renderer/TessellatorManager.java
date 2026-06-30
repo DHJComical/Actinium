@@ -1,6 +1,5 @@
 package com.gtnewhorizon.gtnhlib.client.renderer;
 
-import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.google.common.annotations.Beta;
 import com.gtnewhorizon.gtnhlib.client.renderer.vao.IVertexArrayObject;
 import com.gtnewhorizon.gtnhlib.client.renderer.vao.VertexBufferType;
@@ -116,7 +115,7 @@ public final class TessellatorManager {
     }
 
     public static boolean shouldInterceptBufferBuilderDraw() {
-        return ActiniumRuntimeOptions.allowDirectMemoryAccess() && hasDirectTessellator();
+        return RuntimeOptionsBridge.allowDirectMemoryAccess() && hasDirectTessellator();
     }
 
     public static void interceptBufferBuilderDraw(BufferBuilder bufferBuilder) {

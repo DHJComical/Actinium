@@ -1,0 +1,17 @@
+plugins {
+    id 'java-library'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+            srcDir '../src/lwjglCommon/java'
+            srcDir '../src/lwjgl3/java'
+        }
+    }
+}
+
+dependencies {
+    api project(':GTNHLib')
+}

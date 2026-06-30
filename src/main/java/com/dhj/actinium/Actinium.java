@@ -23,9 +23,13 @@ import org.embeddedt.embeddium.impl.common.util.MathUtil;
 import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
 import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
+import org.embeddedt.embeddium.impl.runtime.EmbeddiumRuntimeOptions;
 import com.dhj.actinium.command.TogglePassCommand;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
+import com.gtnewhorizon.gtnhlib.client.renderer.RuntimeOptionsBridge;
+import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
 
 import java.lang.management.ManagementFactory;
 
@@ -40,6 +44,11 @@ public class Actinium {
         var container = Loader.instance().getIndexedModList().get(MODID);
         String version = container != null ? container.getVersion() : "unknown";
         ActiniumRuntime.setVersion(version);
+        RuntimeOptionsBridge.setAllowDirectMemoryAccess(com.dhj.actinium.config.ActiniumRuntimeOptions::allowDirectMemoryAccess);
+        EmbeddiumRuntimeOptions.setChunkMultiDrawMode(() -> ActiniumRuntime.options().advanced.multiDrawMode);
+        PostProcessingBridge.setDepthTextureProvider(framebuffer -> ((net.coderbot.iris.rendertarget.IRenderTargetExt) framebuffer).iris$getDepthTextureId());
+        PostProcessingBridge.setLightmapColorAccessor(renderer -> ((com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer) renderer).getLightmapColors());
+        GLSMPerfDebugHooks.setExtraStatsSupplier(com.dhj.actinium.render.FastLitItemDisplayListCache::dumpStatsAndReset);
 
         ActiniumDiagnostics.logConstruction();
         initializeDistantHorizonsIrisCompat();

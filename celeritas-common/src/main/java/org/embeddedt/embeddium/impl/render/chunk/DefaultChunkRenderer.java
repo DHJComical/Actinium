@@ -2,7 +2,8 @@ package org.embeddedt.embeddium.impl.render.chunk;
 
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
-import com.gtnewhorizons.angelica.AngelicaMod;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.gl.array.GlVertexArray;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeBinding;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
@@ -26,13 +27,14 @@ import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.util.BitwiseMath;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
-import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.mitchej123.lwjgl.GLExtension;
+import org.embeddedt.embeddium.impl.runtime.EmbeddiumRuntimeOptions;
 import java.util.Iterator;
 
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
+    private static final Logger LOGGER = LogManager.getLogger("EmbeddiumChunkRenderer");
     private static boolean loggedMultiDrawMode;
 
     private final MultiDrawEmitter emitter;
@@ -55,20 +57,20 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
     private static MultiDrawEmitter createEmitter(RenderDevice device) {
         String override = System.getProperty("actinium.chunkMultiDrawMode", "").trim();
-        MultiDrawMode configuredMode = ActiniumRuntime.options().advanced.multiDrawMode;
+        MultiDrawMode configuredMode = EmbeddiumRuntimeOptions.chunkMultiDrawMode();
         MultiDrawMode mode = override.isEmpty() ? configuredMode : MultiDrawMode.fromProperty(override);
         boolean gl32 = LWJGL.isOpenGLVersionSupported(3, 2);
         boolean gl43 = LWJGL.isOpenGLVersionSupported(4, 3);
         boolean arbIndirect = LWJGL.isExtensionSupported(GLExtension.ARB_multi_draw_indirect);
 
         if (mode == MultiDrawMode.INDIRECT && !gl43 && !arbIndirect) {
-            AngelicaMod.LOGGER.warn("Indirect chunk multidraw is not supported, falling back to direct (GL43={}, ARB_multi_draw_indirect={})", gl43, arbIndirect);
+            LOGGER.warn("Indirect chunk multidraw is not supported, falling back to direct (GL43={}, ARB_multi_draw_indirect={})", gl43, arbIndirect);
             mode = MultiDrawMode.DIRECT;
         }
 
         if (!loggedMultiDrawMode) {
             loggedMultiDrawMode = true;
-            AngelicaMod.LOGGER.info(
+            LOGGER.info(
                 "Chunk multidraw mode: requested={}, selected={}, directFunction={}, GL32={}, GL43={}, ARB_multi_draw_indirect={}",
                 override.isEmpty() ? configuredMode.id() : override,
                 mode.id(),

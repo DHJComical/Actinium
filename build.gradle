@@ -54,16 +54,69 @@ configurations {
     runtimeOnly.extendsFrom(modRuntimeOnly)
 }
 
+def embeddedLibraryProjects = [
+    project(':GTNHLib'),
+    project(':glsm'),
+    project(':celeritas-common')
+]
+
+ext.sharedMinecraftCompileClasspath = {
+    rootProject.files(rootProject.provider {
+        rootProject.tasks.named('compileJava', JavaCompile).get().classpath.files.findAll { it.isFile() }
+    })
+}
+
+def mergeEmbeddedLibraryClasses = tasks.register('mergeEmbeddedLibraryClasses', Copy) {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    dependsOn tasks.named('compileJava')
+    dependsOn embeddedLibraryProjects.collect { it.tasks.named('classes') }
+    into tasks.named('compileJava', JavaCompile).flatMap { it.destinationDirectory }
+
+    embeddedLibraryProjects.each { libraryProject ->
+        from(libraryProject.sourceSets.main.output)
+    }
+}
+
 sourceSets {
     main {
         java {
-            srcDir 'src/lwjglCommon/java'
-            srcDir 'src/lwjgl3/java'
-            srcDir 'glsm/src/main/java'
-            srcDir 'GTNHLib/src/main/java'
-            srcDir 'celeritas-common/src/main/java'
             srcDir 'shader/src/main/java'
         }
+    }
+}
+
+subprojects {
+    apply plugin: 'java-library'
+    group = rootProject.group
+    version = rootProject.version
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    dependencies {
+        compileOnly rootProject.ext.sharedMinecraftCompileClasspath()
+        annotationProcessor rootProject.files(rootProject.provider {
+            rootProject.configurations.annotationProcessor.files.findAll { it.isFile() }
+        })
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = '21'
+        targetCompatibility = '21'
+        options.encoding = 'UTF-8'
+        options.release.set(21)
+        javaCompiler = javaToolchains.compilerFor {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+
+    tasks.withType(Javadoc).configureEach {
+        failOnError = false
     }
 }
 
@@ -77,6 +130,10 @@ repositories {
 }
 
 dependencies {
+    compileOnly project(':GTNHLib')
+    compileOnly project(':glsm')
+    compileOnly project(':celeritas-common')
+
     contain('org.taumc:glsl-transformation-lib:0.2.0-32.g7dd88a4-GTNH') {
         transitive = false
         exclude module: 'antlr4'
@@ -181,6 +238,25 @@ processResources {
     }
 }
 
+tasks.named('sourcesJar').configure {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    embeddedLibraryProjects.each { libraryProject ->
+        from(libraryProject.sourceSets.main.allSource)
+    }
+}
+
+tasks.named('classes').configure {
+    dependsOn mergeEmbeddedLibraryClasses
+}
+
+tasks.named('javadoc').configure {
+    failOnError = false
+    embeddedLibraryProjects.each { libraryProject ->
+        source += libraryProject.sourceSets.main.allJava
+        classpath += libraryProject.sourceSets.main.compileClasspath + libraryProject.sourceSets.main.output
+    }
+}
+
 idea {
     module {
         inheritOutputDirs = true
@@ -209,6 +285,11 @@ idea {
 
 jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    dependsOn embeddedLibraryProjects.collect { it.tasks.named('classes') }
+    embeddedLibraryProjects.each { libraryProject ->
+        from(libraryProject.sourceSets.main.output)
+    }
 
     if (configurations.contain.size() > 0) {
         into('/') {

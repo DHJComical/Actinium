@@ -12,8 +12,8 @@ import org.joml.Vector3f;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL20;
 
-import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 import com.gtnewhorizon.gtnhlib.GTNHLib;
+import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
 import com.gtnewhorizon.gtnhlib.client.renderer.shader.ShaderProgram;
 import com.gtnewhorizon.gtnhlib.client.renderer.textures.TextureAtlas;
 
@@ -215,7 +215,7 @@ public final class UniversiumShader extends ShaderProgram {
 
         int coord = world.getCombinedLight(new BlockPos(x, y, z), 0);
 
-        int[] map = ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer).getLightmapColors();
+        int[] map = PostProcessingBridge.getLightmapColors(Minecraft.getMinecraft().entityRenderer);
 
         if (map == null) {
             return setLightLevel(1.0f);

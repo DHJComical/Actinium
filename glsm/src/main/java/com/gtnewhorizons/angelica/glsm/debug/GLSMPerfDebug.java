@@ -1,6 +1,5 @@
 package com.gtnewhorizons.angelica.glsm.debug;
 
-import com.dhj.actinium.render.FastLitItemDisplayListCache;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -155,7 +154,10 @@ public final class GLSMPerfDebug {
         }
         appendTopEntries(sb, "bufferbuilder.source", bufferBuilderSourceCounts, MAX_BUFFERBUILDER_SOURCE_LINES);
         appendTopEntries(sb, "bufferbuilder.stackSample", bufferBuilderStackSamples, MAX_BUFFERBUILDER_SOURCE_LINES);
-        sb.append(' ').append(FastLitItemDisplayListCache.dumpStatsAndReset());
+        String extraStats = GLSMPerfDebugHooks.getExtraStats();
+        if (extraStats != null && !extraStats.isEmpty()) {
+            sb.append(' ').append(extraStats);
+        }
         lastReportNanos = now;
         if (hasSamples) {
             LOGGER.info(sb.toString());

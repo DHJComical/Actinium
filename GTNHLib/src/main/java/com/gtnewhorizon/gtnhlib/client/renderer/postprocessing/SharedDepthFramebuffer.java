@@ -2,12 +2,9 @@ package com.gtnewhorizon.gtnhlib.client.renderer.postprocessing;
 
 import static com.gtnewhorizon.gtnhlib.client.opengl.GLCaps.FBO;
 
-import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.opengl.GL11;
-
-import com.gtnewhorizon.gtnhlib.compat.Mods;
 
 /**
  * A framebuffer that shares the depth buffer of another {@link Framebuffer}.
@@ -92,8 +89,8 @@ public class SharedDepthFramebuffer extends CustomFramebuffer {
     public void bindFramebuffer() {
         super.bindFramebuffer();
         if (linkedBuffer != null) {
-            if (Mods.ACTINIUM && linkedBuffer instanceof IRenderTargetExt) {
-                final int attachment = ((IRenderTargetExt) linkedBuffer).iris$getDepthTextureId();
+            if (PostProcessingBridge.hasDepthTextureProvider()) {
+                final int attachment = PostProcessingBridge.getDepthTextureId(linkedBuffer);
                 if (attachment != depthAttachment) {
                     depthAttachment = attachment;
                     linkDepthTexture(isStencilEnabled());

@@ -1,6 +1,5 @@
 package com.gtnewhorizon.gtnhlib.client.renderer.postprocessing;
 
-import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 
@@ -10,8 +9,6 @@ import com.gtnewhorizon.gtnhlib.client.renderer.DirectTessellator;
 import com.gtnewhorizon.gtnhlib.client.renderer.TessellatorManager;
 import com.gtnewhorizon.gtnhlib.client.renderer.vao.IVertexArrayObject;
 import com.gtnewhorizon.gtnhlib.client.renderer.vao.VertexBufferType;
-import com.gtnewhorizon.gtnhlib.compat.Mods;
-
 public class PostProcessingHelper {
 
     private static IVertexArrayObject fullscreenQuadVAO;
@@ -65,11 +62,8 @@ public class PostProcessingHelper {
         return getDepthTexture(Minecraft.getMinecraft().getFramebuffer());
     }
 
-    // TODO Sisyphus: move IRenderTargetExt to GTNHLib in a non-invasive way
     public static int getDepthTexture(Framebuffer framebuffer) {
-        if (!Mods.ACTINIUM)
-            throw new UnsupportedOperationException("The depth texture requires Angelica to be loaded.");
-        return ((IRenderTargetExt) framebuffer).iris$getDepthTextureId();
+        return PostProcessingBridge.getDepthTextureId(framebuffer);
     }
 
     private static IVertexArrayObject genFullscreenQuadVAO() {

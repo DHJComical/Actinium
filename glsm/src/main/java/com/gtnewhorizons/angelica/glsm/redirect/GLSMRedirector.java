@@ -1,6 +1,5 @@
 package com.gtnewhorizons.angelica.glsm.redirect;
 
-import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
 import com.google.common.collect.ImmutableSet;
 import com.gtnewhorizon.gtnhlib.asm.ClassConstantPoolParser;
 import org.apache.logging.log4j.LogManager;
@@ -26,7 +25,7 @@ import java.util.Set;
 public class GLSMRedirector {
 
     private static final boolean ASSERT_MAIN_THREAD = Boolean.getBoolean("angelica.assertMainThread");
-    private static final boolean LOG_SPAM = ActiniumStartupDebugConfig.enableRedirectorLogSpam();
+    private static final boolean LOG_SPAM = RedirectorDebugOptions.enableLogSpam();
     private static final Logger LOGGER = LogManager.getLogger("GLSMRedirector");
 
     private static final String DRAWABLE = "org/lwjgl/opengl/Drawable";

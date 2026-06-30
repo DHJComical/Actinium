@@ -1,6 +1,6 @@
 package com.gtnewhorizons.angelica.loading.fml.transformers;
 
-import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
+import com.gtnewhorizons.angelica.glsm.redirect.RedirectorDebugOptions;
 import com.gtnewhorizons.angelica.loading.shared.AngelicaClassDump;
 import com.gtnewhorizons.angelica.loading.shared.transformers.AngelicaRedirector;
 import net.minecraft.launchwrapper.IClassTransformer;
@@ -10,7 +10,7 @@ import org.objectweb.asm.tree.ClassNode;
 
 public class AngelicaRedirectorTransformer implements IClassTransformer {
 
-    private static final boolean DEBUG = ActiniumStartupDebugConfig.enableRedirectorDebug();
+    private static final boolean DEBUG = RedirectorDebugOptions.enableDebug();
     private final AngelicaRedirector inner;
     private final String[] exclusions;
 
