@@ -5,6 +5,7 @@ import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 import com.mojang.realmsclient.gui.ChatFormatting;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.compat.dh.DHCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.launchwrapper.Launch;
@@ -49,7 +50,7 @@ public class Actinium {
         GLSMPerfDebugHooks.setExtraStatsSupplier(com.dhj.actinium.render.FastLitItemDisplayListCache::dumpStatsAndReset);
 
         ActiniumDiagnostics.logConstruction();
-        registerDistantHorizonsAccessor();
+        initializeDistantHorizonsCompat();
         MinecraftForge.EVENT_BUS.register(this);
     }
 
@@ -68,9 +69,10 @@ public class Actinium {
         ActiniumDiagnostics.logInitialization(ActiniumRuntime.version());
     }
 
-    private static void registerDistantHorizonsAccessor() {
+    private static void initializeDistantHorizonsCompat() {
         if (Iris.enabled && Loader.isModLoaded("distanthorizons")) {
             ActiniumDHIrisCompat.registerAccessor();
+            DHCompat.run();
         }
     }
 
