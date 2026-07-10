@@ -5,17 +5,18 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 
 public class NativeImageBackedSingleColorTexture extends DynamicTexture {
 	public NativeImageBackedSingleColorTexture(int red, int green, int blue, int alpha) {
-		super(create(NativeImage.combine(alpha, blue, green, red)));
+		super(create(red, green, blue, alpha));
 	}
 
 	public NativeImageBackedSingleColorTexture(int rgba) {
 		this(rgba >> 24 & 0xFF, rgba >> 16 & 0xFF, rgba >> 8 & 0xFF, rgba & 0xFF);
 	}
 
-	private static NativeImage create(int color) {
+	static NativeImage create(int red, int green, int blue, int alpha) {
 		NativeImage image = new NativeImage(NativeImage.Format.RGBA, 1, 1, false);
 
-		image.setPixelRGBA(0, 0, color);
+		// This compatibility NativeImage is backed by BufferedImage, whose pixel API uses ARGB.
+		image.setPixelRGBA(0, 0, NativeImage.combine(alpha, red, green, blue));
 
 		return image;
 	}
