@@ -68,8 +68,8 @@ ext.sharedMinecraftCompileClasspath = {
     })
 }
 
-def mergeEmbeddedLibraryClasses = tasks.register('mergeEmbeddedLibraryClasses', Copy) {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+def mergeEmbeddedLibraryClasses = tasks.register('mergeEmbeddedLibraryClasses', Sync) {
+    duplicatesStrategy = DuplicatesStrategy.FAIL
     dependsOn tasks.named('compileJava')
     dependsOn embeddedLibraryProjects.collect { it.tasks.named('classes') }
     into mergedEmbeddedLibraryClassesDir
@@ -134,8 +134,6 @@ repositories {
 }
 
 dependencies {
-    compileOnly project(':GTNHLib')
-    compileOnly project(':glsm')
     compileOnly project(':celeritas-common')
 
     contain('org.taumc:glsl-transformation-lib:0.2.0-32.g7dd88a4-GTNH') {
@@ -264,12 +262,7 @@ idea {
 }
 
 jar {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-
-    dependsOn embeddedLibraryProjects.collect { it.tasks.named('classes') }
-    embeddedLibraryProjects.each { libraryProject ->
-        from(libraryProject.sourceSets.main.output)
-    }
+    duplicatesStrategy = DuplicatesStrategy.FAIL
 
     if (configurations.contain.size() > 0) {
         into('/') {
@@ -370,8 +363,41 @@ def verifyRemapJar = tasks.register('verifyRemapJar') {
     }
 }
 
+def verifyModuleBoundaries = tasks.register('verifyModuleBoundaries') {
+    dependsOn tasks.named('compileJava')
+    dependsOn embeddedLibraryProjects.collect { it.tasks.named('classes') }
+
+    doLast {
+        def componentOutputs = [
+            actinium: files(tasks.named('compileJava', JavaCompile).get().destinationDirectory),
+            GTNHLib: project(':GTNHLib').sourceSets.main.output.classesDirs,
+            glsm: project(':glsm').sourceSets.main.output.classesDirs,
+            celeritas: project(':celeritas-common').sourceSets.main.output.classesDirs
+        ]
+        def owners = [:]
+        def duplicates = []
+
+        componentOutputs.each { component, outputDirs ->
+            outputDirs.files.findAll { it.exists() }.each { outputDir ->
+                fileTree(outputDir).matching { include '**/*.class' }.files.each { classFile ->
+                    def relativePath = outputDir.toPath().relativize(classFile.toPath()).toString().replace('\\', '/')
+                    def previousOwner = owners.putIfAbsent(relativePath, component)
+                    if (previousOwner != null && previousOwner != component) {
+                        duplicates.add("${relativePath} (${previousOwner}, ${component})")
+                    }
+                }
+            }
+        }
+
+        if (!duplicates.isEmpty()) {
+            throw new GradleException("Duplicate classes cross module boundaries:\n - ${duplicates.sort().join('\n - ')}")
+        }
+    }
+}
+
 tasks.named('check').configure {
     dependsOn verifyRemapJar
+    dependsOn verifyModuleBoundaries
 }
 
 apply from: 'gradle/scripts/publishing.gradle'
