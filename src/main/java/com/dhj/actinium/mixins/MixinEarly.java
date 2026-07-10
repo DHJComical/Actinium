@@ -23,8 +23,7 @@ public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
     @Override
     public @Nullable String[] getASMTransformerClass() {
         return new String[] {
-            "com.gtnewhorizons.angelica.loading.fml.transformers.EarlyRedirectorTransformer",
-            "com.dhj.actinium.core.ActiniumLWJGLRelocationTransformer"
+            "com.gtnewhorizons.angelica.loading.fml.transformers.EarlyRedirectorTransformer"
         };
     }
 

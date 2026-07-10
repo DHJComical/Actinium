@@ -5,7 +5,6 @@ import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 import com.mojang.realmsclient.gui.ChatFormatting;
 import net.coderbot.iris.Iris;
-import net.coderbot.iris.compat.dh.DHCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.launchwrapper.Launch;
@@ -17,7 +16,6 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLConstructionEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.embeddedt.embeddium.impl.common.util.MathUtil;
 import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
@@ -51,19 +49,12 @@ public class Actinium {
         GLSMPerfDebugHooks.setExtraStatsSupplier(com.dhj.actinium.render.FastLitItemDisplayListCache::dumpStatsAndReset);
 
         ActiniumDiagnostics.logConstruction();
-        initializeDistantHorizonsIrisCompat();
+        registerDistantHorizonsAccessor();
         MinecraftForge.EVENT_BUS.register(this);
     }
 
     @EventHandler
-    public void onPreInit(FMLPreInitializationEvent event) {
-        initializeDistantHorizonsIrisCompat();
-    }
-
-    @EventHandler
     public void onInit(FMLInitializationEvent event) {
-        initializeDistantHorizonsIrisCompat();
-
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
         }
@@ -77,10 +68,9 @@ public class Actinium {
         ActiniumDiagnostics.logInitialization(ActiniumRuntime.version());
     }
 
-    private static void initializeDistantHorizonsIrisCompat() {
-        if (Iris.enabled && DHCompat.isDistantHorizonsLoaded()) {
+    private static void registerDistantHorizonsAccessor() {
+        if (Iris.enabled && Loader.isModLoaded("distanthorizons")) {
             ActiniumDHIrisCompat.registerAccessor();
-            DHCompat.run();
         }
     }
 

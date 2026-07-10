@@ -411,7 +411,6 @@ public class Iris {
         }
         renderSystemInitialized = true;
 
-        DHCompat.run();
         boolean isDHLoaded = DHCompat.isDistantHorizonsLoaded();
 
         // Defer shaderpack loading until the first loading-complete stage so the window, splash,
