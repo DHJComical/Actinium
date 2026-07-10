@@ -64,6 +64,8 @@ Install `build/libs/Actinium-<version>.jar` in a compatible Cleanroom instance. 
 
 See [the architecture guide](docs/architecture.md), [current roadmap](docs/roadmap.md),
 and [compatibility matrix](docs/compatibility-matrix.md) before changing the render pipeline.
+Third-party source provenance and licenses are summarized in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Related Projects
 

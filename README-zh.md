@@ -64,6 +64,7 @@ MakeUp、BSL、Complementary 等光影包是开发过程中的重要验证目标
 
 修改渲染管线前，请先阅读[架构说明](docs/architecture.md)、[当前路线图](docs/roadmap.md)
 和[兼容性矩阵](docs/compatibility-matrix.md)。
+第三方源码来源与许可证汇总见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 相关项目
 

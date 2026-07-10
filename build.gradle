@@ -327,6 +327,10 @@ test {
     }
 }
 
+tasks.named('processResources').configure {
+    from('THIRD_PARTY_NOTICES.md')
+}
+
 def verifyRemapJar = tasks.register('verifyRemapJar') {
     dependsOn tasks.named('remapJar')
     def remapOutput = tasks.named('remapJar').flatMap { it.archiveFile }
@@ -336,6 +340,7 @@ def verifyRemapJar = tasks.register('verifyRemapJar') {
         def archive = zipTree(remapOutput.get().asFile)
         def requiredEntries = [
             'META-INF/MANIFEST.MF',
+            'THIRD_PARTY_NOTICES.md',
             'com/dhj/actinium/Actinium.class',
             'com/gtnewhorizons/angelica/glsm/GLStateManager.class',
             'net/coderbot/iris/Iris.class',
