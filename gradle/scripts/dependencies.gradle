@@ -55,6 +55,9 @@ dependencies {
     if (propertyBool('enable_junit_testing')) {
         testImplementation 'org.junit.jupiter:junit-jupiter:6.0.2'
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+        testImplementation 'com.google.guava:guava:21.0'
+        testImplementation 'it.unimi.dsi:fastutil:8.5.18'
+        testImplementation files(sharedMinecraftCompileClasspath())
     }
 
     modRuntimeOnly 'curse.maven:catalogue-vintage-1465746:7872634'

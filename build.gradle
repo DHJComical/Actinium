@@ -334,5 +334,45 @@ test {
     }
 }
 
+def verifyRemapJar = tasks.register('verifyRemapJar') {
+    dependsOn tasks.named('remapJar')
+    def remapOutput = tasks.named('remapJar').flatMap { it.archiveFile }
+    inputs.file(remapOutput)
+
+    doLast {
+        def archive = zipTree(remapOutput.get().asFile)
+        def requiredEntries = [
+            'META-INF/MANIFEST.MF',
+            'com/dhj/actinium/Actinium.class',
+            'com/gtnewhorizons/angelica/glsm/GLStateManager.class',
+            'net/coderbot/iris/Iris.class',
+            'org/embeddedt/embeddium/impl/render/chunk/RenderSectionManager.class',
+            'mixins.actinium.iris.json',
+            'mixins.actinium.vintage.json',
+            'META-INF/services/com.gtnewhorizons.angelica.glsm.backend.RenderBackend'
+        ]
+
+        requiredEntries.each { entry ->
+            if (archive.matching { include entry }.isEmpty()) {
+                throw new GradleException("Remapped mod jar is missing required entry: ${entry}")
+            }
+        }
+
+        def manifest = new java.util.jar.JarFile(remapOutput.get().asFile).withCloseable {
+            it.manifest.mainAttributes
+        }
+        if (manifest.getValue('FMLCorePlugin') != propertyString('coremod_plugin_class_name')) {
+            throw new GradleException('Remapped mod jar has an invalid FMLCorePlugin manifest entry')
+        }
+        if (manifest.getValue('FMLAT') != propertyString('access_transformer_locations').tokenize('/\\').last()) {
+            throw new GradleException('Remapped mod jar has an invalid FMLAT manifest entry')
+        }
+    }
+}
+
+tasks.named('check').configure {
+    dependsOn verifyRemapJar
+}
+
 apply from: 'gradle/scripts/publishing.gradle'
 apply from: 'gradle/scripts/extra.gradle'
