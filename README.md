@@ -6,10 +6,6 @@ Actinium is an experimental rendering and shader compatibility mod for Minecraft
 
 The project currently combines work around Celeritas, GLSM, GTNHLib, and an Iris-style shader pipeline. Its focus is practical compatibility: terrain rendering, entity rendering, shadow passes, post-processing stages, shader uniforms, framebuffer ownership, and the OpenGL state transitions that old and new renderers both depend on.
 
-## Showcase
-
-![MakeUp](docs/images/showcase-02.png)
-
 ## What Actinium Does
 
 - Reworks the Minecraft 1.12.2 client rendering path around a modernized pipeline.
@@ -36,7 +32,7 @@ Shader packs such as MakeUp, BSL, and Complementary are useful compatibility tar
 
 - Minecraft 1.12.2
 - Cleanroom Loader
-- Java toolchain matching the project Gradle configuration
+- Java 25 toolchain; produced bytecode targets Java 21
 - A graphics environment capable of running shader packs used for testing
 
 ## Building
@@ -53,15 +49,21 @@ For a faster compile-only check:
 .\gradlew.bat compileJava --no-daemon
 ```
 
-The produced mod artifact can be used in a compatible Cleanroom-based Minecraft instance.
+Install `build/libs/Actinium-<version>.jar` in a compatible Cleanroom instance. The
+`-sources.jar` file is for development, and the unremapped `-all.jar` is not a runtime mod.
 
 ## Repository Layout
 
-- `src/` contains the main Actinium and Celeritas integration code.
+- `src/` contains Actinium integration, compatibility hooks, mixins, and runtime resources.
+- `shader/` contains the integrated Iris-style shader pipeline.
 - `glsm/` contains the embedded GLSM-side integration.
 - `GTNHLib/` contains the embedded GTNHLib pieces used by the project.
+- `celeritas-common/` contains the embedded Celeritas renderer implementation.
 - `docs/` contains development notes, compatibility gaps, and future documentation.
-- `buildSrc/` contains Gradle build logic and dependency definitions.
+- `gradle/scripts/` contains shared Gradle build and dependency logic.
+
+See [the architecture guide](docs/architecture.md), [current roadmap](docs/roadmap.md),
+and [compatibility matrix](docs/compatibility-matrix.md) before changing the render pipeline.
 
 ## Related Projects
 
