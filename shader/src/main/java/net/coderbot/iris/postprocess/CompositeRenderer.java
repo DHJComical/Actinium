@@ -3,6 +3,7 @@ package net.coderbot.iris.postprocess;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.primitives.Ints;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
@@ -131,8 +132,8 @@ public class CompositeRenderer {
 			pass.program = createProgramFromTransformed(source, transformed, flipped, flippedAtLeastOnceSnapshot, context.shadowTargetsSupplier());
 			pass.computes = createComputes(computes[i], flipped, flippedAtLeastOnceSnapshot, context.shadowTargetsSupplier());
 			pass.blendModeOverride = directives.getBlendModeOverride().orElse(null);
-			pass.bufferBlendOverrides = createBufferBlendOverrides(directives);
 			final int[] drawBuffers = directives.getDrawBuffers();
+			pass.bufferBlendOverrides = createBufferBlendOverrides(directives, drawBuffers);
             IrisGlDebug.logFullscreenProgram(this.textureStage.name(), pass.sourceName, pass.program.getProgramId(), drawBuffers);
 
 			final GlFramebuffer framebuffer = renderTargets.createColorFramebuffer(flipped, drawBuffers);
@@ -247,10 +248,14 @@ public class CompositeRenderer {
 		}
 	}
 
-	private static List<BufferBlendOverride> createBufferBlendOverrides(ProgramDirectives directives) {
+	private static List<BufferBlendOverride> createBufferBlendOverrides(ProgramDirectives directives, int[] drawBuffers) {
 		List<BufferBlendOverride> overrides = new ArrayList<>();
-		directives.getBufferBlendOverrides().forEach(information ->
-			overrides.add(new BufferBlendOverride(information.getIndex(), information.getBlendMode())));
+		directives.getBufferBlendOverrides().forEach(information -> {
+			int drawBuffer = Ints.indexOf(drawBuffers, information.getIndex());
+			if (drawBuffer >= 0) {
+				overrides.add(new BufferBlendOverride(drawBuffer, information.getBlendMode()));
+			}
+		});
 		return overrides;
 	}
 

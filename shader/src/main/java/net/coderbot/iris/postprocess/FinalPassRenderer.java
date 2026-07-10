@@ -2,6 +2,7 @@ package net.coderbot.iris.postprocess;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.primitives.Ints;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import it.unimi.dsi.fastutil.ints.IntList;
@@ -108,7 +109,7 @@ public class FinalPassRenderer {
 			pass.stageReadsFromAlt = flippedBuffers;
 			pass.mipmappedBuffers = directives.getMipmappedBuffers();
 			pass.blendModeOverride = directives.getBlendModeOverride().orElse(null);
-			pass.bufferBlendOverrides = createBufferBlendOverrides(directives);
+			pass.bufferBlendOverrides = createBufferBlendOverrides(directives, directives.getDrawBuffers());
             IrisGlDebug.logFullscreenProgram("FINAL", pass.sourceName, pass.program.getProgramId(), directives.getDrawBuffers());
 
 			return pass;
@@ -193,10 +194,14 @@ public class FinalPassRenderer {
 		}
 	}
 
-	private static List<BufferBlendOverride> createBufferBlendOverrides(ProgramDirectives directives) {
+	private static List<BufferBlendOverride> createBufferBlendOverrides(ProgramDirectives directives, int[] drawBuffers) {
 		List<BufferBlendOverride> overrides = new ArrayList<>();
-		directives.getBufferBlendOverrides().forEach(information ->
-			overrides.add(new BufferBlendOverride(information.getIndex(), information.getBlendMode())));
+		directives.getBufferBlendOverrides().forEach(information -> {
+			int drawBuffer = Ints.indexOf(drawBuffers, information.getIndex());
+			if (drawBuffer >= 0) {
+				overrides.add(new BufferBlendOverride(drawBuffer, information.getBlendMode()));
+			}
+		});
 		return overrides;
 	}
 
