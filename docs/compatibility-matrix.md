@@ -3,16 +3,22 @@
 最后更新：2026-07-10。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
-`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、光影/模组版本和测试环境。
+`无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
+光影/模组版本和测试环境。
+
+本轮验证环境：Actinium `f261611`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
+Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.62）。
 
 ## 光影包
 
 | 光影包 | 版本 | 状态 | 已验证范围 | 已知缺口 | Actinium 基线 |
 | --- | --- | --- | --- | --- | --- |
-| MakeUp Ultra Fast | 9.4c | 部分 | 基础世界、天空、水、阴影、post、TAA | 高设置场景和多模组组合需复测 | 历史验证，待在当前 Iris 管线上重建基线 |
-| BSL | 未固定 | 未验证 | - | - | - |
-| Complementary | 未固定 | 未验证 | - | - | - |
-| Bliss + Distant Horizons | 未固定 | 开发中 | LOD/cloud 路径有近期诊断与修复 | 尚无完整可复现验证记录 | `c3d4ac2` 附近 |
+| MakeUp Ultra Fast | 9.1f | 已验证 | 开启、世界渲染、Distant Horizons LOD | - | `f261611` |
+| BSL | 10.0 | 已验证 | 开启、世界渲染、Distant Horizons LOD | - | `f261611` |
+| Complementary Reimagined / Unbound | r5.5.1 | 已验证 | 开启、世界渲染、Distant Horizons LOD | - | `f261611` |
+| Bliss + Distant Horizons | 2.1.2 | 部分 | 可以开启并进入世界 | 存在渲染异常 | `f261611` |
+| iterationRP / iterationT（ITT 系列） | RP 0.7.7 / 0.8.7；T 3.2.0 | 部分 | 可以开启并进入世界 | 症状与 Bliss 相近 | `f261611` |
+| SEUS PTGI HRR | Test 2.1 | 无法启用 | - | 光影包不能成功开启 | `f261611` |
 
 ## 模组与环境
 
