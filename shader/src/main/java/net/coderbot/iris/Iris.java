@@ -24,6 +24,7 @@ import net.coderbot.iris.pipeline.PipelineManager;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import net.coderbot.iris.pipeline.transform.ShaderTransformer;
 import net.coderbot.iris.pipeline.transform.TransformPatcher;
+import net.coderbot.iris.shaderpack.DimensionId;
 import net.coderbot.iris.shaderpack.OptionalBoolean;
 import net.coderbot.iris.shaderpack.ProgramSet;
 import net.coderbot.iris.shaderpack.ShaderPack;
@@ -801,8 +802,8 @@ public class Iris {
     public static int lastDimensionId = 0;
 
     /**
-     * Gets the dimension name for the current world.
-     * Returns the dimension name from WorldProvider.getDimensionName() if available.
+     * Gets the stable shader-pack dimension key for the current world.
+     * Vanilla provider aliases are normalized to namespaced identifiers; missing names fall back to numeric identity.
      * Falls back to lastDimensionName when no world is loaded.
      */
     public static String getCurrentDimensionName() {
@@ -810,18 +811,17 @@ public class Iris {
 
         if (level != null && level.provider != null) {
             String dimensionName = level.provider.getDimensionType().getName();
-            if (dimensionName == null) {
-                dimensionName = "Overworld";
-                logger.warn("WorldProvider.getDimensionName() returned null for dimension ID {}, defaulting to 'Overworld'", level.provider.getDimension());
+            if (dimensionName == null || dimensionName.isBlank()) {
+                logger.warn("WorldProvider dimension name was null or blank for dimension ID {}; using its numeric identity", level.provider.getDimension());
             }
-            lastDimensionName = dimensionName;
             lastDimensionId = level.provider.getDimension();
-            return dimensionName;
+            lastDimensionName = DimensionId.canonicalize(dimensionName, lastDimensionId);
+            return lastDimensionName;
         } else {
             // This prevents us from reloading the shaderpack unless we need to. Otherwise, if the player is in
             // another dimension and quits the game, we might end up reloading the shaders on exit and on entry to the level
             // because the code thinks that the dimension changed.
-            return lastDimensionName != null ? lastDimensionName : "Overworld";
+            return lastDimensionName != null ? lastDimensionName : DimensionId.OVERWORLD.getCanonicalId();
         }
     }
 
@@ -843,8 +843,8 @@ public class Iris {
 
 
     /**
-     * Creates a pipeline for a dimension using the dimension name from WorldProvider.getDimensionName().
-     * Supports dimension.properties mappings with wildcard fallback.
+     * Creates a pipeline for a canonical dimension key.
+     * Program selection supports exact dimension.properties mappings and wildcard fallback.
      */
     private static WorldRenderingPipeline createPipeline(String dimensionName) {
         if (currentPack == null) {

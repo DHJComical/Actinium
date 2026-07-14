@@ -57,7 +57,11 @@ import java.util.stream.Collectors;
 
 public class ShaderPack {
 	private static final Gson GSON = new Gson();
-	private static final Set<String> PINNED_DIMENSIONS = Set.of("Overworld", "Nether", "The End");
+	private static final Set<String> PINNED_DIMENSIONS = Set.of(
+		DimensionId.OVERWORLD.getCanonicalId(),
+		DimensionId.NETHER.getCanonicalId(),
+		DimensionId.END.getCanonicalId()
+	);
 	// Configurable via -Diris.dimensionCacheSize=X (default: 12)
 	// Set to 0 to disable caching entirely (only vanilla dimensions kept)
 	// Minimum effective cache size is 3
@@ -146,8 +150,7 @@ public class ShaderPack {
 			}
 
 			// Warn if dimension.properties has no wildcard and no explicit Overworld/Nether/End mappings
-			if (!dimensionMap.containsKey("*") && !dimensionMap.containsKey("Overworld")
-				&& !dimensionMap.containsKey("Nether") && !dimensionMap.containsKey("The End")) {
+			if (!dimensionMap.containsKey("*") && PINNED_DIMENSIONS.stream().noneMatch(dimensionMap::containsKey)) {
 				Iris.logger.warn("dimension.properties exists but doesn't define mappings for vanilla dimensions (Overworld/Nether/End) or a wildcard (*)");
 			}
 		} else {
@@ -182,13 +185,13 @@ public class ShaderPack {
 			// Set up dimension mappings
             // If world0 folder exists with shader files, use it for Overworld. Otherwise use base for all oher dims.
 			if (foundFolders.contains("world0")) {
-				dimensionMap.put("Overworld", "world0");
+				dimensionMap.put(DimensionId.OVERWORLD.getCanonicalId(), "world0");
 			}
 			if (foundFolders.contains("world-1")) {
-				dimensionMap.put("Nether", "world-1");
+				dimensionMap.put(DimensionId.NETHER.getCanonicalId(), "world-1");
 			}
 			if (foundFolders.contains("world1")) {
-				dimensionMap.put("The End", "world1");
+				dimensionMap.put(DimensionId.END.getCanonicalId(), "world1");
 			}
 		}
 
@@ -438,7 +441,7 @@ public class ShaderPack {
 			folderNames.add(folderName);
 
 			for (String dimensionName : dimensionNames) {
-				dimensionMap.put(dimensionName, folderName);
+				dimensionMap.put(DimensionId.canonicalize(dimensionName), folderName);
 			}
 		});
 
@@ -599,14 +602,7 @@ public class ShaderPack {
 	 * The LinkedHashMap maintains access order, so oldest entries are at the front.
 	 */
 	private void evictOldDimensions() {
-		// Build set of pinned folders (folders that vanilla dimensions map to)
-		Set<String> pinnedFolders = new HashSet<>();
-		for (String pinnedDimName : PINNED_DIMENSIONS) {
-			String folder = dimensionMap.get(pinnedDimName);
-			if (folder != null) {
-				pinnedFolders.add(folder);
-			}
-		}
+		Set<String> pinnedFolders = resolvePinnedDimensionFolders(dimensionMap, foldersWithShaderFiles);
 
 		// If cache is disabled, evict everything except pinned folders
 		if (MAX_DIMENSION_CACHE == 0) {
@@ -663,29 +659,20 @@ public class ShaderPack {
      * ProgramSets are lazily created and cached. When cache exceeds limit,
      * least recently used non-vanilla dimensions are evicted.
      *
-     * @param dimensionName The dimension name from WorldProvider.getDimensionName()
+     * @param dimensionName The canonical dimension key returned by Iris
      * @return The ProgramSet for this dimension, or base ProgramSet if no override exists
      */
     public ProgramSet getProgramSet(String dimensionName) {
 		int dimensionId = Iris.getCurrentDimensionId();
+		String canonicalDimension = DimensionId.canonicalize(dimensionName, dimensionId);
 
-		// First, try to find an exact match in the dimension map
-		String folderName = dimensionMap.get(dimensionName);
-		boolean foundExactMatch = folderName != null;
-
-		// If no exact match, try wildcard
-		if (folderName == null) {
-			folderName = dimensionMap.get("*");
-		}
-
-		// If still no match, try world{ID} folder as fallback for backward compatibility
-		// But only if that folder actually has shader files!
-		if (folderName == null) {
-			String worldFolder = "world" + dimensionId;
-			if (foldersWithShaderFiles.contains(worldFolder)) {
-				folderName = worldFolder;
-			}
-		}
+		String folderName = resolveDimensionFolder(
+			dimensionMap,
+			foldersWithShaderFiles,
+			canonicalDimension,
+			dimensionId
+		);
+		boolean foundExactMatch = dimensionMap.containsKey(canonicalDimension);
 
 		// If we have a folder name that contains shader files, try to get or create its ProgramSet
 		if (folderName != null && foldersWithShaderFiles.contains(folderName)) {
@@ -720,7 +707,7 @@ public class ShaderPack {
 		if (!dimensionMap.isEmpty() && !foundExactMatch && !dimensionMap.containsKey("*")) {
 			Iris.logger.warn("Dimension '{}' has no shader mapping in dimension.properties and no wildcard (*) fallback is defined. " +
 					"Falling back to base shaders. Consider adding 'dimension.<folder>={}' or 'dimension.<folder>=*' to dimension.properties",
-					dimensionName, dimensionName);
+					canonicalDimension, canonicalDimension);
 		}
 
 		// NB: If a dimension overrides directory is present, none of the files from the parent directory are "merged"
@@ -733,6 +720,50 @@ public class ShaderPack {
 		//     sense to bring it back as a configurable option, and have a more maintainable set of code backing it.
 
 		return base;
+	}
+
+	/**
+	 * Resolves a dimension folder without loading shader sources or touching OpenGL state.
+	 */
+	@Nullable
+	static String resolveDimensionFolder(Map<String, String> mappings, Set<String> availableFolders,
+									 String dimensionName, int dimensionId) {
+		String canonicalDimension = DimensionId.canonicalize(dimensionName, dimensionId);
+		String folderName = mappings.get(canonicalDimension);
+
+		if (folderName == null) {
+			folderName = mappings.get("*");
+		}
+
+		if (folderName == null) {
+			String legacyFolder = "world" + dimensionId;
+			if (availableFolders.contains(legacyFolder)) {
+				folderName = legacyFolder;
+			}
+		}
+
+		return folderName != null && availableFolders.contains(folderName) ? folderName : null;
+	}
+
+	/**
+	 * Resolves every vanilla dimension through the production folder-selection rules for cache pinning.
+	 */
+	static Set<String> resolvePinnedDimensionFolders(Map<String, String> mappings, Set<String> availableFolders) {
+		Set<String> pinnedFolders = new HashSet<>();
+
+		for (DimensionId dimension : DimensionId.values()) {
+			String folderName = resolveDimensionFolder(
+				mappings,
+				availableFolders,
+				dimension.getCanonicalId(),
+				dimension.getNumericId()
+			);
+			if (folderName != null) {
+				pinnedFolders.add(folderName);
+			}
+		}
+
+		return pinnedFolders;
 	}
 
     public Optional<CustomTextureData> getCustomNoiseTexture() {
