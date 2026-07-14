@@ -159,7 +159,7 @@ unimined.minecraft {
             accessTransformer actiniumProjectAccessTransformer.absolutePath
         }
 
-        loader '0.5.12-alpha'
+        loader '0.5.17-alpha'
 
         runs.all {
             args += ['--username', propertyString('minecraft_username')]
