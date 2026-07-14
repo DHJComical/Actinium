@@ -119,6 +119,11 @@ subprojects {
         }
     }
 
+    tasks.named('compileJava', JavaCompile).configure {
+        options.fork = true
+        options.forkOptions.jvmArgs.add('--sun-misc-unsafe-memory-access=allow')
+    }
+
     tasks.withType(Javadoc).configureEach {
         failOnError = false
     }
@@ -313,6 +318,11 @@ tasks.withType(JavaCompile).configureEach {
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(25)
     }
+}
+
+tasks.named('compileJava', JavaCompile).configure {
+    options.fork = true
+    options.forkOptions.jvmArgs.add('--sun-misc-unsafe-memory-access=allow')
 }
 
 test {

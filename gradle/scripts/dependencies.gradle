@@ -24,7 +24,7 @@ repositories {
 
 dependencies {
     def lwjglVersion = '3.4.1'
-    def lombokVersion = '1.18.42'
+    def lombokVersion = '1.18.46'
     def asmVersion = '9.9.1'
 
     compileOnly 'com.cleanroommc:sponge-mixin:0.20.12+mixin.0.8.7'
