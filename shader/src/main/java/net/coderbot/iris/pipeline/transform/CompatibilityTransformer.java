@@ -3,6 +3,7 @@ package net.coderbot.iris.pipeline.transform;
 import net.coderbot.iris.gl.shader.ShaderType;
 import net.coderbot.iris.pipeline.transform.parameter.Parameters;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.taumc.glsl.ShaderPrinter;
 import org.taumc.glsl.Transformer;
 import org.taumc.glsl.grammar.GLSLLexer;
 import org.taumc.glsl.grammar.GLSLParser;
@@ -109,7 +110,9 @@ public class CompatibilityTransformer {
                             continue;
                         }
 
-                        prevTransformer.makeOutDeclaration(inDec.get(in), in);
+                        String outDeclaration = ShaderPrinter.getFormattedShader(inDec.get(in).fully_specified_type())
+                            + " " + in + ";";
+                        prevTransformer.injectVariable(outDeclaration.replaceFirst("\\bin\\b", "out"));
 
                         if (!prevTransformer.hasAssigment(in)) {
                             prevTransformer.initialize(inDec.get(in), in);
