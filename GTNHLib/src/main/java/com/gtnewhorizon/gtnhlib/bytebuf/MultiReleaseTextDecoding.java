@@ -1,13 +1,8 @@
 package com.gtnewhorizon.gtnhlib.bytebuf;
 
-import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.ARRAY_TLC_BYTE;
-import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.ARRAY_TLC_CHAR;
-import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.ARRAY_TLC_SIZE;
-import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.UNSAFE;
-import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memByteBuffer;
-
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
+
+import org.lwjgl.system.MemoryUtil;
 
 /**
  * String decoding utilities.
@@ -26,47 +21,6 @@ final class MultiReleaseTextDecoding {
 
     /** @see MemoryUtilities#memUTF8(ByteBuffer, int, int) */
     static String decodeUTF8(long source, int length) {
-        if (Runtime.version().feature() >= 17) {
-            return org.lwjgl.system.MemoryUtil.memUTF8(source, length);
-        }
-        if (length <= 0) {
-            return "";
-        }
-
-        char[] string = length <= ARRAY_TLC_SIZE ? ARRAY_TLC_CHAR.get() : new char[length];
-
-        int i = 0, position = 0;
-
-        while (position < length) {
-            char c;
-
-            int b0 = UNSAFE.getByte(null, source + position++) & 0xFF;
-            if (b0 < 0x80) {
-                c = (char) b0;
-            } else {
-                int b1 = UNSAFE.getByte(null, source + position++) & 0x3F;
-                if ((b0 & 0xE0) == 0xC0) {
-                    c = (char) (((b0 & 0x1F) << 6) | b1);
-                } else {
-                    int b2 = UNSAFE.getByte(null, source + position++) & 0x3F;
-                    if ((b0 & 0xF0) == 0xE0) {
-                        c = (char) (((b0 & 0x0F) << 12) | (b1 << 6) | b2);
-                    } else {
-                        int b3 = UNSAFE.getByte(null, source + position++) & 0x3F;
-                        int cp = ((b0 & 0x07) << 18) | (b1 << 12) | (b2 << 6) | b3;
-
-                        if (i < length) {
-                            string[i++] = (char) ((cp >>> 10) + 0xD7C0);
-                        }
-                        c = (char) ((cp & 0x3FF) + 0xDC00);
-                    }
-                }
-            }
-            if (i < length) {
-                string[i++] = c;
-            }
-        }
-
-        return new String(string, 0, Math.min(i, length));
+        return MemoryUtil.memUTF8(source, length);
     }
 }

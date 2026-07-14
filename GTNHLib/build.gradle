@@ -1,3 +1,73 @@
+import java.util.Locale
+
 plugins {
     id 'java-library'
+}
+
+repositories {
+    mavenCentral()
+}
+
+def osName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def osArchitecture = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+def osKey
+if (osName.startsWith('windows')) {
+    osKey = 'windows'
+} else if (osName.startsWith('linux')) {
+    osKey = 'linux'
+} else if (osName.startsWith('mac')) {
+    osKey = 'macos'
+} else {
+    throw new GradleException("Unsupported test platform: ${osName}/${osArchitecture}")
+}
+
+def nativeClassifiers = [
+    windows: [
+        amd64: 'natives-windows',
+        x86_64: 'natives-windows',
+        x64: 'natives-windows',
+        x86: 'natives-windows-x86',
+        i386: 'natives-windows-x86',
+        i486: 'natives-windows-x86',
+        i586: 'natives-windows-x86',
+        i686: 'natives-windows-x86',
+        aarch64: 'natives-windows-arm64',
+        arm64: 'natives-windows-arm64'
+    ],
+    linux: [
+        amd64: 'natives-linux',
+        x86_64: 'natives-linux',
+        x64: 'natives-linux',
+        arm: 'natives-linux-arm32',
+        arm32: 'natives-linux-arm32',
+        aarch32: 'natives-linux-arm32',
+        armv7l: 'natives-linux-arm32',
+        aarch64: 'natives-linux-arm64',
+        arm64: 'natives-linux-arm64',
+        ppc64le: 'natives-linux-ppc64le',
+        riscv64: 'natives-linux-riscv64'
+    ],
+    macos: [
+        amd64: 'natives-macos',
+        x86_64: 'natives-macos',
+        x64: 'natives-macos',
+        aarch64: 'natives-macos-arm64',
+        arm64: 'natives-macos-arm64'
+    ]
+]
+def lwjglNatives = nativeClassifiers[osKey][osArchitecture]
+if (lwjglNatives == null) {
+    throw new GradleException("Unsupported test platform: ${osName}/${osArchitecture}")
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.0.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.lwjgl:lwjgl:3.4.1'
+    testRuntimeOnly "org.lwjgl:lwjgl:3.4.1:${lwjglNatives}"
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
 }

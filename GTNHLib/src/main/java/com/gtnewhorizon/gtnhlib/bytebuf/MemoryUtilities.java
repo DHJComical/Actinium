@@ -5,7 +5,6 @@ package com.gtnewhorizon.gtnhlib.bytebuf;
 
 import static com.gtnewhorizon.gtnhlib.bytebuf.APIUtil.apiCheckAllocation;
 import static com.gtnewhorizon.gtnhlib.bytebuf.APIUtil.apiGetBytes;
-import static com.gtnewhorizon.gtnhlib.bytebuf.CheckIntrinsics.NewDirectByteBuffer;
 import static com.gtnewhorizon.gtnhlib.bytebuf.Checks.CHECKS;
 import static com.gtnewhorizon.gtnhlib.bytebuf.Checks.DEBUG;
 import static com.gtnewhorizon.gtnhlib.bytebuf.Checks.check;
@@ -19,8 +18,6 @@ import static java.lang.Character.isHighSurrogate;
 import static java.lang.Character.toCodePoint;
 import static java.lang.Math.min;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.nio.Buffer;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
@@ -36,17 +33,16 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-import java.util.function.LongPredicate;
 
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.MemoryUtil;
 
 /**
  * This class provides functionality for managing native memory.
  *
  * <p>
- * All methods in this class will make use of {@link sun.misc.Unsafe} if it's available, for performance. If Unsafe is
- * not available, the fallback implementations make use of reflection and, in the worst-case, JNI.
+ * Low-level native memory operations are delegated to LWJGL's maintained {@link MemoryUtil} implementation.
  * </p>
  *
  * <p>
@@ -125,70 +121,14 @@ public final class MemoryUtilities {
     static final ThreadLocal<byte[]> ARRAY_TLC_BYTE = ThreadLocal.withInitial(() -> new byte[ARRAY_TLC_SIZE]);
     static final ThreadLocal<char[]> ARRAY_TLC_CHAR = ThreadLocal.withInitial(() -> new char[ARRAY_TLC_SIZE]);
 
-    static final sun.misc.Unsafe UNSAFE;
-
     static final ByteOrder NATIVE_ORDER = ByteOrder.nativeOrder();
 
     private static final Charset UTF16 = NATIVE_ORDER == ByteOrder.LITTLE_ENDIAN ? StandardCharsets.UTF_16LE
             : StandardCharsets.UTF_16BE;
 
-    static final Class<? extends ByteBuffer> BUFFER_BYTE;
-    static final Class<? extends ShortBuffer> BUFFER_SHORT;
-    static final Class<? extends CharBuffer> BUFFER_CHAR;
-    static final Class<? extends IntBuffer> BUFFER_INT;
-    static final Class<? extends LongBuffer> BUFFER_LONG;
-    static final Class<? extends FloatBuffer> BUFFER_FLOAT;
-    static final Class<? extends DoubleBuffer> BUFFER_DOUBLE;
-
-    private static final long MARK;
-    private static final long POSITION;
-    private static final long LIMIT;
-    private static final long CAPACITY;
-
-    private static final long ADDRESS;
-
-    private static final long PARENT_BYTE;
-    private static final long PARENT_SHORT;
-    private static final long PARENT_CHAR;
-    private static final long PARENT_INT;
-    private static final long PARENT_LONG;
-    private static final long PARENT_FLOAT;
-    private static final long PARENT_DOUBLE;
-
     static {
-        ByteBuffer bb = ByteBuffer.allocateDirect(0).order(NATIVE_ORDER);
-
-        BUFFER_BYTE = bb.getClass();
-        BUFFER_SHORT = bb.asShortBuffer().getClass();
-        BUFFER_CHAR = bb.asCharBuffer().getClass();
-        BUFFER_INT = bb.asIntBuffer().getClass();
-        BUFFER_LONG = bb.asLongBuffer().getClass();
-        BUFFER_FLOAT = bb.asFloatBuffer().getClass();
-        BUFFER_DOUBLE = bb.asDoubleBuffer().getClass();
-
-        UNSAFE = getUnsafeInstance();
-
-        try {
-            MARK = getMarkOffset();
-            POSITION = getPositionOffset();
-            LIMIT = getLimitOffset();
-            CAPACITY = getCapacityOffset();
-
-            ADDRESS = getAddressOffset();
-
-            PARENT_BYTE = getFieldOffsetObject(bb.duplicate().order(bb.order()), bb);
-            PARENT_SHORT = getFieldOffsetObject(bb.asShortBuffer(), bb);
-            PARENT_CHAR = getFieldOffsetObject(bb.asCharBuffer(), bb);
-            PARENT_INT = getFieldOffsetObject(bb.asIntBuffer(), bb);
-            PARENT_LONG = getFieldOffsetObject(bb.asLongBuffer(), bb);
-            PARENT_FLOAT = getFieldOffsetObject(bb.asFloatBuffer(), bb);
-            PARENT_DOUBLE = getFieldOffsetObject(bb.asDoubleBuffer(), bb);
-        } catch (Throwable t) {
-            throw new UnsupportedOperationException(t);
-        }
-
-        PAGE_SIZE = UNSAFE.pageSize();
-        CACHE_LINE_SIZE = 64;
+        PAGE_SIZE = MemoryUtil.PAGE_SIZE;
+        CACHE_LINE_SIZE = MemoryUtil.CACHE_LINE_SIZE;
     }
 
     static final class LazyInit {
@@ -395,56 +335,56 @@ public final class MemoryUtilities {
      */
     public static void memFree(@Nullable Buffer ptr) {
         if (ptr != null) {
-            nmemFree(UNSAFE.getLong(ptr, ADDRESS));
+            nmemFree(MemoryUtil.memAddress0(ptr));
         }
     }
 
     /** {@code ByteBuffer} version of {@link #memFree(Buffer)}. */
     public static void memFree(@Nullable ByteBuffer ptr) {
         if (ptr != null) {
-            nmemFree(UNSAFE.getLong(ptr, ADDRESS));
+            nmemFree(MemoryUtil.memAddress0(ptr));
         }
     }
 
     /** {@code ShortBuffer} version of {@link #memFree(Buffer)}. */
     public static void memFree(@Nullable ShortBuffer ptr) {
         if (ptr != null) {
-            nmemFree(UNSAFE.getLong(ptr, ADDRESS));
+            nmemFree(MemoryUtil.memAddress0(ptr));
         }
     }
 
     /** {@code CharBuffer} version of {@link #memFree(Buffer)}. */
     public static void memFree(@Nullable CharBuffer ptr) {
         if (ptr != null) {
-            nmemFree(UNSAFE.getLong(ptr, ADDRESS));
+            nmemFree(MemoryUtil.memAddress0(ptr));
         }
     }
 
     /** {@code IntBuffer} version of {@link #memFree(Buffer)}. */
     public static void memFree(@Nullable IntBuffer ptr) {
         if (ptr != null) {
-            nmemFree(UNSAFE.getLong(ptr, ADDRESS));
+            nmemFree(MemoryUtil.memAddress0(ptr));
         }
     }
 
     /** {@code LongBuffer} version of {@link #memFree(Buffer)}. */
     public static void memFree(@Nullable LongBuffer ptr) {
         if (ptr != null) {
-            nmemFree(UNSAFE.getLong(ptr, ADDRESS));
+            nmemFree(MemoryUtil.memAddress0(ptr));
         }
     }
 
     /** {@code FloatBuffer} version of {@link #memFree(Buffer)}. */
     public static void memFree(@Nullable FloatBuffer ptr) {
         if (ptr != null) {
-            nmemFree(UNSAFE.getLong(ptr, ADDRESS));
+            nmemFree(MemoryUtil.memAddress0(ptr));
         }
     }
 
     /** {@code DoubleBuffer} version of {@link #memFree(Buffer)}. */
     public static void memFree(@Nullable DoubleBuffer ptr) {
         if (ptr != null) {
-            nmemFree(UNSAFE.getLong(ptr, ADDRESS));
+            nmemFree(MemoryUtil.memAddress0(ptr));
         }
     }
 
@@ -631,7 +571,7 @@ public final class MemoryUtilities {
     public static ByteBuffer memRealloc(@Nullable ByteBuffer ptr, int size) {
         return realloc(
                 ptr,
-                memByteBuffer(nmemReallocChecked(ptr == null ? NULL : UNSAFE.getLong(ptr, ADDRESS), size), size),
+                memByteBuffer(nmemReallocChecked(ptr == null ? NULL : MemoryUtil.memAddress0(ptr), size), size),
                 size);
     }
 
@@ -645,7 +585,7 @@ public final class MemoryUtilities {
                 ptr,
                 memShortBuffer(
                         nmemReallocChecked(
-                                ptr == null ? NULL : UNSAFE.getLong(ptr, ADDRESS),
+                                ptr == null ? NULL : MemoryUtil.memAddress0(ptr),
                                 getAllocationSize(size, 1)),
                         size),
                 size);
@@ -661,7 +601,7 @@ public final class MemoryUtilities {
                 ptr,
                 memIntBuffer(
                         nmemReallocChecked(
-                                ptr == null ? NULL : UNSAFE.getLong(ptr, ADDRESS),
+                                ptr == null ? NULL : MemoryUtil.memAddress0(ptr),
                                 getAllocationSize(size, 2)),
                         size),
                 size);
@@ -677,7 +617,7 @@ public final class MemoryUtilities {
                 ptr,
                 memLongBuffer(
                         nmemReallocChecked(
-                                ptr == null ? NULL : UNSAFE.getLong(ptr, ADDRESS),
+                                ptr == null ? NULL : MemoryUtil.memAddress0(ptr),
                                 getAllocationSize(size, 3)),
                         size),
                 size);
@@ -693,7 +633,7 @@ public final class MemoryUtilities {
                 ptr,
                 memFloatBuffer(
                         nmemReallocChecked(
-                                ptr == null ? NULL : UNSAFE.getLong(ptr, ADDRESS),
+                                ptr == null ? NULL : MemoryUtil.memAddress0(ptr),
                                 getAllocationSize(size, 2)),
                         size),
                 size);
@@ -709,7 +649,7 @@ public final class MemoryUtilities {
                 ptr,
                 memDoubleBuffer(
                         nmemReallocChecked(
-                                ptr == null ? NULL : UNSAFE.getLong(ptr, ADDRESS),
+                                ptr == null ? NULL : MemoryUtil.memAddress0(ptr),
                                 getAllocationSize(size, 3)),
                         size),
                 size);
@@ -747,42 +687,42 @@ public final class MemoryUtilities {
      * @return the memory address
      */
     public static long memAddress0(Buffer buffer) {
-        return UNSAFE.getLong(buffer, ADDRESS);
+        return MemoryUtil.memAddress0(buffer);
     }
 
     /** {@code ByteBuffer} version of {@link #memAddress0(Buffer)}. */
     public static long memAddress0(ByteBuffer buffer) {
-        return UNSAFE.getLong(buffer, ADDRESS);
+        return MemoryUtil.memAddress0(buffer);
     }
 
     /** {@code ShortBuffer} version of {@link #memAddress0(Buffer)}. */
     public static long memAddress0(ShortBuffer buffer) {
-        return UNSAFE.getLong(buffer, ADDRESS);
+        return MemoryUtil.memAddress0(buffer);
     }
 
     /** {@code CharBuffer} version of {@link #memAddress0(Buffer)}. */
     public static long memAddress0(CharBuffer buffer) {
-        return UNSAFE.getLong(buffer, ADDRESS);
+        return MemoryUtil.memAddress0(buffer);
     }
 
     /** {@code IntBuffer} version of {@link #memAddress0(Buffer)}. */
     public static long memAddress0(IntBuffer buffer) {
-        return UNSAFE.getLong(buffer, ADDRESS);
+        return MemoryUtil.memAddress0(buffer);
     }
 
     /** {@code LongBuffer} version of {@link #memAddress0(Buffer)}. */
     public static long memAddress0(LongBuffer buffer) {
-        return UNSAFE.getLong(buffer, ADDRESS);
+        return MemoryUtil.memAddress0(buffer);
     }
 
     /** {@code FloatBuffer} version of {@link #memAddress0(Buffer)}. */
     public static long memAddress0(FloatBuffer buffer) {
-        return UNSAFE.getLong(buffer, ADDRESS);
+        return MemoryUtil.memAddress0(buffer);
     }
 
     /** {@code DoubleBuffer} version of {@link #memAddress0(Buffer)}. */
     public static long memAddress0(DoubleBuffer buffer) {
-        return UNSAFE.getLong(buffer, ADDRESS);
+        return MemoryUtil.memAddress0(buffer);
     }
 
     // --- [ Buffer address ] ---
@@ -907,7 +847,7 @@ public final class MemoryUtilities {
         } else {
             elementShift = 3;
         }
-        return address(buffer.position(), elementShift, UNSAFE.getLong(buffer, ADDRESS));
+        return address(buffer.position(), elementShift, MemoryUtil.memAddress0(buffer));
     }
 
     // --- [ Buffer address - Safe ] ---
@@ -1290,23 +1230,7 @@ public final class MemoryUtilities {
      * @return the duplicated buffer
      */
     public static ByteBuffer memDuplicate(ByteBuffer buffer) {
-        ByteBuffer target;
-        try {
-            target = (ByteBuffer) UNSAFE.allocateInstance(BUFFER_BYTE);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(target, ADDRESS, UNSAFE.getLong(buffer, ADDRESS));
-        UNSAFE.putInt(target, MARK, UNSAFE.getInt(buffer, MARK));
-        UNSAFE.putInt(target, POSITION, UNSAFE.getInt(buffer, POSITION));
-        UNSAFE.putInt(target, LIMIT, UNSAFE.getInt(buffer, LIMIT));
-        UNSAFE.putInt(target, CAPACITY, UNSAFE.getInt(buffer, CAPACITY));
-
-        Object attachment = UNSAFE.getObject(buffer, PARENT_BYTE);
-        UNSAFE.putObject(target, PARENT_BYTE, attachment == null ? buffer : attachment);
-
-        return target.order(buffer.order());
+        return MemoryUtil.memDuplicate(buffer);
     }
 
     /**
@@ -1323,7 +1247,7 @@ public final class MemoryUtilities {
      * @return the duplicated buffer
      */
     public static ShortBuffer memDuplicate(ShortBuffer buffer) {
-        return duplicate(BUFFER_SHORT, buffer, PARENT_SHORT);
+        return MemoryUtil.memDuplicate(buffer);
     }
 
     /**
@@ -1340,7 +1264,7 @@ public final class MemoryUtilities {
      * @return the duplicated buffer
      */
     public static CharBuffer memDuplicate(CharBuffer buffer) {
-        return duplicate(BUFFER_CHAR, buffer, PARENT_CHAR);
+        return MemoryUtil.memDuplicate(buffer);
     }
 
     /**
@@ -1357,7 +1281,7 @@ public final class MemoryUtilities {
      * @return the duplicated buffer
      */
     public static IntBuffer memDuplicate(IntBuffer buffer) {
-        return duplicate(BUFFER_INT, buffer, PARENT_INT);
+        return MemoryUtil.memDuplicate(buffer);
     }
 
     /**
@@ -1374,7 +1298,7 @@ public final class MemoryUtilities {
      * @return the duplicated buffer
      */
     public static LongBuffer memDuplicate(LongBuffer buffer) {
-        return duplicate(BUFFER_LONG, buffer, PARENT_LONG);
+        return MemoryUtil.memDuplicate(buffer);
     }
 
     /**
@@ -1391,7 +1315,7 @@ public final class MemoryUtilities {
      * @return the duplicated buffer
      */
     public static FloatBuffer memDuplicate(FloatBuffer buffer) {
-        return duplicate(BUFFER_FLOAT, buffer, PARENT_FLOAT);
+        return MemoryUtil.memDuplicate(buffer);
     }
 
     /**
@@ -1408,7 +1332,7 @@ public final class MemoryUtilities {
      * @return the duplicated buffer
      */
     public static DoubleBuffer memDuplicate(DoubleBuffer buffer) {
-        return duplicate(BUFFER_DOUBLE, buffer, PARENT_DOUBLE);
+        return MemoryUtil.memDuplicate(buffer);
     }
 
     // --- [ Buffer slicing ] ---
@@ -1427,7 +1351,7 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static ByteBuffer memSlice(ByteBuffer buffer) {
-        return slice(buffer, memAddress0(buffer) + buffer.position(), buffer.remaining());
+        return MemoryUtil.memSlice(buffer);
     }
 
     /**
@@ -1444,12 +1368,7 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static ShortBuffer memSlice(ShortBuffer buffer) {
-        return slice(
-                BUFFER_SHORT,
-                buffer,
-                address(buffer.position(), 1, memAddress0(buffer)),
-                buffer.remaining(),
-                PARENT_SHORT);
+        return MemoryUtil.memSlice(buffer);
     }
 
     /**
@@ -1466,12 +1385,7 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static CharBuffer memSlice(CharBuffer buffer) {
-        return slice(
-                BUFFER_CHAR,
-                buffer,
-                address(buffer.position(), 1, memAddress0(buffer)),
-                buffer.remaining(),
-                PARENT_CHAR);
+        return MemoryUtil.memSlice(buffer);
     }
 
     /**
@@ -1488,12 +1402,7 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static IntBuffer memSlice(IntBuffer buffer) {
-        return slice(
-                BUFFER_INT,
-                buffer,
-                address(buffer.position(), 2, memAddress0(buffer)),
-                buffer.remaining(),
-                PARENT_INT);
+        return MemoryUtil.memSlice(buffer);
     }
 
     /**
@@ -1510,12 +1419,7 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static LongBuffer memSlice(LongBuffer buffer) {
-        return slice(
-                BUFFER_LONG,
-                buffer,
-                address(buffer.position(), 3, memAddress0(buffer)),
-                buffer.remaining(),
-                PARENT_LONG);
+        return MemoryUtil.memSlice(buffer);
     }
 
     /**
@@ -1532,12 +1436,7 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static FloatBuffer memSlice(FloatBuffer buffer) {
-        return slice(
-                BUFFER_FLOAT,
-                buffer,
-                address(buffer.position(), 2, memAddress0(buffer)),
-                buffer.remaining(),
-                PARENT_FLOAT);
+        return MemoryUtil.memSlice(buffer);
     }
 
     /**
@@ -1554,12 +1453,7 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static DoubleBuffer memSlice(DoubleBuffer buffer) {
-        return slice(
-                BUFFER_DOUBLE,
-                buffer,
-                address(buffer.position(), 3, memAddress0(buffer)),
-                buffer.remaining(),
-                PARENT_DOUBLE);
+        return MemoryUtil.memSlice(buffer);
     }
 
     /**
@@ -1578,14 +1472,8 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static ByteBuffer memSlice(ByteBuffer buffer, int offset, int capacity) {
-        int position = buffer.position() + offset;
-        if (offset < 0 || buffer.limit() < position) {
-            throw new IllegalArgumentException();
-        }
-        if (capacity < 0 || buffer.capacity() - position < capacity) {
-            throw new IllegalArgumentException();
-        }
-        return slice(buffer, memAddress0(buffer) + position, capacity);
+        checkSliceRange(buffer, offset, capacity);
+        return MemoryUtil.memSlice(buffer, offset, capacity);
     }
 
     /**
@@ -1603,14 +1491,8 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static ShortBuffer memSlice(ShortBuffer buffer, int offset, int capacity) {
-        int position = buffer.position() + offset;
-        if (offset < 0 || buffer.limit() < position) {
-            throw new IllegalArgumentException();
-        }
-        if (capacity < 0 || buffer.capacity() - position < capacity) {
-            throw new IllegalArgumentException();
-        }
-        return slice(BUFFER_SHORT, buffer, address(position, 1, memAddress0(buffer)), capacity, PARENT_SHORT);
+        checkSliceRange(buffer, offset, capacity);
+        return MemoryUtil.memSlice(buffer, offset, capacity);
     }
 
     /**
@@ -1628,14 +1510,8 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static CharBuffer memSlice(CharBuffer buffer, int offset, int capacity) {
-        int position = buffer.position() + offset;
-        if (offset < 0 || buffer.limit() < position) {
-            throw new IllegalArgumentException();
-        }
-        if (capacity < 0 || buffer.capacity() - position < capacity) {
-            throw new IllegalArgumentException();
-        }
-        return slice(BUFFER_CHAR, buffer, address(position, 1, memAddress0(buffer)), capacity, PARENT_CHAR);
+        checkSliceRange(buffer, offset, capacity);
+        return MemoryUtil.memSlice(buffer, offset, capacity);
     }
 
     /**
@@ -1653,14 +1529,8 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static IntBuffer memSlice(IntBuffer buffer, int offset, int capacity) {
-        int position = buffer.position() + offset;
-        if (offset < 0 || buffer.limit() < position) {
-            throw new IllegalArgumentException();
-        }
-        if (capacity < 0 || buffer.capacity() - position < capacity) {
-            throw new IllegalArgumentException();
-        }
-        return slice(BUFFER_INT, buffer, address(position, 2, memAddress0(buffer)), capacity, PARENT_INT);
+        checkSliceRange(buffer, offset, capacity);
+        return MemoryUtil.memSlice(buffer, offset, capacity);
     }
 
     /**
@@ -1678,14 +1548,8 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static LongBuffer memSlice(LongBuffer buffer, int offset, int capacity) {
-        int position = buffer.position() + offset;
-        if (offset < 0 || buffer.limit() < position) {
-            throw new IllegalArgumentException();
-        }
-        if (capacity < 0 || buffer.capacity() - position < capacity) {
-            throw new IllegalArgumentException();
-        }
-        return slice(BUFFER_LONG, buffer, address(position, 3, memAddress0(buffer)), capacity, PARENT_LONG);
+        checkSliceRange(buffer, offset, capacity);
+        return MemoryUtil.memSlice(buffer, offset, capacity);
     }
 
     /**
@@ -1703,14 +1567,8 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static FloatBuffer memSlice(FloatBuffer buffer, int offset, int capacity) {
-        int position = buffer.position() + offset;
-        if (offset < 0 || buffer.limit() < position) {
-            throw new IllegalArgumentException();
-        }
-        if (capacity < 0 || buffer.capacity() - position < capacity) {
-            throw new IllegalArgumentException();
-        }
-        return slice(BUFFER_FLOAT, buffer, address(position, 2, memAddress0(buffer)), capacity, PARENT_FLOAT);
+        checkSliceRange(buffer, offset, capacity);
+        return MemoryUtil.memSlice(buffer, offset, capacity);
     }
 
     /**
@@ -1728,6 +1586,11 @@ public final class MemoryUtilities {
      * @return the sliced buffer
      */
     public static DoubleBuffer memSlice(DoubleBuffer buffer, int offset, int capacity) {
+        checkSliceRange(buffer, offset, capacity);
+        return MemoryUtil.memSlice(buffer, offset, capacity);
+    }
+
+    private static void checkSliceRange(Buffer buffer, int offset, int capacity) {
         int position = buffer.position() + offset;
         if (offset < 0 || buffer.limit() < position) {
             throw new IllegalArgumentException();
@@ -1735,7 +1598,6 @@ public final class MemoryUtilities {
         if (capacity < 0 || buffer.capacity() - position < capacity) {
             throw new IllegalArgumentException();
         }
-        return slice(BUFFER_DOUBLE, buffer, address(position, 3, memAddress0(buffer)), capacity, PARENT_DOUBLE);
     }
 
     // --- [ memset ] ---
@@ -1904,12 +1766,9 @@ public final class MemoryUtilities {
     }
 
     /*
-     * ------------------------------------- ------------------------------------- UNSAFE MEMORY ACCESS API
+     * ------------------------------------- ------------------------------------- NATIVE MEMORY ACCESS API
      * ------------------------------------- -------------------------------------
      */
-
-    private static final int FILL_PATTERN_32 = Integer.divideUnsigned(-1, 255);
-    private static final long FILL_PATTERN_64 = Long.divideUnsigned(-1L, 255L);
 
     /**
      * Sets all bytes in a specified block of memory to a fixed value (usually zero).
@@ -1923,59 +1782,7 @@ public final class MemoryUtilities {
             throw new IllegalArgumentException();
         }
 
-        /*
-         * - Unsafe.setMemory is very slow. - A custom Java loop is fastest at small sizes, approximately up to 256
-         * bytes. - The native memset becomes fastest at bigger sizes, when the JNI overhead becomes negligible.
-         */
-
-        // UNSAFE.setMemory(ptr, bytes, (byte)(value & 0xFF));
-        if (bytes < 256L) {
-            int p = (int) ptr;
-            if (BITS64) {
-                if ((p & 7) == 0) {
-                    memSet64(ptr, value, (int) bytes & 0xFF);
-                    return;
-                }
-            } else {
-                if ((p & 3) == 0) {
-                    memSet32(p, value, (int) bytes & 0xFF);
-                    return;
-                }
-            }
-        }
-        UNSAFE.setMemory(ptr, bytes, (byte) (value & 0xFF));
-    }
-
-    private static void memSet64(long ptr, int value, int bytes) {
-        int aligned = bytes & ~7;
-
-        // Aligned body
-        long valuel = (value & 0xFF) * FILL_PATTERN_64;
-        for (int i = 0; i < aligned; i += 8) {
-            UNSAFE.putLong(null, ptr + i, valuel);
-        }
-
-        // Unaligned tail
-        byte valueb = (byte) (value & 0xFF);
-        for (int i = aligned; i < bytes; i++) {
-            UNSAFE.putByte(null, ptr + i, valueb);
-        }
-    }
-
-    private static void memSet32(int ptr, int value, int bytes) {
-        int aligned = bytes & ~3;
-
-        // Aligned body
-        int vi = (value & 0xFF) * FILL_PATTERN_32;
-        for (int i = 0; i < aligned; i += 4) {
-            UNSAFE.putInt(null, (ptr + i) & 0xFFFF_FFFFL, vi);
-        }
-
-        // Unaligned tail
-        byte vb = (byte) (value & 0xFF);
-        for (int i = aligned; i < bytes; i++) {
-            UNSAFE.putByte(null, (ptr + i) & 0xFFFF_FFFFL, vb);
-        }
+        MemoryUtil.memSet(ptr, value, bytes);
     }
 
     /**
@@ -1990,111 +1797,75 @@ public final class MemoryUtilities {
             throw new IllegalArgumentException();
         }
 
-        MultiReleaseMemCopy.copy(src, dst, bytes);
-    }
-
-    static void memCopyAligned64(long src, long dst, int bytes) {
-        int aligned = bytes & ~7;
-
-        // Aligned body
-        for (int i = 0; i < aligned; i += 8) {
-            UNSAFE.putLong(null, dst + i, UNSAFE.getLong(null, src + i));
-        }
-
-        // Unaligned tail
-        for (int i = aligned; i < bytes; i++) {
-            UNSAFE.putByte(null, dst + i, UNSAFE.getByte(null, src + i));
-        }
-    }
-
-    static void memCopyAligned32(int src, int dst, int bytes) {
-        int aligned = bytes & ~3;
-
-        // Aligned body
-        for (int i = 0; i < aligned; i += 4) {
-            UNSAFE.putInt(null, (dst + i) & 0xFFFF_FFFFL, UNSAFE.getInt(null, (src + i) & 0xFFFF_FFFFL));
-        }
-
-        // Unaligned tail
-        for (int i = aligned; i < bytes; i++) {
-            UNSAFE.putByte(null, (dst + i) & 0xFFFF_FFFFL, UNSAFE.getByte(null, (src + i) & 0xFFFF_FFFFL));
-        }
+        MemoryUtil.memCopy(src, dst, bytes);
     }
 
     public static boolean memGetBoolean(long ptr) {
-        return UNSAFE.getByte(null, ptr) != 0;
+        return MemoryUtil.memGetBoolean(ptr);
     }
 
     public static byte memGetByte(long ptr) {
-        return UNSAFE.getByte(null, ptr);
+        return MemoryUtil.memGetByte(ptr);
     }
 
     public static short memGetShort(long ptr) {
-        return UNSAFE.getShort(null, ptr);
+        return MemoryUtil.memGetShort(ptr);
     }
 
     public static int memGetInt(long ptr) {
-        return UNSAFE.getInt(null, ptr);
+        return MemoryUtil.memGetInt(ptr);
     }
 
     public static long memGetLong(long ptr) {
-        return UNSAFE.getLong(null, ptr);
+        return MemoryUtil.memGetLong(ptr);
     }
 
     public static float memGetFloat(long ptr) {
-        return UNSAFE.getFloat(null, ptr);
+        return MemoryUtil.memGetFloat(ptr);
     }
 
     public static double memGetDouble(long ptr) {
-        return UNSAFE.getDouble(null, ptr);
+        return MemoryUtil.memGetDouble(ptr);
     }
 
     public static long memGetCLong(long ptr) {
-        return CLONG_SIZE == 8 ? UNSAFE.getLong(null, ptr) : UNSAFE.getInt(null, ptr);
+        return MemoryUtil.memGetCLong(ptr);
     }
 
     public static long memGetAddress(long ptr) {
-        return BITS64 ? UNSAFE.getLong(null, ptr) : UNSAFE.getInt(null, ptr) & 0xFFFF_FFFFL;
+        return MemoryUtil.memGetAddress(ptr);
     }
 
     public static void memPutByte(long ptr, byte value) {
-        UNSAFE.putByte(null, ptr, value);
+        MemoryUtil.memPutByte(ptr, value);
     }
 
     public static void memPutShort(long ptr, short value) {
-        UNSAFE.putShort(null, ptr, value);
+        MemoryUtil.memPutShort(ptr, value);
     }
 
     public static void memPutInt(long ptr, int value) {
-        UNSAFE.putInt(null, ptr, value);
+        MemoryUtil.memPutInt(ptr, value);
     }
 
     public static void memPutLong(long ptr, long value) {
-        UNSAFE.putLong(null, ptr, value);
+        MemoryUtil.memPutLong(ptr, value);
     }
 
     public static void memPutFloat(long ptr, float value) {
-        UNSAFE.putFloat(null, ptr, value);
+        MemoryUtil.memPutFloat(ptr, value);
     }
 
     public static void memPutDouble(long ptr, double value) {
-        UNSAFE.putDouble(null, ptr, value);
+        MemoryUtil.memPutDouble(ptr, value);
     }
 
     public static void memPutCLong(long ptr, long value) {
-        if (CLONG_SIZE == 8) {
-            UNSAFE.putLong(null, ptr, value);
-        } else {
-            UNSAFE.putInt(null, ptr, (int) value);
-        }
+        MemoryUtil.memPutCLong(ptr, value);
     }
 
     public static void memPutAddress(long ptr, long value) {
-        if (BITS64) {
-            UNSAFE.putLong(null, ptr, value);
-        } else {
-            UNSAFE.putInt(null, ptr, (int) value);
-        }
+        MemoryUtil.memPutAddress(ptr, value);
     }
 
     /*
@@ -2118,7 +1889,7 @@ public final class MemoryUtilities {
      */
 
     private static int write8(long target, int offset, int value) {
-        UNSAFE.putByte(null, target + Integer.toUnsignedLong(offset), (byte) value);
+        MemoryUtil.memPutByte(target + Integer.toUnsignedLong(offset), (byte) value);
         return offset + 1;
     }
 
@@ -2126,12 +1897,12 @@ public final class MemoryUtilities {
         if (offset == maxLength) {
             throw new BufferOverflowException();
         }
-        UNSAFE.putByte(null, target + Integer.toUnsignedLong(offset), (byte) value);
+        MemoryUtil.memPutByte(target + Integer.toUnsignedLong(offset), (byte) value);
         return offset + 1;
     }
 
     private static int write16(long target, int offset, char value) {
-        UNSAFE.putShort(null, target + Integer.toUnsignedLong(offset), (short) value);
+        MemoryUtil.memPutShort(target + Integer.toUnsignedLong(offset), (short) value);
         return offset + 2;
     }
 
@@ -2603,7 +2374,7 @@ public final class MemoryUtilities {
             if (misalignment != 0) {
                 // Align to 8 bytes
                 for (int len = 8 - misalignment; i < len; i++) {
-                    if (UNSAFE.getByte(null, address + i) == 0) {
+                    if (MemoryUtil.memGetByte(address + i) == 0) {
                         return i;
                     }
                 }
@@ -2611,7 +2382,7 @@ public final class MemoryUtilities {
 
             // Aligned longs for performance
             for (; i <= maxLength - 8; i += 8) {
-                if (mathHasZeroByte(UNSAFE.getLong(null, address + i))) {
+                if (mathHasZeroByte(MemoryUtil.memGetLong(address + i))) {
                     break;
                 }
             }
@@ -2619,7 +2390,7 @@ public final class MemoryUtilities {
 
         // Tail
         for (; i < maxLength; i++) {
-            if (UNSAFE.getByte(null, address + i) == 0) {
+            if (MemoryUtil.memGetByte(address + i) == 0) {
                 break;
             }
         }
@@ -2635,7 +2406,7 @@ public final class MemoryUtilities {
             if (misalignment != 0) {
                 // Align to 4 bytes
                 for (int len = 4 - misalignment; i < len; i++) {
-                    if (UNSAFE.getByte(null, address + i) == 0) {
+                    if (MemoryUtil.memGetByte(address + i) == 0) {
                         return i;
                     }
                 }
@@ -2643,7 +2414,7 @@ public final class MemoryUtilities {
 
             // Aligned ints for performance
             for (; i <= maxLength - 4; i += 4) {
-                if (mathHasZeroByte(UNSAFE.getInt(null, address + i))) {
+                if (mathHasZeroByte(MemoryUtil.memGetInt(address + i))) {
                     break;
                 }
             }
@@ -2651,7 +2422,7 @@ public final class MemoryUtilities {
 
         // Tail
         for (; i < maxLength; i++) {
-            if (UNSAFE.getByte(null, address + i) == 0) {
+            if (MemoryUtil.memGetByte(address + i) == 0) {
                 break;
             }
         }
@@ -2691,7 +2462,7 @@ public final class MemoryUtilities {
             if (misalignment != 0) {
                 // Align to 8 bytes
                 for (int len = 8 - misalignment; i < len; i += 2) {
-                    if (UNSAFE.getShort(null, address + i) == 0) {
+                    if (MemoryUtil.memGetShort(address + i) == 0) {
                         return i;
                     }
                 }
@@ -2699,7 +2470,7 @@ public final class MemoryUtilities {
 
             // Aligned longs for performance
             for (; i <= maxLength - 8; i += 8) {
-                if (mathHasZeroShort(UNSAFE.getLong(null, address + i))) {
+                if (mathHasZeroShort(MemoryUtil.memGetLong(address + i))) {
                     break;
                 }
             }
@@ -2707,7 +2478,7 @@ public final class MemoryUtilities {
 
         // Tail
         for (; i < maxLength; i += 2) {
-            if (UNSAFE.getShort(null, address + i) == 0) {
+            if (MemoryUtil.memGetShort(address + i) == 0) {
                 break;
             }
         }
@@ -2723,7 +2494,7 @@ public final class MemoryUtilities {
             if (misalignment != 0) {
                 // Align to 4 bytes
                 for (int len = 4 - misalignment; i < len; i += 2) {
-                    if (UNSAFE.getShort(null, address + i) == 0) {
+                    if (MemoryUtil.memGetShort(address + i) == 0) {
                         return i;
                     }
                 }
@@ -2731,7 +2502,7 @@ public final class MemoryUtilities {
 
             // Aligned longs for performance
             while (i <= maxLength - 4) {
-                if (mathHasZeroShort(UNSAFE.getInt(null, address + i))) {
+                if (mathHasZeroShort(MemoryUtil.memGetInt(address + i))) {
                     break;
                 }
                 i += 4;
@@ -2740,7 +2511,7 @@ public final class MemoryUtilities {
 
         // Tail
         for (; i < maxLength; i += 2) {
-            if (UNSAFE.getShort(null, address + i) == 0) {
+            if (MemoryUtil.memGetShort(address + i) == 0) {
                 break;
             }
         }
@@ -3159,271 +2930,32 @@ public final class MemoryUtilities {
         return memUTF16(memAddress(buffer, offset), length);
     }
 
-    // -------------------------------------------------
-    // -------------------------------------------------
-    // -------------------------------------------------
-
-    static sun.misc.Unsafe getUnsafeInstance() {
-        java.lang.reflect.Field[] fields = sun.misc.Unsafe.class.getDeclaredFields();
-
-        /*
-         * Different runtimes use different names for the Unsafe singleton, so we cannot use .getDeclaredField and we
-         * scan instead. For example: Oracle: theUnsafe PERC : m_unsafe_instance Android: THE_ONE
-         */
-        for (java.lang.reflect.Field field : fields) {
-            if (!field.getType().equals(sun.misc.Unsafe.class)) {
-                continue;
-            }
-
-            int modifiers = field.getModifiers();
-            if (!(java.lang.reflect.Modifier.isStatic(modifiers) && java.lang.reflect.Modifier.isFinal(modifiers))) {
-                continue;
-            }
-
-            try {
-                field.setAccessible(true);
-                return (sun.misc.Unsafe) field.get(null);
-            } catch (Exception ignored) {}
-            break;
-        }
-
-        throw new UnsupportedOperationException("LWJGL requires sun.misc.Unsafe to be available.");
-    }
-
-    private static long getFieldOffset(Class<?> containerType, Class<?> fieldType, LongPredicate predicate) {
-        Class<?> c = containerType;
-        while (c != Object.class) {
-            Field[] fields = c.getDeclaredFields();
-            for (Field field : fields) {
-                if (!field.getType().isAssignableFrom(fieldType) || Modifier.isStatic(field.getModifiers())
-                        || field.isSynthetic()) {
-                    continue;
-                }
-
-                long offset = UNSAFE.objectFieldOffset(field);
-                if (predicate.test(offset)) {
-                    return offset;
-                }
-            }
-            c = c.getSuperclass();
-        }
-        throw new UnsupportedOperationException("Failed to find field offset in class.");
-    }
-
-    private static long getFieldOffsetInt(Object container, int value) {
-        return getFieldOffset(container.getClass(), int.class, offset -> UNSAFE.getInt(container, offset) == value);
-    }
-
-    private static long getFieldOffsetObject(Object container, Object value) {
-        return getFieldOffset(
-                container.getClass(),
-                value.getClass(),
-                offset -> UNSAFE.getObject(container, offset) == value);
-    }
-
-    private static long getAddressOffset() {
-        long MAGIC_ADDRESS = 0xDEADBEEF8BADF00DL & (BITS32 ? 0xFFFF_FFFFL : 0xFFFF_FFFF_FFFF_FFFFL);
-
-        ByteBuffer bb = Objects.requireNonNull(NewDirectByteBuffer(MAGIC_ADDRESS, 0));
-
-        return getFieldOffset(bb.getClass(), long.class, offset -> UNSAFE.getLong(bb, offset) == MAGIC_ADDRESS);
-    }
-
-    private static final int MAGIC_CAPACITY = 0x0D15EA5E;
-    private static final int MAGIC_POSITION = 0x00FACADE;
-
-    private static long getMarkOffset() {
-        ByteBuffer bb = Objects.requireNonNull(NewDirectByteBuffer(1L, 0));
-        return getFieldOffsetInt(bb, -1);
-    }
-
-    private static long getPositionOffset() {
-        ByteBuffer bb = Objects.requireNonNull(NewDirectByteBuffer(-1L, MAGIC_CAPACITY));
-        bb.position(MAGIC_POSITION);
-        return getFieldOffsetInt(bb, MAGIC_POSITION);
-    }
-
-    private static long getLimitOffset() {
-        ByteBuffer bb = Objects.requireNonNull(NewDirectByteBuffer(-1L, MAGIC_CAPACITY));
-        bb.limit(MAGIC_POSITION);
-        return getFieldOffsetInt(bb, MAGIC_POSITION);
-    }
-
-    private static long getCapacityOffset() {
-        ByteBuffer bb = Objects.requireNonNull(NewDirectByteBuffer(-1L, MAGIC_CAPACITY));
-        bb.limit(0);
-        return getFieldOffsetInt(bb, MAGIC_CAPACITY);
-    }
-
     static ByteBuffer wrapBufferByte(long address, int capacity) {
-        ByteBuffer buffer;
-        try {
-            buffer = (ByteBuffer) UNSAFE.allocateInstance(BUFFER_BYTE);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(buffer, ADDRESS, address);
-        UNSAFE.putInt(buffer, MARK, -1);
-        UNSAFE.putInt(buffer, LIMIT, capacity);
-        UNSAFE.putInt(buffer, CAPACITY, capacity);
-
-        return buffer.order(NATIVE_ORDER);
+        return MemoryUtil.memByteBuffer(address, capacity);
     }
 
     static ShortBuffer wrapBufferShort(long address, int capacity) {
-        ShortBuffer buffer;
-        try {
-            buffer = (ShortBuffer) UNSAFE.allocateInstance(BUFFER_SHORT);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(buffer, ADDRESS, address);
-        UNSAFE.putInt(buffer, MARK, -1);
-        UNSAFE.putInt(buffer, LIMIT, capacity);
-        UNSAFE.putInt(buffer, CAPACITY, capacity);
-
-        return buffer;
+        return MemoryUtil.memShortBuffer(address, capacity);
     }
 
     static CharBuffer wrapBufferChar(long address, int capacity) {
-        CharBuffer buffer;
-        try {
-            buffer = (CharBuffer) UNSAFE.allocateInstance(BUFFER_CHAR);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(buffer, ADDRESS, address);
-        UNSAFE.putInt(buffer, MARK, -1);
-        UNSAFE.putInt(buffer, LIMIT, capacity);
-        UNSAFE.putInt(buffer, CAPACITY, capacity);
-
-        return buffer;
+        return MemoryUtil.memCharBuffer(address, capacity);
     }
 
     static IntBuffer wrapBufferInt(long address, int capacity) {
-        IntBuffer buffer;
-        try {
-            buffer = (IntBuffer) UNSAFE.allocateInstance(BUFFER_INT);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(buffer, ADDRESS, address);
-        UNSAFE.putInt(buffer, MARK, -1);
-        UNSAFE.putInt(buffer, LIMIT, capacity);
-        UNSAFE.putInt(buffer, CAPACITY, capacity);
-
-        return buffer;
+        return MemoryUtil.memIntBuffer(address, capacity);
     }
 
     static LongBuffer wrapBufferLong(long address, int capacity) {
-        LongBuffer buffer;
-        try {
-            buffer = (LongBuffer) UNSAFE.allocateInstance(BUFFER_LONG);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(buffer, ADDRESS, address);
-        UNSAFE.putInt(buffer, MARK, -1);
-        UNSAFE.putInt(buffer, LIMIT, capacity);
-        UNSAFE.putInt(buffer, CAPACITY, capacity);
-
-        return buffer;
+        return MemoryUtil.memLongBuffer(address, capacity);
     }
 
     static FloatBuffer wrapBufferFloat(long address, int capacity) {
-        FloatBuffer buffer;
-        try {
-            buffer = (FloatBuffer) UNSAFE.allocateInstance(BUFFER_FLOAT);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(buffer, ADDRESS, address);
-        UNSAFE.putInt(buffer, MARK, -1);
-        UNSAFE.putInt(buffer, LIMIT, capacity);
-        UNSAFE.putInt(buffer, CAPACITY, capacity);
-
-        return buffer;
+        return MemoryUtil.memFloatBuffer(address, capacity);
     }
 
     static DoubleBuffer wrapBufferDouble(long address, int capacity) {
-        DoubleBuffer buffer;
-        try {
-            buffer = (DoubleBuffer) UNSAFE.allocateInstance(BUFFER_DOUBLE);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(buffer, ADDRESS, address);
-        UNSAFE.putInt(buffer, MARK, -1);
-        UNSAFE.putInt(buffer, LIMIT, capacity);
-        UNSAFE.putInt(buffer, CAPACITY, capacity);
-
-        return buffer;
-    }
-
-    static ByteBuffer slice(ByteBuffer source, long address, int capacity) {
-        ByteBuffer target;
-        try {
-            target = (ByteBuffer) UNSAFE.allocateInstance(BUFFER_BYTE);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(target, ADDRESS, address);
-        UNSAFE.putInt(target, MARK, -1);
-        UNSAFE.putInt(target, LIMIT, capacity);
-        UNSAFE.putInt(target, CAPACITY, capacity);
-
-        Object attachment = UNSAFE.getObject(source, PARENT_BYTE);
-        UNSAFE.putObject(target, PARENT_BYTE, attachment == null ? source : attachment);
-
-        return target.order(source.order());
-    }
-
-    @SuppressWarnings("unchecked")
-    static <T extends Buffer> T slice(Class<? extends T> clazz, T source, long address, int capacity,
-            long attachmentOffset) {
-        T target;
-        try {
-            target = (T) UNSAFE.allocateInstance(clazz);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(target, ADDRESS, address);
-        UNSAFE.putInt(target, MARK, -1);
-        UNSAFE.putInt(target, LIMIT, capacity);
-        UNSAFE.putInt(target, CAPACITY, capacity);
-
-        UNSAFE.putObject(target, attachmentOffset, UNSAFE.getObject(source, attachmentOffset));
-
-        return target;
-    }
-
-    @SuppressWarnings("unchecked")
-    static <T extends Buffer> T duplicate(Class<? extends T> clazz, T source, long attachmentOffset) {
-        T target;
-        try {
-            target = (T) UNSAFE.allocateInstance(clazz);
-        } catch (InstantiationException e) {
-            throw new UnsupportedOperationException(e);
-        }
-
-        UNSAFE.putLong(target, ADDRESS, UNSAFE.getLong(source, ADDRESS));
-        UNSAFE.putInt(target, MARK, UNSAFE.getInt(source, MARK));
-        UNSAFE.putInt(target, POSITION, UNSAFE.getInt(source, POSITION));
-        UNSAFE.putInt(target, LIMIT, UNSAFE.getInt(source, LIMIT));
-        UNSAFE.putInt(target, CAPACITY, UNSAFE.getInt(source, CAPACITY));
-
-        UNSAFE.putObject(target, attachmentOffset, UNSAFE.getObject(source, attachmentOffset));
-
-        return target;
+        return MemoryUtil.memDoubleBuffer(address, capacity);
     }
 
 }

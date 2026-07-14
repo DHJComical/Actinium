@@ -6,6 +6,8 @@ package com.gtnewhorizon.gtnhlib.bytebuf;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
+import org.lwjgl.system.MemoryUtil;
+
 /**
  * Simple index checks.
  *
@@ -52,47 +54,11 @@ public final class CheckIntrinsics {
     }
 
     public static ByteBuffer NewDirectByteBuffer(long address, int capacity) {
-        if (Runtime.version().feature() >= 17) {
-            return org.lwjgl.system.jni.JNINativeInterface.NewDirectByteBuffer(address, capacity);
-        }
-        try {
-            @SuppressWarnings("unchecked")
-            final Class<? extends ByteBuffer> dbb = (Class<? extends ByteBuffer>) Class.forName("java.nio.DirectByteBuffer");
-            final var newDbb = dbb.getDeclaredConstructor(long.class, int.class);
-            newDbb.setAccessible(true);
-            return newDbb.newInstance(address, capacity);
-        } catch (Throwable t) {
-            throw new RuntimeException(t);
-        }
+        return MemoryUtil.memByteBuffer(address, capacity);
     }
 
     public static MemoryUtilities.MemoryAllocator getLwjgl3ifyAllocator() {
-        if (Runtime.version().feature() < 17) {
-            return null;
-        }
-        return new Lwjgl3ifyAllocator();
-    }
-
-    private static final class Lwjgl3ifyAllocator implements MemoryUtilities.MemoryAllocator {
-        @Override
-        public long malloc(long size) {
-            return org.lwjgl.system.MemoryUtil.nmemAlloc(size);
-        }
-
-        @Override
-        public long calloc(long num, long size) {
-            return org.lwjgl.system.MemoryUtil.nmemCalloc(num, size);
-        }
-
-        @Override
-        public long realloc(long ptr, long size) {
-            return org.lwjgl.system.MemoryUtil.nmemRealloc(ptr, size);
-        }
-
-        @Override
-        public void free(long ptr) {
-            org.lwjgl.system.MemoryUtil.nmemFree(ptr);
-        }
+        return MemoryManage.getInstance();
     }
 
 }

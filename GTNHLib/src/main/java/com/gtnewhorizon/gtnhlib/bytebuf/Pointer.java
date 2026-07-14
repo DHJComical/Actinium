@@ -6,10 +6,9 @@ package com.gtnewhorizon.gtnhlib.bytebuf;
 import static com.gtnewhorizon.gtnhlib.bytebuf.Checks.CHECKS;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.NULL;
 
-import org.apache.commons.lang3.SystemUtils;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
-import org.lwjgl.Sys;
+import org.lwjgl.system.Platform;
 
 /**
  * Pointer interface.
@@ -29,13 +28,13 @@ import org.lwjgl.Sys;
 public interface Pointer {
 
     /** The pointer size in bytes. Will be 4 on a 32bit JVM and 8 on a 64bit one. */
-    int POINTER_SIZE = Sys.is64Bit() ? 8 : 4;
+    int POINTER_SIZE = Platform.getArchitecture().is64Bit() ? 8 : 4;
 
     /** The pointer size power-of-two. Will be 2 on a 32bit JVM and 3 on a 64bit one. */
     int POINTER_SHIFT = POINTER_SIZE == 8 ? 3 : 2;
 
     /** The value of {@code sizeof(long)} for the current platform. */
-    int CLONG_SIZE = POINTER_SIZE == 8 && SystemUtils.IS_OS_WINDOWS ? 4 : POINTER_SIZE;
+    int CLONG_SIZE = POINTER_SIZE == 8 && Platform.get() == Platform.WINDOWS ? 4 : POINTER_SIZE;
 
     /** The value of {@code sizeof(long)} as a power-of-two. */
     int CLONG_SHIFT = CLONG_SIZE == 8 ? 3 : 2;
@@ -85,7 +84,7 @@ public interface Pointer {
         }
 
         public int hashCode() {
-            return (int) (address ^ (address >>> 32));
+            return Long.hashCode(address);
         }
 
         @Override

@@ -4,9 +4,8 @@
 package com.gtnewhorizon.gtnhlib.bytebuf;
 
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.MemoryAllocator;
-import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.getUnsafeInstance;
 
-import net.minecraft.launchwrapper.Launch;
+import org.lwjgl.system.MemoryUtil;
 
 /** Provides {@link MemoryAllocator} implementations for {@link MemoryUtilities} to use. */
 final class MemoryManage {
@@ -14,37 +13,30 @@ final class MemoryManage {
     private MemoryManage() {}
 
     static MemoryAllocator getInstance() {
-        final boolean hasLwjgl3ify = Launch.blackboard != null
-                && Launch.blackboard.get("lwjgl3ify:rfb-booted") == Boolean.TRUE;
-        return hasLwjgl3ify ? CheckIntrinsics.getLwjgl3ifyAllocator() : new StdlibAllocator();
+        return new LwjglAllocator();
     }
 
-    /** stdlib memory allocator. */
-    private static class StdlibAllocator implements MemoryAllocator {
-
-        static final sun.misc.Unsafe UNSAFE = getUnsafeInstance();
+    /** Adapts LWJGL's maintained native allocator to the local public allocator contract. */
+    private static final class LwjglAllocator implements MemoryAllocator {
 
         @Override
         public long malloc(long size) {
-            return UNSAFE.allocateMemory(size);
+            return MemoryUtil.nmemAlloc(size);
         }
 
         @Override
         public long calloc(long num, long size) {
-            final long totalSize = Math.multiplyExact(num, size);
-            final long addr = UNSAFE.allocateMemory(totalSize);
-            UNSAFE.setMemory(addr, totalSize, (byte) 0);
-            return addr;
+            return MemoryUtil.nmemCalloc(1L, Math.multiplyExact(num, size));
         }
 
         @Override
         public long realloc(long ptr, long size) {
-            return UNSAFE.reallocateMemory(ptr, size);
+            return MemoryUtil.nmemRealloc(ptr, size);
         }
 
         @Override
         public void free(long ptr) {
-            UNSAFE.freeMemory(ptr);
+            MemoryUtil.nmemFree(ptr);
         }
     }
 
