@@ -6,6 +6,8 @@ import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.glsm.states.Color4;
 import com.gtnewhorizons.angelica.glsm.states.ColorMask;
 import com.gtnewhorizons.angelica.glsm.states.ViewportState;
+import net.coderbot.iris.Iris;
+import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.renderer.texture.TextureUtil;
@@ -66,19 +68,25 @@ public final class EndPortalCompositeRenderer {
             return 0;
         }
 
-        try {
-            initialize();
-            CacheEntry entry = CACHE.computeIfAbsent(layers.size(), ignored -> createCacheEntry());
-            if (EndPortalCompositeLogic.needsUpdate(entry.lastUpdatedFrame, frame)) {
-                update(entry, layers);
-                entry.lastUpdatedFrame = frame;
+        return EndPortalActivePassScope.run(markProgramUsed -> {
+            try {
+                if (program == null) {
+                    markProgramUsed.run();
+                    initialize();
+                }
+                CacheEntry entry = CACHE.computeIfAbsent(layers.size(), ignored -> createCacheEntry());
+                if (EndPortalCompositeLogic.needsUpdate(entry.lastUpdatedFrame, frame)) {
+                    markProgramUsed.run();
+                    update(entry, layers);
+                    entry.lastUpdatedFrame = frame;
+                }
+                return entry.texture;
+            } catch (RuntimeException exception) {
+                unavailable = true;
+                LOGGER.error("Disabling end portal precomposition after an OpenGL failure", exception);
+                return 0;
             }
-            return entry.texture;
-        } catch (RuntimeException exception) {
-            unavailable = true;
-            LOGGER.error("Disabling end portal precomposition after an OpenGL failure", exception);
-            return 0;
-        }
+        }, EndPortalCompositeRenderer::restoreActivePass);
     }
 
     /** Releases compositor resources before the current OpenGL context is destroyed. */
@@ -97,6 +105,13 @@ public final class EndPortalCompositeRenderer {
             program = null;
         }
         unavailable = false;
+    }
+
+    private static void restoreActivePass() {
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        if (pipeline != null) {
+            pipeline.restoreActivePass();
+        }
     }
 
     private static void initialize() {

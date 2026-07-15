@@ -111,6 +111,11 @@ public class FixedFunctionWorldRenderingPipeline implements WorldRenderingPipeli
 	}
 
 	@Override
+	public void restoreActivePass() {
+		// Fixed-function rendering has no shader-pack pass state to restore.
+	}
+
+	@Override
 	public void beginHand() {
 	    // stub: nothing to do here
 	}

@@ -38,6 +38,9 @@ public interface WorldRenderingPipeline {
 
 	void onBindTexture(int id);
 
+	/** Reapplies the complete pass state after a temporary owned-program override. */
+	void restoreActivePass();
+
 	void beginHand();
 
 	void beginTranslucents();
