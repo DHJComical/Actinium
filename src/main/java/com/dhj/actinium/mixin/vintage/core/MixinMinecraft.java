@@ -1,6 +1,7 @@
 package com.dhj.actinium.mixin.vintage.core;
 
 import com.dhj.actinium.debug.flight.GlFlightRecording;
+import com.dhj.actinium.debug.flight.GlFlightStreamingSource;
 import com.dhj.actinium.gui.ActiniumWindowModeController;
 import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
 import com.dhj.actinium.render.EndPortalCompositeRenderer;
@@ -47,8 +48,12 @@ public class MixinMinecraft {
         if (supportsCpuRenderAhead() && ActiniumRuntime.options().advanced.cpuRenderAheadLimit > 0) {
             celeritas$renderAheadManager.endFrame();
         }
+        GlFlightRecording.beginStreamingSync(GlFlightStreamingSource.TESSELLATOR);
         TessellatorStreamingDrawer.endFrame();
+        GlFlightRecording.endStreamingSync(GlFlightStreamingSource.TESSELLATOR);
+        GlFlightRecording.beginStreamingSync(GlFlightStreamingSource.BUFFER_BUILDER);
         BufferBuilderStreamingDrawer.endFrame();
+        GlFlightRecording.endStreamingSync(GlFlightStreamingSource.BUFFER_BUILDER);
         GlFlightRecording.beginSwap();
     }
 

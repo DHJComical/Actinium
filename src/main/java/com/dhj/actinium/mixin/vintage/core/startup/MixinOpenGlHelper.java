@@ -1,6 +1,8 @@
 package com.dhj.actinium.mixin.vintage.core.startup;
 
 import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
+import com.dhj.actinium.debug.flight.GlFlightRecording;
+import com.dhj.actinium.debug.flight.GlFlightGpuCommandRecorder;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;
@@ -33,6 +35,7 @@ public class MixinOpenGlHelper {
             .framebufferSupported(OpenGlHelper.framebufferSupported)
             .fboEnabled(mc.gameSettings.fboEnable)
             .streamingUploadStrategy(celeritas$streamingUploadStrategy())
+            .gpuCommandRecorder(GlFlightRecording.isEnabled() ? GlFlightGpuCommandRecorder.INSTANCE : null)
             .directDrawer(TessellatorStreamingDrawer::drawDirect)
             .streamingDrawerDestroy(() -> {
                 TessellatorStreamingDrawer.destroy();

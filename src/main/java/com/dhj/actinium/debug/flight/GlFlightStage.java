@@ -38,6 +38,8 @@ public enum GlFlightStage {
     SWAP_BUFFERS(16),
     /** Covers shader-pipeline creation, selection, and destruction. */
     SHADER_PIPELINE(17),
+    /** Covers persistent streaming-buffer frame completion and fence insertion. */
+    STREAMING_SYNC(18),
     /** Covers a diagnostic event that has no more specific stable stage. */
     UNKNOWN(255);
 

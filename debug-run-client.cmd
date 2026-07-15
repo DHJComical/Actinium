@@ -37,7 +37,7 @@ echo [INFO] Project root: "%PROJECT_ROOT%"
 echo [INFO] Starting crash capture with WPR and LWJGL debug enabled.
 echo [INFO] Close Minecraft normally when the test is complete.
 echo.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CAPTURE_SCRIPT%" -ProjectRoot "%PROJECT_ROOT%" -EnableWpr -EnableLwjglDebug
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CAPTURE_SCRIPT%" -ProjectRoot "%PROJECT_ROOT%" -EnableWpr -EnableLwjglDebug -ExtraClientJvmArgs "-Dactinium.glsm.forceOrphanStreaming=true -XX:MaxDirectMemorySize=8G"
 set "EXIT_CODE=%ERRORLEVEL%"
 echo.
 if "%EXIT_CODE%"=="0" (
@@ -51,5 +51,5 @@ exit /b %EXIT_CODE%
 
 :dry_run
 echo [INFO] Dry run: validating the capture setup without elevation or client startup.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CAPTURE_SCRIPT%" -ProjectRoot "%PROJECT_ROOT%" -EnableWpr -EnableLwjglDebug -DryRun
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CAPTURE_SCRIPT%" -ProjectRoot "%PROJECT_ROOT%" -EnableWpr -EnableLwjglDebug -ExtraClientJvmArgs "-Dactinium.glsm.forceOrphanStreaming=true -XX:MaxDirectMemorySize=8G" -DryRun
 exit /b %ERRORLEVEL%

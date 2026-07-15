@@ -53,6 +53,21 @@ C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260715-1010.dmp
 
 驱动 610.62 的 `nvoglv64.dll` 文件版本为 `32.0.16.1062`，驱动 610.74 的版本为 `32.0.16.1074`。同型崩溃跨越了这两个驱动版本；这只能说明问题不局限于其中一个已测试版本，不能证明驱动本身是唯一根因。
 
+### 2026-07-15 对照样本
+
+后续自动捕获确认，不同光影包可以落入相同的故障桶：
+
+| 光影包 | 维度 | 本次连续运行时间 | 已确认结果 |
+|---|---|---:|---|
+| MakeUp Ultra Fast 9.1f | 主世界 | 约 53 秒 | NVIDIA OpenGL Driver error 3 / subcode 7，`nvoglv64.dll` 偏移 `0x10cba3d`，`0xC0000409`，并关联 `LiveKernelEvent 141` |
+| iterationT 3.2.0 | 主世界 | 约 15 分钟 | 与 MakeUp 样本相同的驱动错误、模块偏移、异常代码和 `LiveKernelEvent 141` |
+
+因此，现有证据不支持把故障限定为 MakeUp，也不能把 iterationT 3.2 视为不会触发该故障的负对照。
+
+同型崩溃还在以下 JVM 和流式上传配置下复现：`-Xmx8G`、`-XX:MaxDirectMemorySize=8G`，并通过 `-Dactinium.glsm.forceOrphanStreaming=true` 禁用 persistent streaming buffer 路径。对应会话中没有 Distant Horizons direct-buffer OOM。该结果排除了“2 GiB Java heap 上限”“2 GiB direct-memory 上限”“Distant Horizons direct-buffer OOM”或“persistent streaming buffer”分别作为该故障的必要条件，但不能证明这些变量在其他组合中完全无关。
+
+GPU command breadcrumb 捕获到的最后暴露点并不固定：有样本停在 texture copy 调用中，后续样本则停在真实的 `SwapBuffers` 调用中。用户态 dump 和 breadcrumb 只能说明 CPU 线程在驱动报告故障时暴露于哪个调用。由于 OpenGL 命令由驱动异步提交和执行，不能把最后暴露的 API 直接认定为产生无效 GPU 工作或触发 TDR 的根因。
+
 ## 游戏日志的证据边界
 
 现有事件显示，Windows 将 `java.exe` 的故障模块记录为 NVIDIA OpenGL 原生驱动 `nvoglv64.dll`，异常代码为 `0xC0000409`，同一时间窗还关联到 GPU watchdog 的 `LiveKernelEvent 141`。从现有结果只能确认该次退出未进入 Minecraft 常规的 Java 异常和 crash-report 流程，不能进一步断言 JVM 未生成 `hs_err_pid*.log` 的内部机制。
@@ -66,6 +81,7 @@ C:\WINDOWS\LiveKernelReports\WATCHDOG\WATCHDOG-20260715-1010.dmp
 - 据用户报告，在末地传送门附近连续切换约 20 次光影，未崩溃。
 - 另一轮测试的光影加载编号到 `Load #35`，其中 34 次记录了 `Total shaderpack load time`，`Load #17` 没有完成记录；该会话于 10:36:37 正常退出。
 - Gibbed 的两种 immediate 渲染路径均执行过并正常退出。
+- 加入 GPU command breadcrumb 和非阻塞 checkpoint 后，用户使用 iterationT 3.2 在主世界等待 2 小时未崩溃。该结果目前只能记录为单次“暂未复现”，不能据此宣称问题已经修复。
 
 2026-06-21 的两次同型崩溃早于当前末地传送门渲染重写，也不支持将重写后的传送门实现直接认定为根因。
 
@@ -120,7 +136,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\capture-native-c
 
 脚本通过 Gradle 的 `extra_jvm_args` 向客户端传递 `-Dactinium.glFlightRecorder=crash`。可用 `-FlightRecorderMode off` 关闭。附加客户端 JVM 参数可使用空格分隔的 `-ExtraClientJvmArgs '-Xmx6G -Dexample=value'`；最终生成的 Gradle 参数和客户端 JVM 参数会完整写入 `manifest.json`。
 
-当前 flight recorder 记录的是 frame、render stage、pipeline 和 swap 等 CPU 侧语义 breadcrumb，不是逐条 OpenGL API trace。OpenGL 命令由驱动异步提交和执行，因此崩溃前最后一个 `BEGIN`、未配对事件或最后一条已写入记录只能界定候选区间，不能直接认定为触发 GPU/驱动故障的根因调用。需要逐调用参数和 replay 时，仍应在缩小复现场景后使用专门的 OpenGL API trace 工具。
+当前 flight recorder 记录 frame、render stage、pipeline、swap、GPU command 和非阻塞 checkpoint 等 CPU 侧语义 breadcrumb，不是可重放的逐条 OpenGL API trace。`GPU_CHECKPOINT` 会记录进入和返回 native fence/wait/delete 的生命周期，包括 `FENCE_CALL_BEGIN`、`FENCE_CALL_RETURNED`、`WAIT_CALL_BEGIN`、`WAIT_CALL_PENDING`、`WAIT_CALL_COMPLETED`、`WAIT_CALL_FAILED`、`DELETE_CALL_BEGIN` 和 `DELETE_CALL_RETURNED`；由此可以区分 native 调用没有返回、零超时轮询仍在等待、已经完成、驱动报告失败或 `glDeleteSync` 是否返回。非阻塞 checkpoint 不会等待 GPU 完成，`FENCE_CALL_RETURNED` 也只证明 `glFenceSync` 返回到 Java，不能证明此前提交的 GPU 工作执行成功；`DELETE_CALL_RETURNED` 同样只描述 `glDeleteSync` 的调用边界。GPU command 元数据只有在当前 OpenGL context 的缓存状态可信时才记录具体值；不可信时写入 `UNKNOWN=-1`，该值表示无法安全归属，而不是 OpenGL 对象 `-1` 或新的驱动错误。OpenGL 命令由驱动异步提交和执行，因此崩溃前最后一个 `BEGIN`、未配对事件、最后暴露的 API 或最后一条已写入记录只能界定候选区间，不能直接认定为触发 GPU/驱动故障的根因调用。需要逐调用参数和 replay 时，仍应在缩小复现场景后使用专门的 OpenGL API trace 工具。
 
 同时启用 WPR GPU 内存循环跟踪并附加 ProcDump：
 
@@ -147,6 +163,7 @@ java.exe -cp .\build\classes\java\main `
 
 使用时需要注意：
 
+- `runClient` 由复现问题的用户执行；分析人员应等待 Minecraft / `java.exe` 完全退出和捕获脚本显示会话结束后再读取本次日志与证据。
 - `-EnableWpr` 通常需要从“以管理员身份运行”的 PowerShell 启动。读取 `C:\Windows\LiveKernelReports\WATCHDOG` 也可能需要管理员权限；权限不足只会使对应 dump 元数据缺失。
 - KHR_debug callback 默认不开启；必须显式传入 `-EnableLwjglDebug`，脚本才会追加 `-Dactinium.lwjglDebug=true`。Debug context 和 callback 会增加检查工作并可能改变崩溃时序，因此复现记录中必须注明该开关状态。
 - 脚本只会停止自己成功启动的 WPR 会话。若系统已有 WPR 记录，新的 WPR 启动通常会失败；不要为了运行脚本而取消其他人的跟踪会话。

@@ -1,5 +1,8 @@
 package com.dhj.actinium.debug.flight;
 
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCheckpointType;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandPhase;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -56,6 +59,50 @@ public final class GlFlightRecording {
         GlFlightRecordingSession state = STATE;
         if (state != null) {
             state.markStage(label);
+        }
+    }
+
+    /** Returns whether command breadcrumbs have an enabled process-wide destination. */
+    public static boolean isEnabled() {
+        return STATE != null;
+    }
+
+    /** Records a GPU command immediately before GLSM submits it to the native driver. */
+    public static void gpuCommand(
+        GpuCommandType type,
+        GpuCommandPhase phase,
+        int program,
+        int drawFramebuffer,
+        int operand0,
+        int operand1
+    ) {
+        GlFlightRecordingSession state = STATE;
+        if (state != null) {
+            state.gpuCommand(type, phase, program, drawFramebuffer, operand0, operand1);
+        }
+    }
+
+    /** Records lifecycle state for a non-blocking GPU completion checkpoint. */
+    public static void gpuCheckpoint(GpuCheckpointType type, long checkpointId, int commandCode) {
+        GlFlightRecordingSession state = STATE;
+        if (state != null) {
+            state.gpuCheckpoint(type, checkpointId, commandCode);
+        }
+    }
+
+    /** Records entry into a persistent streaming source's frame-completion synchronization. */
+    public static void beginStreamingSync(GlFlightStreamingSource source) {
+        GlFlightRecordingSession state = STATE;
+        if (state != null) {
+            state.beginStreamingSync(source);
+        }
+    }
+
+    /** Records successful return from a persistent streaming source's frame-completion synchronization. */
+    public static void endStreamingSync(GlFlightStreamingSource source) {
+        GlFlightRecordingSession state = STATE;
+        if (state != null) {
+            state.endStreamingSync(source);
         }
     }
 

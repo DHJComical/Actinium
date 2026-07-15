@@ -13,7 +13,11 @@ public enum GlFlightEventKind {
     /** Records shader-pipeline creation, binding, and destruction. */
     PIPELINE(4),
     /** Delimits buffer presentation to the operating system. */
-    SWAP(5);
+    SWAP(5),
+    /** Records a GPU command immediately before native submission. */
+    GPU_COMMAND(6),
+    /** Records insertion and non-blocking completion of a GPU fence checkpoint. */
+    GPU_CHECKPOINT(7);
 
     private final int code;
 

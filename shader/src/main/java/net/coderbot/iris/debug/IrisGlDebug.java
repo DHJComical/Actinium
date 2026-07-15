@@ -2,6 +2,7 @@ package net.coderbot.iris.debug;
 
 import com.dhj.actinium.debug.flight.GlFlightRecording;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandType;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.compat.dh.DHCompat;
@@ -863,6 +864,10 @@ public final class IrisGlDebug {
     public static void markStage(String stage) {
         lastStage = stage;
         GlFlightRecording.markStage(stage);
+        if (GlFlightRecording.isEnabled()
+            && (stage.endsWith(":end") || stage.endsWith(":done") || stage.endsWith(":return"))) {
+            GLStateManager.gpuCheckpoint(GpuCommandType.PASS_END);
+        }
     }
 
     public static void beginFramebufferSamplePhase(String phase) {

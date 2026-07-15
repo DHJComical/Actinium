@@ -3,6 +3,11 @@ package com.dhj.actinium.debug.flight;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCheckpointType;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandPhase;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandRecorder;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -52,6 +57,153 @@ class GlFlightIntegrationLogicTest {
         );
         assertEquals(GlFlightHash.stableHash("composite:draw"), stages.getFirst().argument0());
         assertEquals(0xCEC64E155111225DL, GlFlightHash.stableHash("abc"));
+        session.endFrame();
+        session.close();
+    }
+
+    @Test
+    void distinguishesPersistentStreamingBufferEndFrameBoundaries() throws IOException {
+        CapturingRecorder recorder = new CapturingRecorder();
+        GlFlightRecordingSession session = new GlFlightRecordingSession(recorder);
+        session.beginFrame();
+
+        session.beginStreamingSync(GlFlightStreamingSource.TESSELLATOR);
+        session.endStreamingSync(GlFlightStreamingSource.TESSELLATOR);
+        session.beginStreamingSync(GlFlightStreamingSource.BUFFER_BUILDER);
+        session.endStreamingSync(GlFlightStreamingSource.BUFFER_BUILDER);
+
+        List<CapturedEvent> boundaries = recorder.eventsOfKind(GlFlightEventKind.RENDER_STAGE);
+        assertEquals(4, boundaries.size());
+        assertEquals(
+            List.of(
+                GlFlightStage.STREAMING_SYNC,
+                GlFlightStage.STREAMING_SYNC,
+                GlFlightStage.STREAMING_SYNC,
+                GlFlightStage.STREAMING_SYNC
+            ),
+            boundaries.stream().map(CapturedEvent::stage).toList()
+        );
+        assertEquals(
+            List.of(
+                GlFlightEventPhase.BEGIN,
+                GlFlightEventPhase.END,
+                GlFlightEventPhase.BEGIN,
+                GlFlightEventPhase.END
+            ),
+            boundaries.stream().map(CapturedEvent::phase).toList()
+        );
+        assertEquals(
+            List.of(
+                (long) GlFlightStreamingSource.TESSELLATOR.code(),
+                (long) GlFlightStreamingSource.TESSELLATOR.code(),
+                (long) GlFlightStreamingSource.BUFFER_BUILDER.code(),
+                (long) GlFlightStreamingSource.BUFFER_BUILDER.code()
+            ),
+            boundaries.stream().map(CapturedEvent::argument0).toList()
+        );
+        assertEquals(List.of(0L, 0L, 0L, 0L), boundaries.stream().map(CapturedEvent::frame).toList());
+        session.endFrame();
+        session.close();
+    }
+
+    @Test
+    void gpuDiagnosticEnumsRoundTripStableCodes() {
+        assertEquals(
+            List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21),
+            List.of(GpuCommandType.values()).stream().map(GpuCommandType::code).toList()
+        );
+        assertEquals(
+            List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+            List.of(GpuCheckpointType.values()).stream().map(GpuCheckpointType::code).toList()
+        );
+        for (GpuCommandType type : GpuCommandType.values()) {
+            assertSame(type, GpuCommandType.fromCode(type.code()));
+        }
+        for (GpuCheckpointType type : GpuCheckpointType.values()) {
+            assertSame(type, GpuCheckpointType.fromCode(type.code()));
+        }
+
+        assertThrows(IllegalArgumentException.class, () -> GpuCommandType.fromCode(0L));
+        assertThrows(IllegalArgumentException.class, () -> GpuCheckpointType.fromCode(0L));
+    }
+
+    @Test
+    void glsmCommandRecorderIsOptionalAndPreservesTheConfiguredInstance() {
+        assertNull(GLSMInitConfig.defaults().getGpuCommandRecorder());
+
+        GLSMInitConfig config = GLSMInitConfig.builder()
+            .gpuCommandRecorder(TestGpuCommandRecorder.INSTANCE)
+            .build();
+
+        assertSame(TestGpuCommandRecorder.INSTANCE, config.getGpuCommandRecorder());
+    }
+
+    @Test
+    void encodesGpuCommandsAndCheckpointsWithTheCurrentStageContext() throws IOException {
+        CapturingRecorder recorder = new CapturingRecorder();
+        GlFlightRecordingSession session = new GlFlightRecordingSession(recorder);
+        session.beginFrame();
+        String stageLabel = "composite:draw";
+        session.markStage(stageLabel);
+
+        session.gpuCommand(GpuCommandType.DRAW_ELEMENTS, GpuCommandPhase.ISSUED, -2, 17, 4, 65_537);
+        session.gpuCommand(GpuCommandType.CLEAR, GpuCommandPhase.BEGIN, 21, 34, 0x4100, 0);
+        session.gpuCommand(GpuCommandType.CLEAR, GpuCommandPhase.END, 21, 34, 0x4100, 0);
+        session.gpuCheckpoint(GpuCheckpointType.ISSUED, 0x1_0000_0001L, GpuCommandType.CLEAR.code());
+
+        List<CapturedEvent> commands = recorder.eventsOfKind(GlFlightEventKind.GPU_COMMAND);
+        assertEquals(
+            List.of(GlFlightEventPhase.INSTANT, GlFlightEventPhase.BEGIN, GlFlightEventPhase.END),
+            commands.stream().map(CapturedEvent::phase).toList()
+        );
+        assertEquals(List.of(GlFlightStage.COMPOSITE, GlFlightStage.COMPOSITE, GlFlightStage.COMPOSITE),
+            commands.stream().map(CapturedEvent::stage).toList());
+        assertEquals(List.of(0L, 0L, 0L), commands.stream().map(CapturedEvent::frame).toList());
+
+        CapturedEvent draw = commands.getFirst();
+        assertEquals(GpuCommandType.DRAW_ELEMENTS.code(), draw.argument0());
+        assertEquals(GlFlightHash.stableHash(stageLabel), draw.argument1());
+        assertEquals(GlFlightRecordingSession.packInts(-2, 17), draw.argument2());
+        assertEquals(GlFlightRecordingSession.packInts(4, 65_537), draw.argument3());
+        assertEquals(0xFFFFFFFE00000011L, draw.argument2());
+        assertEquals(0x0000000400010001L, draw.argument3());
+
+        CapturedEvent checkpoint = recorder.eventsOfKind(GlFlightEventKind.GPU_CHECKPOINT).getFirst();
+        assertEquals(GlFlightEventPhase.INSTANT, checkpoint.phase());
+        assertEquals(GlFlightStage.COMPOSITE, checkpoint.stage());
+        assertEquals(0L, checkpoint.frame());
+        assertEquals(GpuCheckpointType.ISSUED.code(), checkpoint.argument0());
+        assertEquals(0x1_0000_0001L, checkpoint.argument1());
+        assertEquals(GpuCommandType.CLEAR.code(), checkpoint.argument2());
+        assertEquals(GlFlightHash.stableHash(stageLabel), checkpoint.argument3());
+
+        session.endFrame();
+        session.close();
+    }
+
+    @Test
+    void doesNotLeakRenderStageAttributionAcrossCommandThreads() throws IOException, InterruptedException {
+        CapturingRecorder recorder = new CapturingRecorder();
+        GlFlightRecordingSession session = new GlFlightRecordingSession(recorder);
+        session.beginFrame();
+        session.markStage("composite:draw");
+        session.gpuCommand(GpuCommandType.DRAW_ARRAYS, GpuCommandPhase.ISSUED, 1, 2, 3, 4);
+
+        Thread worker = new Thread(
+            () -> session.gpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.BEGIN, 5, 6, 7, 8),
+            "flight-command-context-test"
+        );
+        worker.start();
+        worker.join();
+
+        List<CapturedEvent> commands = recorder.eventsOfKind(GlFlightEventKind.GPU_COMMAND);
+        assertEquals(GlFlightStage.COMPOSITE, commands.getFirst().stage());
+        assertEquals(0L, commands.getFirst().frame());
+        assertEquals(GlFlightHash.stableHash("composite:draw"), commands.getFirst().argument1());
+        assertEquals(GlFlightStage.FRAME, commands.getLast().stage());
+        assertEquals(-1L, commands.getLast().frame());
+        assertEquals(0L, commands.getLast().argument1());
+
         session.endFrame();
         session.close();
     }
@@ -284,6 +436,27 @@ class GlFlightIntegrationLogicTest {
 
         List<CapturedEvent> eventsOfKind(GlFlightEventKind kind) {
             return events.stream().filter(event -> event.kind() == kind).toList();
+        }
+    }
+
+    private enum TestGpuCommandRecorder implements GpuCommandRecorder {
+        INSTANCE;
+
+        @Override
+        public void record(
+            GpuCommandType type,
+            GpuCommandPhase phase,
+            int program,
+            int drawFramebuffer,
+            int operand0,
+            int operand1
+        ) {
+            throw new AssertionError("Configuration callback must not be invoked by this test");
+        }
+
+        @Override
+        public void checkpoint(GpuCheckpointType type, long checkpointId, int commandCode) {
+            throw new AssertionError("Configuration callback must not be invoked by this test");
         }
     }
 

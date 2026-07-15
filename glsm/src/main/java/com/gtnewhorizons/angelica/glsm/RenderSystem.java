@@ -7,6 +7,8 @@ import com.gtnewhorizons.angelica.glsm.dsa.DSACore;
 import com.gtnewhorizons.angelica.glsm.dsa.DSAEXT;
 import com.gtnewhorizons.angelica.glsm.dsa.DSAUnsupported;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandPhase;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandType;
 import com.gtnewhorizons.angelica.glsm.texture.TextureInfoCache;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -144,7 +146,10 @@ public class RenderSystem {
     }
 
     public static void generateMipmaps(int texture, int mipmapTarget) {
+        GLStateManager.recordGpuCommand(GpuCommandType.GENERATE_MIPMAP, GpuCommandPhase.BEGIN, texture, mipmapTarget);
         dsaState.generateMipmaps(texture, mipmapTarget);
+        GLStateManager.recordGpuCommand(GpuCommandType.GENERATE_MIPMAP, GpuCommandPhase.END, texture, mipmapTarget);
+        GLStateManager.gpuCheckpoint(GpuCommandType.GENERATE_MIPMAP);
     }
 
     public static void bindAttributeLocation(int program, int index, CharSequence name) {
@@ -210,7 +215,10 @@ public class RenderSystem {
     }
 
     public static void copyTexSubImage2D(int destTexture, int target, int i, int i1, int i2, int i3, int i4, int width, int height) {
+        GLStateManager.recordGpuCommand(GpuCommandType.COPY_TEX_SUB_IMAGE_2D, GpuCommandPhase.BEGIN, destTexture, packDimensions(width, height));
         dsaState.copyTexSubImage2D(destTexture, target, i, i1, i2, i3, i4, width, height);
+        GLStateManager.recordGpuCommand(GpuCommandType.COPY_TEX_SUB_IMAGE_2D, GpuCommandPhase.END, destTexture, packDimensions(width, height));
+        GLStateManager.gpuCheckpoint(GpuCommandType.COPY_TEX_SUB_IMAGE_2D);
     }
 
     public static void texParameteri(int texture, int target, int pname, int param) {
@@ -243,8 +251,11 @@ public class RenderSystem {
     }
 
     public static void texImage3D(int texture, int target, int level, int internalformat, int width, int height, int depth, int border, int format, int type, ByteBuffer pixels) {
+        GLStateManager.recordGpuCommand(GpuCommandType.TEX_IMAGE_3D, GpuCommandPhase.BEGIN, texture, packDimensions(width, height));
         RENDER_BACKEND.bindTexture(target, texture);
         RENDER_BACKEND.texImage3D(target, level, internalformat, width, height, depth, border, format, type, pixels);
+        GLStateManager.recordGpuCommand(GpuCommandType.TEX_IMAGE_3D, GpuCommandPhase.END, texture, packDimensions(width, height));
+        GLStateManager.gpuCheckpoint(GpuCommandType.TEX_IMAGE_3D);
     }
 
     public static String getProgramInfoLog(int program) {
@@ -332,14 +343,16 @@ public class RenderSystem {
     }
 
     public static void dispatchCompute(int workX, int workY, int workZ) {
+        GLStateManager.recordGpuCommand(GpuCommandType.DISPATCH_COMPUTE, workX, workY << 16 | workZ & 0xFFFF);
         RENDER_BACKEND.dispatchCompute(workX, workY, workZ);
     }
 
     public static void dispatchCompute(Vector3i workGroups) {
-        RENDER_BACKEND.dispatchCompute(workGroups.x, workGroups.y, workGroups.z);
+        dispatchCompute(workGroups.x, workGroups.y, workGroups.z);
     }
 
     public static void dispatchComputeIndirect(long offset) {
+        GLStateManager.recordGpuCommand(GpuCommandType.DISPATCH_COMPUTE_INDIRECT, (int) (offset >>> 32), (int) offset);
         RENDER_BACKEND.dispatchComputeIndirect(offset);
     }
 
@@ -397,7 +410,10 @@ public class RenderSystem {
 
     public static void blitFramebuffer(int source, int dest, int offsetX, int offsetY, int width, int height, int offsetX2, int offsetY2, int width2,
             int height2, int bufferChoice, int filter) {
+        GLStateManager.recordGpuCommand(GpuCommandType.BLIT_FRAMEBUFFER, GpuCommandPhase.BEGIN, source, dest);
         dsaState.blitFramebuffer(source, dest, offsetX, offsetY, width, height, offsetX2, offsetY2, width2, height2, bufferChoice, filter);
+        GLStateManager.recordGpuCommand(GpuCommandType.BLIT_FRAMEBUFFER, GpuCommandPhase.END, source, dest);
+        GLStateManager.gpuCheckpoint(GpuCommandType.BLIT_FRAMEBUFFER);
     }
 
     public static int createFramebuffer() {
@@ -444,7 +460,10 @@ public class RenderSystem {
     }
 
     public static void clearTexImage(int texture, int target, int level, int format, int type) {
+        GLStateManager.recordGpuCommand(GpuCommandType.CLEAR_TEX_IMAGE, GpuCommandPhase.BEGIN, texture, level);
         RENDER_BACKEND.clearTexImage(texture, level, format, type);
+        GLStateManager.recordGpuCommand(GpuCommandType.CLEAR_TEX_IMAGE, GpuCommandPhase.END, texture, level);
+        GLStateManager.gpuCheckpoint(GpuCommandType.CLEAR_TEX_IMAGE);
     }
 
     public static void textureStorage1D(int texture, int target, int levels, int internalFormat, int width) {
@@ -452,11 +471,21 @@ public class RenderSystem {
     }
 
     public static void textureStorage2D(int texture, int target, int levels, int internalFormat, int width, int height) {
+        GLStateManager.recordGpuCommand(GpuCommandType.TEX_STORAGE_2D, GpuCommandPhase.BEGIN, texture, packDimensions(width, height));
         dsaState.textureStorage2D(texture, target, levels, internalFormat, width, height);
+        GLStateManager.recordGpuCommand(GpuCommandType.TEX_STORAGE_2D, GpuCommandPhase.END, texture, packDimensions(width, height));
+        GLStateManager.gpuCheckpoint(GpuCommandType.TEX_STORAGE_2D);
     }
 
     public static void textureStorage3D(int texture, int target, int levels, int internalFormat, int width, int height, int depth) {
+        GLStateManager.recordGpuCommand(GpuCommandType.TEX_STORAGE_3D, GpuCommandPhase.BEGIN, texture, packDimensions(width, height));
         dsaState.textureStorage3D(texture, target, levels, internalFormat, width, height, depth);
+        GLStateManager.recordGpuCommand(GpuCommandType.TEX_STORAGE_3D, GpuCommandPhase.END, texture, packDimensions(width, height));
+        GLStateManager.gpuCheckpoint(GpuCommandType.TEX_STORAGE_3D);
+    }
+
+    private static int packDimensions(int width, int height) {
+        return (width & 0xFFFF) << 16 | height & 0xFFFF;
     }
 
     public static int getMaxGlslVersion() {

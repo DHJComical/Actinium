@@ -9,6 +9,7 @@ import com.gtnewhorizons.angelica.glsm.DisplayListManager.RecordMode;
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
+import com.gtnewhorizons.angelica.glsm.debug.GpuCheckpointTracker;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredAlphaHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredBlendHandler;
@@ -16,6 +17,9 @@ import com.gtnewhorizons.angelica.glsm.hooks.DeferredDepthColorHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMConfig;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandRecorder;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandPhase;
+import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandType;
 import com.gtnewhorizons.angelica.glsm.recording.CommandRecorder;
 import com.gtnewhorizons.angelica.glsm.recording.CompiledDisplayList;
 import com.gtnewhorizons.angelica.glsm.recording.ImmediateModeRecorder;
@@ -482,6 +486,65 @@ public class GLStateManager {
         initConfig = config;
         preInit(config.getDisplayWidth(), config.getDisplayHeight());
         init(config.getPostInitCallback());
+    }
+
+    static void recordGpuCommand(GpuCommandType type, int operand0, int operand1) {
+        recordGpuCommand(type, GpuCommandPhase.ISSUED, operand0, operand1);
+    }
+
+    static void recordGpuCommand(GpuCommandType type, GpuCommandPhase phase, int operand0, int operand1) {
+        final GLSMInitConfig config = initConfig;
+        if (config == null) {
+            return;
+        }
+        final GpuCommandRecorder recorder = config.getGpuCommandRecorder();
+        if (recorder != null) {
+            final boolean cacheTrusted = isGpuDiagnosticCacheTrusted();
+            recorder.record(
+                type,
+                phase,
+                GpuCommandDiagnostics.trustedValue(cacheTrusted, activeProgram),
+                GpuCommandDiagnostics.trustedValue(cacheTrusted, drawFramebuffer),
+                operand0,
+                operand1
+            );
+        }
+    }
+
+    /**
+     * Polls prior GPU fences without waiting and inserts a completion checkpoint for a submitted command.
+     *
+     * @param type command or semantic pass boundary associated with the checkpoint
+     */
+    public static void gpuCheckpoint(GpuCommandType type) {
+        final GLSMInitConfig config = initConfig;
+        if (config == null) {
+            return;
+        }
+        final GpuCommandRecorder recorder = config.getGpuCommandRecorder();
+        if (recorder != null) {
+            GpuCheckpointTracker.checkpoint(recorder, type.code());
+        }
+    }
+
+    private static int packDimensions(int width, int height) {
+        return (width & 0xFFFF) << 16 | height & 0xFFFF;
+    }
+
+    private static int getBoundTextureForGpuDiagnostics() {
+        if (!isGpuDiagnosticCacheTrusted()) {
+            return GpuCommandDiagnostics.UNKNOWN;
+        }
+        return getBoundTexture();
+    }
+
+    private static boolean isGpuDiagnosticCacheTrusted() {
+        return GpuCommandDiagnostics.isCacheTrusted(
+            isCachingEnabled(),
+            BYPASS_CACHE,
+            GLContext.getCapabilities(),
+            capabilities
+        );
     }
 
     static void preInit(int displayWidth, int displayHeight) {
@@ -1751,11 +1814,13 @@ public class GLStateManager {
         if (target != GL11.GL_TEXTURE_2D) {
             // Non-2D targets (e.g. GL_TEXTURE_2D_ARRAY) pass through without caching
             logUncachedTextureTarget(target);
+            recordGpuCommand(GpuCommandType.TEXTURE_BIND, target, texture);
             RENDER_BACKEND.bindTexture(target, texture);
             return;
         }
 
         if (!isCachingEnabled()) {
+            recordGpuCommand(GpuCommandType.TEXTURE_BIND, target, texture);
             RENDER_BACKEND.bindTexture(target, texture);
             return;
         }
@@ -1765,6 +1830,7 @@ public class GLStateManager {
         final int cachedBinding = textureUnit.getBinding();
 
         if (cachedBinding != texture) {
+            recordGpuCommand(GpuCommandType.TEXTURE_BIND, target, texture);
             RENDER_BACKEND.bindTexture(target, texture);
             textureUnit.setBinding(texture);
             if (texture != 0 && activeUnit > maxBoundTextureUnit) {
@@ -1819,6 +1885,7 @@ public class GLStateManager {
             }
         }
         TextureInfoCache.INSTANCE.onTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         suspendPixelUnpackBuffer();
         if (shouldUseDSA(target)) {
             // Use DSA to upload directly to the texture
@@ -1828,6 +1895,8 @@ public class GLStateManager {
             RENDER_BACKEND.texImage2D(target, level, internalformat, width, height, border, format, type, pixels);
         }
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
     }
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, FloatBuffer pixels) {
@@ -1840,9 +1909,12 @@ public class GLStateManager {
             }
         }
         TextureInfoCache.INSTANCE.onTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         suspendPixelUnpackBuffer();
         RENDER_BACKEND.texImage2D(target, level, internalformat, width, height, border, format, type, pixels);
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
     }
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, DoubleBuffer pixels) {
@@ -1855,9 +1927,12 @@ public class GLStateManager {
             }
         }
         TextureInfoCache.INSTANCE.onTexImage2D(target, level, internalformat, width, height, border, format, type, pixels);
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         suspendPixelUnpackBuffer();
         RENDER_BACKEND.texImage2D(target, level, internalformat, width, height, border, format, type, pixels);
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
     }
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, ByteBuffer pixels) {
@@ -1870,6 +1945,7 @@ public class GLStateManager {
             }
         }
         TextureInfoCache.INSTANCE.onTexImage2D(target, level, internalformat, width, height, border, format, type, pixels != null ? pixels.asIntBuffer() : null);
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         suspendPixelUnpackBuffer();
         if (shouldUseDSA(target)) {
             RenderSystem.textureImage2D(getBoundTextureForServerState(), target, level, internalformat, width, height, border, format, type, pixels);
@@ -1877,6 +1953,8 @@ public class GLStateManager {
             RENDER_BACKEND.texImage2D(target, level, internalformat, width, height, border, format, type, pixels);
         }
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
     }
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, long pixels_buffer_offset) {
@@ -1885,7 +1963,10 @@ public class GLStateManager {
             throw new UnsupportedOperationException("glTexImage2D with buffer offset in display lists not yet supported");
         }
         TextureInfoCache.INSTANCE.onTexImage2D(target, level, internalformat, width, height, border, format, type, pixels_buffer_offset);
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         RENDER_BACKEND.texImage2D(target, level, internalformat, width, height, border, format, type, pixels_buffer_offset);
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
     }
 
     public static void glTexCoord1f(float s) {
@@ -2180,6 +2261,7 @@ public class GLStateManager {
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("byte-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_BYTE, -1L);
         }
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
         RENDER_BACKEND.drawElements(mode, indices);
     }
 
@@ -2197,6 +2279,7 @@ public class GLStateManager {
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("int-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_INT, -1L);
         }
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadElementsAsTriangles(indices);
         } else {
@@ -2218,6 +2301,7 @@ public class GLStateManager {
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("short-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_SHORT, -1L);
         }
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadElementsAsTriangles(indices);
         } else {
@@ -2239,6 +2323,7 @@ public class GLStateManager {
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("typed-byte-buffer", mode, count, type, -1L);
         }
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, count);
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadElementsAsTriangles(count, type, indices);
         } else {
@@ -2274,6 +2359,7 @@ public class GLStateManager {
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("ebo-offset", mode, indices_count, type, indices_buffer_offset);
         }
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices_count);
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadElementsAsTriangles(indices_count, type, indices_buffer_offset);
         } else {
@@ -2297,24 +2383,28 @@ public class GLStateManager {
     public static void glMultiDrawElementsIndirect(int mode, int type, long indirect, int drawcount, int stride) {
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, drawcount);
         RENDER_BACKEND.multiDrawElementsIndirect(mode, type, indirect, drawcount, stride);
     }
 
     public static void glMultiDrawElementsBaseVertex(int mode, long pCount, int type, long pIndices, int drawcount, long pBaseVertex) {
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, drawcount);
         RENDER_BACKEND.multiDrawElementsBaseVertex(mode, pCount, type, pIndices, drawcount, pBaseVertex);
     }
 
     public static void glDrawElementsBaseVertex(int mode, int count, int type, long indices, int basevertex) {
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, count);
         RENDER_BACKEND.drawElementsBaseVertex(mode, count, type, indices, basevertex);
     }
 
     public static void glDrawElementsInstanced(int mode, int count, int type, long indices, int primcount) {
         ShaderManager.getInstance().preDraw();
         prepareClientArrays();
+        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, count);
         RENDER_BACKEND.drawElementsInstanced(mode, count, type, indices, primcount);
     }
 
@@ -2396,6 +2486,7 @@ public class GLStateManager {
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawArrays("draw-arrays", mode, first, count);
         }
+        recordGpuCommand(GpuCommandType.DRAW_ARRAYS, mode, count);
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadsAsTriangles(first, count);
         } else if (mode == GL11.GL_QUAD_STRIP) {
@@ -3354,7 +3445,10 @@ public class GLStateManager {
                 return;
             }
         }
+        recordGpuCommand(GpuCommandType.CLEAR, GpuCommandPhase.BEGIN, mask, 0);
         RENDER_BACKEND.clear(mask);
+        recordGpuCommand(GpuCommandType.CLEAR, GpuCommandPhase.END, mask, 0);
+        gpuCheckpoint(GpuCommandType.CLEAR);
     }
 
     public static void glPushAttrib(int mask) {
@@ -3947,8 +4041,20 @@ public class GLStateManager {
         RENDER_BACKEND.readPixels(x, y, width, height, format, type, pixels);
         restorePixelPackBuffer();
     }
-    public static void glTexStorage2D(int target, int levels, int internalFormat, int width, int height) { RENDER_BACKEND.texStorage2D(target, levels, internalFormat, width, height); }
-    public static void glClearTexImage(int texture, int level, int format, int type, java.nio.ByteBuffer data) { RENDER_BACKEND.clearTexImage(texture, level, format, type); }
+    public static void glTexStorage2D(int target, int levels, int internalFormat, int width, int height) {
+        int texture = getBoundTextureForGpuDiagnostics();
+        recordGpuCommand(GpuCommandType.TEX_STORAGE_2D, GpuCommandPhase.BEGIN, texture, packDimensions(width, height));
+        RENDER_BACKEND.texStorage2D(target, levels, internalFormat, width, height);
+        recordGpuCommand(GpuCommandType.TEX_STORAGE_2D, GpuCommandPhase.END, texture, packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_STORAGE_2D);
+    }
+
+    public static void glClearTexImage(int texture, int level, int format, int type, ByteBuffer data) {
+        recordGpuCommand(GpuCommandType.CLEAR_TEX_IMAGE, GpuCommandPhase.BEGIN, texture, level);
+        RENDER_BACKEND.clearTexImage(texture, level, format, type);
+        recordGpuCommand(GpuCommandType.CLEAR_TEX_IMAGE, GpuCommandPhase.END, texture, level);
+        gpuCheckpoint(GpuCommandType.CLEAR_TEX_IMAGE);
+    }
 
     public static int glGenSamplers() { return RENDER_BACKEND.genSamplers(); }
     public static void glDeleteSamplers(int sampler) { RENDER_BACKEND.deleteSamplers(sampler); }
@@ -4327,6 +4433,7 @@ public class GLStateManager {
                 GLSMHooks.programChangeEvent.newProgram = 0;
                 GLSMHooks.PROGRAM_CHANGE.post(GLSMHooks.programChangeEvent);
             }
+            recordGpuCommand(GpuCommandType.PROGRAM_USE, program, 0);
             ffp.activate();
             return;
         }
@@ -4351,6 +4458,7 @@ public class GLStateManager {
                 final String programName = GLDebug.getObjectLabel(KHRDebug.GL_PROGRAM, program);
                 GLDebug.debugMessage("Activating Program - " + program + ":" + programName);
             }
+            recordGpuCommand(GpuCommandType.PROGRAM_USE, program, 0);
             RENDER_BACKEND.useProgram(program);
             CompatUniformManager.onUseProgram(program);
         }
@@ -4372,9 +4480,12 @@ public class GLStateManager {
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexImage3D in display lists not yet implemented");
         }
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_3D, GpuCommandPhase.BEGIN, target, packDimensions(width, height));
         suspendPixelUnpackBuffer();
         RENDER_BACKEND.texImage3D(target, level, internalformat, width, height, depth, border, format, type, pixels);
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_3D, GpuCommandPhase.END, target, packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_IMAGE_3D);
     }
 
     public static void glTexImage3D(int target, int level, int internalformat, int width, int height, int depth, int border, int format, int type, IntBuffer pixels) {
@@ -4382,9 +4493,12 @@ public class GLStateManager {
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexImage3D in display lists not yet implemented");
         }
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_3D, GpuCommandPhase.BEGIN, target, packDimensions(width, height));
         suspendPixelUnpackBuffer();
         RENDER_BACKEND.texImage3D(target, level, internalformat, width, height, depth, border, format, type, pixels);
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_IMAGE_3D, GpuCommandPhase.END, target, packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_IMAGE_3D);
     }
 
     public static void glTexSubImage1D(int target, int level, int xoffset, int width, int format, int type, ByteBuffer pixels) {
@@ -4482,6 +4596,7 @@ public class GLStateManager {
                 return;
             }
         }
+        recordGpuCommand(GpuCommandType.TEX_SUB_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         suspendPixelUnpackBuffer();
         if (shouldUseDSA(target)) {
             // Use DSA to upload directly to the texture - keeps GL binding state unchanged
@@ -4491,6 +4606,8 @@ public class GLStateManager {
             RENDER_BACKEND.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
         }
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_SUB_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_SUB_IMAGE_2D);
     }
 
     public static void glTexSubImage2D(int target, int level, int xoffset, int yoffset, int width, int height, int format, int type, IntBuffer pixels) {
@@ -4501,6 +4618,7 @@ public class GLStateManager {
                 return;
             }
         }
+        recordGpuCommand(GpuCommandType.TEX_SUB_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         suspendPixelUnpackBuffer();
         if (shouldUseDSA(target)) {
             // Use DSA to upload directly to the texture
@@ -4510,22 +4628,30 @@ public class GLStateManager {
             RENDER_BACKEND.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels);
         }
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_SUB_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_SUB_IMAGE_2D);
     }
 
     public static void glTexSubImage2D(int target, int level, int xoffset, int yoffset, int width, int height, int format, int type, long pixels_buffer_offset) {
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexSubImage2D with buffer offset in display lists not yet supported");
         }
+        recordGpuCommand(GpuCommandType.TEX_SUB_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         RENDER_BACKEND.texSubImage2D(target, level, xoffset, yoffset, width, height, format, type, pixels_buffer_offset);
+        recordGpuCommand(GpuCommandType.TEX_SUB_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_SUB_IMAGE_2D);
     }
 
     public static void glTexSubImage3D(int target, int level, int xoffset, int yoffset, int zoffset, int width, int height, int depth, int format, int type, ByteBuffer pixels) {
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexSubImage3D in display lists not yet implemented - if you see this, please report!");
         }
+        recordGpuCommand(GpuCommandType.TEX_SUB_IMAGE_3D, GpuCommandPhase.BEGIN, target, packDimensions(width, height));
         suspendPixelUnpackBuffer();
         RENDER_BACKEND.texSubImage3D(target, level, xoffset, yoffset, zoffset, width, height, depth, format, type, pixels);
         restorePixelUnpackBuffer();
+        recordGpuCommand(GpuCommandType.TEX_SUB_IMAGE_3D, GpuCommandPhase.END, target, packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.TEX_SUB_IMAGE_3D);
     }
 
     public static void glCopyTexImage1D(int target, int level, int internalFormat, int x, int y, int width, int border) {
@@ -4539,7 +4665,10 @@ public class GLStateManager {
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glCopyTexImage2D in display lists not yet implemented - if you see this, please report!");
         }
+        recordGpuCommand(GpuCommandType.COPY_TEX_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         RENDER_BACKEND.copyTexImage2D(target, level, internalFormat, x, y, width, height, border);
+        recordGpuCommand(GpuCommandType.COPY_TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.COPY_TEX_IMAGE_2D);
     }
 
     public static void glCopyTexSubImage1D(int target, int level, int xoffset, int x, int y, int width) {
@@ -4553,7 +4682,10 @@ public class GLStateManager {
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glCopyTexSubImage2D in display lists not yet implemented - if you see this, please report!");
         }
+        recordGpuCommand(GpuCommandType.COPY_TEX_SUB_IMAGE_2D, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         RENDER_BACKEND.copyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
+        recordGpuCommand(GpuCommandType.COPY_TEX_SUB_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
+        gpuCheckpoint(GpuCommandType.COPY_TEX_SUB_IMAGE_2D);
     }
 
     public static void glCopyTexSubImage3D(int target, int level, int xoffset, int yoffset, int zoffset, int x, int y, int width, int height) {
@@ -5147,6 +5279,7 @@ public class GLStateManager {
             if (readFramebuffer == framebuffer) return;
             readFramebuffer = framebuffer;
         }
+        recordGpuCommand(GpuCommandType.FRAMEBUFFER_BIND, target, framebuffer);
         RENDER_BACKEND.bindFramebuffer(target, framebuffer);
     }
 
@@ -5175,11 +5308,30 @@ public class GLStateManager {
     public static void glFramebufferTexture(int target, int attachment, int texture, int level) { RENDER_BACKEND.framebufferTexture(target, attachment, texture, level); }
 
     public static void glGenerateMipmap(int target) {
+        recordGpuCommand(GpuCommandType.GENERATE_MIPMAP, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), target);
         RENDER_BACKEND.generateMipmap(target);
+        recordGpuCommand(GpuCommandType.GENERATE_MIPMAP, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), target);
+        gpuCheckpoint(GpuCommandType.GENERATE_MIPMAP);
     }
 
     public static void glBlitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1, int mask, int filter) {
+        final boolean cacheTrusted = isGpuDiagnosticCacheTrusted();
+        final int diagnosticReadFramebuffer = GpuCommandDiagnostics.trustedValue(cacheTrusted, readFramebuffer);
+        final int diagnosticDrawFramebuffer = GpuCommandDiagnostics.trustedValue(cacheTrusted, drawFramebuffer);
+        recordGpuCommand(
+            GpuCommandType.BLIT_FRAMEBUFFER,
+            GpuCommandPhase.BEGIN,
+            diagnosticReadFramebuffer,
+            diagnosticDrawFramebuffer
+        );
         RENDER_BACKEND.blitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
+        recordGpuCommand(
+            GpuCommandType.BLIT_FRAMEBUFFER,
+            GpuCommandPhase.END,
+            diagnosticReadFramebuffer,
+            diagnosticDrawFramebuffer
+        );
+        gpuCheckpoint(GpuCommandType.BLIT_FRAMEBUFFER);
     }
 
     public static void setActiveTexture(int textureUnit) {
@@ -5764,10 +5916,17 @@ public class GLStateManager {
     public static void glCopyImageSubData(int srcName, int srcTarget, int srcLevel, int srcX, int srcY, int srcZ,
                                            int dstName, int dstTarget, int dstLevel, int dstX, int dstY, int dstZ,
                                            int srcWidth, int srcHeight, int srcDepth) {
+        recordGpuCommand(GpuCommandType.COPY_IMAGE_SUB_DATA, GpuCommandPhase.BEGIN, srcName, dstName);
         RENDER_BACKEND.copyImageSubData(srcName, srcTarget, srcLevel, srcX, srcY, srcZ,
             dstName, dstTarget, dstLevel, dstX, dstY, dstZ, srcWidth, srcHeight, srcDepth);
+        recordGpuCommand(GpuCommandType.COPY_IMAGE_SUB_DATA, GpuCommandPhase.END, srcName, dstName);
+        gpuCheckpoint(GpuCommandType.COPY_IMAGE_SUB_DATA);
     }
-    public static void glDispatchCompute(int x, int y, int z) { RENDER_BACKEND.dispatchCompute(x, y, z); }
+
+    public static void glDispatchCompute(int x, int y, int z) {
+        recordGpuCommand(GpuCommandType.DISPATCH_COMPUTE, x, y << 16 | z & 0xFFFF);
+        RENDER_BACKEND.dispatchCompute(x, y, z);
+    }
 
     public static int glGetUniformLocation(int program, CharSequence name) {
         int loc = RENDER_BACKEND.getUniformLocation(program, name);
