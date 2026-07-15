@@ -1,6 +1,5 @@
 package com.dhj.actinium.render.terrain;
 
-import com.dhj.actinium.render.EndPortalBatchRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.DestroyBlockProgress;
@@ -224,11 +223,9 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
     public int renderBlockEntities(TileEntityRenderContext tileEntityRenderContext) {
         int pass = MinecraftForgeClient.getRenderPass();
         TileEntityRendererDispatcher.instance.preDrawBatch();
-        EndPortalBatchRenderer.begin();
         try {
             return super.renderBlockEntities(tileEntityRenderContext);
         } finally {
-            EndPortalBatchRenderer.end();
             TileEntityRendererDispatcher.instance.drawBatch(pass);
         }
     }

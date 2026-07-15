@@ -1,6 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
-import com.dhj.actinium.render.EndPortalBatchRenderer;
+import com.dhj.actinium.render.EndPortalRenderer;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.minecraft.client.renderer.tileentity.TileEntityEndPortalRenderer;
 import net.minecraft.tileentity.TileEntityEndPortal;
@@ -36,15 +36,12 @@ public abstract class TileEntityEndPortalRendererIrisMixin {
         ci.cancel();
 
         if (IrisGlDebug.shouldLogPortalRenderEvents() && actinium$portalLogCount++ < 8) {
-            IrisGlDebug.logDebugInfo("end-portal-projective type={} pos=[{},{},{}]", te.getClass().getName(), x, y, z);
+            IrisGlDebug.logDebugInfo("end-portal-core-profile type={} pos=[{},{},{}]", te.getClass().getName(), x, y, z);
         }
 
         double distanceSq = x * x + y * y + z * z;
-        int passes = this.getPasses(distanceSq);
-        float topOffset = this.getOffset();
+        int vanillaLayerCount = this.getPasses(distanceSq);
 
-        if (!EndPortalBatchRenderer.enqueue(te, x, y, z, passes, topOffset)) {
-            EndPortalBatchRenderer.renderImmediate(te, x, y, z, passes, topOffset);
-        }
+        EndPortalRenderer.render(te, x, y, z, this.getOffset(), vanillaLayerCount);
     }
 }

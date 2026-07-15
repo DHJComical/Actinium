@@ -2,7 +2,6 @@ package com.dhj.actinium.mixin.vintage.core.terrain;
 
 import com.llamalad7.mixinextras.sugar.Local;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
-import com.dhj.actinium.render.EndPortalBatchRenderer;
 import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.dhj.actinium.shadows.ShadowRenderingState;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
@@ -264,7 +263,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 if (!this.setTileEntities.isEmpty()) {
                     long setBlockEntityStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
                     TileEntityRendererDispatcher.instance.preDrawBatch();
-                    EndPortalBatchRenderer.begin();
                     try {
                         for (var te : this.setTileEntities) {
                             if (te.shouldRenderInPass(pass)) {
@@ -272,7 +270,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                             }
                         }
                     } finally {
-                        EndPortalBatchRenderer.end();
                         TileEntityRendererDispatcher.instance.drawBatch(pass);
                     }
                     RenderDebugHooksHolder.recordRenderGlobalStageTiming("block-entities-set", pass, setBlockEntityStartNanos);
