@@ -1,5 +1,6 @@
 package net.coderbot.iris.pipeline;
 
+import com.dhj.actinium.debug.flight.GlFlightRecording;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import lombok.Getter;
 import net.coderbot.iris.Iris;
@@ -11,6 +12,7 @@ import org.lwjgl.opengl.GL13;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -30,6 +32,7 @@ public class PipelineManager {
 	public WorldRenderingPipeline preparePipeline(String currentDimension) {
 		// Detect dimension change and do full teardown/recreation
 		if (lastPreparedDimension != null && !lastPreparedDimension.equals(currentDimension)) {
+			GlFlightRecording.dimensionChange(lastPreparedDimension, currentDimension);
 			Iris.logger.info("Dimension changed from '{}' to '{}', reloading pipeline", lastPreparedDimension, currentDimension);
 			destroyPipeline();
 		}
@@ -40,9 +43,11 @@ public class PipelineManager {
 			SystemTimeUniforms.TIMER.reset();
 
 			Iris.logger.info("Creating pipeline for dimension '{}'", currentDimension);
+			GlFlightRecording.beginPipelineCreate(currentDimension);
 			pipeline = pipelineFactory.apply(currentDimension);
 			MinecraftFramebufferHelper.restoreMainFramebuffer(true);
 			pipelinesPerDimension.put(currentDimension, pipeline);
+			GlFlightRecording.endPipelineCreate(currentDimension);
 		} else {
 			pipeline = pipelinesPerDimension.get(currentDimension);
 		}
@@ -72,12 +77,16 @@ public class PipelineManager {
 	 * @see <a href="https://github.com/IrisShaders/Iris/issues/1330">this GitHub issue</a>
 	 */
 	public void destroyPipeline() {
-		pipelinesPerDimension.forEach((dimensionName, pipeline) -> {
+		for (Entry<String, WorldRenderingPipeline> entry : pipelinesPerDimension.entrySet()) {
+			String dimensionName = entry.getKey();
+			WorldRenderingPipeline pipeline = entry.getValue();
+			GlFlightRecording.beginPipelineDestroy(dimensionName);
 			Iris.logger.info("Destroying pipeline for dimension '{}'", dimensionName);
 			resetTextureState();
 			pipeline.destroy();
 			MinecraftFramebufferHelper.restoreMainFramebuffer(true);
-		});
+			GlFlightRecording.endPipelineDestroy(dimensionName);
+		}
 
 		pipelinesPerDimension.clear();
 		pipeline = null;

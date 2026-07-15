@@ -1,5 +1,7 @@
 package com.dhj.actinium.mixin.vintage.core.startup;
 
+import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
+import com.dhj.actinium.debug.CoreProfileContextAttributes;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.ForgeHooksClient;
 import org.apache.logging.log4j.LogManager;
@@ -32,6 +34,7 @@ public abstract class MixinMinecraftCoreProfileDisplay {
         PixelFormat format = new PixelFormat().withDepthBits(24).withStencilBits(8);
         int maxMajor = 4;
         int maxMinor = LWJGLUtil.getPlatform() == LWJGLUtil.PLATFORM_MACOSX ? 1 : 6;
+        boolean lwjglDebug = ActiniumStartupDebugConfig.enableLwjglDebug();
         Exception lastException = null;
 
         for (int major = maxMajor; major >= 3; --major) {
@@ -39,10 +42,15 @@ public abstract class MixinMinecraftCoreProfileDisplay {
             int endMinor = major == 3 ? 3 : 0;
 
             for (int minor = startMinor; minor >= endMinor; --minor) {
-                ContextAttribs attribs = celeritas$createContextAttribs(major, minor);
+                ContextAttribs attribs = CoreProfileContextAttributes.create(major, minor, lwjglDebug);
                 try {
                     Display.create(format, attribs);
-                    celeritas$LOGGER.info("Created OpenGL {}.{} core profile context", major, minor);
+                    celeritas$LOGGER.info(
+                        "Created OpenGL {}.{} core profile context (debug={})",
+                        major,
+                        minor,
+                        lwjglDebug
+                    );
                     ForgeHooksClient.initializeWindowsInformation();
                     ForgeHooksClient.setWindowStyle(this.fullscreen);
                     ForgeHooksClient.initializeTaskbarAPI();
@@ -50,23 +58,22 @@ public abstract class MixinMinecraftCoreProfileDisplay {
                     return;
                 } catch (RuntimeException e) {
                     lastException = e;
+                    celeritas$LOGGER.debug(
+                        "Failed to create OpenGL {}.{} core profile context (debug={})",
+                        major,
+                        minor,
+                        lwjglDebug,
+                        e
+                    );
                     try {
                         Display.destroy();
-                    } catch (Exception ignored) {
+                    } catch (RuntimeException destroyFailure) {
+                        celeritas$LOGGER.warn("Failed to destroy an unsuccessful OpenGL context", destroyFailure);
                     }
                 }
             }
         }
 
         throw new LWJGLException("Failed to create an OpenGL 3.3+ core profile context", lastException);
-    }
-
-    @Unique
-    private static ContextAttribs celeritas$createContextAttribs(int major, int minor) {
-        ContextAttribs attribs = new ContextAttribs(major, minor);
-        attribs.withProfileCore(true);
-        attribs.withForwardCompatible(true);
-        attribs.withDebug(Boolean.getBoolean("actinium.lwjglDebug"));
-        return attribs;
     }
 }

@@ -1,5 +1,6 @@
 package net.coderbot.iris.debug;
 
+import com.dhj.actinium.debug.flight.GlFlightRecording;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
@@ -861,6 +862,7 @@ public final class IrisGlDebug {
 
     public static void markStage(String stage) {
         lastStage = stage;
+        GlFlightRecording.markStage(stage);
     }
 
     public static void beginFramebufferSamplePhase(String phase) {

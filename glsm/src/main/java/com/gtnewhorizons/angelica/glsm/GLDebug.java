@@ -6,6 +6,8 @@
 package com.gtnewhorizons.angelica.glsm;
 
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.EXTBlendColor;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -15,18 +17,47 @@ import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL43;
 
 public final class GLDebug {
+    private static final Logger LOGGER = LogManager.getLogger("GLSM/GLDebug");
 
     /**
-     * Sets up debug callbacks
+     * Installs the driver debug callback requested by the startup configuration.
      *
-     * @return 0 for failure, 1 for success, 2 for restart required.
+     * @return 1 for a debug context or 2 for a callback forced on a non-debug context
+     * @throws IllegalStateException when no callback implementation can be installed
      */
     public static int setupDebugMessageCallback() {
         if (Thread.currentThread() != GLStateManager.getMainThread()) {
-            GLStateManager.LOGGER.warn("setupDebugMessageCallback called from non-main thread!");
-            return 0;
+            String message = "OpenGL debug callback installation must run on the GLSM main thread";
+            LOGGER.error(message);
+            throw new IllegalStateException(message);
         }
-        return setupDebugMessageCallbackImpl();
+
+        int result;
+        try {
+            result = setupDebugMessageCallbackImpl();
+        } catch (RuntimeException e) {
+            String message = "Failed to install the OpenGL debug callback using "
+                + BackendManager.RENDER_BACKEND.getName();
+            LOGGER.error(message, e);
+            throw new IllegalStateException(message, e);
+        }
+
+        requireInstalledCallback(result, BackendManager.RENDER_BACKEND.getName());
+        if (result == 1) {
+            LOGGER.info("OpenGL debug callback installed on a debug context");
+        } else {
+            LOGGER.warn("OpenGL debug callback installed, but the context has no debug flag");
+        }
+        return result;
+    }
+
+    static void requireInstalledCallback(int result, String backendName) {
+        if (result != 1 && result != 2) {
+            String message = "OpenGL debug output was explicitly enabled, but " + backendName
+                + " could not install a debug callback (result=" + result + ")";
+            LOGGER.error(message);
+            throw new IllegalStateException(message);
+        }
     }
 
     public static Throwable filterStackTrace(Throwable throwable, int offset) {

@@ -3,6 +3,8 @@ package com.dhj.actinium.debug;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -10,12 +12,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+/**
+ * Reads debug options needed before the normal runtime configuration is available.
+ */
 public final class ActiniumStartupDebugConfig {
+    private static final Logger LOGGER = LogManager.getLogger("ActiniumStartupDebugConfig");
     private static final Path CONFIG_PATH = Paths.get("config", "actinium-options.json");
     private static final Path LEGACY_CONFIG_PATH = Paths.get("config", "embeddium-options.json");
     private static final Snapshot SNAPSHOT = loadSnapshot();
+    private static final boolean LWJGL_DEBUG = resolveLwjglDebug(System.getProperty("actinium.lwjglDebug"));
 
     private ActiniumStartupDebugConfig() {
+    }
+
+    /**
+     * Returns whether startup must request an OpenGL debug context and install its driver callback.
+     * This is intentionally separate from the runtime GL state checkpoint option.
+     */
+    public static boolean enableLwjglDebug() {
+        return LWJGL_DEBUG;
     }
 
     public static boolean enableRedirectorDebug() {
@@ -33,6 +48,10 @@ public final class ActiniumStartupDebugConfig {
     private static boolean getBooleanOverride(String property, boolean fallback) {
         String override = System.getProperty(property);
         return override != null ? Boolean.parseBoolean(override) : fallback;
+    }
+
+    static boolean resolveLwjglDebug(String override) {
+        return override != null && Boolean.parseBoolean(override);
     }
 
     private static Snapshot loadSnapshot() {
@@ -57,7 +76,8 @@ public final class ActiniumStartupDebugConfig {
                 getBoolean(debug, "enable_redirector_log_spam"),
                 getBoolean(debug, "enable_redirector_class_dump")
             );
-        } catch (IOException | RuntimeException ignored) {
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("Failed to read startup debug options from {}", path, e);
             return Snapshot.DEFAULT;
         }
     }

@@ -1,9 +1,9 @@
 package com.gtnewhorizons.angelica.glsm.backend;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.AMDDebugOutput;
 import org.lwjgl.opengl.ARBClearTexture;
-import org.lwjgl.opengl.ARBDebugOutput;
 import org.lwjgl.opengl.ARBDirectStateAccess;
 import org.lwjgl.opengl.ContextCapabilities;
 import org.lwjgl.opengl.EXTDirectStateAccess;
@@ -39,13 +39,16 @@ import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
  * LWJGL2 GL implementation of {@link RenderBackend}.
  */
 public final class Lwjgl2GLRenderBackend extends RenderBackend {
+    private static final Logger LOGGER = LogManager.getLogger("GLSM/Lwjgl2Backend");
+
     private ContextCapabilities caps;
     private IntBuffer intArrayBuffer = BufferUtils.createIntBuffer(16);
     private FloatBuffer floatArrayBuffer = BufferUtils.createFloatBuffer(16);
 
-    // Debug output state: 0=none, 1=GL43/KHR, 2=ARB, 3=AMD
+    // Debug output state: 0=none, 1=GL43/KHR
     private int activeDebugExtension;
     private GLDebugMessageCallbackI khrCallback;
+    private boolean debugOutputEnabledExplicitly;
 
     private IntBuffer getIntArrayBuffer(int size) {
         if (intArrayBuffer.capacity() < size) {
@@ -67,6 +70,7 @@ public final class Lwjgl2GLRenderBackend extends RenderBackend {
     public void init() {
         caps = GLContext.getCapabilities();
         activeDebugExtension = 0;
+        debugOutputEnabledExplicitly = false;
     }
 
     @Override
@@ -1336,19 +1340,25 @@ public final class Lwjgl2GLRenderBackend extends RenderBackend {
 
     @Override
     public boolean supportsDebugOutput() {
-        return caps.OpenGL43 || caps.GL_KHR_debug || caps.GL_ARB_debug_output || caps.GL_AMD_debug_output;
+        return selectDebugOutputApi(caps.OpenGL43, caps.GL_KHR_debug, caps.GL_ARB_debug_output, caps.GL_AMD_debug_output)
+            != DebugOutputApi.NONE;
     }
 
     @Override
     public int setupDebugOutput(DebugMessageHandler handler) {
-        if (caps.OpenGL43 || caps.GL_KHR_debug) {
+        DebugOutputApi api = selectDebugOutputApi(
+            caps.OpenGL43,
+            caps.GL_KHR_debug,
+            caps.GL_ARB_debug_output,
+            caps.GL_AMD_debug_output
+        );
+        if (api != DebugOutputApi.NONE) {
+            LOGGER.info("Installing OpenGL debug callback using {}", api.displayName);
             khrCallback = (source, type, id, severity, length, message, userParam) ->
                 handler.handleMessage(source, type, id, severity, GLDebugMessageCallback.getMessage(length, message));
-            GL43.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, GL43.GL_DEBUG_SEVERITY_HIGH, (IntBuffer) null, true);
-            GL43.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, GL43.GL_DEBUG_SEVERITY_MEDIUM, (IntBuffer) null, false);
-            GL43.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, GL43.GL_DEBUG_SEVERITY_LOW, (IntBuffer) null, false);
-            GL43.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, GL43.GL_DEBUG_SEVERITY_NOTIFICATION, (IntBuffer) null, false);
-            if (caps.OpenGL43) {
+
+            configureDebugMessages(api);
+            if (api == DebugOutputApi.OPENGL_43) {
                 GL43.glDebugMessageCallback(khrCallback, 0L);
             } else {
                 KHRDebug.glDebugMessageCallback(khrCallback, 0L);
@@ -1358,15 +1368,27 @@ public final class Lwjgl2GLRenderBackend extends RenderBackend {
 
             if ((GL11.glGetInteger(GL30.GL_CONTEXT_FLAGS) & GL43.GL_CONTEXT_FLAG_DEBUG_BIT) == 0) {
                 GL11.glEnable(GL43.GL_DEBUG_OUTPUT);
+                debugOutputEnabledExplicitly = true;
                 return 2;
             }
             return 1;
-        } else if (caps.GL_ARB_debug_output) {
-            return 0;
-        } else if (caps.GL_AMD_debug_output) {
-            return 0;
         }
         return 0;
+    }
+
+    private void configureDebugMessages(DebugOutputApi api) {
+        if (api == DebugOutputApi.OPENGL_43) {
+            GL43.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, GL43.GL_DEBUG_SEVERITY_HIGH, (IntBuffer) null, true);
+            GL43.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, GL43.GL_DEBUG_SEVERITY_MEDIUM, (IntBuffer) null, false);
+            GL43.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, GL43.GL_DEBUG_SEVERITY_LOW, (IntBuffer) null, false);
+            GL43.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, GL43.GL_DEBUG_SEVERITY_NOTIFICATION, (IntBuffer) null, false);
+            return;
+        }
+
+        KHRDebug.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, KHRDebug.GL_DEBUG_SEVERITY_HIGH, (IntBuffer) null, true);
+        KHRDebug.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, KHRDebug.GL_DEBUG_SEVERITY_MEDIUM, (IntBuffer) null, false);
+        KHRDebug.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, KHRDebug.GL_DEBUG_SEVERITY_LOW, (IntBuffer) null, false);
+        KHRDebug.glDebugMessageControl(GL11.GL_DONT_CARE, GL11.GL_DONT_CARE, KHRDebug.GL_DEBUG_SEVERITY_NOTIFICATION, (IntBuffer) null, false);
     }
 
     @Override
@@ -1377,17 +1399,12 @@ public final class Lwjgl2GLRenderBackend extends RenderBackend {
                     GL43.glDebugMessageCallback(null, 0L);
                 } else {
                     KHRDebug.glDebugMessageCallback(null, 0L);
-                    if (caps.OpenGL30 && (GL11.glGetInteger(GL30.GL_CONTEXT_FLAGS) & GL43.GL_CONTEXT_FLAG_DEBUG_BIT) == 0) {
-                        GL11.glDisable(GL43.GL_DEBUG_OUTPUT);
-                    }
+                }
+                if (debugOutputEnabledExplicitly) {
+                    GL11.glDisable(GL43.GL_DEBUG_OUTPUT);
+                    debugOutputEnabledExplicitly = false;
                 }
                 khrCallback = null;
-            }
-            case 2 -> {
-                return 0;
-            }
-            case 3 -> {
-                return 0;
             }
             default -> {
                 return 0;
@@ -1395,6 +1412,31 @@ public final class Lwjgl2GLRenderBackend extends RenderBackend {
         }
         activeDebugExtension = 0;
         return 1;
+    }
+
+    static DebugOutputApi selectDebugOutputApi(boolean openGL43, boolean khrDebug, boolean arbDebug, boolean amdDebug) {
+        if (openGL43) {
+            return DebugOutputApi.OPENGL_43;
+        }
+        if (khrDebug) {
+            return DebugOutputApi.KHR_DEBUG;
+        }
+        if (arbDebug || amdDebug) {
+            return DebugOutputApi.NONE;
+        }
+        return DebugOutputApi.NONE;
+    }
+
+    enum DebugOutputApi {
+        OPENGL_43("OpenGL 4.3 core"),
+        KHR_DEBUG("KHR_debug"),
+        NONE("none");
+
+        private final String displayName;
+
+        DebugOutputApi(String displayName) {
+            this.displayName = displayName;
+        }
     }
 
     @Override

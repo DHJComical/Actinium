@@ -587,7 +587,7 @@ public class GLStateManager {
             LOGGER.info("GLStateManager cache bypassed");
         }
         if (initConfig != null && initConfig.isLwjglDebug()) {
-            LOGGER.info("Enabling additional LWJGL debug output");
+            LOGGER.info("LWJGL debug context requested; installing synchronous high-severity driver output");
 
             GLDebug.setupDebugMessageCallback();
             GLDebug.initDebugState();

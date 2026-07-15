@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.vintage.core.startup;
 
+import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;
@@ -27,6 +28,7 @@ public class MixinOpenGlHelper {
 
         GLStateManager.setDrawableGL(Display.getDrawable());
         GLStateManager.initialize(GLSMInitConfig.builder()
+            .lwjglDebug(ActiniumStartupDebugConfig.enableLwjglDebug())
             .displaySize(mc.displayWidth, mc.displayHeight)
             .framebufferSupported(OpenGlHelper.framebufferSupported)
             .fboEnabled(mc.gameSettings.fboEnable)
