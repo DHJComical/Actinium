@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
+import com.dhj.actinium.render.EndPortalCompositeRenderer;
 
 @Mixin(value = OpenGlHelper.class, priority = 100)
 public class MixinOpenGlHelper {
@@ -34,6 +35,7 @@ public class MixinOpenGlHelper {
             .streamingDrawerDestroy(() -> {
                 TessellatorStreamingDrawer.destroy();
                 BufferBuilderStreamingDrawer.destroy();
+                EndPortalCompositeRenderer.destroy();
             })
             .build());
 

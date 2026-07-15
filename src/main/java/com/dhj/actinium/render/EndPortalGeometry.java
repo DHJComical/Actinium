@@ -73,6 +73,29 @@ final class EndPortalGeometry {
         }
     }
 
+    /**
+     * Emits one shader-pack mesh mapped to the compositor's normalized screen texture.
+     *
+     * @param triangles clipped adaptive shader topology
+     * @param renderX render-relative block X
+     * @param renderY render-relative block Y
+     * @param renderZ render-relative block Z
+     * @param sink divided vertex destination
+     */
+    static void emitComposite(
+        List<EndPortalMesh.Triangle> triangles,
+        double renderX,
+        double renderY,
+        double renderZ,
+        VertexSink sink
+    ) {
+        for (EndPortalMesh.Triangle triangle : triangles) {
+            compositeVertex(sink, triangle.face(), triangle.first(), renderX, renderY, renderZ);
+            compositeVertex(sink, triangle.face(), triangle.second(), renderX, renderY, renderZ);
+            compositeVertex(sink, triangle.face(), triangle.third(), renderX, renderY, renderZ);
+        }
+    }
+
     private static UvRebase rebase(EndPortalLayers.Layer layer, EndPortalProjection.ClipPosition clip) {
         EndPortalProjection.ProjectiveTexCoord texture = layer.projective(clip);
         return new UvRebase(Math.floor(texture.dividedU()), Math.floor(texture.dividedV()));
@@ -135,6 +158,35 @@ final class EndPortalGeometry {
             layer.red(),
             layer.green(),
             layer.blue(),
+            ALPHA,
+            FULL_BRIGHT,
+            FULL_BRIGHT,
+            face.getXOffset(),
+            face.getYOffset(),
+            face.getZOffset()
+        );
+    }
+
+    private static void compositeVertex(
+        VertexSink sink,
+        EnumFacing face,
+        EndPortalMesh.MeshVertex vertex,
+        double renderX,
+        double renderY,
+        double renderZ
+    ) {
+        EndPortalMesh.LocalPosition local = vertex.local();
+        EndPortalProjection.ClipPosition clip = vertex.clip();
+        sink.vertex(
+            face,
+            renderX + local.x(),
+            renderY + local.y(),
+            renderZ + local.z(),
+            (float) (clip.x() / clip.w() * 0.5D + 0.5D),
+            (float) (clip.y() / clip.w() * 0.5D + 0.5D),
+            1.0F,
+            1.0F,
+            1.0F,
             ALPHA,
             FULL_BRIGHT,
             FULL_BRIGHT,

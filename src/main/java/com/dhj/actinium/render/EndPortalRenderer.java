@@ -92,16 +92,29 @@ public final class EndPortalRenderer {
             GLStateManager.enableTexture();
             GLStateManager.disableLighting();
 
-            EndPortalLayers.Layer skyLayer = layers.getFirst();
-            bindTexture(skyLayer.texture());
-            applyBlend(skyLayer.blend());
-            drawLayers(x, y, z, layers, 0, 1, shaderPackInUse, faces, shaderTriangles, projection);
+            boolean precomposed = false;
+            if (EndPortalCompositeLogic.shouldPrecompose(shaderPackInUse, layers.size())) {
+                int compositeTexture = EndPortalCompositeRenderer.texture(layers);
+                if (compositeTexture != 0) {
+                    GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, compositeTexture);
+                    GLStateManager.disableBlend();
+                    EndPortalBlockEntityIdScope.run(() -> drawComposite(x, y, z, shaderTriangles));
+                    precomposed = true;
+                }
+            }
 
-            if (layers.size() > 1) {
-                EndPortalLayers.Layer portalLayer = layers.get(1);
-                bindTexture(portalLayer.texture());
-                applyBlend(portalLayer.blend());
-                drawLayers(x, y, z, layers, 1, layers.size(), shaderPackInUse, faces, shaderTriangles, projection);
+            if (!precomposed) {
+                EndPortalLayers.Layer skyLayer = layers.getFirst();
+                bindTexture(skyLayer.texture());
+                applyBlend(skyLayer.blend());
+                drawLayers(x, y, z, layers, 0, 1, shaderPackInUse, faces, shaderTriangles, projection);
+
+                if (layers.size() > 1) {
+                    EndPortalLayers.Layer portalLayer = layers.get(1);
+                    bindTexture(portalLayer.texture());
+                    applyBlend(portalLayer.blend());
+                    drawLayers(x, y, z, layers, 1, layers.size(), shaderPackInUse, faces, shaderTriangles, projection);
+                }
             }
         } finally {
             GLStateManager.glBlendFuncSeparate(
@@ -205,6 +218,35 @@ public final class EndPortalRenderer {
         buffer.finishDrawing();
         if (buffer.getVertexCount() > 0) {
             VanillaBufferBuilderRenderer.draw(buffer, "EndPortal");
+        } else {
+            buffer.reset();
+        }
+    }
+
+    private static void drawComposite(
+        double x,
+        double y,
+        double z,
+        List<EndPortalMesh.Triangle> shaderTriangles
+    ) {
+        BufferBuilder buffer = Tessellator.getInstance().getBuffer();
+        buffer.begin(GL11.GL_TRIANGLES, PORTAL_VERTEX_FORMAT);
+        EndPortalGeometry.emitComposite(
+            shaderTriangles,
+            x,
+            y,
+            z,
+            (face, vertexX, vertexY, vertexZ, u, v, red, green, blue, alpha, lightU, lightV, normalX, normalY, normalZ) ->
+                buffer.pos(vertexX, vertexY, vertexZ)
+                    .color(red, green, blue, alpha)
+                    .tex(u, v)
+                    .lightmap(lightU, lightV)
+                    .normal(normalX, normalY, normalZ)
+                    .endVertex()
+        );
+        buffer.finishDrawing();
+        if (buffer.getVertexCount() > 0) {
+            VanillaBufferBuilderRenderer.draw(buffer, "EndPortalComposite");
         } else {
             buffer.reset();
         }

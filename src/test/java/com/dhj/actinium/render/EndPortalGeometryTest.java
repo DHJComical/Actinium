@@ -112,6 +112,53 @@ class EndPortalGeometryTest {
         assertTrue(vertices.stream().allMatch(vertex -> vertex.normalY == 1.0F));
     }
 
+    @Test
+    void compositePathMapsClipSpaceToNormalizedScreenCoordinates() {
+        Matrix4f perspective = new Matrix4f().perspective(
+            (float) Math.toRadians(70.0D),
+            16.0F / 9.0F,
+            0.05F,
+            256.0F
+        );
+        EndPortalProjection projection = new EndPortalProjection(perspective, new Matrix4f());
+        List<EndPortalLayers.Layer> layers = EndPortalLayers.create(16, 0.25F);
+        List<EndPortalMesh.FaceQuad> faces = EndPortalMesh.visibleFaces(face -> face == EnumFacing.UP, 0.75F);
+        List<EndPortalMesh.Triangle> triangles = EndPortalMesh.shaderTriangles(
+            faces,
+            projection,
+            0.0D,
+            0.0D,
+            -4.0D,
+            layers
+        );
+        List<DividedVertex> vertices = new ArrayList<>();
+
+        EndPortalGeometry.emitComposite(
+            triangles,
+            0.0D,
+            0.0D,
+            -4.0D,
+            (face, x, y, z, u, v, red, green, blue, alpha, lightU, lightV, normalX, normalY, normalZ) ->
+                vertices.add(new DividedVertex(u, v, lightU, lightV, normalY))
+        );
+
+        assertEquals(triangles.size() * 3, vertices.size());
+        int vertexIndex = 0;
+        for (EndPortalMesh.Triangle triangle : triangles) {
+            for (EndPortalMesh.MeshVertex meshVertex : List.of(
+                triangle.first(), triangle.second(), triangle.third()
+            )) {
+                EndPortalProjection.ClipPosition clip = meshVertex.clip();
+                DividedVertex vertex = vertices.get(vertexIndex++);
+                assertEquals(clip.x() / clip.w() * 0.5D + 0.5D, vertex.u, EPSILON);
+                assertEquals(clip.y() / clip.w() * 0.5D + 0.5D, vertex.v, EPSILON);
+                assertEquals(240, vertex.lightU);
+                assertEquals(240, vertex.lightV);
+                assertEquals(1.0F, vertex.normalY);
+            }
+        }
+    }
+
     private static List<ProjectiveVertex> homogeneousVertices(
         List<EndPortalMesh.FaceQuad> faces,
         double x,

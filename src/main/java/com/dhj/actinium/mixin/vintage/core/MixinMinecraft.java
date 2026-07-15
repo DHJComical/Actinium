@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import com.dhj.actinium.gui.ActiniumWindowModeController;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
+import com.dhj.actinium.render.EndPortalCompositeRenderer;
 
 @Mixin(Minecraft.class)
 public class MixinMinecraft {
@@ -25,6 +26,7 @@ public class MixinMinecraft {
 
     @Inject(method = "runGameLoop", at = @At("HEAD"))
     private void beginRenderFrame(CallbackInfo ci) {
+        EndPortalCompositeRenderer.beginFrame();
         final int limit = supportsCpuRenderAhead() ? ActiniumRuntime.options().advanced.cpuRenderAheadLimit : 0;
         if (limit > 0) {
             celeritas$renderAheadManager.startFrame(limit);
