@@ -738,6 +738,10 @@ public class ShadowRenderer {
 	public void renderShadows(EntityRenderer levelRenderer, Camera playerCamera) {
         final Minecraft mc = Minecraft.getMinecraft();
         final RenderGlobal rg = mc.renderGlobal;
+		final WorldRenderingPipeline renderingPipeline = Objects.requireNonNull(
+			Iris.getPipelineManager().getPipelineNullable(),
+			"Cannot render shadows without an active world rendering pipeline"
+		);
 
         // We have to re-query this each frame since this changes based on whether the profiler is active
 		// If the profiler is inactive, it will return InactiveProfiler.INSTANCE
@@ -861,7 +865,9 @@ public class ShadowRenderer {
 		// Render all opaque terrain unless pack requests not to
 		if (shouldRenderTerrain) {
             mc.renderEngine.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-            ActiniumWorldRenderer.instance().drawChunkLayersDeduplicated(OPAQUE_SHADOW_TERRAIN_LAYERS, terrainX, terrainY, terrainZ);
+			TerrainPhaseScope.runOpaque(renderingPipeline,
+				() -> ActiniumWorldRenderer.instance().drawChunkLayersDeduplicated(
+					OPAQUE_SHADOW_TERRAIN_LAYERS, terrainX, terrainY, terrainZ));
 		}
 
 		// Reset viewport in case terrain rendering changed it
@@ -916,7 +922,9 @@ public class ShadowRenderer {
 		// It doesn't matter a ton, since this just means that they won't be sorted in the getNormal rendering pass.
 		// Just something to watch out for, however...
 		if (shouldRenderTranslucent) {
-            ActiniumWorldRenderer.instance().drawChunkLayer(BlockRenderLayer.TRANSLUCENT, terrainX, terrainY, terrainZ);
+			TerrainPhaseScope.runTranslucent(renderingPipeline,
+				() -> ActiniumWorldRenderer.instance().drawChunkLayer(
+					BlockRenderLayer.TRANSLUCENT, terrainX, terrainY, terrainZ));
 		}
 
 		if (celeritasManaged) {
@@ -970,6 +978,29 @@ public class ShadowRenderer {
 			InternalShadowRenderingState.end();
 			ACTIVE = false;
 			CURRENT_TARGETS = null;
+		}
+	}
+
+	static final class TerrainPhaseScope {
+		private TerrainPhaseScope() {
+		}
+
+		static void runOpaque(WorldRenderingPipeline pipeline, Runnable action) {
+			run(pipeline, WorldRenderingPhase.TERRAIN_SOLID, action);
+		}
+
+		static void runTranslucent(WorldRenderingPipeline pipeline, Runnable action) {
+			run(pipeline, WorldRenderingPhase.TERRAIN_TRANSLUCENT, action);
+		}
+
+		private static void run(WorldRenderingPipeline pipeline, WorldRenderingPhase phase, Runnable action) {
+			WorldRenderingPhase previousPhase = pipeline.getPhase();
+			pipeline.setPhase(phase);
+			try {
+				action.run();
+			} finally {
+				pipeline.setPhase(previousPhase);
+			}
 		}
 	}
 
