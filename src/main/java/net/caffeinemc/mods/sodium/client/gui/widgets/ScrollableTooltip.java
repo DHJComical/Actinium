@@ -20,6 +20,9 @@ import java.util.List;
 public final class ScrollableTooltip {
     private static final ResourceLocation ARROWS = new ResourceLocation("sodium", "textures/gui/tooltip_arrows.png");
     private static final int PADDING = 4;
+    private static final int BORDER_WIDTH = 1;
+    private static final int SCROLL_THUMB_WIDTH = 3;
+    private static final int MAX_WIDTH = 180;
     private final FontRenderer font = Minecraft.getMinecraft().fontRenderer;
     private final ScrollState scroll = new ScrollState(null);
     private GuiRect area;
@@ -95,6 +98,12 @@ public final class ScrollableTooltip {
         GuiRect box = this.positionBounds();
         Gui.drawRect(box.x(), box.y(), box.right(), box.bottom(),
                 this.overlay ? Colors.BACKGROUND_OVERLAY : Colors.BACKGROUND_LIGHT);
+        // Keep the tooltip visually close to Minecraft's item tooltip while matching the active mod theme.
+        int themeColor = this.target.getTheme().theme();
+        Gui.drawRect(box.x(), box.y(), box.right(), box.y() + BORDER_WIDTH, themeColor);
+        Gui.drawRect(box.x(), box.bottom() - BORDER_WIDTH, box.right(), box.bottom(), themeColor);
+        Gui.drawRect(box.x(), box.y(), box.x() + BORDER_WIDTH, box.bottom(), themeColor);
+        Gui.drawRect(box.right() - BORDER_WIDTH, box.y(), box.right(), box.bottom(), themeColor);
         if (!this.overlay) {
             Minecraft.getMinecraft().getTextureManager().bindTexture(ARROWS);
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
@@ -111,9 +120,10 @@ public final class ScrollableTooltip {
         }
         if (this.scroll.canScroll()) {
             int thumbY = box.y() + this.scroll.thumbStart(box.height());
-            Gui.drawRect(box.right() - Layout.SCROLLBAR_WIDTH, box.y(), box.right(), box.bottom(), 0x96323232);
-            Gui.drawRect(box.right() - Layout.SCROLLBAR_WIDTH, thumbY, box.right(),
-                    Math.min(box.bottom(), thumbY + this.scroll.thumbLength(box.height())), 0x96646464);
+            int thumbX = box.right() - BORDER_WIDTH - SCROLL_THUMB_WIDTH;
+            Gui.drawRect(thumbX, thumbY, box.right() - BORDER_WIDTH,
+                    Math.min(box.bottom() - BORDER_WIDTH, thumbY + this.scroll.thumbLength(box.height())),
+                    this.target.getTheme().themeDisabled());
         }
     }
 
@@ -147,7 +157,21 @@ public final class ScrollableTooltip {
 
     private int tooltipWidth() {
         int available = Math.max(1, this.area.width());
-        return Math.min(Layout.MAX_TOOLTIP_WIDTH, Math.max(1, available));
+        int maximum = Math.min(Math.min(Layout.MAX_TOOLTIP_WIDTH, MAX_WIDTH), available);
+        if (this.target == null) {
+            return maximum;
+        }
+        String text = this.target.getOption().getTooltip().getFormattedText();
+        OptionImpact impact = this.target.getOption().getImpact();
+        if (impact != null) {
+            text += "\n" + I18n.format("sodium.options.performance_impact_string", impact.name());
+        }
+        int longestLine = 0;
+        for (String line : text.split("\\n", -1)) {
+            longestLine = Math.max(longestLine, this.font.getStringWidth(line));
+        }
+        int natural = longestLine + PADDING * 2 + BORDER_WIDTH * 2;
+        return Math.min(maximum, Math.max(Layout.MIN_TOOLTIP_WIDTH, natural));
     }
 
     /** Calculates a mouse-adjacent overlay rectangle entirely within the supplied viewport. */

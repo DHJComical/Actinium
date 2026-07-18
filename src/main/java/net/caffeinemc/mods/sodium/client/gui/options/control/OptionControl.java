@@ -37,6 +37,11 @@ public abstract class OptionControl<O extends Option> implements FocusTarget {
         return this.option;
     }
 
+    /** Returns the owner theme used to render this option and its related overlays. */
+    public final ColorTheme getTheme() {
+        return this.theme;
+    }
+
     public final void render(int mouseX, int mouseY) {
         boolean enabled = this.option.isEnabled();
         boolean hovered = this.bounds.contains(mouseX, mouseY);

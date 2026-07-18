@@ -12,6 +12,13 @@ import java.util.stream.Stream;
  * by returning the max size when scale = 0.
  */
 public class MuiGuiScaleHook {
+    /**
+     * Keep the manual GUI scale range useful on low-resolution displays. Vanilla
+     * may clamp the effective scale, but the setting remains valid and can be
+     * applied immediately when the window is resized.
+     */
+    static final int MIN_MANUAL_GUI_SCALE = 5;
+
     private static final Method calcGuiScalesMethod;
 
     static {
@@ -40,15 +47,23 @@ public class MuiGuiScaleHook {
     }
 
     public static int getMaxGuiScale() {
+        boolean forceUnicode = Minecraft.getMinecraft().gameSettings.forceUnicodeFont;
+        int vanillaMax = calculateScale(0, forceUnicode);
+
         if (calcGuiScalesMethod != null) {
             try {
-                return (int) calcGuiScalesMethod.invoke(null) & 0xf;
+                int modernUiMax = (int) calcGuiScalesMethod.invoke(null) & 0xf;
+                return resolveMaximum(vanillaMax, modernUiMax);
             } catch (Throwable e) {
                 e.printStackTrace();
             }
         }
-        boolean forceUnicode = Minecraft.getMinecraft().gameSettings.forceUnicodeFont;
-        return calculateScale(0, forceUnicode);
+
+        return resolveMaximum(vanillaMax, 0);
+    }
+
+    static int resolveMaximum(int vanillaMax, int externalMax) {
+        return Math.max(MIN_MANUAL_GUI_SCALE, Math.max(vanillaMax, externalMax));
     }
 
     public static int calculateScale(int guiScale, boolean forceUnicode) {
