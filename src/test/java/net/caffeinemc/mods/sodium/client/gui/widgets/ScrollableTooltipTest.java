@@ -1,9 +1,12 @@
 package net.caffeinemc.mods.sodium.client.gui.widgets;
 
 import net.caffeinemc.mods.sodium.client.gui.GuiRect;
+import net.caffeinemc.mods.sodium.client.gui.options.control.OptionControl;
+import net.caffeinemc.mods.sodium.client.config.structure.Option;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class ScrollableTooltipTest {
     private static final GuiRect AREA = new GuiRect(100, 80, 200, 120);
@@ -29,5 +32,54 @@ class ScrollableTooltipTest {
 
         assertEquals(new GuiRect(100, 80, 80, 40), bounds);
         assertEquals(bounds, bounds.intersection(AREA));
+    }
+
+    @Test
+    void contentHeightMatchesRenderedLinesWithoutTrailingSpacing() {
+        assertEquals(9, ScrollableTooltip.calculateContentHeight(1, 9));
+        assertEquals(31, ScrollableTooltip.calculateContentHeight(3, 9));
+        assertEquals(0, ScrollableTooltip.calculateContentHeight(0, 9));
+    }
+
+    @Test
+    void focusedFallbackIsClearedOutsideTooltipViewport() {
+        OptionControl<?> focused = new TestControl();
+
+        assertEquals(focused, ScrollableTooltip.selectTarget(null, focused, true));
+        assertNull(ScrollableTooltip.selectTarget(null, focused, false));
+    }
+
+    @Test
+    void hoveredControlAlwaysWinsWithinViewport() {
+        OptionControl<?> hovered = new TestControl();
+        OptionControl<?> focused = new TestControl();
+
+        assertEquals(hovered, ScrollableTooltip.selectTarget(hovered, focused, true));
+        assertEquals(hovered, ScrollableTooltip.selectTarget(hovered, focused, false));
+    }
+
+    private static final class TestControl extends OptionControl<Option> {
+        private TestControl() {
+            super(null, null, null);
+        }
+
+        @Override
+        protected int controlWidth() {
+            return 0;
+        }
+
+        @Override
+        protected void renderControl(GuiRect control, boolean enabled, int mouseX, int mouseY) {
+        }
+
+        @Override
+        protected boolean onMouseClicked(GuiRect control, int mouseX, int mouseY) {
+            return false;
+        }
+
+        @Override
+        protected boolean onKeyPressed(int keyCode) {
+            return false;
+        }
     }
 }

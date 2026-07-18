@@ -68,7 +68,7 @@ public final class ScrollableTooltip {
         this.lines = List.copyOf(content);
         this.visibleBounds = this.positionBounds();
         this.scroll.setContext(Math.max(0, this.visibleBounds.height() - PADDING * 2),
-                this.lines.size() * (this.font.FONT_HEIGHT + Layout.TEXT_LINE_SPACING));
+                this.contentHeight());
     }
 
     public void updateTarget(OptionControl<?> hovered, int mouseX, int mouseY) {
@@ -78,12 +78,24 @@ public final class ScrollableTooltip {
     public void updateTarget(OptionControl<?> hovered, OptionControl<?> focused, int mouseX, int mouseY) {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
-        OptionControl<?> target = hovered != null ? hovered : focused;
+        // Keyboard focus may keep a tooltip visible while navigating, but only while the
+        // pointer remains inside the viewport owned by this tooltip. Moving to the sidebar,
+        // search box, footer, or surrounding screen must clear the fallback target.
+        OptionControl<?> target = selectTarget(hovered, focused, this.area.contains(mouseX, mouseY));
         if (target != null) {
             this.setTarget(target);
         } else if (this.target == null || !this.positionBounds().contains(mouseX, mouseY)) {
             this.setTarget(null);
         }
+    }
+
+    /** Selects the tooltip target without allowing keyboard focus to leak outside its viewport. */
+    static OptionControl<?> selectTarget(OptionControl<?> hovered, OptionControl<?> focused,
+                                         boolean pointerInsideViewport) {
+        if (hovered != null) {
+            return hovered;
+        }
+        return pointerInsideViewport ? focused : null;
     }
 
     public void setReservedAreaTopLeftCorner(int x, int y) {
@@ -148,11 +160,23 @@ public final class ScrollableTooltip {
         if (this.target == null) return this.area;
         this.overlay = true;
         int width = this.tooltipWidth();
-        int height = Math.min(Math.max(1, this.area.height()), Math.max(1, this.lines.size()
-                * (this.font.FONT_HEIGHT + Layout.TEXT_LINE_SPACING) - Layout.TEXT_LINE_SPACING + PADDING * 2));
+        int height = Math.min(Math.max(1, this.area.height()), Math.max(1,
+                this.contentHeight() + PADDING * 2));
         GuiRect bounds = calculateOverlayBounds(this.area, this.target.getBounds(), width, height,
                 this.mouseX, this.mouseY);
         return bounds;
+    }
+
+    /** Returns the exact height occupied by the rendered tooltip lines, excluding padding. */
+    private int contentHeight() {
+        return calculateContentHeight(this.lines.size(), this.font.FONT_HEIGHT);
+    }
+
+    static int calculateContentHeight(int lineCount, int fontHeight) {
+        if (lineCount <= 0) {
+            return 0;
+        }
+        return lineCount * (fontHeight + Layout.TEXT_LINE_SPACING) - Layout.TEXT_LINE_SPACING;
     }
 
     private int tooltipWidth() {

@@ -41,6 +41,15 @@ class ScrollStateTest {
     }
 
     @Test
+    void equalContentAndViewportDoesNotNeedScrolling() {
+        ScrollState state = new ScrollState(null);
+        state.setContext(31, 31);
+
+        assertFalse(state.canScroll());
+        assertEquals(31, state.thumbLength(31));
+    }
+
+    @Test
     void rejectsNegativeDimensions() {
         ScrollState state = new ScrollState(null);
         assertThrows(IllegalArgumentException.class, () -> state.setContext(-1, 10));
