@@ -1,0 +1,179 @@
+package net.caffeinemc.mods.sodium.client.gui.widgets;
+
+import net.caffeinemc.mods.sodium.api.config.option.OptionImpact;
+import net.caffeinemc.mods.sodium.client.gui.Colors;
+import net.caffeinemc.mods.sodium.client.gui.GuiRect;
+import net.caffeinemc.mods.sodium.client.gui.Layout;
+import net.caffeinemc.mods.sodium.client.gui.input.OverlayInputArbiter;
+import net.caffeinemc.mods.sodium.client.gui.options.control.OptionControl;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.util.ResourceLocation;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/** Wrapped, scrollable tooltip constrained to either its own pane or an option-list overlay. */
+public final class ScrollableTooltip {
+    private static final ResourceLocation ARROWS = new ResourceLocation("sodium", "textures/gui/tooltip_arrows.png");
+    private static final int PADDING = 4;
+    private final FontRenderer font = Minecraft.getMinecraft().fontRenderer;
+    private final ScrollState scroll = new ScrollState(null);
+    private GuiRect area;
+    private boolean overlay;
+    private OptionControl<?> target;
+    private List<String> lines = List.of();
+    private GuiRect visibleBounds;
+    private int mouseX;
+    private int mouseY;
+
+    public ScrollableTooltip(GuiRect area, boolean overlay) {
+        this.area = area;
+        this.overlay = overlay;
+    }
+
+    public void setArea(GuiRect area, boolean overlay) {
+        this.area = area;
+        this.overlay = overlay;
+        this.target = null;
+        this.lines = List.of();
+    }
+
+    public void setTarget(OptionControl<?> target) {
+        if (target == this.target) {
+            if (target != null) {
+                this.visibleBounds = this.positionBounds();
+            }
+            return;
+        }
+        this.target = target;
+        this.scroll.scrollTo(0);
+        if (target == null) {
+            this.lines = List.of();
+            return;
+        }
+        int width = Math.max(1, this.tooltipWidth() - PADDING * 2);
+        List<String> content = new ArrayList<>(this.font.listFormattedStringToWidth(
+                target.getOption().getTooltip().getFormattedText(), width));
+        OptionImpact impact = target.getOption().getImpact();
+        if (impact != null) {
+            content.add(I18n.format("sodium.options.performance_impact_string", impact.name()));
+        }
+        this.lines = List.copyOf(content);
+        this.visibleBounds = this.positionBounds();
+        this.scroll.setContext(Math.max(0, this.visibleBounds.height() - PADDING * 2),
+                this.lines.size() * (this.font.FONT_HEIGHT + Layout.TEXT_LINE_SPACING));
+    }
+
+    public void updateTarget(OptionControl<?> hovered, int mouseX, int mouseY) {
+        this.updateTarget(hovered, null, mouseX, mouseY);
+    }
+
+    public void updateTarget(OptionControl<?> hovered, OptionControl<?> focused, int mouseX, int mouseY) {
+        this.mouseX = mouseX;
+        this.mouseY = mouseY;
+        OptionControl<?> target = hovered != null ? hovered : focused;
+        if (target != null) {
+            this.setTarget(target);
+        } else if (this.target == null || !this.positionBounds().contains(mouseX, mouseY)) {
+            this.setTarget(null);
+        }
+    }
+
+    public void setReservedAreaTopLeftCorner(int x, int y) {
+        // Kept for source compatibility with callers of the upstream API. Overlay tooltips no longer
+        // reserve space for action buttons; their bounds are constrained by the option viewport.
+    }
+
+    public void render() {
+        if (this.target == null) {
+            return;
+        }
+        GuiRect box = this.positionBounds();
+        Gui.drawRect(box.x(), box.y(), box.right(), box.bottom(),
+                this.overlay ? Colors.BACKGROUND_OVERLAY : Colors.BACKGROUND_LIGHT);
+        if (!this.overlay) {
+            Minecraft.getMinecraft().getTextureManager().bindTexture(ARROWS);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            int arrowY = Math.max(this.area.y(), Math.min(this.target.getBounds().y()
+                    + (this.target.getBounds().height() - 9) / 2, this.area.bottom() - 9));
+            Gui.drawModalRectWithCustomSizedTexture(box.x() - 5, arrowY, 0, 0, 5, 9, 10, 9);
+        }
+        int y = box.y() + PADDING - this.scroll.amount();
+        for (String line : this.lines) {
+            if (y >= box.y() && y + this.font.FONT_HEIGHT <= box.bottom()) {
+                this.font.drawString(line, box.x() + PADDING, y, Colors.FOREGROUND);
+            }
+            y += this.font.FONT_HEIGHT + Layout.TEXT_LINE_SPACING;
+        }
+        if (this.scroll.canScroll()) {
+            int thumbY = box.y() + this.scroll.thumbStart(box.height());
+            Gui.drawRect(box.right() - Layout.SCROLLBAR_WIDTH, box.y(), box.right(), box.bottom(), 0x96323232);
+            Gui.drawRect(box.right() - Layout.SCROLLBAR_WIDTH, thumbY, box.right(),
+                    Math.min(box.bottom(), thumbY + this.scroll.thumbLength(box.height())), 0x96646464);
+        }
+    }
+
+    public boolean mouseScrolled(int mouseX, int mouseY, int delta) {
+        if (this.target != null && this.positionBounds().contains(mouseX, mouseY) && this.scroll.canScroll()) {
+            this.scroll.scroll(delta);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean mouseClicked(int mouseX, int mouseY, int button) {
+        return button >= 0 && this.capturesInput(mouseX, mouseY);
+    }
+
+    public boolean capturesInput(int mouseX, int mouseY) {
+        return OverlayInputArbiter.captures(this.overlay, this.target != null,
+                this.target == null ? null : this.positionBounds(), mouseX, mouseY);
+    }
+
+    private GuiRect positionBounds() {
+        if (this.target == null) return this.area;
+        this.overlay = true;
+        int width = this.tooltipWidth();
+        int height = Math.min(Math.max(1, this.area.height()), Math.max(1, this.lines.size()
+                * (this.font.FONT_HEIGHT + Layout.TEXT_LINE_SPACING) - Layout.TEXT_LINE_SPACING + PADDING * 2));
+        GuiRect bounds = calculateOverlayBounds(this.area, this.target.getBounds(), width, height,
+                this.mouseX, this.mouseY);
+        return bounds;
+    }
+
+    private int tooltipWidth() {
+        int available = Math.max(1, this.area.width());
+        return Math.min(Layout.MAX_TOOLTIP_WIDTH, Math.max(1, available));
+    }
+
+    /** Calculates a mouse-adjacent overlay rectangle entirely within the supplied viewport. */
+    static GuiRect calculateOverlayBounds(GuiRect area, GuiRect control, int width, int height,
+                                          int mouseX, int mouseY) {
+        int boundedWidth = Math.min(Math.max(1, width), Math.max(1, area.width()));
+        int boundedHeight = Math.min(Math.max(1, height), Math.max(1, area.height()));
+        int x = mouseX + Layout.TOOLTIP_OUTER_MARGIN;
+        if (x + boundedWidth > area.right()) {
+            x = mouseX - boundedWidth - Layout.TOOLTIP_OUTER_MARGIN;
+        }
+        if (x < area.x()) {
+            x = area.x();
+        } else if (x + boundedWidth > area.right()) {
+            x = area.right() - boundedWidth;
+        }
+
+        int y = mouseY + Layout.TOOLTIP_OUTER_MARGIN;
+        if (y + boundedHeight > area.bottom()) {
+            y = mouseY - boundedHeight - Layout.TOOLTIP_OUTER_MARGIN;
+        }
+        if (y < area.y()) {
+            y = area.y();
+        } else if (y + boundedHeight > area.bottom()) {
+            y = area.bottom() - boundedHeight;
+        }
+        return new GuiRect(x, y, boundedWidth, boundedHeight);
+    }
+}

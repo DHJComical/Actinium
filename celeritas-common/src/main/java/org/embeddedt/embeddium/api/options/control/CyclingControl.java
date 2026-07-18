@@ -54,7 +54,12 @@ public class CyclingControl<T> implements Control<T> {
     }
 
     public TextComponent[] getNames() {
-        return this.names;
+        return this.names.clone();
+    }
+
+    /** Returns the ordered values exposed by this control without leaking its backing array. */
+    public T[] getAllowedValues() {
+        return this.allowedValues.clone();
     }
 
     @Override

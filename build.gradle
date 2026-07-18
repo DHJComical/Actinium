@@ -343,7 +343,8 @@ test {
 }
 
 tasks.named('processResources').configure {
-    from('THIRD_PARTY_NOTICES.md')
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+    from('THIRD_PARTY_NOTICES.md', 'LICENSE-SODIUM.md')
 }
 
 def verifyRemapJar = tasks.register('verifyRemapJar') {
@@ -356,6 +357,7 @@ def verifyRemapJar = tasks.register('verifyRemapJar') {
         def requiredEntries = [
             'META-INF/MANIFEST.MF',
             'THIRD_PARTY_NOTICES.md',
+            'LICENSE-SODIUM.md',
             'com/dhj/actinium/Actinium.class',
             'com/gtnewhorizons/angelica/glsm/GLStateManager.class',
             'net/coderbot/iris/Iris.class',

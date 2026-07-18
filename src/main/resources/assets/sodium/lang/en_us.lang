@@ -1,0 +1,5 @@
+#PARSE_ESCAPES
+sodium.options.pages.general=General
+sodium.options.search=Search
+sodium.options.search.hint=Search...
+sodium.options.open_external_page_button=Open

@@ -96,10 +96,10 @@ public abstract class ShaderChunkRenderer implements ChunkRenderer {
         List<GlShader> loadedShaders = new ArrayList<>();
 
         loadedShaders.add(loadShader(ShaderType.VERTEX,
-                "sodium:" + path + ".vsh", constants));
+                "actinium:" + path + ".vsh", constants));
 
         loadedShaders.add(loadShader(ShaderType.FRAGMENT,
-                "sodium:" + path + ".fsh", constants));
+                "actinium:" + path + ".fsh", constants));
 
         try {
             var builder = GlProgram.builder("sodium:chunk_shader");
