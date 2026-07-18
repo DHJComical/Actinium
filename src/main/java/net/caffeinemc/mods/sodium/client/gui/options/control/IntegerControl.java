@@ -23,7 +23,7 @@ public final class IntegerControl extends OptionControl<IntegerOption> {
     protected void renderControl(GuiRect control, boolean enabled, int mouseX, int mouseY) {
         SteppedValidator range = this.option.getSteppedValidator();
         int trackY = control.y() + control.height() / 2;
-        boolean drawSlider = enabled && (control.contains(mouseX, mouseY) || this.isFocused());
+        boolean drawSlider = enabled;
         double progress = (double) (this.option.getPendingValue() - range.min())
                 / Math.max(1, range.max() - range.min());
         if (drawSlider) {
