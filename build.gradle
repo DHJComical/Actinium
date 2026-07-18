@@ -194,8 +194,13 @@ unimined.minecraft {
 }
 
 tasks.named('runClient', JavaExec).configure {
+    workingDir = layout.projectDirectory.dir('run/client').asFile
     jvmArgs = jvmArgs.findAll { !it.startsWith('-Xmx') }
     maxHeapSize = '8G'
+}
+
+tasks.named('runServer', JavaExec).configure {
+    workingDir = layout.projectDirectory.dir('run/server').asFile
 }
 
 apply from: 'gradle/scripts/dependencies.gradle'
