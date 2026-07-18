@@ -39,6 +39,15 @@ public abstract class IrisGuiSlot extends GuiSlot {
     }
 
     @Override
+    protected int getContentHeight() {
+        // Entries are drawn 6 pixels lower than vanilla assumes (headerPadding is forced to 2 in
+        // drawSelectionBox, and drawSlot implementations draw the entry at y + 4) and occupy the
+        // full slotHeight instead of slotHeight - 4. Account for those 10 extra pixels so that
+        // getMaxScroll() allows the last entry to be scrolled fully into view.
+        return super.getContentHeight() + 10;
+    }
+
+    @Override
     protected void elementClicked(int index, boolean doubleClick, int mouseX, int mouseY) {
         // Do nothing
     }
