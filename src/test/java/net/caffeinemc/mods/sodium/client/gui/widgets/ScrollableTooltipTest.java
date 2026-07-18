@@ -42,11 +42,19 @@ class ScrollableTooltipTest {
     }
 
     @Test
-    void focusedFallbackIsClearedOutsideTooltipViewport() {
+    void focusedOptionDoesNotCreateTooltipInViewportBlankSpace() {
         OptionControl<?> focused = new TestControl();
 
-        assertEquals(focused, ScrollableTooltip.selectTarget(null, focused, true));
-        assertNull(ScrollableTooltip.selectTarget(null, focused, false));
+        assertNull(ScrollableTooltip.selectTarget(null, focused, null, false));
+        assertNull(ScrollableTooltip.selectTarget(null, focused, null, true));
+    }
+
+    @Test
+    void visibleTooltipIsRetainedWhilePointerIsInsideItsOverlay() {
+        OptionControl<?> current = new TestControl();
+
+        assertEquals(current, ScrollableTooltip.selectTarget(null, null, current, true));
+        assertNull(ScrollableTooltip.selectTarget(null, null, current, false));
     }
 
     @Test
@@ -54,8 +62,8 @@ class ScrollableTooltipTest {
         OptionControl<?> hovered = new TestControl();
         OptionControl<?> focused = new TestControl();
 
-        assertEquals(hovered, ScrollableTooltip.selectTarget(hovered, focused, true));
-        assertEquals(hovered, ScrollableTooltip.selectTarget(hovered, focused, false));
+        assertEquals(hovered, ScrollableTooltip.selectTarget(hovered, focused, null, true));
+        assertEquals(hovered, ScrollableTooltip.selectTarget(hovered, focused, null, false));
     }
 
     private static final class TestControl extends OptionControl<Option> {

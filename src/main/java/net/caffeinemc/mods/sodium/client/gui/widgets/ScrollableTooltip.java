@@ -78,24 +78,25 @@ public final class ScrollableTooltip {
     public void updateTarget(OptionControl<?> hovered, OptionControl<?> focused, int mouseX, int mouseY) {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
-        // Keyboard focus may keep a tooltip visible while navigating, but only while the
-        // pointer remains inside the viewport owned by this tooltip. Moving to the sidebar,
-        // search box, footer, or surrounding screen must clear the fallback target.
-        OptionControl<?> target = selectTarget(hovered, focused, this.area.contains(mouseX, mouseY));
+        // Focus is keyboard state and must not create a tooltip under an unrelated pointer
+        // position. A visible overlay may retain its current target while the pointer is
+        // inside the overlay itself so that scrolling and clicking remain possible.
+        boolean insideCurrentTooltip = this.target != null && this.positionBounds().contains(mouseX, mouseY);
+        OptionControl<?> target = selectTarget(hovered, focused, this.target, insideCurrentTooltip);
         if (target != null) {
             this.setTarget(target);
-        } else if (this.target == null || !this.positionBounds().contains(mouseX, mouseY)) {
+        } else {
             this.setTarget(null);
         }
     }
 
-    /** Selects the tooltip target without allowing keyboard focus to leak outside its viewport. */
+    /** Selects a hovered option, or retains an already-visible tooltip only while hovered. */
     static OptionControl<?> selectTarget(OptionControl<?> hovered, OptionControl<?> focused,
-                                         boolean pointerInsideViewport) {
+                                         OptionControl<?> current, boolean pointerInsideTooltip) {
         if (hovered != null) {
             return hovered;
         }
-        return pointerInsideViewport ? focused : null;
+        return pointerInsideTooltip ? current : null;
     }
 
     public void setReservedAreaTopLeftCorner(int x, int y) {
