@@ -445,9 +445,14 @@ public class Iris {
     }
 
     public static void loadShaderpack() {
-        if (!isWorldReadyForShaderpackLoad()) {
+        // NB: Loading the pack itself only parses files and reads GL capability strings, so it is
+        // safe outside of a world (e.g. the shader pack screen on the main menu). Only pipeline
+        // creation requires an active world, and that is gated separately in reload().
+        // We still defer until the render system has been initialized, since loading the pack
+        // reads GL capabilities for the standard environment defines.
+        if (!renderSystemInitialized) {
             loadShaderPackWhenPossible = true;
-            logger.info("Deferring shaderpack load because no world is active yet");
+            logger.info("Deferring shaderpack load because the render system is not initialized yet");
             return;
         }
 
@@ -751,12 +756,6 @@ public class Iris {
 
         // Destroy all allocated resources
         destroyEverything();
-
-        if (!isWorldReadyForShaderpackLoad()) {
-            loadShaderPackWhenPossible = true;
-            logger.info("Deferring shader reload because no world is active yet");
-            return;
-        }
 
         // Load the new shaderpack
         loadShaderpack();
