@@ -71,6 +71,33 @@ class LegacyOptionAdapterTest {
         assertFalse(config.hasPendingChanges());
     }
 
+    @Test
+    void resolvesLegacyTextThroughClientTranslator() {
+        MutableStorage storage = new MutableStorage();
+        var option = OptionImpl.createBuilder(boolean.class, storage)
+                .setId(OptionIdentifier.create("testmod", "translated", boolean.class))
+                .setName(TextComponent.translatable("test.option.name"))
+                .setTooltip(TextComponent.translatable("test.option.tooltip"))
+                .setControl(TickBoxControl::new)
+                .setBinding((data, value) -> data.enabled = value, data -> data.enabled)
+                .build();
+        OptionPage page = new OptionPage(OptionIdentifier.create("testmod", "translated_page"),
+                TextComponent.translatable("test.page.name"),
+                List.of(OptionGroup.createBuilder().add(option).build()));
+        ConfigBuilderImpl builder = new ConfigBuilderImpl(id -> null, "testmod");
+        var owner = builder.registerModOptions("testmod", "Test Mod", "1");
+
+        new LegacyOptionAdapter(builder, true, new LinkedHashSet<>(), key -> true,
+                (key, arguments) -> "translated:" + key).addPages(owner, List.of(page));
+        Config config = new Config(builder.build(), () -> "en_us");
+        Option translated = config.getOption(id("translated"), Option.class);
+
+        assertEquals("translated:test.page.name", config.getModOptions().getFirst().pages().getFirst()
+                .name().getUnformattedText());
+        assertEquals("translated:test.option.name", translated.getName().getUnformattedText());
+        assertEquals("translated:test.option.tooltip", translated.getTooltip().getUnformattedText());
+    }
+
     private static OptionPage createPage(MutableStorage storage) {
         var enabled = OptionImpl.createBuilder(boolean.class, storage)
                 .setId(OptionIdentifier.create("testmod", "enabled", boolean.class))

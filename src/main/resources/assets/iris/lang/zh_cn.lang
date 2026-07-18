@@ -7,6 +7,7 @@ iris.unsupported.pack=光影包不兼容！
 iris.unsupported.pack.description=你尝试加载的光影包包含 %s 不支持的功能。请尝试其他光影包。列表：%s
 
 options.iris.apply=应用
+options.iris.title=Iris
 options.iris.refresh=刷新
 options.iris.openShaderPackFolder=打开光影包文件夹...
 options.iris.shaderPackSettings=光影包设置...

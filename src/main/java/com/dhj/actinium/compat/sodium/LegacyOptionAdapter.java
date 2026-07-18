@@ -12,11 +12,11 @@ import net.caffeinemc.mods.sodium.api.config.structure.OptionBuilder;
 import net.caffeinemc.mods.sodium.api.config.structure.OptionGroupBuilder;
 import net.caffeinemc.mods.sodium.api.config.structure.OptionPageBuilder;
 import net.caffeinemc.mods.sodium.api.config.structure.StatefulOptionBuilder;
+import net.caffeinemc.mods.sodium.client.gui.text.ClientTranslatedText;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
-import net.minecraft.util.text.TextComponentTranslation;
 import org.embeddedt.embeddium.api.options.control.CyclingControl;
 import org.embeddedt.embeddium.api.options.control.SliderControl;
 import org.embeddedt.embeddium.api.options.control.TickBoxControl;
@@ -36,7 +36,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 /**
  * Converts the retained Embeddium option contract into the modern Sodium Config API without reflection.
@@ -50,11 +53,20 @@ public final class LegacyOptionAdapter {
     private final boolean writable;
     private final Map<OptionStorage<?>, LegacyStorageHandler> storages = new IdentityHashMap<>();
     private final Set<ResourceLocation> registeredOptionIds;
+    private final Predicate<String> translationKeyChecker;
+    private final BiFunction<String, Object[], String> translator;
 
     /**
      * Creates a conversion session sharing option IDs across all pages in one Config registry.
      */
     public LegacyOptionAdapter(ConfigBuilder builder, boolean writable, Set<ResourceLocation> registeredOptionIds) {
+        this(builder, writable, registeredOptionIds, I18n::hasKey, I18n::format);
+    }
+
+    /** Creates an adapter with an explicit client translation boundary for integration tests. */
+    public LegacyOptionAdapter(ConfigBuilder builder, boolean writable, Set<ResourceLocation> registeredOptionIds,
+                               Predicate<String> translationKeyChecker,
+                               BiFunction<String, Object[], String> translator) {
         if (builder == null) {
             throw new IllegalArgumentException("Config builder must not be null");
         }
@@ -64,12 +76,15 @@ public final class LegacyOptionAdapter {
         this.builder = builder;
         this.writable = writable;
         this.registeredOptionIds = registeredOptionIds;
+        this.translationKeyChecker = Objects.requireNonNull(translationKeyChecker,
+                "Translation key checker must not be null");
+        this.translator = Objects.requireNonNull(translator, "Client translator must not be null");
     }
 
     /** Adds every unique option from the supplied legacy pages in traversal order. */
     public void addPages(ModOptionsBuilder owner, List<OptionPage> pages) {
         for (OptionPage page : pages) {
-            OptionPageBuilder targetPage = this.builder.createOptionPage().setName(convertText(page.getName()));
+            OptionPageBuilder targetPage = this.builder.createOptionPage().setName(this.convertText(page.getName()));
             boolean pageHasOptions = false;
             for (OptionGroup group : page.getGroups()) {
                 OptionGroupBuilder targetGroup = this.builder.createOptionGroup();
@@ -119,7 +134,7 @@ public final class LegacyOptionAdapter {
         return this.applyCommon(this.builder.createIntegerOption(id), option)
                 .setDefaultValue(option.getValue())
                 .setRange(slider.getMin(), slider.getMax(), slider.getInterval())
-                .setValueFormatter(value -> convertText(slider.getFormatter().format(value)))
+                .setValueFormatter(value -> this.convertText(slider.getFormatter().format(value)))
                 .setBinding(value -> this.saveLegacy(option, value), option::getValue);
     }
 
@@ -147,7 +162,7 @@ public final class LegacyOptionAdapter {
         return this.applyCommon(this.builder.createIntegerOption(id), option)
                 .setDefaultValue(option.getValue())
                 .setValidator(validator)
-                .setValueFormatter(value -> convertText(nameForInteger(id, value, allowed, names)))
+                .setValueFormatter(value -> this.convertText(nameForInteger(id, value, allowed, names)))
                 .setBinding(value -> this.saveLegacy(option, value), option::getValue);
     }
 
@@ -159,7 +174,7 @@ public final class LegacyOptionAdapter {
         TextComponent[] names = cycling.getNames();
         Map<E, ITextComponent> namesByValue = new IdentityHashMap<>();
         for (int index = 0; index < values.size(); index++) {
-            namesByValue.put(values.get(index), convertText(names[index]));
+            namesByValue.put(values.get(index), this.convertText(names[index]));
         }
         return this.applyCommon(this.builder.createEnumOption(id, enumClass), option)
                 .setDefaultValue(option.getValue())
@@ -177,8 +192,8 @@ public final class LegacyOptionAdapter {
 
     private <B extends StatefulOptionBuilder<?>> B applyCommon(
             B target, Option<?> source) {
-        target.setName(convertText(source.getName()))
-                .setTooltip(convertText(source.getTooltip()))
+        target.setName(this.convertText(source.getName()))
+                .setTooltip(this.convertText(source.getTooltip()))
                 .setEnabledProvider(state -> this.writable && source.isAvailable())
                 .setStorageHandler(this.storageFor(source.getStorage()))
                 .setControlHiddenWhenDisabled(false)
@@ -208,20 +223,20 @@ public final class LegacyOptionAdapter {
         return new ResourceLocation("sodium", "builtin_option_flag." + flag.name().toLowerCase(Locale.ROOT));
     }
 
-    private static ITextComponent convertText(TextComponent component) {
+    private ITextComponent convertText(TextComponent component) {
         if (component instanceof TextComponent.Literal literal) {
             return new TextComponentString(literal.text());
         }
         if (component instanceof TextComponent.Translatable translatable) {
-            String key = translatable.keys().stream().filter(I18n::hasKey).findFirst()
+            String key = translatable.keys().stream().filter(this.translationKeyChecker).findFirst()
                     .orElse(translatable.keys().get(0));
             Object[] args = translatable.args().stream()
-                    .map(argument -> argument instanceof TextComponent nested ? convertText(nested) : argument)
+                    .map(argument -> argument instanceof TextComponent nested ? this.convertText(nested) : argument)
                     .toArray();
-            return new TextComponentTranslation(key, args);
+            return new ClientTranslatedText(key, this.translator, args);
         }
         if (component instanceof TextComponent.Styled styled) {
-            return convertText(styled.inner());
+            return this.convertText(styled.inner());
         }
         throw new IllegalArgumentException("Unsupported legacy text component: " + component.getClass().getName());
     }
