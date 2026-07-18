@@ -335,8 +335,19 @@ tasks.named('compileJava', JavaCompile).configure {
     options.forkOptions.jvmArgs.add('--sun-misc-unsafe-memory-access=allow')
 }
 
+def testRunDirectory = layout.projectDirectory.dir('run/test')
+
+def prepareTestRunDirectory = tasks.register('prepareTestRunDirectory') {
+    outputs.dir(testRunDirectory)
+    doLast {
+        mkdir(testRunDirectory)
+    }
+}
+
 test {
+    dependsOn prepareTestRunDirectory
     useJUnitPlatform()
+    workingDir = testRunDirectory.asFile
     javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(25)
     }
