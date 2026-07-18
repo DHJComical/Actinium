@@ -422,7 +422,9 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
         final boolean previousShadersEnabled = Iris.getIrisConfig().areShadersEnabled();
 
         // Only reload if the pack would be different from before, or shaders were toggled, or options were changed, or if we're about to reset options.
-        if (!name.equals(previousPackName) || enabled != previousShadersEnabled || !Iris.getShaderPackOptionQueue().isEmpty() || Iris.shouldResetShaderPackOptionsOnNextReload()) {
+        // Also reload if shaders are enabled but the pack isn't loaded yet, which happens when opening
+        // this screen from the main menu (pack loading is deferred until the render system is ready).
+        if (!name.equals(previousPackName) || enabled != previousShadersEnabled || !Iris.getShaderPackOptionQueue().isEmpty() || Iris.shouldResetShaderPackOptionsOnNextReload() || (enabled && Iris.getCurrentPack().isEmpty())) {
             Iris.getIrisConfig().setShaderPackName(name);
             IrisApi.getInstance().getConfig().setShadersEnabledAndApply(enabled);
         }

@@ -208,6 +208,10 @@ public final class PropertiesTokenizer {
 		return splitBaseEntry(entry, baseEntry, nbtProperties);
 	}
 
+	private static boolean startsWithNumeric(String segment) {
+		return !segment.isEmpty() && StringUtils.isNumeric(segment.substring(0, 1));
+	}
+
 	private static ParsedBlockIdentifier splitBaseEntry(String entry, String baseEntry, Map<String, NbtValue> nbtProperties) {
 		Set<Integer> metas = new HashSet<>();
 		Map<String, String> stateProperties = new LinkedHashMap<>();
@@ -233,7 +237,7 @@ public final class PropertiesTokenizer {
 		}
 
 		if (splitStates.length == 2
-			&& !StringUtils.isNumeric(splitStates[1].substring(0, 1))
+			&& !startsWithNumeric(splitStates[1])
 			&& !splitStates[1].contains("=")) {
 			return new ParsedBlockIdentifier(
 				new NamespacedId(splitStates[0], splitStates[1]),
@@ -249,7 +253,7 @@ public final class PropertiesTokenizer {
 		if (splitStates.length == 2) {
 			id = new NamespacedId("minecraft", splitStates[0]);
 			statesStart = 1;
-		} else if (StringUtils.isNumeric(splitStates[1].substring(0, 1)) || splitStates[1].contains("=")) {
+		} else if (startsWithNumeric(splitStates[1]) || splitStates[1].contains("=")) {
 			id = new NamespacedId("minecraft", splitStates[0]);
 			statesStart = 1;
 		} else {

@@ -46,6 +46,26 @@ public class SliderControl implements Control<Integer> {
         return 130;
     }
 
+    /** Returns the inclusive minimum used by compatibility model adapters. */
+    public int getMin() {
+        return this.min;
+    }
+
+    /** Returns the inclusive maximum used by compatibility model adapters. */
+    public int getMax() {
+        return this.max;
+    }
+
+    /** Returns the discrete step used by compatibility model adapters. */
+    public int getInterval() {
+        return this.interval;
+    }
+
+    /** Returns the value formatter used by compatibility model adapters. */
+    public ControlValueFormatter getFormatter() {
+        return this.mode;
+    }
+
     private static class Button extends ControlElement<Integer> {
         private static final int THUMB_WIDTH = 2, TRACK_HEIGHT = 1;
 

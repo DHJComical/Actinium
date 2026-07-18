@@ -7,6 +7,7 @@ iris.unsupported.pack=Shader pack incompatible!
 iris.unsupported.pack.description=The shader pack you are trying to load contains features unsupported by %s. Please try another pack. List: %s
 
 options.iris.apply=Apply
+options.iris.title=Iris
 options.iris.refresh=Refresh
 options.iris.openShaderPackFolder=Open Shader Pack Folder...
 options.iris.shaderPackSettings=Shader Pack Settings...

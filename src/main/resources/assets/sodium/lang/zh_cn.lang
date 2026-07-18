@@ -1,0 +1,5 @@
+#PARSE_ESCAPES
+sodium.options.pages.general=常规
+sodium.options.search=搜索
+sodium.options.search.hint=搜索...
+sodium.options.open_external_page_button=打开
