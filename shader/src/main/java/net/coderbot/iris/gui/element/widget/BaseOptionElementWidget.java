@@ -147,7 +147,7 @@ public abstract class BaseOptionElementWidget<T extends OptionMenuElement> exten
 
 	@Override
 	public Optional<String> getCommentBody() {
-		return Optional.ofNullable(getCommentKey()).map(I18n::format);
+		return Optional.ofNullable(getCommentKey()).map(key -> I18n.hasKey(key) ? I18n.format(key) : null);
 	}
 
 	@Override
