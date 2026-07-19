@@ -28,7 +28,9 @@ import org.lwjgl.system.Platform;
 public interface Pointer {
 
     /** The pointer size in bytes. Will be 4 on a 32bit JVM and 8 on a 64bit one. */
-    int POINTER_SIZE = Platform.getArchitecture().is64Bit() ? 8 : 4;
+    // Delegate to LWJGL's own constant: Platform.Architecture.is64Bit() only exists
+    // on LWJGL 3.4+, while Cleanroom currently ships LWJGL 3.3.x at runtime.
+    int POINTER_SIZE = org.lwjgl.system.Pointer.POINTER_SIZE;
 
     /** The pointer size power-of-two. Will be 2 on a 32bit JVM and 3 on a 64bit one. */
     int POINTER_SHIFT = POINTER_SIZE == 8 ? 3 : 2;
