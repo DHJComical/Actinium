@@ -1,5 +1,6 @@
 package com.gtnewhorizons.angelica.loading.fml.tweakers;
 
+import com.dhj.actinium.compat.MixinReEntranceLockFix;
 import net.minecraft.launchwrapper.ITweaker;
 import net.minecraft.launchwrapper.LaunchClassLoader;
 import org.apache.logging.log4j.LogManager;
@@ -39,6 +40,13 @@ public class AngelicaLateTweaker implements ITweaker {
             }
         } catch (Exception e) {
             LOGGER.warn("Failed to install Angelica redirector late", e);
+        } finally {
+            // Instantiating the redirector above forces the first class loads through the
+            // mixin transformer, so mixin select/prepare has completed by this point. If a
+            // legacy coremod transformer re-entered mixin during prepare (e.g. Techguns
+            // resolving supertypes), the processor's re-entrance lock depth is now leaked
+            // and every later applyMixins would throw; restore the balanced state here.
+            MixinReEntranceLockFix.clearLeakedLock();
         }
         return new String[0];
     }
