@@ -418,6 +418,19 @@ public class ActiniumGameOptionPages {
                 )
                 .build());
 
+        groups.add(OptionGroup.createBuilder()
+                .setId(StandardOptions.Option.ACTINIUM_IGNORE_FRAMEBUFFER_ERRORS.cast())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_IGNORE_FRAMEBUFFER_ERRORS.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.ignore_framebuffer_errors.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.ignore_framebuffer_errors.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.MEDIUM)
+                        .setBinding((opts, value) -> opts.debug.ignoreFramebufferErrors = value, opts -> opts.debug.ignoreFramebufferErrors)
+                        .build()
+                )
+                .build());
+
         return new OptionPage(StandardOptions.Pages.ADVANCED, TextComponent.translatable("sodium.options.pages.advanced"), ImmutableList.copyOf(groups));
     }
 

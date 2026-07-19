@@ -24,4 +24,6 @@ sodium.options.actinium.shader_debug.model_renderer_display_lists.tooltip=把批
 sodium.options.actinium.shader_debug.fast_lit_item_rendering.tooltip=使用 Actinium 的简化发光物品路径，而不是 Forge 的分段路径。若手持物品或第一人称物品在光影下出现半透明或深度异常，请关闭这一项。
 sodium.options.actinium.shader_debug.fast_lit_item_display_lists.tooltip=把可缓存的发光物品模型保存为 GLSM 显示列表。若手持物品、物品栏图标或附魔光效附近的物品渲染出现残留、半透明或深度错误，请关闭这一项。
 sodium.options.actinium.shader_debug.render_pass_optimization.tooltip=当方块模型面的声明渲染通道与实际纹理透明度不匹配时，重新分配更合适的地形渲染通道。排查光影下地面明暗闪烁或透明分类错误时，请关闭这一项。
+sodium.options.actinium.ignore_framebuffer_errors.name=忽略帧缓冲错误
+sodium.options.actinium.ignore_framebuffer_errors.tooltip=允许直接使用未通过显卡驱动完整性检查的帧缓冲。如果在 Android 设备上运行（如 MobileGlues 渲染器）且部分渲染无法正常工作，可以尝试打开此选项。警告：这会降低真实图形错误的可诊断性。
 options.actinium.shaderPackSelection=Iris 光影包

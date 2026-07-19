@@ -8,6 +8,7 @@ import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import net.coderbot.iris.features.FeatureFlags;
+import net.coderbot.iris.Iris;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.blending.BufferBlendOverride;
@@ -141,6 +142,7 @@ public class FinalPassRenderer {
 				return;
 			}
 
+			Iris.logger.info("Creating swap-pass framebuffer for colortex{}", target);
 			final SwapPass swap = new SwapPass();
 			final RenderTarget target1 = renderTargets.get(target);
 			swap.target = target;

@@ -1,6 +1,8 @@
 package net.coderbot.iris.rendertarget;
 
+import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.google.common.collect.ImmutableSet;
+import com.gtnewhorizons.angelica.glsm.GLDebug;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import lombok.Getter;
@@ -12,12 +14,22 @@ import net.coderbot.iris.shaderpack.PackDirectives;
 import net.coderbot.iris.shaderpack.PackRenderTargetDirectives;
 import org.joml.Vector2i;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class RenderTargets {
+	// When enabled, a failed framebuffer creation is retried once with fresh bindings (actinium.fbRetry)
+	private static final boolean FB_RETRY = Boolean.parseBoolean(System.getProperty("actinium.fbRetry", "true"));
+
+	// Advisory mode: a framebuffer that fails the driver's completeness check is used anyway.
+	// Forced by -Dactinium.advisoryFboStatus=true|false; otherwise follows the GUI option
+	// "Ignore Framebuffer Errors" (debug.ignoreFramebufferErrors). Intended for Android GL
+	// translation layers (e.g. MobileGlues) where the verdict can be a false negative.
+	private static boolean loggedAdvisoryBypass;
+
 	private final RenderTarget[] targets;
 	private int currentDepthTexture;
 	private DepthBufferFormat currentDepthFormat;
@@ -56,6 +68,7 @@ public class RenderTargets {
 			targets[index] = RenderTarget.builder().setDimensions(dimensions.x, dimensions.y)
 					.setInternalFormat(actualFormat)
 					.setPixelFormat(actualFormat.getPixelFormat()).build();
+			Iris.logger.info("Render target colortex{}: format={} (gl=0x{}) size={}x{}", index, actualFormat, Integer.toHexString(actualFormat.getGlFormat()), dimensions.x, dimensions.y);
 		});
 		this.currentDepthTexture = depthTexture;
 		this.currentDepthFormat = depthFormat;
@@ -301,9 +314,65 @@ public class RenderTargets {
 
 		final int[] actualDrawBuffers = new int[drawBuffers.length];
 
-		for (int i = 0; i < drawBuffers.length; i++) {
+		for (int i = 0; i < actualDrawBuffers.length; i++) {
 			actualDrawBuffers[i] = i;
+		}
 
+		setupColorAttachments(framebuffer, stageWritesToMain, drawBuffers);
+
+		framebuffer.drawBuffers(actualDrawBuffers);
+        framebuffer.readBuffer(0);
+
+		final int status = framebuffer.checkStatus();
+		if (status == GL30.GL_FRAMEBUFFER_COMPLETE) {
+			return framebuffer;
+		}
+
+		// Dump full diagnostics before failing: the raw exception alone hides the actual GL status.
+		final String diagnostics = describeFramebuffer(stageWritesToMain, drawBuffers, framebuffer);
+		Iris.logger.warn("Failed to create color framebuffer: status={} ({})\n{}",
+				String.format("0x%04X", status), GLDebug.getFramebufferStatusName(status), diagnostics);
+
+		if (isAdvisoryFboStatus()) {
+			if (!loggedAdvisoryBypass) {
+				loggedAdvisoryBypass = true;
+				Iris.logger.info("Advisory FBO status mode active (actinium.advisoryFboStatus override or 'Ignore Framebuffer Errors' option); incomplete framebuffers will be used anyway");
+			}
+			Iris.logger.warn("Framebuffer reported incomplete but will be used anyway (advisory mode)");
+			return framebuffer;
+		}
+
+		if (!FB_RETRY) {
+			throw new IllegalStateException("Unexpected error while creating framebuffer: status="
+					+ String.format("0x%04X", status) + " (" + GLDebug.getFramebufferStatusName(status) + ")\n" + diagnostics);
+		}
+
+		// Self-heal: unbind everything and rebuild the framebuffer from scratch. Works around GL
+		// translation layers (e.g. MobileGlues) leaving stale framebuffer bindings behind.
+		GLStateManager.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+
+		final GlFramebuffer retry = new GlFramebuffer();
+		setupColorAttachments(retry, stageWritesToMain, drawBuffers);
+		retry.drawBuffers(actualDrawBuffers);
+		retry.readBuffer(0);
+
+		final int retryStatus = retry.checkStatus();
+		if (retryStatus == GL30.GL_FRAMEBUFFER_COMPLETE) {
+			Iris.logger.warn("Framebuffer recovered on retry (first status={} ({}))",
+					String.format("0x%04X", status), GLDebug.getFramebufferStatusName(status));
+			ownedFramebuffers.add(retry);
+			destroyFramebuffer(framebuffer);
+			return retry;
+		}
+
+		destroyFramebuffer(retry);
+		throw new IllegalStateException("Unexpected error while creating framebuffer: status="
+				+ String.format("0x%04X", status) + " (" + GLDebug.getFramebufferStatusName(status) + "), retry status="
+				+ String.format("0x%04X", retryStatus) + " (" + GLDebug.getFramebufferStatusName(retryStatus) + ")\n" + diagnostics);
+	}
+
+	private void setupColorAttachments(GlFramebuffer framebuffer, ImmutableSet<Integer> stageWritesToMain, int[] drawBuffers) {
+		for (int i = 0; i < drawBuffers.length; i++) {
 			if (drawBuffers[i] >= getRenderTargetCount()) {
 				// TODO: This causes resource leaks, also we should really verify this in the shaderpack parser...
 				throw new IllegalStateException("Render target with index " + drawBuffers[i] + " is not supported, only "
@@ -316,15 +385,36 @@ public class RenderTargets {
 
 			framebuffer.addColorAttachment(i, textureId);
         }
+	}
 
-		framebuffer.drawBuffers(actualDrawBuffers);
-        framebuffer.readBuffer(0);
+	private String describeFramebuffer(ImmutableSet<Integer> stageWritesToMain, int[] drawBuffers, GlFramebuffer framebuffer) {
+		final StringBuilder sb = new StringBuilder();
 
-		if (!framebuffer.isComplete()) {
-			throw new IllegalStateException("Unexpected error while creating framebuffer");
+		for (int i = 0; i < drawBuffers.length; i++) {
+			final RenderTarget target = this.get(drawBuffers[i]);
+			final boolean main = stageWritesToMain.contains(drawBuffers[i]);
+			final int textureId = main ? target.getMainTexture() : target.getAltTexture();
+			sb.append(String.format("  drawBuffer[%d]: colortex%d texture=%d (%s) format=%s (gl=0x%X) size=%dx%d%n",
+					i, drawBuffers[i], textureId, main ? "main" : "alt",
+					target.getInternalFormat(), target.getInternalFormat().getGlFormat(),
+					target.getWidth(), target.getHeight()));
 		}
 
-		return framebuffer;
+		for (int i = 0; i < drawBuffers.length; i++) {
+			sb.append(String.format("  attachment[%d]: objectType=0x%X objectName=%d%n", i,
+					framebuffer.getAttachmentParameter(i, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE),
+					framebuffer.getAttachmentParameter(i, GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME)));
+		}
+
+		for (int i = 0; i < drawBuffers.length; i++) {
+			final RenderTarget target = this.get(drawBuffers[i]);
+			final int textureId = stageWritesToMain.contains(drawBuffers[i]) ? target.getMainTexture() : target.getAltTexture();
+			sb.append(String.format("  texture %d: level0 width=%d internalFormat=0x%X%n", textureId,
+					RenderSystem.getTexLevelParameteri(textureId, 0, GL11.GL_TEXTURE_WIDTH),
+					RenderSystem.getTexLevelParameteri(textureId, 0, GL11.GL_TEXTURE_INTERNAL_FORMAT)));
+		}
+
+		return sb.toString();
 	}
 
 	public void destroyFramebuffer(GlFramebuffer framebuffer) {
@@ -338,5 +428,19 @@ public class RenderTargets {
 
 	public int getCurrentHeight() {
 		return cachedHeight;
+	}
+
+	// -Dactinium.advisoryFboStatus=true|false forces advisory mode; otherwise the GUI option decides.
+	private static boolean isAdvisoryFboStatus() {
+		final String override = System.getProperty("actinium.advisoryFboStatus");
+		if (override != null) {
+			return Boolean.parseBoolean(override);
+		}
+
+		try {
+			return ActiniumRuntime.options().debug.ignoreFramebufferErrors;
+		} catch (RuntimeException ignored) {
+			return false;
+		}
 	}
 }
