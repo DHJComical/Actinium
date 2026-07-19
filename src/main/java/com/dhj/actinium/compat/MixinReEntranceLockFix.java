@@ -5,8 +5,11 @@ import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.transformer.MixinProcessor;
 import org.spongepowered.asm.mixin.transformer.Proxy;
 import org.spongepowered.asm.util.ReEntranceLock;
+import top.outlands.foundation.boot.ActualClassLoader;
 
 import java.lang.reflect.Field;
+import java.util.Iterator;
+import java.util.Set;
 
 /**
  * Works around a re-entrance lock leak in the Cleanroom sponge-mixin 0.8.7 build.
@@ -61,5 +64,53 @@ public final class MixinReEntranceLockFix {
             lock.pop();
         }
         lock.clear();
+    }
+
+    /**
+     * Removes vanilla ({@code net.minecraft.*}) entries from the class loader's
+     * invalid-class negative cache. A nested class load that fails because of the
+     * re-entrance described above is recorded there permanently, so the class can
+     * never be loaded for real later; vanilla classes always exist, so their
+     * presence in the cache can only come from such transient failures.
+     */
+    public static void clearInvalidVanillaClasses() {
+        try {
+            ClassLoader cl = MixinReEntranceLockFix.class.getClassLoader();
+            if (!(cl instanceof ActualClassLoader)) {
+                return;
+            }
+            Set<String> invalid = ((ActualClassLoader) cl).getInvalidClasses();
+            int removed = 0;
+            for (Iterator<String> it = invalid.iterator(); it.hasNext(); ) {
+                if (it.next().startsWith("net.minecraft.")) {
+                    it.remove();
+                    removed++;
+                }
+            }
+            if (removed > 0) {
+                LOGGER.warn("Removed {} vanilla class(es) from the invalid-class cache so they can be loaded for real", removed);
+            }
+        } catch (Throwable t) {
+            LOGGER.warn("Unable to clean the invalid-class cache", t);
+        }
+    }
+
+    /**
+     * Loads the given classes without initializing them, so their transformations
+     * (including mixins) are applied up front. Used for mixin targets whose first
+     * real use would otherwise happen nested inside another class's transform
+     * (e.g. Techguns resolving the Tessellator hierarchy), which mixin cannot
+     * handle re-entrantly.
+     */
+    public static void preloadClasses(String... classNames) {
+        ClassLoader cl = MixinReEntranceLockFix.class.getClassLoader();
+        for (String className : classNames) {
+            try {
+                Class.forName(className, false, cl);
+                LOGGER.debug("Pre-loaded {}", className);
+            } catch (Throwable t) {
+                LOGGER.warn("Failed to pre-load {}", className, t);
+            }
+        }
     }
 }

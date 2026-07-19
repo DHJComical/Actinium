@@ -45,8 +45,14 @@ public class AngelicaLateTweaker implements ITweaker {
             // mixin transformer, so mixin select/prepare has completed by this point. If a
             // legacy coremod transformer re-entered mixin during prepare (e.g. Techguns
             // resolving supertypes), the processor's re-entrance lock depth is now leaked
-            // and every later applyMixins would throw; restore the balanced state here.
+            // and the nested-loaded class was blacklisted in the loader's invalid-class
+            // cache; restore both here, then pre-load mixin targets that are known to be
+            // resolved from inside other classes' transforms before their first real use.
             MixinReEntranceLockFix.clearLeakedLock();
+            MixinReEntranceLockFix.clearInvalidVanillaClasses();
+            MixinReEntranceLockFix.preloadClasses("net.minecraft.client.renderer.Tessellator");
+            MixinReEntranceLockFix.clearLeakedLock();
+            MixinReEntranceLockFix.clearInvalidVanillaClasses();
         }
         return new String[0];
     }

@@ -60,6 +60,22 @@ class MixinReEntranceLockFixTest {
     }
 
     @Test
+    void actualClassLoaderExposesInvalidClassCache() throws Exception {
+        assertTrue(java.util.Set.class.isAssignableFrom(
+            top.outlands.foundation.boot.ActualClassLoader.class.getMethod("getInvalidClasses").getReturnType()));
+    }
+
+    @Test
+    void clearInvalidVanillaClassesNeverThrowsOutsideLaunchEnvironment() {
+        assertDoesNotThrow(MixinReEntranceLockFix::clearInvalidVanillaClasses);
+    }
+
+    @Test
+    void preloadClassesNeverThrowsForMissingClasses() {
+        assertDoesNotThrow(() -> MixinReEntranceLockFix.preloadClasses("com.example.DoesNotExist"));
+    }
+
+    @Test
     void clearLeakedLockNeverThrowsOutsideLaunchEnvironment() {
         assertDoesNotThrow(MixinReEntranceLockFix::clearLeakedLock);
     }
