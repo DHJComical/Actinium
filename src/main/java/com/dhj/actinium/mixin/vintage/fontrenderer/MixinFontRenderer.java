@@ -4,10 +4,13 @@ import com.gtnewhorizon.gtnhlib.util.font.IFontParameters;
 import com.gtnewhorizons.angelica.client.font.BatchingFontRenderer;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.mixins.interfaces.FontRendererAccessor;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.ResourceLocation;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -35,17 +38,48 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Shadow protected abstract void bindTexture(ResourceLocation location);
 
     @Unique private BatchingFontRenderer actinium$batcher;
+    @Unique private static final boolean actinium$disableBatcher = Boolean.getBoolean("actinium.disableFontBatcher");
+    @Unique private static final Logger actinium$LOGGER = LogManager.getLogger("Actinium");
 
     @Inject(method = "<init>", at = @At("TAIL"))
     private void actinium$injectBatcher(GameSettings settings, ResourceLocation fontLocation, TextureManager texManager,
         boolean unicodeMode, CallbackInfo ci) {
         actinium$batcher = new BatchingFontRenderer((FontRenderer) (Object) this, this.charWidth, this.colorCode, this.locationFontTexture, texManager);
+        if (Boolean.getBoolean("actinium.fontDebug")) {
+            Logger log = LogManager.getLogger("ActiniumFontDebug");
+            log.info("charWidth-probe renderer={} unicode={} space={} A={} a={} m={} M={} W={}",
+                getClass().getName(), unicodeMode,
+                this.charWidth[32], this.charWidth[65], this.charWidth[97], this.charWidth[109], this.charWidth[77], this.charWidth[87]);
+            try (java.io.InputStream in = Minecraft.getMinecraft().getResourceManager()
+                    .getResource(this.locationFontTexture).getInputStream()) {
+                java.awt.image.BufferedImage img = net.minecraft.client.renderer.texture.TextureUtil.readBufferedImage(in);
+                log.info("fontimg-probe renderer={} loc={} img={}x{} px(8,8)={} px(40,40)={}",
+                    getClass().getName(), this.locationFontTexture, img.getWidth(), img.getHeight(),
+                    Integer.toHexString(img.getRGB(8, 8)), Integer.toHexString(img.getRGB(40, 40)));
+            } catch (Exception e) {
+                log.info("fontimg-probe renderer={} loc={} FAILED {}", getClass().getName(), this.locationFontTexture, e);
+            }
+        }
+        // Third-party renderers (e.g. StellarCore's CachedRGBFontRenderer) may replace
+        // Minecraft.fontRenderer without registering a resource reload listener, leaving charWidth
+        // permanently zeroed (vanilla only fills it in onResourceManagerReload -> readFontTexture),
+        // which collapses all non-Unicode text. A zeroed slot means "never initialized" since
+        // readFontTexture guarantees every slot >= 1. Backfill the array in place so the batcher's
+        // captured reference sees it automatically; for vanilla instances this merely moves the
+        // first fill earlier, and the startup reload overwrites it idempotently.
+        if (this.charWidth[65] == 0) {
+            try {
+                ((FontRenderer) (Object) this).onResourceManagerReload(Minecraft.getMinecraft().getResourceManager());
+            } catch (Exception e) {
+                actinium$LOGGER.warn("Failed to backfill charWidth for font renderer {}", getClass().getName(), e);
+            }
+        }
     }
 
     @Inject(method = "drawString(Ljava/lang/String;FFIZ)I", at = @At("HEAD"), cancellable = true)
     private void actinium$drawStringBatched(String text, float x, float y, int argb, boolean dropShadow,
         CallbackInfoReturnable<Integer> cir) {
-        if (GLStateManager.getListMode() == 0) {
+        if (!actinium$disableBatcher && GLStateManager.getListMode() == 0) {
             cir.setReturnValue(angelica$drawStringBatched(text, (int) x, (int) y, argb, dropShadow));
         }
     }
@@ -53,7 +87,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Inject(method = "renderString", at = @At("HEAD"), cancellable = true)
     private void actinium$renderStringBatched(String text, float x, float y, int argb, boolean dropShadow,
         CallbackInfoReturnable<Integer> cir) {
-        if (GLStateManager.getListMode() == 0) {
+        if (!actinium$disableBatcher && GLStateManager.getListMode() == 0) {
             cir.setReturnValue(angelica$drawStringBatched(text, (int) x, (int) y, argb, dropShadow));
         }
     }
@@ -77,7 +111,12 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
         GLStateManager.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
         this.posX = x;
         this.posY = y;
-        return (int) actinium$batcher.drawString(x, y, argb, dropShadow, unicodeFlag, text, 0, text.length());
+        final float ret = actinium$batcher.drawString(x, y, argb, dropShadow, unicodeFlag, text, 0, text.length());
+        // Honor the vanilla renderString contract: posX advances to the end of the text.
+        // Segmented renderers such as CachedRGBFontRenderer chain super.drawString calls
+        // and rely on this to stitch segments together.
+        this.posX = ret;
+        return (int) ret;
     }
 
     @Override
@@ -92,7 +131,9 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
 
     @Inject(method = "getCharWidth", at = @At("HEAD"), cancellable = true)
     private void actinium$getCharWidth(char c, CallbackInfoReturnable<Integer> cir) {
-        cir.setReturnValue((int) angelica$getBatcher().getCharWidthFine(c));
+        if (!actinium$disableBatcher) {
+            cir.setReturnValue((int) angelica$getBatcher().getCharWidthFine(c));
+        }
     }
 
     @Override public float actinium$getGlyphScaleX() { return angelica$getBatcher().getGlyphScaleX(); }

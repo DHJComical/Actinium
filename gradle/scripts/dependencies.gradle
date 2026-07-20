@@ -75,4 +75,6 @@ dependencies {
 //    modRuntimeOnly 'curse.maven:unseens-nether-backport-1109447:7694245'
     modImplementation 'curse.maven:gibbed-1480667:7737413'
     modRuntimeOnly'curse.maven:fermiumbooter2mixinbooter-1163720:7668886'
+    modImplementation 'curse.maven:stellarcore-1064321:8406201'
+    modImplementation 'curse.maven:rgb-chat-702720:4595048'
 }
