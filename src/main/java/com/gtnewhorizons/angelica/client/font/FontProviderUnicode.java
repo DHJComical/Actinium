@@ -10,15 +10,28 @@ import java.io.InputStream;
 public final class FontProviderUnicode implements FontProvider {
 
     private FontProviderUnicode() {
-        try {
-            InputStream inputstream = Minecraft.getMinecraft().getResourceManager()
-                .getResource(new ResourceLocation("font/glyph_sizes.bin")).getInputStream();
-            //noinspection ResultOfMethodCallIgnored
-            inputstream.read(this.glyphWidth);
+        // A single InputStream.read(byte[]) call is not guaranteed to fill the buffer:
+        // jar-backed resource streams return partial reads, which would leave most of
+        // glyphWidth zeroed and make every unicode glyph "unavailable" (invisible text).
+        try (InputStream inputstream = Minecraft.getMinecraft().getResourceManager()
+            .getResource(new ResourceLocation("font/glyph_sizes.bin")).getInputStream()) {
+            readFully(inputstream, this.glyphWidth);
         }
         catch (IOException ioexception) {
             throw new RuntimeException(ioexception);
         }
+    }
+
+    static int readFully(InputStream in, byte[] buf) throws IOException {
+        int offset = 0;
+        while (offset < buf.length) {
+            int read = in.read(buf, offset, buf.length - offset);
+            if (read < 0) {
+                break;
+            }
+            offset += read;
+        }
+        return offset;
     }
 
     private static class InstLoader { static final FontProviderUnicode instance = new FontProviderUnicode(); }
