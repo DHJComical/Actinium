@@ -13,40 +13,49 @@ public final class TessellatorManager {
     public static final int DEFAULT_BUFFER_SIZE = 0x8000;
     private static final int DIRECT_TESSELLATOR_STACK_DEPTH = 16;
 
-    private static final DirectTessellator mainInstance = new DirectTessellator(DEFAULT_BUFFER_SIZE, false);
-    private static final CallbackTessellator mainCallbackInstance = new CallbackTessellator(DEFAULT_BUFFER_SIZE, false);
-    private static final DirectTessellator[] directTessellators = new DirectTessellator[DIRECT_TESSELLATOR_STACK_DEPTH];
+    // The capture stack is per-thread: a capture started on one thread (e.g. display
+    // list recording on the client thread) must never intercept draws issued by
+    // another thread (e.g. CustomLoadingScreen's splash renderer), otherwise the
+    // foreign draw lands in the owner's tessellator and corrupts state.
+    private static final ThreadLocal<DirectTessellator> mainInstance =
+        ThreadLocal.withInitial(() -> new DirectTessellator(DEFAULT_BUFFER_SIZE, false));
+    private static final ThreadLocal<CallbackTessellator> mainCallbackInstance =
+        ThreadLocal.withInitial(() -> new CallbackTessellator(DEFAULT_BUFFER_SIZE, false));
+    private static final ThreadLocal<DirectTessellator[]> directTessellators =
+        ThreadLocal.withInitial(() -> new DirectTessellator[DIRECT_TESSELLATOR_STACK_DEPTH]);
 
-    private static int directTessellatorIndex = -1;
-    private static boolean mainInstanceInStack = false;
+    private static final ThreadLocal<Integer> directTessellatorIndex = ThreadLocal.withInitial(() -> -1);
+    private static final ThreadLocal<Boolean> mainInstanceInStack = ThreadLocal.withInitial(() -> false);
 
     private TessellatorManager() {
     }
 
     private static DirectTessellator getDirectTessellator() {
-        return directTessellators[directTessellatorIndex];
+        return directTessellators.get()[directTessellatorIndex.get()];
     }
 
     private static boolean hasDirectTessellator() {
-        return directTessellatorIndex != -1;
+        return directTessellatorIndex.get() != -1;
     }
 
     private static boolean isMainTessellator(DirectTessellator tessellator) {
-        return tessellator == mainInstance || tessellator == mainCallbackInstance;
+        return tessellator == mainInstance.get() || tessellator == mainCallbackInstance.get();
     }
 
     private static void setDirectTessellator(DirectTessellator tessellator) {
-        if (++directTessellatorIndex >= DIRECT_TESSELLATOR_STACK_DEPTH) {
+        final int index = directTessellatorIndex.get() + 1;
+        if (index >= DIRECT_TESSELLATOR_STACK_DEPTH) {
             throw new IllegalStateException("DirectTessellator stack overflow");
         }
-        mainInstanceInStack = mainInstanceInStack || isMainTessellator(tessellator);
-        directTessellators[directTessellatorIndex] = tessellator;
+        mainInstanceInStack.set(mainInstanceInStack.get() || isMainTessellator(tessellator));
+        directTessellators.get()[index] = tessellator;
+        directTessellatorIndex.set(index);
     }
 
     public static DirectTessellator startCapturingDirect() {
-        if (!mainInstanceInStack) {
-            setDirectTessellator(mainInstance);
-            return mainInstance;
+        if (!mainInstanceInStack.get()) {
+            setDirectTessellator(mainInstance.get());
+            return mainInstance.get();
         }
         final DirectTessellator tessellator = new DirectTessellator(DEFAULT_BUFFER_SIZE);
         setDirectTessellator(tessellator);
@@ -54,9 +63,9 @@ public final class TessellatorManager {
     }
 
     public static DirectTessellator startCapturingDirect(int capacity) {
-        if (!mainInstanceInStack && DEFAULT_BUFFER_SIZE >= capacity) {
-            setDirectTessellator(mainInstance);
-            return mainInstance;
+        if (!mainInstanceInStack.get() && DEFAULT_BUFFER_SIZE >= capacity) {
+            setDirectTessellator(mainInstance.get());
+            return mainInstance.get();
         }
         final DirectTessellator tessellator = new DirectTessellator(capacity);
         setDirectTessellator(tessellator);
@@ -71,8 +80,8 @@ public final class TessellatorManager {
 
     @Beta
     public static CallbackTessellator startCapturingDirect(DirectDrawCallback callback) {
-        if (!mainInstanceInStack) {
-            final CallbackTessellator tessellator = mainCallbackInstance;
+        if (!mainInstanceInStack.get()) {
+            final CallbackTessellator tessellator = mainCallbackInstance.get();
             tessellator.setDrawCallback(callback);
             setDirectTessellator(tessellator);
             return tessellator;
@@ -92,9 +101,10 @@ public final class TessellatorManager {
             throw new IllegalStateException("Tried to stop capturing when not capturing!");
         }
         final DirectTessellator tessellator = getDirectTessellator();
-        directTessellators[directTessellatorIndex--] = null;
+        directTessellators.get()[directTessellatorIndex.get()] = null;
+        directTessellatorIndex.set(directTessellatorIndex.get() - 1);
         if (isMainTessellator(tessellator)) {
-            mainInstanceInStack = false;
+            mainInstanceInStack.set(false);
         }
         tessellator.onRemovedFromStack();
     }
