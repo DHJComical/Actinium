@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -19,7 +20,8 @@ class MixinConfigurationTest {
         "mixins.actinium.vintage.json",
         "mixins.actinium.iris.json",
         "mixins.actinium.dh.json",
-        "mixins.actinium.gibbed.json"
+        "mixins.actinium.gibbed.json",
+        "mixins.actinium.lumenized.json"
     );
 
     @Test
@@ -28,7 +30,7 @@ class MixinConfigurationTest {
 
         for (String configName : CONFIGS) {
             try (Reader reader = new InputStreamReader(
-                java.util.Objects.requireNonNull(classLoader.getResourceAsStream(configName), "Missing " + configName),
+                Objects.requireNonNull(classLoader.getResourceAsStream(configName), "Missing " + configName),
                 StandardCharsets.UTF_8
             )) {
                 JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();

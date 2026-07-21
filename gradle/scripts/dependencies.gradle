@@ -77,4 +77,5 @@ dependencies {
     modRuntimeOnly'curse.maven:fermiumbooter2mixinbooter-1163720:7668886'
     modImplementation 'curse.maven:stellarcore-1064321:8406201'
     modImplementation 'curse.maven:rgb-chat-702720:4595048'
+    modCompileOnly 'curse.maven:lumenized-1234162:6734060'
 }
