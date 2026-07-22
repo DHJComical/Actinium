@@ -31,5 +31,7 @@ public final class LegacyExtensionEntryPoint implements ConfigEntryPoint {
         ModOptionsBuilder owner = builder.registerModOptions(this.namespace, this.namespace, "legacy-event");
         new LegacyOptionAdapter(builder, !ActiniumRuntime.options().isReadOnly(),
                 this.registeredOptionIds).addPages(owner, this.pages);
+        ActiniumRuntime.logger().info("Converted {} legacy option pages for '{}' with {} options", this.pages.size(),
+                this.namespace, this.registeredOptionIds.size());
     }
 }

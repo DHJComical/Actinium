@@ -80,11 +80,71 @@ def mergeEmbeddedLibraryClasses = tasks.register('mergeEmbeddedLibraryClasses', 
 }
 
 sourceSets {
+    compatBridge {
+        java.setSrcDirs(['src/compatBridge/java'])
+        resources.setSrcDirs(['src/compatBridge/resources'])
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        compileClasspath += project(':celeritas-common').sourceSets.main.output
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+    test {
+        compileClasspath += sourceSets.compatBridge.output
+        runtimeClasspath += sourceSets.compatBridge.output
+    }
     main {
         java {
             srcDir 'shader/src/main/java'
         }
     }
+}
+
+tasks.named('compileCompatBridgeJava', JavaCompile).configure {
+    dependsOn tasks.named('compileJava')
+    classpath = sourceSets.main.compileClasspath + sourceSets.main.output
+    sourceCompatibility = targetCompatibility = '21'
+}
+
+tasks.named('processCompatBridgeResources').configure {
+    inputs.property 'minecraft_version', '1.12.2'
+    inputs.property 'mod_version', propertyString('mod_version')
+
+    filesMatching('mcmod.info') {
+        expand(
+            'minecraft_version': '1.12.2',
+            'mod_version': propertyString('mod_version')
+        )
+    }
+}
+
+def compatBridgeJar = tasks.register('compatBridgeJar', Jar) {
+    group = 'build'
+    description = 'Builds the development-named legacy Celeritas compatibility bridge jar.'
+    archiveBaseName.set('celeritas-compat-bridge')
+    archiveVersion.set(project.version.toString())
+    destinationDirectory.set(layout.buildDirectory.dir('dev-libs'))
+    from sourceSets.compatBridge.output
+    manifest {
+        attributes(
+                'ModType': 'CRL',
+                'MixinConfigs': 'celeritas-compat-bridge.mixin.json'
+        )
+    }
+    dependsOn tasks.named('compatBridgeClasses')
+}
+
+def compatBridgeSourcesJar = tasks.register('compatBridgeSourcesJar', Jar) {
+    group = 'build'
+    description = 'Builds the source archive for the legacy Celeritas compatibility bridge.'
+    archiveBaseName.set('celeritas-compat-bridge')
+    archiveVersion.set(project.version.toString())
+    archiveClassifier.set('sources')
+    destinationDirectory.set(layout.buildDirectory.dir('libs'))
+    from sourceSets.compatBridge.allSource
+}
+
+tasks.named('compileTestJava', JavaCompile).configure {
+    dependsOn tasks.named('compileCompatBridgeJava')
 }
 
 sourceSets.main.output.dir(mergedEmbeddedLibraryClassesDir, builtBy: mergeEmbeddedLibraryClasses)
@@ -152,6 +212,8 @@ def actiniumProjectAccessTransformer = propertyBool('use_access_transformer')
     ? rootProject.projectDir.toPath().resolve("src/main/resources/${propertyString('access_transformer_locations')}").toFile()
     : null
 
+def remapCompatBridgeJar
+
 unimined.minecraft {
     version '1.12.2'
 
@@ -187,13 +249,60 @@ unimined.minecraft {
         }
     }
 
+    remapCompatBridgeJar = remap(compatBridgeJar.get(), 'remapCompatBridgeJar') {
+        group = 'build'
+        description = 'Remaps the legacy Celeritas compatibility bridge for production.'
+        asJar {
+            archiveBaseName.set('celeritas-compat-bridge')
+            archiveVersion.set(project.version.toString())
+            archiveClassifier.set('')
+        }
+        mixinRemap {
+            enableBaseMixin()
+            enableMixinExtra()
+        }
+    }
+
     mods {
         remap(configurations.modCompileOnly)
         remap(configurations.modRuntimeOnly)
     }
 }
 
+def compatBridgeRemapOutput = remapCompatBridgeJar.flatMap { it.archiveFile }
+def prepareCompatBridgeRun = tasks.register('prepareCompatBridgeRun') {
+    group = 'build'
+    description = 'Installs the remapped Celeritas compatibility bridge into the client run directory.'
+    dependsOn remapCompatBridgeJar
+    inputs.file(compatBridgeRemapOutput)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        def runModsDirectory = layout.projectDirectory.dir('run/client/mods').asFile
+        if (!runModsDirectory.exists() && !runModsDirectory.mkdirs()) {
+            throw new GradleException("Failed to create client mods directory: ${runModsDirectory}")
+        }
+        fileTree(runModsDirectory).matching {
+            include 'celeritas-compat-bridge-*.jar'
+        }.files.each { existingJar ->
+            if (!existingJar.delete()) {
+                throw new GradleException("Failed to remove stale compatibility bridge jar: ${existingJar}")
+            }
+        }
+        copy {
+            from compatBridgeRemapOutput
+            into runModsDirectory
+        }
+    }
+}
+
+tasks.named('assemble').configure {
+    dependsOn remapCompatBridgeJar
+    dependsOn compatBridgeSourcesJar
+}
+
 tasks.named('runClient', JavaExec).configure {
+    dependsOn prepareCompatBridgeRun
     workingDir = layout.projectDirectory.dir('run/client').asFile
     jvmArgs = jvmArgs.findAll { !it.startsWith('-Xmx') }
     maxHeapSize = '8G'
@@ -346,6 +455,7 @@ def prepareTestRunDirectory = tasks.register('prepareTestRunDirectory') {
 
 test {
     dependsOn prepareTestRunDirectory
+    dependsOn remapCompatBridgeJar
     useJUnitPlatform()
     workingDir = testRunDirectory.asFile
     javaLauncher = javaToolchains.launcherFor {
@@ -355,6 +465,10 @@ test {
         testLogging {
             showStandardStreams = true
         }
+    }
+    doFirst {
+        systemProperty 'actinium.compatBridgeJar', compatBridgeRemapOutput.get().asFile.absolutePath
+        systemProperty 'actinium.modVersion', propertyString('mod_version')
     }
 }
 

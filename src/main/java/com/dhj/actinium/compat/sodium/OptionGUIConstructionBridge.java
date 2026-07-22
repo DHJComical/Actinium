@@ -13,10 +13,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Collects legacy GUI page contributions while isolating each failing event listener. */
 public final class OptionGUIConstructionBridge {
+    private static final List<LegacyOptionPageProvider> LEGACY_PROVIDERS = new CopyOnWriteArrayList<>();
     private OptionGUIConstructionBridge() {
+    }
+
+    public static void registerLegacyProvider(LegacyOptionPageProvider provider) {
+        if (provider == null) {
+            throw new IllegalArgumentException("Legacy option page provider must not be null");
+        }
+        LEGACY_PROVIDERS.add(provider);
     }
 
     /**
@@ -40,7 +49,17 @@ public final class OptionGUIConstructionBridge {
                         handler.getClass().getName(), exception);
             }
         });
-
+        for (LegacyOptionPageProvider provider : LEGACY_PROVIDERS) {
+            List<OptionPage> snapshot = List.copyOf(mutablePages);
+            try {
+                provider.appendPages(mutablePages);
+                validatePages(mutablePages, builtInIdentities);
+            } catch (RuntimeException exception) {
+                mutablePages.clear();
+                mutablePages.addAll(snapshot);
+                ActiniumRuntime.logger().error("Legacy Celeritas page provider failed and was isolated", exception);
+            }
+        }
         Map<String, List<OptionPage>> extensions = new LinkedHashMap<>();
         for (OptionPage page : mutablePages) {
             if (!builtInIdentities.contains(page)) {
@@ -52,6 +71,9 @@ public final class OptionGUIConstructionBridge {
             }
         }
         extensions.replaceAll((namespace, pages) -> List.copyOf(pages));
+        ActiniumRuntime.logger().info("Collected legacy option GUI extensions: {}", extensions.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue().size())
+                .toList());
         return Collections.unmodifiableMap(new LinkedHashMap<>(extensions));
     }
 

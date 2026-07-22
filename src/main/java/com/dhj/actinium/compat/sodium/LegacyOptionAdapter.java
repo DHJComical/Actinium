@@ -86,11 +86,13 @@ public final class LegacyOptionAdapter {
         for (OptionPage page : pages) {
             OptionPageBuilder targetPage = this.builder.createOptionPage().setName(this.convertText(page.getName()));
             boolean pageHasOptions = false;
-            for (OptionGroup group : page.getGroups()) {
+            for (int groupIndex = 0; groupIndex < page.getGroups().size(); groupIndex++) {
+                OptionGroup group = page.getGroups().get(groupIndex);
                 OptionGroupBuilder targetGroup = this.builder.createOptionGroup();
                 boolean groupHasOptions = false;
-                for (Option<?> option : group.getOptions()) {
-                    ResourceLocation id = requireId(option);
+                for (int optionIndex = 0; optionIndex < group.getOptions().size(); optionIndex++) {
+                    Option<?> option = group.getOptions().get(optionIndex);
+                    ResourceLocation id = resolveId(page, option, groupIndex, optionIndex);
                     if (this.registeredOptionIds.add(id)) {
                         targetGroup.addOption(this.convertOption(option, id));
                         groupHasOptions = true;
@@ -209,11 +211,16 @@ public final class LegacyOptionAdapter {
         return this.storages.computeIfAbsent(storage, LegacyStorageHandler::new);
     }
 
-    private static ResourceLocation requireId(Option<?> option) {
-        if (option.getId() == null || !OptionIdentifier.isPresent(option.getId())) {
-            throw new IllegalArgumentException("Legacy option '" + option.getName() + "' has no stable ID");
+    private static ResourceLocation resolveId(OptionPage page, Option<?> option, int groupIndex, int optionIndex) {
+        OptionIdentifier<?> optionId = option.getId();
+        if (OptionIdentifier.isPresent(optionId)
+                && !optionId.getModId().isBlank() && !optionId.getPath().isBlank()) {
+            return new ResourceLocation(optionId.getModId(), optionId.getPath());
         }
-        return new ResourceLocation(option.getId().getModId(), option.getId().getPath());
+        OptionIdentifier<Void> pageId = page.getId();
+        String path = "_legacy_unnamed/" + pageId.getPath()
+                + "/group_" + groupIndex + "/option_" + optionIndex;
+        return new ResourceLocation(pageId.getModId(), path);
     }
 
     private static ResourceLocation convertFlag(OptionFlag flag) {

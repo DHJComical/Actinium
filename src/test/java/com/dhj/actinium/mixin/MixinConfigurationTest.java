@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class MixinConfigurationTest {
     private static final List<String> CONFIGS = List.of(
+        "celeritas-compat-bridge.mixin.json",
         "mixins.actinium.vintage.json",
         "mixins.actinium.iris.json",
         "mixins.actinium.dh.json",

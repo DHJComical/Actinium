@@ -57,6 +57,7 @@ dependencies {
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
         testImplementation 'com.google.guava:guava:21.0'
         testImplementation 'it.unimi.dsi:fastutil:8.5.18'
+        testImplementation "org.ow2.asm:asm-tree:${asmVersion}"
         testImplementation files(sharedMinecraftCompileClasspath())
     }
 
@@ -78,4 +79,8 @@ dependencies {
     modImplementation 'curse.maven:stellarcore-1064321:8406201'
     modImplementation 'curse.maven:rgb-chat-702720:4595048'
     modCompileOnly 'curse.maven:lumenized-1234162:6734060'
+
+    modRuntimeOnly "curse.maven:celeritas-dynamic-lights-1313831:8387313"
+    modRuntimeOnly "curse.maven:celeritas-extra-1451214:8362538"
+    modRuntimeOnly "curse.maven:celeritasleafculling-1449111:7550650"
 }

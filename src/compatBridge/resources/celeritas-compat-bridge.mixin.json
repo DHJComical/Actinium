@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "priority": 1500,
+  "package": "org.taumc.celeritas.compat.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "target": "@env(MOD)",
+  "minVersion": "0.8.7",
+  "setSourceFile": true,
+  "mixins": [],
+  "server": [],
+  "client": [
+    "CeleritasTileEntityRendererDispatcherMixin",
+    "LegacyRendererAccessMixin",
+    "LegacyRendererConstructionMixin",
+    "LegacyWorldSliceMixin"
+  ]
+}

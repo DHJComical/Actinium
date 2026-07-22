@@ -1,0 +1,16 @@
+[
+  {
+    "modid": "celeritas",
+    "name": "Celeritas Compatibility Bridge",
+    "version": "${mod_version}",
+    "mcversion": "${minecraft_version}",
+    "description": "Compatibility bridge exposing Actinium as the legacy Celeritas mod id for Celeritas addons.",
+    "authorList": [
+      "DHJComical"
+    ],
+    "credits": "Actinium",
+    "url": "",
+    "updateJSON": "",
+    "logoFile": ""
+  }
+]
