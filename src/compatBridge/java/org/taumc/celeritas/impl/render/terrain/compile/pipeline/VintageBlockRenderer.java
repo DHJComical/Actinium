@@ -13,6 +13,7 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.WorldType;
 import org.embeddedt.embeddium.impl.model.light.LightMode;
 import org.embeddedt.embeddium.impl.model.light.LightPipeline;
@@ -64,7 +65,7 @@ public class VintageBlockRenderer extends ActiniumVintageBlockRenderer {
         analyzer.setDefaultRenderingFlags(defaultFlags);
         access.actiniumLegacy$getUsedContextEncoders().clear();
 
-        if (legacyAccess.getWorldType() != WorldType.DEBUG_ALL_BLOCK_STATES) {
+        if (((IBlockAccess) legacyAccess).getWorldType() != WorldType.DEBUG_ALL_BLOCK_STATES) {
             state = state.getActualState(legacyAccess, pos);
         }
         var model = access.actiniumLegacy$getShapes().getModelForState(state);

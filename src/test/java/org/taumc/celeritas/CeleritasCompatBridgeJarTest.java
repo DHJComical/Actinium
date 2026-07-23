@@ -43,6 +43,8 @@ class CeleritasCompatBridgeJarTest {
     private static final String TARGET_OWNER =
             "net/minecraft/client/renderer/tileentity/TileEntityRendererDispatcher";
     private static final String RENDER_DESCRIPTOR = "(Lnet/minecraft/tileentity/TileEntity;FI)V";
+    private static final String BLOCK_ACCESS_OWNER = "net/minecraft/world/IBlockAccess";
+    private static final String WORLD_TYPE_DESCRIPTOR = "()Lnet/minecraft/world/WorldType;";
 
     @Test
     void publishesCompleteForgeModJar() throws IOException {
@@ -110,6 +112,18 @@ class CeleritasCompatBridgeJarTest {
     }
 
     @Test
+    void remapsLegacyRendererWorldTypeCallThroughVanillaBlockAccess() throws IOException {
+        try (JarFile jar = openBridgeJar();
+             InputStream stream = jar.getInputStream(jar.getJarEntry(LEGACY_RENDERER_CLASS))) {
+            ClassNode renderer = readClass(stream);
+            MethodInsnNode worldTypeCall = findMethodCall(
+                    renderer.methods, BLOCK_ACCESS_OWNER, WORLD_TYPE_DESCRIPTOR);
+
+            assertEquals("func_175624_G", worldTypeCall.name);
+        }
+    }
+
+    @Test
     void managedMixinPackageContainsOnlyDeclaredMixinImplementations() throws IOException {
         try (JarFile jar = openBridgeJar()) {
             JsonObject config = readJsonObject(jar, MIXIN_CONFIG);
@@ -153,17 +167,21 @@ class CeleritasCompatBridgeJarTest {
     }
 
     private static MethodInsnNode findTargetRenderCall(List<MethodNode> methods) {
+        return findMethodCall(methods, TARGET_OWNER, RENDER_DESCRIPTOR);
+    }
+
+    private static MethodInsnNode findMethodCall(List<MethodNode> methods, String owner, String descriptor) {
         for (MethodNode method : methods) {
             for (AbstractInsnNode instruction = method.instructions.getFirst(); instruction != null;
                  instruction = instruction.getNext()) {
                 if (instruction instanceof MethodInsnNode methodCall
-                        && methodCall.owner.equals(TARGET_OWNER)
-                        && methodCall.desc.equals(RENDER_DESCRIPTOR)) {
+                        && methodCall.owner.equals(owner)
+                        && methodCall.desc.equals(descriptor)) {
                     return methodCall;
                 }
             }
         }
-        throw new AssertionError("Compatibility Mixin does not invoke the current tile entity render entry point");
+        throw new AssertionError("Missing method call " + owner + "." + descriptor);
     }
 
     private static void assertMethodCall(MethodNode method, String owner, String name) {
