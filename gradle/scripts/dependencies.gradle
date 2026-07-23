@@ -27,7 +27,7 @@ dependencies {
     def lombokVersion = '1.18.46'
     def asmVersion = '9.9.1'
 
-    compileOnly 'com.cleanroommc:sponge-mixin:0.20.12+mixin.0.8.7'
+    compileOnly 'com.cleanroommc:sponge-mixin:0.20.13+mixin.0.8.7'
     compileOnly 'org.jetbrains:annotations:24.1.0'
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
@@ -53,7 +53,7 @@ dependencies {
         compileOnly 'com.cleanroommc:lwjglx:1.0.0'
     }
     if (propertyBool('enable_junit_testing')) {
-        testImplementation 'org.junit.jupiter:junit-jupiter:6.0.2'
+        testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
         testImplementation 'com.google.guava:guava:21.0'
         testImplementation 'it.unimi.dsi:fastutil:8.5.18'
