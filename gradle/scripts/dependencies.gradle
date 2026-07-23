@@ -44,7 +44,6 @@ dependencies {
     implementation 'org.anarres:jcpp:1.4.14'
     contain 'org.anarres:jcpp:1.4.14'
 
-    modImplementation 'zone.rong:mixinbooter:10.5'
     modCompileOnly 'maven.modrinth:fluidlogged-api:3.0.6'
 
     compileOnly "org.lwjgl:lwjgl:${lwjglVersion}"

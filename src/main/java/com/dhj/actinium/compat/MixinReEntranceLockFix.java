@@ -2,12 +2,10 @@ package com.dhj.actinium.compat;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.spongepowered.asm.mixin.transformer.MixinProcessor;
-import org.spongepowered.asm.mixin.transformer.Proxy;
+import org.spongepowered.asm.service.MixinService;
 import org.spongepowered.asm.util.ReEntranceLock;
 import top.outlands.foundation.boot.ActualClassLoader;
 
-import java.lang.reflect.Field;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -40,10 +38,7 @@ public final class MixinReEntranceLockFix {
      */
     public static void clearLeakedLock() {
         try {
-            MixinProcessor processor = Proxy.transformer.processor;
-            Field lockField = MixinProcessor.class.getDeclaredField("lock");
-            lockField.setAccessible(true);
-            ReEntranceLock lock = (ReEntranceLock) lockField.get(processor);
+            ReEntranceLock lock = MixinService.getService().getReEntranceLock();
             if (lock != null && lock.getDepth() > 0) {
                 LOGGER.warn("Detected leaked mixin re-entrance lock (depth {}), draining it to keep class transforms working", lock.getDepth());
                 drain(lock);
@@ -102,15 +97,9 @@ public final class MixinReEntranceLockFix {
      * (e.g. Techguns resolving the Tessellator hierarchy), which mixin cannot
      * handle re-entrantly.
      */
-    public static void preloadClasses(String... classNames) {
-        ClassLoader cl = MixinReEntranceLockFix.class.getClassLoader();
-        for (String className : classNames) {
-            try {
-                Class.forName(className, false, cl);
-                LOGGER.debug("Pre-loaded {}", className);
-            } catch (Throwable t) {
-                LOGGER.warn("Failed to pre-load {}", className, t);
-            }
+    public static void preloadClasses(Class<?>... classes) {
+        for (Class<?> clazz : classes) {
+            LOGGER.debug("Pre-loaded {}", clazz.getName());
         }
     }
 }

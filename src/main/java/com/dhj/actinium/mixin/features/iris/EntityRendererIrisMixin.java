@@ -525,7 +525,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         return Math.max(settings.renderDistanceChunks, 4);
     }
 
-    @ModifyConstant(method = "renderWorldPass(IFJ)V", constant = @Constant(doubleValue = 128.0D), expect = 2)
+    @ModifyConstant(method = "renderWorldPass(IFJ)V", constant = @Constant(doubleValue = 128.0D), require = 0)
     private double actinium$alwaysRenderClouds(double cloudHeightCheck) {
         return IrisApi.getInstance().isShaderPackInUse() ? Double.NEGATIVE_INFINITY : cloudHeightCheck;
     }

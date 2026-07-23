@@ -3,8 +3,7 @@ package com.dhj.actinium.mixins;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 import org.jetbrains.annotations.Nullable;
-import org.spongepowered.asm.launch.GlobalProperties;
-import org.spongepowered.asm.service.mojang.MixinServiceLaunchWrapper;
+import org.spongepowered.asm.mixin.MixinEnvironment;
 import zone.rong.mixinbooter.IEarlyMixinLoader;
 
 import java.util.ArrayList;
@@ -19,6 +18,11 @@ public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
         "mixins.actinium.vintage.json",
         "mixins.actinium.iris.json"
     );
+
+    static {
+        // CeleritasExtra uses Java 11 nesting features in its mixins under CRL 0.6.3.
+        MixinEnvironment.setCompatibilityLevel(MixinEnvironment.CompatibilityLevel.JAVA_11);
+    }
 
     @Override
     public @Nullable String[] getASMTransformerClass() {
@@ -40,12 +44,10 @@ public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
     @Override
     @SuppressWarnings("unchecked")
     public void injectData(Map<String, Object> data) {
-        List<String> tweaks = GlobalProperties.get(MixinServiceLaunchWrapper.BLACKBOARD_KEY_TWEAKCLASSES);
-        if (tweaks == null) {
-            Object value = Launch.blackboard.get("TweakClasses");
-            if (value instanceof List<?>) {
-                tweaks = (List<String>) value;
-            }
+        Object value = Launch.blackboard.get("TweakClasses");
+        List<String> tweaks = null;
+        if (value instanceof List<?>) {
+            tweaks = (List<String>) value;
         }
         if (tweaks == null) {
             tweaks = new ArrayList<>();
