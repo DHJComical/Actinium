@@ -150,10 +150,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 }
             }
         }
-        if (blockLayerIn == BlockRenderLayer.SOLID && renderDistantHorizonsLods) {
-            DistantHorizonsCompat.renderVanillaLods(this.world, partialTicks);
-        }
-
         RenderDevice.enterManagedCode();
 
         RenderHelper.disableStandardItemLighting();

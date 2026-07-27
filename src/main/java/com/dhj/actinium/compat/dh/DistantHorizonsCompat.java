@@ -33,7 +33,6 @@ public final class DistantHorizonsCompat {
     private static final Logger LOGGER = LogManager.getLogger("ActiniumDHCompat");
     private static final String MODID = "distanthorizons";
 
-    private static boolean loggedFirstRender;
     private static boolean loggedFirstDeferredRender;
     private static boolean warnedRenderFailure;
     private static boolean warnedLightmapSyncFailure;
@@ -44,57 +43,66 @@ public final class DistantHorizonsCompat {
     private DistantHorizonsCompat() {
     }
 
-    public static void renderVanillaLods(WorldClient world, double partialTicks) {
-        renderLodPass(world, partialTicks, false);
+    public static boolean prepareVanillaLodRender(WorldClient world, double partialTicks) {
+        if (world == null || !Loader.isModLoaded(MODID)) {
+            return false;
+        }
+
+        try {
+            return prepareLodState(world, partialTicks, false);
+        } catch (Throwable t) {
+            logRenderFailure("prepare Distant Horizons vanilla LOD state", t);
+            return false;
+        }
     }
 
     public static void renderDeferredLodsForShaders(WorldClient world, double partialTicks) {
-        renderLodPass(world, partialTicks, true);
-    }
-
-    private static void renderLodPass(WorldClient world, double partialTicks, boolean deferred) {
         if (world == null || !Loader.isModLoaded(MODID)) {
             return;
         }
 
         try {
-            syncDeferredLodRenderingForShaders();
-            if (deferred && !isDeferredLodRenderingEnabledForShaders()) {
+            if (!prepareLodState(world, partialTicks, true)) {
                 return;
             }
 
-            ClientApi.RENDER_STATE.mcProjectionMatrix = copyJomlMatrix(RenderingState.INSTANCE.getProjectionMatrix());
-            ClientApi.RENDER_STATE.mcModelViewMatrix = copyJomlMatrix(RenderingState.INSTANCE.getModelViewMatrix());
-
-            ClientApi.RENDER_STATE.partialTickTime = (float) partialTicks;
-            ClientApi.RENDER_STATE.clientLevelWrapper = ClientLevelWrapper.getWrapperIfDifferent(ClientApi.RENDER_STATE.clientLevelWrapper, world);
-            syncFogColor();
-            syncLightmap();
-
-            if (deferred) {
-                ClientApi.INSTANCE.renderDeferredLodsForShaders();
-                if (!loggedFirstDeferredRender) {
-                    loggedFirstDeferredRender = true;
-                    LOGGER.info("Distant Horizons shader LOD bridge called renderDeferredLodsForShaders for the first frame");
-                }
-            } else {
-                ClientApi.INSTANCE.renderLods();
-                if (!loggedFirstRender) {
-                    loggedFirstRender = true;
-                    LOGGER.info("Distant Horizons vanilla LOD bridge called renderLods for the first frame");
-                }
+            ClientApi.INSTANCE.renderDeferredLodsForShaders();
+            if (!loggedFirstDeferredRender) {
+                loggedFirstDeferredRender = true;
+                LOGGER.info("Distant Horizons shader LOD bridge called renderDeferredLodsForShaders for the first frame");
             }
-//            logRenderDiagnostics();
 
             GL32.glBindVertexArray(0);
             GL32.glBindBuffer(GL32.GL_ARRAY_BUFFER, 0);
             GL32.glBindBuffer(GL32.GL_ELEMENT_ARRAY_BUFFER, 0);
             GL32.glUseProgram(0);
         } catch (Throwable t) {
-            if (!warnedRenderFailure) {
-                warnedRenderFailure = true;
-                LOGGER.warn("Failed to render Distant Horizons LODs through the Actinium bridge", t);
-            }
+            logRenderFailure("render Distant Horizons deferred LODs", t);
+        }
+    }
+
+    private static boolean prepareLodState(WorldClient world, double partialTicks, boolean deferred) {
+        syncDeferredLodRenderingForShaders();
+        if (deferred && !isDeferredLodRenderingEnabledForShaders()) {
+            return false;
+        }
+
+        ClientApi.RENDER_STATE.mcProjectionMatrix = copyJomlMatrix(RenderingState.INSTANCE.getProjectionMatrix());
+        ClientApi.RENDER_STATE.mcModelViewMatrix = copyJomlMatrix(RenderingState.INSTANCE.getModelViewMatrix());
+        ClientApi.RENDER_STATE.partialTickTime = (float) partialTicks;
+        ClientApi.RENDER_STATE.clientLevelWrapper = ClientLevelWrapper.getWrapperIfDifferent(
+            ClientApi.RENDER_STATE.clientLevelWrapper,
+            world
+        );
+        syncFogColor();
+        syncLightmap();
+        return true;
+    }
+
+    private static void logRenderFailure(String operation, Throwable throwable) {
+        if (!warnedRenderFailure) {
+            warnedRenderFailure = true;
+            LOGGER.warn("Failed to {} through the Actinium bridge", operation, throwable);
         }
     }
 

@@ -8,9 +8,12 @@
   "mixins": [],
   "server": [],
   "client": [
+    "MixinClientApi",
     "MixinFogRenderParamFactory",
     "MixinFullDataToRenderDataTransformer",
-    "MixinMinecraftClientWrapper"
+    "MixinLodRenderer",
+    "MixinMinecraftClientWrapper",
+    "MixinRenderUtil"
   ],
   "injectors": {
     "defaultRequire": 1

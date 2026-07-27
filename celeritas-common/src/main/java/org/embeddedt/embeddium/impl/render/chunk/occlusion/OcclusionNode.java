@@ -23,7 +23,7 @@ public class OcclusionNode extends AbstractSection {
      */
     @Getter
     @Setter
-    private long visibilityData = VisibilityEncoding.NULL;
+    private long visibilityData = VisibilityEncoding.EVERYTHING;
 
     private final RenderSection section;
     @Getter
