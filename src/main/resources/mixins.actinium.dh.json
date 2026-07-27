@@ -9,7 +9,8 @@
   "server": [],
   "client": [
     "MixinFogRenderParamFactory",
-    "MixinFullDataToRenderDataTransformer"
+    "MixinFullDataToRenderDataTransformer",
+    "MixinMinecraftClientWrapper"
   ],
   "injectors": {
     "defaultRequire": 1

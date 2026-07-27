@@ -28,14 +28,13 @@ import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.resources.IResourceManagerReloadListener;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.EntityLivingBase;
+import org.joml.Vector3d;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -320,6 +319,11 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderCloudsCheck(Lnet/minecraft/client/renderer/RenderGlobal;FIDDD)V", shift = At.Shift.AFTER)
     )
     private void actinium$checkAfterClouds(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (Iris.enabled && IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
+            IrisGlDebug.recordWorldPassStage("cloud-check-to-setup-terrain");
+            return;
+        }
+
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-clouds");
         IrisGlDebug.recordWorldPassStage("clouds-to-setup-terrain");
     }
@@ -468,9 +472,13 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
             return;
         }
 
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        if (pipeline != null) {
+            actinium$renderLateClouds(partialTicks, pass, pipeline);
+        }
+
         MinecraftFramebufferHelper.restoreMinecraftFramebufferBuffers();
         IrisGlDebug.markStage("mixin:finalize:entry");
-        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
         if (pipeline == null) {
             return;
         }
@@ -485,6 +493,29 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         GLStateManager.glDepthMask(true);
         IrisGlDebug.markStage("mixin:finalize:done");
         IrisGlDebug.recordWorldPassStage("finalize-to-render-last");
+    }
+
+    private void actinium$renderLateClouds(float partialTicks, int pass, WorldRenderingPipeline pipeline) {
+        if (pipeline.getCloudSetting() == CloudSetting.OFF) {
+            return;
+        }
+
+        Vector3d entityPos = Camera.INSTANCE.getEntityPos();
+        pipeline.setPhase(WorldRenderingPhase.CLOUDS);
+        try {
+            this.renderCloudsCheck(
+                this.mc.renderGlobal,
+                partialTicks,
+                pass,
+                entityPos.x,
+                entityPos.y,
+                entityPos.z
+            );
+        } finally {
+            pipeline.setPhase(WorldRenderingPhase.NONE);
+        }
+        IrisGlDebug.markStage("render-world-pass:" + pass + ":after-clouds");
+        IrisGlDebug.recordWorldPassStage("clouds-to-finalize");
     }
 
     @Inject(
@@ -525,32 +556,14 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         return Math.max(settings.renderDistanceChunks, 4);
     }
 
-    @ModifyConstant(method = "renderWorldPass(IFJ)V", constant = @Constant(doubleValue = 128.0D), require = 0)
-    private double actinium$alwaysRenderClouds(double cloudHeightCheck) {
-        return IrisApi.getInstance().isShaderPackInUse() ? Double.NEGATIVE_INFINITY : cloudHeightCheck;
-    }
-
     @Redirect(
         method = "renderWorldPass(IFJ)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderCloudsCheck(Lnet/minecraft/client/renderer/RenderGlobal;FIDDD)V")
     )
     private void actinium$renderClouds(EntityRenderer renderer, RenderGlobal renderGlobal, float partialTicks, int pass, double x, double y, double z) {
-        if (!Iris.enabled) {
-            this.renderCloudsCheck(renderGlobal, partialTicks, pass, x, y, z);
-            return;
-        }
-
-        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
-        if (pipeline == null) {
-            this.renderCloudsCheck(renderGlobal, partialTicks, pass, x, y, z);
-            return;
-        }
-
-        pipeline.setPhase(WorldRenderingPhase.CLOUDS);
-        if (pipeline.getCloudSetting() != CloudSetting.OFF) {
+        if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             this.renderCloudsCheck(renderGlobal, partialTicks, pass, x, y, z);
         }
-        pipeline.setPhase(WorldRenderingPhase.NONE);
     }
 
     @Redirect(
