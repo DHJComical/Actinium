@@ -6,6 +6,8 @@ import lombok.Getter;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.uniforms.SystemTimeUniforms;
+import org.embeddedt.embeddium.api.shader.ShaderProvider;
+import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
@@ -92,7 +94,19 @@ public class PipelineManager {
 		pipeline = null;
 		lastPreparedDimension = null;
 		versionCounterForSodiumShaderReload++;
+
+		// The lazy version-counter cleanup in the terrain shader provider only runs while
+		// shaders are enabled; delete the chunk programs here so disabling shaders does not
+		// strand them (and their references into the destroyed pipeline) until re-enable.
+		deleteTerrainShaders(ShaderProviderHolder.getProvider());
+
 		MinecraftFramebufferHelper.restoreMainFramebuffer(true);
+	}
+
+	static void deleteTerrainShaders(@Nullable ShaderProvider terrainShaderProvider) {
+		if (terrainShaderProvider != null) {
+			terrainShaderProvider.deleteShaders();
+		}
 	}
 
 	private void resetTextureState() {
