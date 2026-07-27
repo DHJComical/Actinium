@@ -3,7 +3,6 @@ package com.dhj.actinium.gui;
 import net.minecraft.client.Minecraft;
 import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
-import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.Display;
@@ -11,8 +10,6 @@ import org.lwjgl.system.MemoryStack;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.mixin.vintage.core.MinecraftAccessor;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.nio.IntBuffer;
 
 public final class ActiniumWindowModeController {
@@ -20,6 +17,7 @@ public final class ActiniumWindowModeController {
     private static final long WINDOW_LOOKUP_FAILED = Long.MIN_VALUE;
     private static boolean synchronizing;
     private static boolean loggedWindowLookupFailure;
+    private static String loggedInvalidFullscreenMode;
     private static long cachedWindowHandle = -1L;
     private static final WindowBounds savedWindowedBounds = new WindowBounds();
 
@@ -31,7 +29,11 @@ public final class ActiniumWindowModeController {
         if (configuredModeName != null) {
             try {
                 return FullscreenMode.valueOf(configuredModeName);
-            } catch (IllegalArgumentException ignored) {
+            } catch (IllegalArgumentException e) {
+                if (!configuredModeName.equals(loggedInvalidFullscreenMode)) {
+                    loggedInvalidFullscreenMode = configuredModeName;
+                    LOGGER.warn("Unknown fullscreen mode '{}' in the options file, falling back to {}", configuredModeName, FullscreenMode.FULLSCREEN);
+                }
             }
         }
 
@@ -59,7 +61,7 @@ public final class ActiniumWindowModeController {
         boolean shouldBeFullscreen = client.gameSettings.fullScreen;
         FullscreenMode desiredMode = resolveConfiguredMode(ActiniumRuntime.options());
 
-        long windowHandle = findWindowHandle(client);
+        long windowHandle = findWindowHandle();
 
         if (isWindowStateCompatible(client, windowHandle, shouldBeFullscreen, desiredMode)) {
             return;
@@ -262,7 +264,7 @@ public final class ActiniumWindowModeController {
         return monitor != 0L ? monitor : GLFW.glfwGetPrimaryMonitor();
     }
 
-    private static long findWindowHandle(Minecraft client) {
+    private static long findWindowHandle() {
         if (cachedWindowHandle == WINDOW_LOOKUP_FAILED) {
             return 0L;
         }
@@ -277,13 +279,6 @@ public final class ActiniumWindowModeController {
             return displayWindow;
         }
 
-        Long handle = extractLongHandle(client);
-
-        if (handle != null) {
-            cachedWindowHandle = handle;
-            return handle;
-        }
-
         cachedWindowHandle = WINDOW_LOOKUP_FAILED;
         if (!loggedWindowLookupFailure) {
             loggedWindowLookupFailure = true;
@@ -292,68 +287,6 @@ public final class ActiniumWindowModeController {
 
         return 0L;
     }
-
-    private static @Nullable Long extractLongHandle(Object instance) {
-        if (instance == null) {
-            return null;
-        }
-
-        if (instance instanceof Number number) {
-            long value = number.longValue();
-            return value != 0L ? value : null;
-        }
-
-        for (String methodName : new String[] { "getMainWindow", "getWindow", "getWindowHandle", "getHandle", "getWindowId" }) {
-            Object nested = invokeNoArgs(instance, methodName);
-
-            if (nested == null) {
-                continue;
-            }
-
-            Long nestedHandle = extractLongHandle(nested);
-
-            if (nestedHandle != null) {
-                return nestedHandle;
-            }
-        }
-
-        for (String fieldName : new String[] { "mainWindow", "window", "windowHandle", "handle", "windowId" }) {
-            Object nested = getFieldValue(instance, fieldName);
-
-            if (nested == null) {
-                continue;
-            }
-
-            Long nestedHandle = extractLongHandle(nested);
-
-            if (nestedHandle != null) {
-                return nestedHandle;
-            }
-        }
-
-        return null;
-    }
-
-    private static @Nullable Object invokeNoArgs(Object instance, String methodName) {
-        try {
-            Method method = instance.getClass().getMethod(methodName);
-            method.setAccessible(true);
-            return method.invoke(instance);
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
-    }
-
-    private static @Nullable Object getFieldValue(Object instance, String fieldName) {
-        try {
-            Field field = instance.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            return field.get(instance);
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
-    }
-
     private static final class WindowBounds {
         private int x;
         private int y;
