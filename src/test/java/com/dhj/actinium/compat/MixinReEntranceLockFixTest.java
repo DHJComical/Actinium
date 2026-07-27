@@ -28,7 +28,7 @@ class MixinReEntranceLockFixTest {
     }
 
     @Test
-    void preloadClassesAcceptsClassReferences() {
+    void preloadClassesAcceptsLoadedClassReferences() {
         assertDoesNotThrow(() -> MixinReEntranceLockFix.preloadClasses(Object.class));
     }
 

@@ -20,7 +20,7 @@ public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
     );
 
     static {
-        // CeleritasExtra uses Java 11 nesting features in its mixins under CRL 0.6.3.
+        // CeleritasExtra uses Java 11 nesting features in its mixins.
         MixinEnvironment.setCompatibilityLevel(MixinEnvironment.CompatibilityLevel.JAVA_11);
     }
 

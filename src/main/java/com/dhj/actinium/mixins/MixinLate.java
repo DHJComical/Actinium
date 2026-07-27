@@ -32,9 +32,12 @@ public class MixinLate implements ILateMixinLoader {
 
         MixinReEntranceLockFix.clearLeakedLock();
         MixinReEntranceLockFix.clearInvalidVanillaClasses();
-        MixinReEntranceLockFix.preloadClasses(EntityRenderer.class);
-        MixinReEntranceLockFix.clearLeakedLock();
-        MixinReEntranceLockFix.clearInvalidVanillaClasses();
+        try {
+            MixinReEntranceLockFix.preloadClasses(EntityRenderer.class);
+        } finally {
+            MixinReEntranceLockFix.clearLeakedLock();
+            MixinReEntranceLockFix.clearInvalidVanillaClasses();
+        }
     }
 
     static List<String> configsFor(Predicate<String> loadedMods) {

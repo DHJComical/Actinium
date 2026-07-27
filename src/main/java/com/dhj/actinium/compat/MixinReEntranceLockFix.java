@@ -91,11 +91,10 @@ public final class MixinReEntranceLockFix {
     }
 
     /**
-     * Loads the given classes without initializing them, so their transformations
-     * (including mixins) are applied up front. Used for mixin targets whose first
-     * real use would otherwise happen nested inside another class's transform
-     * (e.g. Techguns resolving the Tessellator hierarchy), which mixin cannot
-     * handle re-entrantly.
+     * Records classes that callers loaded up front so their transformations
+     * (including mixins) are complete before a nested transform can resolve them.
+     * Used for targets such as Tessellator whose hierarchy Techguns may resolve
+     * from inside another class's transform.
      */
     public static void preloadClasses(Class<?>... classes) {
         for (Class<?> clazz : classes) {

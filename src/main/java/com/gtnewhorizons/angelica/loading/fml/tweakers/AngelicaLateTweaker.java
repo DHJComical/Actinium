@@ -52,9 +52,12 @@ public class AngelicaLateTweaker implements ITweaker {
             // resolved from inside other classes' transforms before their first real use.
             MixinReEntranceLockFix.clearLeakedLock();
             MixinReEntranceLockFix.clearInvalidVanillaClasses();
-            MixinReEntranceLockFix.preloadClasses(Tessellator.class);
-            MixinReEntranceLockFix.clearLeakedLock();
-            MixinReEntranceLockFix.clearInvalidVanillaClasses();
+            try {
+                MixinReEntranceLockFix.preloadClasses(Tessellator.class);
+            } finally {
+                MixinReEntranceLockFix.clearLeakedLock();
+                MixinReEntranceLockFix.clearInvalidVanillaClasses();
+            }
         }
         return new String[0];
     }
