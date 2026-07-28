@@ -1,6 +1,8 @@
 package com.gtnewhorizons.angelica.glsm;
 
 import com.gtnewhorizons.angelica.glsm.backend.RenderBackend;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.taumc.glsl.ShaderParser;
 import org.taumc.glsl.Transformer;
 
@@ -12,6 +14,7 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -39,9 +42,22 @@ import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACK
  */
 public class CompatShaderTransformer {
 
+    private static final Logger LOGGER = LogManager.getLogger(CompatShaderTransformer.class);
+
     private static final Pattern VERSION_PATTERN = Pattern.compile("#version[ \\t]+(\\d+)(?:[ \\t]+(\\w+))?");
 
-    private static final Pattern DEFINE_PATTERN = Pattern.compile("^\\s*#\\s*define\\s+.+$", Pattern.MULTILINE);
+    private static final Pattern GLES_IFDEF_PATTERN = Pattern.compile(
+        "^[ \\t]*#[ \\t]*ifdef[ \\t]+GL_ES[ \\t]*(?://.*)?$"
+    );
+    private static final Pattern ENDIF_PATTERN = Pattern.compile("^[ \\t]*#[ \\t]*endif[ \\t]*(?://.*)?$");
+    private static final Pattern PRECISION_DECLARATION_PATTERN = Pattern.compile(
+        "^[ \\t]*precision[ \\t]+(?:lowp|mediump|highp)[ \\t]+(?:float|int)[ \\t]*;[ \\t]*(?://.*)?$"
+    );
+    private static final Pattern MAIN_VOID_PARAMETERS_PATTERN = Pattern.compile(
+        "\\bmain[ \\t\\r\\n]*\\([ \\t\\r\\n]*void[ \\t\\r\\n]*\\)"
+    );
+    private static final Pattern DIRECTIVE_NAME_PATTERN = Pattern.compile("[ \\t]*([A-Za-z]+)");
+    private static final Pattern MACRO_NAME_PATTERN = Pattern.compile("[ \\t]*(?:define|undef)[ \\t]+([A-Za-z_][A-Za-z0-9_]*)");
 
     /** Compat builtins that trigger AST transformation. */
     private static final Set<String> COMPAT_BUILTINS = Set.of(
@@ -105,7 +121,7 @@ public class CompatShaderTransformer {
                 result = transformInternal(source, isFragment);
                 cache.put(key, result);
             } catch (Exception e) {
-                GLStateManager.LOGGER.warn("CompatShaderTransformer: AST transformation failed, falling back to version fixup only", e);
+                LOGGER.warn("CompatShaderTransformer: AST transformation failed, falling back to version fixup only", e);
                 result = fixupVersion(source);
             }
         }
@@ -133,6 +149,10 @@ public class CompatShaderTransformer {
         }
 
         final int targetVersion = Math.max(declaredVersion, RENDER_BACKEND != null ? RENDER_BACKEND.getMinGLSLVersion() : 330);
+
+        source = stripGlesPrecisionGuards(source);
+        final SeparatedSource separatedSource = separatePreprocessorPreamble(source);
+        source = MAIN_VOID_PARAMETERS_PATTERN.matcher(separatedSource.shader()).replaceAll("main()");
 
         // Pre-parse reserved word renaming — prevents ANTLR parse failures
         source = GlslTransformUtils.replaceTexture(source);
@@ -215,16 +235,8 @@ public class CompatShaderTransformer {
         transformer.renameAndWrapShadow("shadow2DLod", "textureLod");
 
         final String versionDirective = "#version " + targetVersion + " core\n";
-        final String extensions = VERSION_PATTERN.matcher(GlslTransformUtils.getFormattedShader(parsedShader.pre(), "")).replaceFirst("").trim();
-
-        // Preserve #define directives
-        final StringBuilder defines = new StringBuilder();
-        final Matcher defineMatcher = DEFINE_PATTERN.matcher(source);
-        while (defineMatcher.find()) {
-            defines.append(defineMatcher.group().trim()).append('\n');
-        }
-
-        final String header = versionDirective + (extensions.isEmpty() ? "" : "\n" + extensions) + (defines.isEmpty() ? "" : "\n" + defines);
+        final String preprocessor = separatedSource.preprocessor().trim();
+        final String header = versionDirective + (preprocessor.isEmpty() ? "" : "\n" + preprocessor + "\n");
         final StringBuilder result = new StringBuilder();
         transformer.mutateTree(tree -> result.append(GlslTransformUtils.getFormattedShader(tree, header)));
 
@@ -236,6 +248,250 @@ public class CompatShaderTransformer {
 
         return output;
     }
+
+    /**
+     * Remove OpenGL ES default precision blocks that are invalid and unnecessary in desktop core shaders.
+     * Other {@code GL_ES} conditionals are preserved because they can contain declarations with desktop alternatives.
+     */
+    private static String stripGlesPrecisionGuards(String source) {
+        final String[] lines = source.split("\\R", -1);
+        final StringBuilder result = new StringBuilder(source.length());
+
+        for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            if (GLES_IFDEF_PATTERN.matcher(lines[lineIndex]).matches()) {
+                int endIndex = lineIndex + 1;
+                boolean foundPrecision = false;
+                boolean onlyPrecision = true;
+
+                while (endIndex < lines.length && !ENDIF_PATTERN.matcher(lines[endIndex]).matches()) {
+                    final String line = lines[endIndex];
+                    if (PRECISION_DECLARATION_PATTERN.matcher(line).matches()) {
+                        foundPrecision = true;
+                    } else if (!line.isBlank() && !line.stripLeading().startsWith("//")) {
+                        onlyPrecision = false;
+                    }
+                    endIndex++;
+                }
+
+                if (foundPrecision && onlyPrecision && endIndex < lines.length) {
+                    lineIndex = endIndex;
+                    continue;
+                }
+            }
+
+            result.append(lines[lineIndex]);
+            if (lineIndex < lines.length - 1) {
+                result.append('\n');
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Keep a leading directive-only preamble out of the GLSL AST parser. Moving directives after shader tokens, or
+     * moving shader tokens out of a conditional block, would change preprocessing semantics and is therefore rejected.
+     */
+    private static SeparatedSource separatePreprocessorPreamble(String source) {
+        final String[] lines = source.split("\\R", -1);
+        final StringBuilder shader = new StringBuilder(source.length());
+        final StringBuilder preprocessor = new StringBuilder();
+        boolean continuation = false;
+        boolean inBlockComment = false;
+        boolean shaderStarted = false;
+        boolean macroDirectiveSeen = false;
+        int conditionalDepth = 0;
+
+        for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            final String line = lines[lineIndex];
+            final LineClassification classification = classifyLine(line, inBlockComment);
+            inBlockComment = classification.inBlockComment();
+
+            if (continuation) {
+                preprocessor.append(line).append('\n');
+                continuation = classification.trailingBackslash();
+            } else if (classification.directive()) {
+                final String directiveName = directiveName(line, classification.directiveOffset());
+                if (shaderStarted && !canRelocateLateMacro(
+                    line,
+                    classification.directiveOffset(),
+                    directiveName,
+                    shader,
+                    macroDirectiveSeen
+                )) {
+                    throw unsafePreprocessorLayout(lineIndex, "directive appears after GLSL tokens");
+                }
+                if ("line".equals(directiveName)) {
+                    throw unsafePreprocessorLayout(lineIndex, "#line cannot be relocated without changing line semantics");
+                }
+                if ("version".equals(directiveName)) {
+                    if (conditionalDepth != 0) {
+                        throw unsafePreprocessorLayout(lineIndex, "#version appears inside a conditional block");
+                    }
+                } else {
+                    preprocessor.append(line).append('\n');
+                }
+
+                conditionalDepth = updateConditionalDepth(directiveName, conditionalDepth, lineIndex);
+                macroDirectiveSeen |= isMacroDirective(directiveName);
+                continuation = classification.trailingBackslash();
+            } else {
+                if (classification.shaderToken()) {
+                    if (conditionalDepth != 0) {
+                        throw unsafePreprocessorLayout(lineIndex, "conditional directive controls GLSL tokens");
+                    }
+                    shaderStarted = true;
+                }
+                shader.append(line);
+            }
+
+            if (lineIndex < lines.length - 1) {
+                shader.append('\n');
+            }
+        }
+
+        if (continuation) {
+            throw unsafePreprocessorLayout(lines.length - 1, "unterminated directive continuation");
+        }
+        if (conditionalDepth != 0) {
+            throw unsafePreprocessorLayout(lines.length - 1, "unterminated conditional directive");
+        }
+
+        return new SeparatedSource(shader.toString(), preprocessor.toString());
+    }
+
+    private static int updateConditionalDepth(String directiveName, int depth, int lineIndex) {
+        if ("if".equals(directiveName) || "ifdef".equals(directiveName) || "ifndef".equals(directiveName)) {
+            return depth + 1;
+        }
+        if ("else".equals(directiveName) || "elif".equals(directiveName)) {
+            if (depth == 0) {
+                throw unsafePreprocessorLayout(lineIndex, "conditional branch has no opening directive");
+            }
+            return depth;
+        }
+        if ("endif".equals(directiveName)) {
+            if (depth == 0) {
+                throw unsafePreprocessorLayout(lineIndex, "#endif has no opening directive");
+            }
+            return depth - 1;
+        }
+        return depth;
+    }
+
+    private static String directiveName(String line, int directiveOffset) {
+        final Matcher matcher = DIRECTIVE_NAME_PATTERN.matcher(line.substring(directiveOffset + 1));
+        return matcher.lookingAt() ? matcher.group(1).toLowerCase(Locale.ROOT) : "";
+    }
+
+    private static boolean canRelocateLateMacro(
+        String line,
+        int directiveOffset,
+        String directiveName,
+        CharSequence precedingShader,
+        boolean macroDirectiveSeen
+    ) {
+        if (macroDirectiveSeen || !isMacroDirective(directiveName)) {
+            return false;
+        }
+
+        final Matcher matcher = MACRO_NAME_PATTERN.matcher(line.substring(directiveOffset + 1));
+        if (!matcher.lookingAt()) {
+            return false;
+        }
+
+        final Pattern previousUse = Pattern.compile("\\b" + Pattern.quote(matcher.group(1)) + "\\b");
+        return !previousUse.matcher(precedingShader).find();
+    }
+
+    private static boolean isMacroDirective(String directiveName) {
+        return "define".equals(directiveName) || "undef".equals(directiveName);
+    }
+
+    private static IllegalArgumentException unsafePreprocessorLayout(int lineIndex, String reason) {
+        return new IllegalArgumentException("Unsafe shader preprocessor layout at line " + (lineIndex + 1) + ": " + reason);
+    }
+
+    private static LineClassification classifyLine(String line, boolean startsInBlockComment) {
+        boolean inBlockComment = startsInBlockComment;
+        boolean inString = false;
+        char quote = 0;
+        boolean escaped = false;
+        int directiveOffset = -1;
+        int lastOutsideComment = -1;
+        boolean shaderToken = false;
+
+        for (int index = 0; index < line.length(); index++) {
+            final char current = line.charAt(index);
+            final char next = index + 1 < line.length() ? line.charAt(index + 1) : 0;
+
+            if (inBlockComment) {
+                if (current == '*' && next == '/') {
+                    inBlockComment = false;
+                    index++;
+                }
+                continue;
+            }
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (current == '\\') {
+                    escaped = true;
+                } else if (current == quote) {
+                    inString = false;
+                }
+                continue;
+            }
+            if (current == '/' && next == '/') {
+                break;
+            }
+            if (current == '/' && next == '*') {
+                inBlockComment = true;
+                index++;
+                continue;
+            }
+            if (current == '\"' || current == '\'') {
+                inString = true;
+                quote = current;
+                continue;
+            }
+            if (!Character.isWhitespace(current)) {
+                lastOutsideComment = index;
+                if (directiveOffset < 0 && !shaderToken) {
+                    if (current == '#') {
+                        directiveOffset = index;
+                    } else {
+                        shaderToken = true;
+                    }
+                }
+            }
+        }
+
+        final int lastNonWhitespace = lastNonWhitespace(line);
+        final boolean trailingBackslash = lastNonWhitespace >= 0
+            && lastNonWhitespace == lastOutsideComment
+            && line.charAt(lastNonWhitespace) == '\\';
+        return new LineClassification(directiveOffset >= 0, shaderToken, inBlockComment, trailingBackslash, directiveOffset);
+    }
+
+    private static int lastNonWhitespace(String line) {
+        for (int index = line.length() - 1; index >= 0; index--) {
+            if (!Character.isWhitespace(line.charAt(index))) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private record SeparatedSource(String shader, String preprocessor) {}
+
+    private record LineClassification(
+        boolean directive,
+        boolean shaderToken,
+        boolean inBlockComment,
+        boolean trailingBackslash,
+        int directiveOffset
+    ) {}
 
     /**
      * Inject matrix uniforms and rename compat builtins.
@@ -348,7 +604,7 @@ public class CompatShaderTransformer {
             Files.writeString(DUMP_DIR.resolve(id + "_original" + suffix), header + original, StandardCharsets.UTF_8);
             Files.writeString(DUMP_DIR.resolve(id + "_transformed" + suffix), header + transformed, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            GLStateManager.LOGGER.warn("Failed to dump compat shader: {}", e.getMessage());
+            LOGGER.warn("Failed to dump compat shader: {}", e.getMessage());
         }
     }
 

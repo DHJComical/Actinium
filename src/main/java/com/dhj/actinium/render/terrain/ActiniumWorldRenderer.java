@@ -11,6 +11,7 @@ import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.client.MinecraftForgeClient;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
+import com.dhj.actinium.compat.ichunutil.PortalChunkRenderMatrices;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
 import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
@@ -36,6 +37,8 @@ import java.util.*;
  */
 public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, VintageRenderSectionManager, BlockRenderLayer, TileEntity, ActiniumWorldRenderer.TileEntityRenderContext>  {
     private static final double MAX_ENTITY_CHECK_VOLUME = 16 * 16 * 16 * 15;
+    private boolean portalCamera;
+    private ChunkRenderMatrices portalMatrices;
 
     public record TileEntityRenderContext(Map<Integer, DestroyBlockProgress> damagedBlocks, float partialTicks) {}
 
@@ -77,6 +80,9 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
     protected ChunkRenderMatrices createChunkRenderMatrices() {
         if (this.renderSectionManager != null && this.renderSectionManager.isInShadowPass()) {
             return new ChunkRenderMatrices(ShadowRenderer.PROJECTION, ShadowRenderer.MODELVIEW);
+        }
+        if (this.portalCamera) {
+            return Objects.requireNonNull(this.portalMatrices, "Portal matrices must be captured before terrain rendering");
         }
         return new ChunkRenderMatrices(RenderingState.INSTANCE.getProjectionMatrix(), RenderingState.INSTANCE.getModelViewMatrix());
     }
@@ -122,6 +128,14 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
 
     public void setCurrentViewport(Viewport viewport) {
         this.currentViewport = viewport;
+    }
+
+    /**
+     * Captures the iChun recursive terrain matrices while leaving ordinary and shadow rendering unchanged.
+     */
+    public void setPortalCamera(boolean portalCamera) {
+        this.portalCamera = portalCamera;
+        this.portalMatrices = portalCamera ? PortalChunkRenderMatrices.capture() : null;
     }
 
     @Override
@@ -183,9 +197,8 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         );
     }
 
-    public static CameraState captureCameraState(double ticks) {
-        Entity viewEntity = Objects.requireNonNull(Minecraft.getMinecraft().getRenderViewEntity(), "Client must have view entity");
-
+    public static CameraState captureCameraState(Entity viewEntity, double ticks) {
+        Objects.requireNonNull(viewEntity, "viewEntity");
         double x = viewEntity.lastTickPosX + (viewEntity.posX - viewEntity.lastTickPosX) * ticks;
         double y = viewEntity.lastTickPosY + (viewEntity.posY - viewEntity.lastTickPosY) * ticks + (double) viewEntity.getEyeHeight();
         double z = viewEntity.lastTickPosZ + (viewEntity.posZ - viewEntity.lastTickPosZ) * ticks;

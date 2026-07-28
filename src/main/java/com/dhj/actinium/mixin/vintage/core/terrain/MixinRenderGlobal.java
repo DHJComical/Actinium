@@ -1,7 +1,10 @@
 package com.dhj.actinium.mixin.vintage.core.terrain;
 
 import com.llamalad7.mixinextras.sugar.Local;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
+import com.dhj.actinium.compat.ichunutil.PortalViewportProvider;
 import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.dhj.actinium.shadows.ShadowRenderingState;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
@@ -186,12 +189,25 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
      * @reason Redirect the terrain setup phase to our renderer
      * @author JellySquid
      */
-    @Overwrite
-    public void setupTerrain(Entity entity, double tick, ICamera camera, int frame, boolean spectator) {
+    @WrapMethod(method = "setupTerrain")
+    private void actinium$setupTerrain(
+        Entity entity,
+        double tick,
+        ICamera camera,
+        int frame,
+        boolean spectator,
+        Operation<Void> original
+    ) {
+        boolean portalCamera = camera instanceof PortalViewportProvider;
+        if (portalCamera) {
+            original.call(entity, tick, camera, frame, spectator);
+        }
+
         RenderDevice.enterManagedCode();
 
         try {
-            this.renderer.setupTerrain(((ViewportProvider)camera).sodium$createViewport(), ActiniumWorldRenderer.captureCameraState(tick),
+            this.renderer.setPortalCamera(portalCamera);
+            this.renderer.setupTerrain(((ViewportProvider)camera).sodium$createViewport(), ActiniumWorldRenderer.captureCameraState(entity, tick),
                     frame, spectator, false);
         } finally {
             RenderDevice.exitManagedCode();

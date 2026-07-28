@@ -13,6 +13,7 @@
     "core.MixinMinecraft",
     "core.MixinRenderGlobalDestroyBlock",
     "core.MixinTessellator",
+    "core.MixinTileEntityRendererDispatcherBatch",
     "core.MixinTextureManagerDebugLabels",
     "core.MixinVertexBufferUploader",
     "core.MixinWorldVertexBufferUploader",

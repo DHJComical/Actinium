@@ -357,7 +357,6 @@ public class GLStateManager {
 
     // Stencil state (GL_STENCIL_BUFFER_BIT)
     @Getter protected static final StencilStateStack stencilState = new StencilStateStack();
-    private static int stencilBitMask = 0xFFFFFFFF;
 
     @Getter protected static final BooleanStateStack autoNormalState = new BooleanStateStack(GL11.GL_AUTO_NORMAL);
     @Getter protected static final BooleanStateStack map1Color4State = new BooleanStateStack(GL11.GL_MAP1_COLOR_4);
@@ -592,21 +591,10 @@ public class GLStateManager {
         final String glVendor = RENDER_BACKEND.getString(GL11.GL_VENDOR);
         VENDOR = Vendor.getVendor(glVendor.toLowerCase());
 
-        // The initial mask value should be defined as all 1's. However, some drivers have it set to 0's.
-        // To ensure consistency & correctness across all drivers, we're setting them to 0xFF.
-        RENDER_BACKEND.stencilFunc(stencilState.getFuncFront(), stencilState.getRefFront(), 0xFF);
-        RENDER_BACKEND.stencilMask(0xFF);
-
-        // Compute stencil bit mask — driver clamps stencil masks to buffer depth
-        // GL_STENCIL_BITS was removed in core profile; query via default FBO attachment
-        final int stencilBits = RENDER_BACKEND.getFramebufferAttachmentParameteri(GL30.GL_DRAW_FRAMEBUFFER, GL11.GL_STENCIL, GL30.GL_FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE);
-        stencilBitMask = stencilBits >= 32 ? 0xFFFFFFFF : (1 << stencilBits) - 1;
-
-        // Initialize stencil masks from computed bit mask
-        stencilState.setValueMaskFront(stencilBitMask);
-        stencilState.setValueMaskBack(stencilBitMask);
-        stencilState.setWriteMaskFront(stencilBitMask);
-        stencilState.setWriteMaskBack(stencilBitMask);
+        // Keep the driver aligned with the cached all-ones defaults. The driver clamps these masks to the
+        // stencil width of whichever framebuffer is current when a draw occurs.
+        RENDER_BACKEND.stencilFunc(stencilState.getFuncFront(), stencilState.getRefFront(), stencilState.getValueMaskFront());
+        RENDER_BACKEND.stencilMask(stencilState.getWriteMaskFront());
 
         final FloatBuffer lwRange = BufferUtils.createFloatBuffer(16);
         RENDER_BACKEND.getFloat(GL12.GL_ALIASED_LINE_WIDTH_RANGE, lwRange);
@@ -4843,13 +4831,12 @@ public class GLStateManager {
                 return;
             }
         }
-        final int clampedMask = mask & stencilBitMask;
         final boolean caching = isCachingEnabled();
-        if (BYPASS_CACHE || !caching || stencilState.getFuncFront() != func || stencilState.getRefFront() != ref || stencilState.getValueMaskFront() != clampedMask) {
+        if (BYPASS_CACHE || !caching || stencilState.getFuncFront() != func || stencilState.getRefFront() != ref || stencilState.getValueMaskFront() != mask) {
             if (caching) {
-                stencilState.setFunc(func, ref, clampedMask);
+                stencilState.setFunc(func, ref, mask);
             }
-            RENDER_BACKEND.stencilFunc(func, ref, clampedMask);
+            RENDER_BACKEND.stencilFunc(func, ref, mask);
         }
     }
 
@@ -4861,13 +4848,12 @@ public class GLStateManager {
                 return;
             }
         }
-        final int clampedMask = mask & stencilBitMask;
         final boolean caching = isCachingEnabled();
-        if (BYPASS_CACHE || !caching || stencilState.getWriteMaskFront() != clampedMask) {
+        if (BYPASS_CACHE || !caching || stencilState.getWriteMaskFront() != mask) {
             if (caching) {
-                stencilState.setWriteMask(clampedMask);
+                stencilState.setWriteMask(mask);
             }
-            RENDER_BACKEND.stencilMask(clampedMask);
+            RENDER_BACKEND.stencilMask(mask);
         }
     }
 
@@ -5008,15 +4994,14 @@ public class GLStateManager {
                 return;
             }
         }
-        final int clampedMask = mask & stencilBitMask;
         final boolean caching = isCachingEnabled();
         boolean needsUpdate = BYPASS_CACHE || !caching;
         if (!needsUpdate) {
             if (face == GL11.GL_FRONT || face == GL11.GL_FRONT_AND_BACK) {
-                needsUpdate = stencilState.getFuncFront() != func || stencilState.getRefFront() != ref || stencilState.getValueMaskFront() != clampedMask;
+                needsUpdate = stencilState.getFuncFront() != func || stencilState.getRefFront() != ref || stencilState.getValueMaskFront() != mask;
             }
             if (!needsUpdate && (face == GL11.GL_BACK || face == GL11.GL_FRONT_AND_BACK)) {
-                needsUpdate = stencilState.getFuncBack() != func || stencilState.getRefBack() != ref || stencilState.getValueMaskBack() != clampedMask;
+                needsUpdate = stencilState.getFuncBack() != func || stencilState.getRefBack() != ref || stencilState.getValueMaskBack() != mask;
             }
         }
         if (needsUpdate) {
@@ -5024,15 +5009,15 @@ public class GLStateManager {
                 if (face == GL11.GL_FRONT || face == GL11.GL_FRONT_AND_BACK) {
                     stencilState.setFuncFront(func);
                     stencilState.setRefFront(ref);
-                    stencilState.setValueMaskFront(clampedMask);
+                    stencilState.setValueMaskFront(mask);
                 }
                 if (face == GL11.GL_BACK || face == GL11.GL_FRONT_AND_BACK) {
                     stencilState.setFuncBack(func);
                     stencilState.setRefBack(ref);
-                    stencilState.setValueMaskBack(clampedMask);
+                    stencilState.setValueMaskBack(mask);
                 }
             }
-            RENDER_BACKEND.stencilFuncSeparate(face, func, ref, clampedMask);
+            RENDER_BACKEND.stencilFuncSeparate(face, func, ref, mask);
         }
     }
 
@@ -5044,27 +5029,26 @@ public class GLStateManager {
                 return;
             }
         }
-        final int clampedMask = mask & stencilBitMask;
         final boolean caching = isCachingEnabled();
         boolean needsUpdate = BYPASS_CACHE || !caching;
         if (!needsUpdate) {
             if (face == GL11.GL_FRONT || face == GL11.GL_FRONT_AND_BACK) {
-                needsUpdate = stencilState.getWriteMaskFront() != clampedMask;
+                needsUpdate = stencilState.getWriteMaskFront() != mask;
             }
             if (!needsUpdate && (face == GL11.GL_BACK || face == GL11.GL_FRONT_AND_BACK)) {
-                needsUpdate = stencilState.getWriteMaskBack() != clampedMask;
+                needsUpdate = stencilState.getWriteMaskBack() != mask;
             }
         }
         if (needsUpdate) {
             if (caching) {
                 if (face == GL11.GL_FRONT || face == GL11.GL_FRONT_AND_BACK) {
-                    stencilState.setWriteMaskFront(clampedMask);
+                    stencilState.setWriteMaskFront(mask);
                 }
                 if (face == GL11.GL_BACK || face == GL11.GL_FRONT_AND_BACK) {
-                    stencilState.setWriteMaskBack(clampedMask);
+                    stencilState.setWriteMaskBack(mask);
                 }
             }
-            RENDER_BACKEND.stencilMaskSeparate(face, clampedMask);
+            RENDER_BACKEND.stencilMaskSeparate(face, mask);
         }
     }
 

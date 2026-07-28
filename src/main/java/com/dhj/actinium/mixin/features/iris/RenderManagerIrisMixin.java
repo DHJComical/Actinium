@@ -36,20 +36,23 @@ public class RenderManagerIrisMixin {
 
         int previousEntity = CapturedRenderingState.INSTANCE.getCurrentRenderedEntity();
         WorldRenderingPhase previousPhase = GbufferPrograms.getCurrentPhase();
-        boolean beganEntityPhase = previousPhase == WorldRenderingPhase.NONE;
-        ShaderRegressionDebug.logEntityPhase("renderEntity:before", entity, render, previousPhase.name(), beganEntityPhase);
+        GbufferPrograms.EntityPhase entityPhase = null;
+        boolean beganEntityPhase = false;
         CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
         try {
-            if (beganEntityPhase) {
-                GbufferPrograms.beginEntities();
-            }
+            entityPhase = GbufferPrograms.enterEntityPhase();
+            beganEntityPhase = entityPhase.changedPhase();
+            ShaderRegressionDebug.logEntityPhase("renderEntity:before", entity, render, previousPhase.name(), beganEntityPhase);
             render.doRender(entity, x, y, z, yaw, partialTicks);
         } finally {
-            if (beganEntityPhase) {
-                GbufferPrograms.endEntities();
+            try {
+                if (entityPhase != null) {
+                    entityPhase.close();
+                }
+            } finally {
+                ShaderRegressionDebug.logEntityPhase("renderEntity:after", entity, render, previousPhase.name(), beganEntityPhase);
+                CapturedRenderingState.INSTANCE.setCurrentEntity(previousEntity);
             }
-            ShaderRegressionDebug.logEntityPhase("renderEntity:after", entity, render, previousPhase.name(), beganEntityPhase);
-            CapturedRenderingState.INSTANCE.setCurrentEntity(previousEntity);
         }
     }
 
@@ -90,20 +93,23 @@ public class RenderManagerIrisMixin {
 
         int previousEntity = CapturedRenderingState.INSTANCE.getCurrentRenderedEntity();
         WorldRenderingPhase previousPhase = GbufferPrograms.getCurrentPhase();
-        boolean beganEntityPhase = previousPhase == WorldRenderingPhase.NONE;
-        ShaderRegressionDebug.logEntityPhase("renderMultipass:before", entity, render, previousPhase.name(), beganEntityPhase);
+        GbufferPrograms.EntityPhase entityPhase = null;
+        boolean beganEntityPhase = false;
         CapturedRenderingState.INSTANCE.setCurrentEntity(EntityIdHelper.getEntityId(entity));
         try {
-            if (beganEntityPhase) {
-                GbufferPrograms.beginEntities();
-            }
+            entityPhase = GbufferPrograms.enterEntityPhase();
+            beganEntityPhase = entityPhase.changedPhase();
+            ShaderRegressionDebug.logEntityPhase("renderMultipass:before", entity, render, previousPhase.name(), beganEntityPhase);
             render.renderMultipass(entity, x, y, z, yaw, partialTicks);
         } finally {
-            if (beganEntityPhase) {
-                GbufferPrograms.endEntities();
+            try {
+                if (entityPhase != null) {
+                    entityPhase.close();
+                }
+            } finally {
+                ShaderRegressionDebug.logEntityPhase("renderMultipass:after", entity, render, previousPhase.name(), beganEntityPhase);
+                CapturedRenderingState.INSTANCE.setCurrentEntity(previousEntity);
             }
-            ShaderRegressionDebug.logEntityPhase("renderMultipass:after", entity, render, previousPhase.name(), beganEntityPhase);
-            CapturedRenderingState.INSTANCE.setCurrentEntity(previousEntity);
         }
     }
 }

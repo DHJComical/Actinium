@@ -16,6 +16,8 @@ public class MixinLate implements ILateMixinLoader {
     private static final String DISTANT_HORIZONS_MIXIN_CONFIG = "mixins.actinium.dh.json";
     private static final String GIBBED_MOD_ID = "gibbed";
     private static final String GIBBED_MIXIN_CONFIG = "mixins.actinium.gibbed.json";
+    private static final String ICHUN_UTIL_MOD_ID = "ichunutil";
+    private static final String ICHUN_UTIL_MIXIN_CONFIG = "mixins.actinium.ichunutil.json";
     private static final String LUMENIZED_MOD_ID = "lumenized";
     private static final String LUMENIZED_MIXIN_CONFIG = "mixins.actinium.lumenized.json";
 
@@ -49,6 +51,10 @@ public class MixinLate implements ILateMixinLoader {
 
         if (loadedMods.test(GIBBED_MOD_ID)) {
             mixins.add(GIBBED_MIXIN_CONFIG);
+        }
+
+        if (loadedMods.test(ICHUN_UTIL_MOD_ID)) {
+            mixins.add(ICHUN_UTIL_MIXIN_CONFIG);
         }
 
         if (loadedMods.test(LUMENIZED_MOD_ID)) {

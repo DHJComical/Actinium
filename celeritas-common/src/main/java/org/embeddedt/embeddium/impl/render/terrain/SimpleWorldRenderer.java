@@ -1,5 +1,6 @@
 package org.embeddedt.embeddium.impl.render.terrain;
 
+import it.unimi.dsi.fastutil.longs.LongCollection;
 import lombok.Getter;
 import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
@@ -38,6 +39,15 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
     @Getter
     protected SECTIONMANAGER renderSectionManager;
 
+    private ChunkTracker.Subscription chunkTrackerSubscription;
+
+    /**
+     * Returns whether this renderer is currently attached to the supplied world instance.
+     */
+    public boolean isRenderingWorld(WORLD world) {
+        return this.world == world;
+    }
+
     public void setWorld(WORLD world) {
         // Check that the world is actually changing
         if (this.world == world) {
@@ -57,19 +67,38 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
 
     protected void loadWorld(WORLD world) {
         this.world = world;
+        this.chunkTrackerSubscription = ChunkTrackerHolder.get(world).subscribe();
 
-        try (CommandList commandList = RenderDevice.INSTANCE.createCommandList()) {
-            this.initRenderer(commandList);
+        boolean loaded = false;
+        try {
+            try (CommandList commandList = RenderDevice.INSTANCE.createCommandList()) {
+                this.initRenderer(commandList);
+            }
+            loaded = true;
+        } finally {
+            if (!loaded) {
+                this.unloadWorld();
+            }
         }
     }
 
     protected void unloadWorld() {
-        if (this.renderSectionManager != null) {
-            this.renderSectionManager.destroy();
+        try {
+            if (this.renderSectionManager != null) {
+                this.renderSectionManager.destroy();
+            }
+        } finally {
             this.renderSectionManager = null;
+            try {
+                Objects.requireNonNull(
+                    this.chunkTrackerSubscription,
+                    "Loaded world must have a chunk tracker subscription"
+                ).unsubscribe();
+            } finally {
+                this.chunkTrackerSubscription = null;
+                this.world = null;
+            }
         }
-
-        this.world = null;
     }
 
     /**
@@ -174,8 +203,10 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
     }
 
     private void processChunkEvents() {
-        var tracker = ChunkTrackerHolder.get(this.world);
-        tracker.forEachEvent(this.renderSectionManager::onChunkAdded, this.renderSectionManager::onChunkRemoved);
+        Objects.requireNonNull(
+            this.chunkTrackerSubscription,
+            "Loaded world must have a chunk tracker subscription"
+        ).forEachEvent(this.renderSectionManager::onChunkAdded, this.renderSectionManager::onChunkRemoved);
     }
 
     protected abstract ChunkRenderMatrices createChunkRenderMatrices();
@@ -223,8 +254,11 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
 
         this.renderSectionManager = this.createRenderSectionManager(commandList);
 
-        var tracker = ChunkTrackerHolder.get(this.world);
-        ChunkTracker.forEachChunk(tracker.getReadyChunks(), this.renderSectionManager::onChunkAdded);
+        LongCollection readyChunks = Objects.requireNonNull(
+            this.chunkTrackerSubscription,
+            "Loaded world must have a chunk tracker subscription"
+        ).snapshotReadyChunks();
+        ChunkTracker.forEachChunk(readyChunks, this.renderSectionManager::onChunkAdded);
     }
 
     /**

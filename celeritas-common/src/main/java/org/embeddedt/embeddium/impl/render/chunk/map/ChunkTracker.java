@@ -3,12 +3,15 @@ package org.embeddedt.embeddium.impl.render.chunk.map;
 import it.unimi.dsi.fastutil.longs.*;
 import org.embeddedt.embeddium.impl.util.PositionUtil;
 
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
+
 public class ChunkTracker implements ClientChunkEventListener {
     private final Long2IntOpenHashMap chunkStatus = new Long2IntOpenHashMap();
     private final LongOpenHashSet chunkReady = new LongOpenHashSet();
 
-    private final LongSet unloadQueue = new LongOpenHashSet();
-    private final LongSet loadQueue = new LongOpenHashSet();
+    private final Set<Subscription> subscriptions = Collections.newSetFromMap(new IdentityHashMap<>());
 
     private int requiredNeighborRadius;
 
@@ -32,7 +35,7 @@ public class ChunkTracker implements ClientChunkEventListener {
         this.requiredNeighborRadius = requiredNeighborRadius;
     }
 
-    public void setRequiredNeighborRadius(int radius) {
+    public synchronized void setRequiredNeighborRadius(int radius) {
         if (radius < 0) {
             throw new IllegalArgumentException("radius must be nonnegative");
         }
@@ -45,9 +48,7 @@ public class ChunkTracker implements ClientChunkEventListener {
             var readyIterator = this.chunkReady.iterator();
             while (readyIterator.hasNext()) {
                 long key = readyIterator.nextLong();
-                if (!this.loadQueue.remove(key)) {
-                    this.unloadQueue.add(key);
-                }
+                this.publishChunkRemoved(key);
             }
             this.chunkReady.clear();
         }
@@ -76,7 +77,7 @@ public class ChunkTracker implements ClientChunkEventListener {
     }
 
     @Override
-    public void onChunkStatusAdded(int x, int z, int flags) {
+    public synchronized void onChunkStatusAdded(int x, int z, int flags) {
         var key = PositionUtil.packChunk(x, z);
 
         var prev = this.chunkStatus.get(key);
@@ -92,7 +93,7 @@ public class ChunkTracker implements ClientChunkEventListener {
     }
 
     @Override
-    public void onChunkStatusRemoved(int x, int z, int flags) {
+    public synchronized void onChunkStatusRemoved(int x, int z, int flags) {
         var key = PositionUtil.packChunk(x, z);
 
         var prev = this.chunkStatus.get(key);
@@ -133,26 +134,125 @@ public class ChunkTracker implements ClientChunkEventListener {
         }
 
         if (flags == ChunkStatus.FLAG_ALL) {
-            if (this.chunkReady.add(key) && !this.unloadQueue.remove(key)) {
-                this.loadQueue.add(key);
+            if (this.chunkReady.add(key)) {
+                this.publishChunkAdded(key);
             }
         } else {
-            if (this.chunkReady.remove(key) && !this.loadQueue.remove(key)) {
-                this.unloadQueue.add(key);
+            if (this.chunkReady.remove(key)) {
+                this.publishChunkRemoved(key);
             }
         }
     }
 
-    public LongCollection getReadyChunks() {
-        return LongSets.unmodifiable(this.chunkReady);
+    private void publishChunkAdded(long key) {
+        for (Subscription subscription : this.subscriptions) {
+            subscription.onChunkAdded(key);
+        }
     }
 
-    public void forEachEvent(ChunkEventHandler loadEventHandler, ChunkEventHandler unloadEventHandler) {
-        forEachChunk(this.unloadQueue, unloadEventHandler);
-        this.unloadQueue.clear();
+    private void publishChunkRemoved(long key) {
+        for (Subscription subscription : this.subscriptions) {
+            subscription.onChunkRemoved(key);
+        }
+    }
 
-        forEachChunk(this.loadQueue, loadEventHandler);
-        this.loadQueue.clear();
+    public synchronized LongCollection getReadyChunks() {
+        return LongSets.unmodifiable(new LongOpenHashSet(this.chunkReady));
+    }
+
+    /**
+     * Creates an independent event stream for one renderer.
+     */
+    public synchronized Subscription subscribe() {
+        Subscription subscription = new Subscription(this);
+        this.subscriptions.add(subscription);
+        return subscription;
+    }
+
+    private synchronized LongCollection snapshotReadyChunks(Subscription subscription) {
+        this.requireSubscribed(subscription);
+        subscription.clearPendingEvents();
+        return LongSets.unmodifiable(new LongOpenHashSet(this.chunkReady));
+    }
+
+    private synchronized PendingEvents drainEvents(Subscription subscription) {
+        this.requireSubscribed(subscription);
+        PendingEvents events = new PendingEvents(
+            new LongOpenHashSet(subscription.unloadQueue),
+            new LongOpenHashSet(subscription.loadQueue)
+        );
+        subscription.clearPendingEvents();
+        return events;
+    }
+
+    private synchronized void unsubscribe(Subscription subscription) {
+        this.requireSubscribed(subscription);
+        this.subscriptions.remove(subscription);
+        subscription.clearPendingEvents();
+        subscription.subscribed = false;
+    }
+
+    private void requireSubscribed(Subscription subscription) {
+        if (subscription.owner != this || !subscription.subscribed || !this.subscriptions.contains(subscription)) {
+            throw new IllegalStateException("Chunk tracker subscription is not active");
+        }
+    }
+
+    private record PendingEvents(LongCollection unloads, LongCollection loads) {
+    }
+
+    /**
+     * Holds pending chunk events for exactly one world renderer.
+     */
+    public static final class Subscription {
+        private final ChunkTracker owner;
+        private final LongSet unloadQueue = new LongOpenHashSet();
+        private final LongSet loadQueue = new LongOpenHashSet();
+        private boolean subscribed = true;
+
+        private Subscription(ChunkTracker owner) {
+            this.owner = owner;
+        }
+
+        private void onChunkAdded(long key) {
+            if (!this.unloadQueue.remove(key)) {
+                this.loadQueue.add(key);
+            }
+        }
+
+        private void onChunkRemoved(long key) {
+            if (!this.loadQueue.remove(key)) {
+                this.unloadQueue.add(key);
+            }
+        }
+
+        private void clearPendingEvents() {
+            this.unloadQueue.clear();
+            this.loadQueue.clear();
+        }
+
+        /**
+         * Captures the owner's complete ready set and discards events already represented by that snapshot.
+         */
+        public LongCollection snapshotReadyChunks() {
+            return this.owner.snapshotReadyChunks(this);
+        }
+
+        /**
+         * Delivers this renderer's pending events without consuming another renderer's stream.
+         */
+        public void forEachEvent(ChunkEventHandler loadEventHandler, ChunkEventHandler unloadEventHandler) {
+            PendingEvents events = this.owner.drainEvents(this);
+            forEachChunk(events.unloads, unloadEventHandler);
+            forEachChunk(events.loads, loadEventHandler);
+        }
+
+        /**
+         * Stops event delivery and releases this subscription from its owner.
+         */
+        public void unsubscribe() {
+            this.owner.unsubscribe(this);
+        }
     }
 
     public static void forEachChunk(LongCollection queue, ChunkEventHandler handler) {

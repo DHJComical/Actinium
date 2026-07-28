@@ -20,6 +20,7 @@ class MixinLateTest {
             List.of(
                 "mixins.actinium.dh.json",
                 "mixins.actinium.gibbed.json",
+                "mixins.actinium.ichunutil.json",
                 "mixins.actinium.lumenized.json"
             ),
             MixinLate.configsFor(modId -> true)
