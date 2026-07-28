@@ -1,11 +1,21 @@
 package com.dhj.actinium;
 
 import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
+import com.dhj.actinium.command.TogglePassCommand;
+import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.dhj.actinium.debug.ActiniumDiagnostics;
+import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
+import com.dhj.actinium.render.FastLitItemDisplayListCache;
+import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
+import com.dhj.actinium.runtime.ActiniumRuntime;
+import com.gtnewhorizon.gtnhlib.client.renderer.RuntimeOptionsBridge;
+import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 import com.mojang.realmsclient.gui.ChatFormatting;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompat;
+import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.launchwrapper.Launch;
@@ -23,13 +33,6 @@ import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
 import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
 import org.embeddedt.embeddium.impl.runtime.EmbeddiumRuntimeOptions;
-import com.dhj.actinium.command.TogglePassCommand;
-import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
-import com.dhj.actinium.runtime.ActiniumRuntime;
-import com.gtnewhorizon.gtnhlib.client.renderer.RuntimeOptionsBridge;
-import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
-import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
-
 import java.lang.management.ManagementFactory;
 
 @Mod(modid = Actinium.MODID, useMetadata = true, clientSideOnly = true, acceptableRemoteVersions = "*")
@@ -43,11 +46,14 @@ public class Actinium {
         var container = Loader.instance().getIndexedModList().get(MODID);
         String version = container != null ? container.getVersion() : "unknown";
         ActiniumRuntime.setVersion(version);
-        RuntimeOptionsBridge.setAllowDirectMemoryAccess(com.dhj.actinium.config.ActiniumRuntimeOptions::allowDirectMemoryAccess);
+        RuntimeOptionsBridge.setAllowDirectMemoryAccess(ActiniumRuntimeOptions::allowDirectMemoryAccess);
         EmbeddiumRuntimeOptions.setChunkMultiDrawMode(() -> ActiniumRuntime.options().advanced.multiDrawMode);
-        PostProcessingBridge.setDepthTextureProvider(framebuffer -> ((net.coderbot.iris.rendertarget.IRenderTargetExt) framebuffer).iris$getDepthTextureId());
-        PostProcessingBridge.setLightmapColorAccessor(renderer -> ((com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer) renderer).getLightmapColors());
-        GLSMPerfDebugHooks.setExtraStatsSupplier(com.dhj.actinium.render.FastLitItemDisplayListCache::dumpStatsAndReset);
+        PostProcessingBridge.setDepthTextureProvider(framebuffer -> ((IRenderTargetExt) framebuffer).iris$getDepthTextureId());
+        PostProcessingBridge.setLightmapColorAccessor(renderer -> ((AccessorEntityRenderer) renderer).getLightmapColors());
+        GLSMPerfDebugHooks.setExtraStatsSupplier(FastLitItemDisplayListCache::dumpStatsAndReset);
+        GLSMPerfDebugHooks.setConfiguredEnabled(
+            ActiniumRuntimeOptions.resolvePerfDebugEnabled(ActiniumRuntime.options().debug.enableActiniumPerfDebug)
+        );
 
         ActiniumDiagnostics.logConstruction();
         initializeDistantHorizonsCompat();

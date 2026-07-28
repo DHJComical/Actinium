@@ -1,6 +1,8 @@
 package com.dhj.actinium.gui;
 
 import com.google.common.collect.ImmutableList;
+import com.dhj.actinium.config.ActiniumRuntimeOptions;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
@@ -478,7 +480,12 @@ public class ActiniumGameOptionPages {
                         .setTooltip(TextComponent.translatable("sodium.options.actinium.perf_debug.tooltip"))
                         .setControl(TickBoxControl::new)
                         .setImpact(OptionImpact.MEDIUM)
-                        .setBinding((opts, value) -> opts.debug.enableActiniumPerfDebug = value, opts -> opts.debug.enableActiniumPerfDebug)
+                        .setBinding((opts, value) -> {
+                            opts.debug.enableActiniumPerfDebug = value;
+                            GLSMPerfDebugHooks.setConfiguredEnabled(
+                                ActiniumRuntimeOptions.resolvePerfDebugEnabled(value)
+                            );
+                        }, opts -> opts.debug.enableActiniumPerfDebug)
                         .build())
                 .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
                         .setId(StandardOptions.Option.ACTINIUM_GPU_PERF_DEBUG.cast())

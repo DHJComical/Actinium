@@ -2179,7 +2179,7 @@ public class GLStateManager {
                 if (DisplayListManager.isCompileAndExecute() && initConfig != null && initConfig.getDirectDrawer() != null) {
                     DisplayListManager.flushMatrix();
                     final var recorder = DisplayListManager.pauseRecording();
-                    if (GLSMPerfDebug.ENABLED) {
+                    if (GLSMPerfDebug.isEnabled()) {
                         GLSMPerfDebug.count(GLSMPerfDebug.Source.DIRECT_COMPILE_EXECUTE);
                     }
                     initConfig.getDirectDrawer().accept(result);
@@ -2191,7 +2191,7 @@ public class GLStateManager {
         }
         final DirectTessellator result = ImmediateModeRecorder.end();
         if (result != null && initConfig != null && initConfig.getDirectDrawer() != null) {
-            if (GLSMPerfDebug.ENABLED) {
+            if (GLSMPerfDebug.isEnabled()) {
                 GLSMPerfDebug.count(GLSMPerfDebug.Source.DIRECT_LIVE_IMMEDIATE);
             }
             initConfig.getDirectDrawer().accept(result);
@@ -2397,11 +2397,12 @@ public class GLStateManager {
     }
 
     private static void prepareClientArrays() {
-        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.GL_PREPARE_CLIENT_ARRAYS) : 0L;
+        final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+        final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.GL_PREPARE_CLIENT_ARRAYS) : 0L;
         if (ShaderManager.getInstance().isEnabled() && VertexAttribState.hasAnyClientSideEnabledAttrib()) {
             uploadClientArraysToVBO();
         }
-        if (GLSMPerfDebug.ENABLED) {
+        if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.GL_PREPARE_CLIENT_ARRAYS, perfStart);
         }
     }
@@ -2411,7 +2412,8 @@ public class GLStateManager {
      * attribs into a shared stream VBO so the draw succeeds under core profile.
      */
     private static void uploadClientArraysToVBO() {
-        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.GL_CLIENT_ARRAY_UPLOAD) : 0L;
+        final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+        final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.GL_CLIENT_ARRAY_UPLOAD) : 0L;
         int totalBytes = 0;
         for (int i = 0; i < VertexAttribState.MAX_ATTRIBS; i++) {
             clientArraysVBOOffsets[i] = -1;
@@ -2420,7 +2422,12 @@ public class GLStateManager {
             clientArraysVBOOffsets[i] = totalBytes;
             totalBytes += a.clientPointer.remaining();
         }
-        if (totalBytes == 0) return;
+        if (totalBytes == 0) {
+            if (perfDebugEnabled) {
+                GLSMPerfDebug.end(GLSMPerfDebug.Stage.GL_CLIENT_ARRAY_UPLOAD, perfStart);
+            }
+            return;
+        }
 
         if (clientArraysVBO == 0) {
             clientArraysVBO = RENDER_BACKEND.genBuffers();
@@ -2447,7 +2454,7 @@ public class GLStateManager {
         }
 
         glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVBO);
-        if (GLSMPerfDebug.ENABLED) {
+        if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.GL_CLIENT_ARRAY_UPLOAD, perfStart);
         }
     }

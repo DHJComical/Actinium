@@ -3,6 +3,7 @@ package com.gtnewhorizons.angelica.glsm.debug;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -11,8 +12,8 @@ public final class GLSMPerfDebug {
     private static final long REPORT_INTERVAL_NS = 1_000_000_000L;
     private static final int SAMPLE_MASK = 255;
     private static final int MAX_BUFFERBUILDER_SOURCE_LINES = 12;
-
-    public static final boolean ENABLED = Boolean.getBoolean("actinium.glsmPerfDebug");
+    private static final String ENABLED_OVERRIDE = System.getProperty("actinium.glsmPerfDebug");
+    private static volatile boolean enabled = resolveEnabled(ENABLED_OVERRIDE, false);
 
     public enum Stage {
         STREAM_DRAW("stream.draw"),
@@ -65,6 +66,41 @@ public final class GLSMPerfDebug {
 
     private GLSMPerfDebug() {}
 
+    public static boolean isEnabled() {
+        return enabled;
+    }
+
+    static boolean setConfiguredEnabled(boolean configuredEnabled) {
+        boolean resolvedEnabled = resolveEnabled(ENABLED_OVERRIDE, configuredEnabled);
+        if (enabled == resolvedEnabled) {
+            return false;
+        }
+
+        enabled = false;
+        resetStats();
+        enabled = resolvedEnabled;
+        return true;
+    }
+
+    static boolean resolveEnabled(String explicitOverride, boolean configuredEnabled) {
+        return explicitOverride != null ? Boolean.parseBoolean(explicitOverride) : configuredEnabled;
+    }
+
+    static int getSampledCount(Stage stage) {
+        return sampledCounts[stage.ordinal()];
+    }
+
+    private static void resetStats() {
+        Arrays.fill(totalNanos, 0L);
+        Arrays.fill(maxNanos, 0L);
+        Arrays.fill(sampledCounts, 0);
+        Arrays.fill(observedCounts, 0);
+        Arrays.fill(sourceCounts, 0);
+        bufferBuilderSourceCounts.clear();
+        bufferBuilderStackSamples.clear();
+        lastReportNanos = 0L;
+    }
+
     public static long begin(Stage stage) {
         final int index = stage.ordinal();
         observedCounts[index]++;
@@ -89,7 +125,7 @@ public final class GLSMPerfDebug {
     }
 
     public static void countBufferBuilder(String source, int drawMode, int vertexCount) {
-        if (!ENABLED) return;
+        if (!isEnabled()) return;
         final String sourceKey = source + "/mode=" + drawMode;
         bufferBuilderSourceCounts.put(sourceKey, bufferBuilderSourceCounts.getOrDefault(sourceKey, 0) + 1);
         final int observed = observedCounts[Stage.BUFFERBUILDER_STREAM_DRAW.ordinal()];

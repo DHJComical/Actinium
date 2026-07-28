@@ -15,4 +15,10 @@ public final class GLSMPerfDebugHooks {
     public static void setExtraStatsSupplier(Supplier<String> supplier) {
         extraStatsSupplier = supplier != null ? supplier : () -> "";
     }
+
+    public static void setConfiguredEnabled(boolean enabled) {
+        if (GLSMPerfDebug.setConfiguredEnabled(enabled)) {
+            extraStatsSupplier.get();
+        }
+    }
 }

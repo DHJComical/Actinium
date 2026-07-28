@@ -95,7 +95,8 @@ public class ShaderManager {
     }
 
     public void preDraw(boolean hasColor, boolean hasNormal, boolean hasTexCoord, boolean hasLightmap) {
-        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.FFP_PREDRAW) : 0L;
+        final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+        final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.FFP_PREDRAW) : 0L;
         GLStateManager.flushDeferredVertexAttribs();
         final DeferredBlendHandler bh = GLSMHooks.blendHandler;
         if (bh != null) bh.flushDeferredBlend();
@@ -105,10 +106,16 @@ public class ShaderManager {
                 final int currentProgramId = GLStateManager.getActiveProgram();
                 if (currentProgramId != 0) {
                     CompatUniformManager.onUseProgram(currentProgramId);
+                    if (perfDebugEnabled) {
+                        GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_PREDRAW, perfStart);
+                    }
                     return;
                 }
                 active = true;
             } else {
+                if (perfDebugEnabled) {
+                    GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_PREDRAW, perfStart);
+                }
                 return;
             }
         }
@@ -121,7 +128,7 @@ public class ShaderManager {
         }
 
         uploadUniforms();
-        if (GLSMPerfDebug.ENABLED) {
+        if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_PREDRAW, perfStart);
         }
     }
@@ -159,9 +166,10 @@ public class ShaderManager {
 
     private void uploadUniforms() {
         if (currentProgram != null) {
-            final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.FFP_UNIFORMS) : 0L;
+            final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+            final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.FFP_UNIFORMS) : 0L;
             uniforms.upload(currentProgram);
-            if (GLSMPerfDebug.ENABLED) {
+            if (perfDebugEnabled) {
                 GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_UNIFORMS, perfStart);
             }
         }

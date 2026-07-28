@@ -9,6 +9,7 @@ public final class ActiniumRuntimeOptions {
     private static final String FAST_LIT_ITEM_RENDERING_PROPERTY = "actinium.fastLitItemRendering";
     private static final String FAST_LIT_ITEM_DISPLAY_LISTS_PROPERTY = "actinium.fastLitItemDisplayLists";
     private static final String DEFERRED_PARTICLE_BATCHING_PROPERTY = "actinium.deferredParticleBatching";
+    private static final String PERF_DEBUG_PROPERTY = "actinium.perfDebug";
 
     private ActiniumRuntimeOptions() {
     }
@@ -89,5 +90,14 @@ public final class ActiniumRuntimeOptions {
         } catch (RuntimeException | LinkageError ignored) {
             return true;
         }
+    }
+
+    public static boolean resolvePerfDebugEnabled(boolean configuredEnabled) {
+        String override = System.getProperty(PERF_DEBUG_PROPERTY);
+        if (override != null) {
+            return Boolean.parseBoolean(override);
+        }
+
+        return configuredEnabled;
     }
 }

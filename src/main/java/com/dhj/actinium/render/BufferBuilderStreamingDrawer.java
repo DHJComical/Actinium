@@ -35,10 +35,11 @@ public final class BufferBuilderStreamingDrawer {
     }
 
     public static void draw(BufferBuilder bufferBuilder, String debugSource) {
-        final long perfStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.BUFFERBUILDER_STREAM_DRAW) : 0L;
+        final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+        final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.BUFFERBUILDER_STREAM_DRAW) : 0L;
         if (bufferBuilder.getVertexCount() <= 0) {
             bufferBuilder.reset();
-            if (GLSMPerfDebug.ENABLED) {
+            if (perfDebugEnabled) {
                 GLSMPerfDebug.end(GLSMPerfDebug.Stage.BUFFERBUILDER_STREAM_DRAW, perfStart);
             }
             return;
@@ -51,14 +52,16 @@ public final class BufferBuilderStreamingDrawer {
         int drawMode = bufferBuilder.getDrawMode();
         int stride = format.getSize();
         int byteCount = vertexCount * stride;
-        GLSMPerfDebug.countBufferBuilder(debugSource, drawMode, vertexCount);
+        if (perfDebugEnabled) {
+            GLSMPerfDebug.countBufferBuilder(debugSource, drawMode, vertexCount);
+        }
         ByteBuffer buffer = bufferBuilder.getByteBuffer().duplicate();
         buffer.position(0);
         buffer.limit(byteCount);
 
         drawRaw(buffer, format, vertexCount, drawMode, debugSource);
         bufferBuilder.reset();
-        if (GLSMPerfDebug.ENABLED) {
+        if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.BUFFERBUILDER_STREAM_DRAW, perfStart);
         }
     }
@@ -69,6 +72,8 @@ public final class BufferBuilderStreamingDrawer {
         }
 
         init();
+
+        final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
 
         DrawState state = ensureDrawState(format);
         int stride = format.getSize();
@@ -86,9 +91,9 @@ public final class BufferBuilderStreamingDrawer {
 
         try {
             if (persistentBuffer != null) {
-                final long uploadStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.now() : 0L;
+                final long uploadStart = perfDebugEnabled ? GLSMPerfDebug.now() : 0L;
                 firstVertex = persistentBuffer.upload(upload, stride);
-                if (firstVertex >= 0) {
+                if (perfDebugEnabled && firstVertex >= 0) {
                     GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_PERSISTENT_UPLOAD, uploadStart, GLSMPerfDebug.now());
                 }
             }
@@ -105,9 +110,11 @@ public final class BufferBuilderStreamingDrawer {
                 vbo = state.orphanBuffer.getBufferId();
                 GLStateManager.glBindVertexArray(vao);
                 GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-                final long uploadStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.now() : 0L;
+                final long uploadStart = perfDebugEnabled ? GLSMPerfDebug.now() : 0L;
                 state.orphanBuffer.upload(upload);
-                GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_ORPHAN_UPLOAD, uploadStart, GLSMPerfDebug.now());
+                if (perfDebugEnabled) {
+                    GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_ORPHAN_UPLOAD, uploadStart, GLSMPerfDebug.now());
+                }
                 firstVertex = 0;
             }
 
@@ -120,9 +127,11 @@ public final class BufferBuilderStreamingDrawer {
             if (checkDrawErrors) {
                 RenderDebugHooksHolder.checkDrawError("bufferbuilder-stream:after-predraw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, formatDescription, vao, vbo);
             }
-            final long drawStart = GLSMPerfDebug.ENABLED ? GLSMPerfDebug.now() : 0L;
+            final long drawStart = perfDebugEnabled ? GLSMPerfDebug.now() : 0L;
             VanillaVertexBufferRenderer.drawArrays(drawMode, firstVertex, vertexCount);
-            GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_DRAW_CALL, drawStart, GLSMPerfDebug.now());
+            if (perfDebugEnabled) {
+                GLSMPerfDebug.record(GLSMPerfDebug.Stage.BUFFERBUILDER_DRAW_CALL, drawStart, GLSMPerfDebug.now());
+            }
             if (checkDrawErrors) {
                 RenderDebugHooksHolder.checkDrawError("bufferbuilder-stream:after-draw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, formatDescription, vao, vbo);
             }
