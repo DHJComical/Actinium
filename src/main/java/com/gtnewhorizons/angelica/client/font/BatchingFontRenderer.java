@@ -21,6 +21,7 @@ import org.embeddedt.embeddium.impl.render.shader.ShaderLoader;
 import org.joml.Matrix4f;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
@@ -66,32 +67,12 @@ public class BatchingFontRenderer {
     protected final ResourceLocation locationFontTexture;
     private final TextureManager textureManager;
 
-    private final int AAMode;
-    private final int AAStrength;
-    private final int alphaTestRefLocation;
-    private final int mvpMatrixLocation;
-    private final int samplerLocation;
-    private final int fontShaderId;
-
     final boolean isSGA;
     final boolean isSplash;
 
     /** For use with modded books. Affects calculations and forces some defaults. */
     @Setter
     boolean bookMode = false;
-
-    private static class FontAAShader {
-
-        private static Program fontShader = null;
-        public static Program getProgram() {
-            if (fontShader == null) {
-                final String vsh = ShaderLoader.getShaderSource("angelica:fontFilter.vsh");
-                final String fsh = ShaderLoader.getShaderSource("angelica:fontFilter.fsh");
-                fontShader = ProgramBuilder.begin("fontFilter", vsh, null, fsh, ImmutableSet.of(0)).build();
-            }
-            return fontShader;
-        }
-    }
 
     public BatchingFontRenderer(FontRenderer underlying, int[] charWidth, int[] colorCode, ResourceLocation locationFontTexture,
         TextureManager textureManager) {
@@ -111,33 +92,15 @@ public class BatchingFontRenderer {
         FontProviderMC.get(this.isSGA).charWidth = this.charWidth;
         FontProviderMC.get(this.isSGA).locationFontTexture = this.locationFontTexture;
 
-        //noinspection deprecation
-        fontShaderId = FontAAShader.getProgram().getProgramId();
-        samplerLocation = GLStateManager.glGetUniformLocation(fontShaderId, "sampler");
-        AAMode = GLStateManager.glGetUniformLocation(fontShaderId, "aaMode");
-        AAStrength = GLStateManager.glGetUniformLocation(fontShaderId, "strength");
-        alphaTestRefLocation = GLStateManager.glGetUniformLocation(fontShaderId, "alphaTestRef");
-        mvpMatrixLocation = GLStateManager.glGetUniformLocation(fontShaderId, "u_MVPMatrix");
         logFontDebug(
-            "font-init renderer={} texture={} isSGA={} isSplash={} shader={} samplerLoc={} aaLoc={} strengthLoc={} alphaLoc={} mvpLoc={} charWidthLen={} unicode={}",
+            "font-init-cpu renderer={} texture={} isSGA={} isSplash={} charWidthLen={} unicode={}",
             underlying.getClass().getName(),
             this.locationFontTexture,
             this.isSGA,
             this.isSplash,
-            fontShaderId,
-            samplerLocation,
-            AAMode,
-            AAStrength,
-            alphaTestRefLocation,
-            mvpMatrixLocation,
             this.charWidth != null ? this.charWidth.length : -1,
             underlying.getUnicodeFlag()
         );
-        if (ebo == null) {
-            ebo = new IndexBuffer();
-            vbo = GLStateManager.glGenBuffers();
-            allocateBuffers();
-        }
     }
 
     // === Batched rendering
@@ -156,10 +119,39 @@ public class BatchingFontRenderer {
     private static int vboCapacity;
 
 
-    // OpenGL objects (static, can be used between multiple BatchingFontRenderer)
-    private static int fontVAO = 0;
-    private static int vbo;
-    private static IndexBuffer ebo;
+    // OpenGL objects are shared between all font renderers and safely published after first use.
+    private static final GlResourceInitializer<SharedGlResources> SHARED_GL_RESOURCES =
+        new GlResourceInitializer<>(BatchingFontRenderer::hasCurrentGlContext, BatchingFontRenderer::createSharedGlResources);
+
+    private static final class SharedGlResources {
+
+        private final Program fontShader;
+        private final int fontShaderId;
+        private final int samplerLocation;
+        private final int aaModeLocation;
+        private final int aaStrengthLocation;
+        private final int alphaTestRefLocation;
+        private final int mvpMatrixLocation;
+        private final int fontVao;
+        private final int vbo;
+        private final IndexBuffer ebo;
+        private int eboCapacity;
+
+        private SharedGlResources(Program fontShader, int fontShaderId, int samplerLocation, int aaModeLocation,
+            int aaStrengthLocation, int alphaTestRefLocation, int mvpMatrixLocation, int fontVao, int vbo,
+            IndexBuffer ebo) {
+            this.fontShader = fontShader;
+            this.fontShaderId = fontShaderId;
+            this.samplerLocation = samplerLocation;
+            this.aaModeLocation = aaModeLocation;
+            this.aaStrengthLocation = aaStrengthLocation;
+            this.alphaTestRefLocation = alphaTestRefLocation;
+            this.mvpMatrixLocation = mvpMatrixLocation;
+            this.fontVao = fontVao;
+            this.vbo = vbo;
+            this.ebo = ebo;
+        }
+    }
 
     private int batchDepth = 0;
 
@@ -173,11 +165,56 @@ public class BatchingFontRenderer {
     private int blendDstRGB = GL11.GL_ONE_MINUS_SRC_ALPHA;
 
 
-    private void allocateBuffers() {
-        populateEBO(rawCapacity / VERTEX_SIZE);
+    private static boolean hasCurrentGlContext() {
+        final boolean current = GLFW.glfwGetCurrentContext() != 0L;
+        if (!current) {
+            LOGGER.error("Font rendering attempted without a current OpenGL context on thread {}", Thread.currentThread().getName());
+        }
+        return current;
     }
 
-    private void populateEBO(int capacity) {
+    private static SharedGlResources createSharedGlResources() {
+        final String vsh = ShaderLoader.getShaderSource("angelica:fontFilter.vsh");
+        final String fsh = ShaderLoader.getShaderSource("angelica:fontFilter.fsh");
+        final Program fontShader = ProgramBuilder.begin("fontFilter", vsh, null, fsh, ImmutableSet.of(0)).build();
+        //noinspection deprecation
+        final int fontShaderId = fontShader.getProgramId();
+        final int samplerLocation = GLStateManager.glGetUniformLocation(fontShaderId, "sampler");
+        final int aaModeLocation = GLStateManager.glGetUniformLocation(fontShaderId, "aaMode");
+        final int aaStrengthLocation = GLStateManager.glGetUniformLocation(fontShaderId, "strength");
+        final int alphaTestRefLocation = GLStateManager.glGetUniformLocation(fontShaderId, "alphaTestRef");
+        final int mvpMatrixLocation = GLStateManager.glGetUniformLocation(fontShaderId, "u_MVPMatrix");
+        final IndexBuffer ebo = new IndexBuffer();
+        final int vbo = GLStateManager.glGenBuffers();
+        final int fontVao = GLStateManager.glGenVertexArrays();
+        final SharedGlResources resources = new SharedGlResources(
+            fontShader,
+            fontShaderId,
+            samplerLocation,
+            aaModeLocation,
+            aaStrengthLocation,
+            alphaTestRefLocation,
+            mvpMatrixLocation,
+            fontVao,
+            vbo,
+            ebo
+        );
+        populateEBO(resources, rawCapacity / VERTEX_SIZE);
+        logFontDebug(
+            "font-init-gl shader={} samplerLoc={} aaLoc={} strengthLoc={} alphaLoc={} mvpLoc={} vao={} vbo={}",
+            fontShaderId,
+            samplerLocation,
+            aaModeLocation,
+            aaStrengthLocation,
+            alphaTestRefLocation,
+            mvpMatrixLocation,
+            fontVao,
+            vbo
+        );
+        return resources;
+    }
+
+    private static void populateEBO(SharedGlResources resources, int capacity) {
         final int quadCount = capacity * 6;
         final ByteBuffer data = memAlloc(quadCount * 6 * 2);
         long ptr = memAddress0(data);
@@ -196,7 +233,8 @@ public class BatchingFontRenderer {
             ptr += 12;
         }
 
-        ebo.upload(data);
+        resources.ebo.upload(data);
+        resources.eboCapacity = capacity;
 
         memFree(data);
 
@@ -207,8 +245,6 @@ public class BatchingFontRenderer {
             rawCapacity *= 2;
             vertexData = memRealloc(vertexData, rawCapacity);
             vertexDataAddress = memAddress0(vertexData);
-
-            allocateBuffers();
         }
     }
 
@@ -358,8 +394,14 @@ public class BatchingFontRenderer {
             return;
         }
 
+        final SharedGlResources resources = SHARED_GL_RESOURCES.get();
+        final int requiredEboCapacity = rawCapacity / VERTEX_SIZE;
+        if (resources.eboCapacity < requiredEboCapacity) {
+            populateEBO(resources, requiredEboCapacity);
+        }
+
         // Upload first (to reduce stalls)
-        GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
+        GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, resources.vbo);
         vertexData.limit(vertexDataPos);
         vboCapacity = StreamingUploader.upload(vertexData, vboCapacity);
 
@@ -381,7 +423,7 @@ public class BatchingFontRenderer {
             LOGGER.info(
                 "font-flush-start renderer={} shader={} prevProgram={} vertexBytes={} idx={} cmds={} activeBefore={} tex0Before={} texEnabled={} alphaEnabled={} blendEnabled={} vao={} vbo={} unicode={} aaMode={} aaStrength={} alphaRef={}",
                 underlying.getClass().getName(),
-                fontShaderId,
+                resources.fontShaderId,
                 prevProgram,
                 vertexDataPos,
                 idxWriterIndex,
@@ -391,8 +433,8 @@ public class BatchingFontRenderer {
                 isTextureEnabledBefore,
                 isAlphaTestEnabledBefore,
                 isBlendEnabledBefore,
-                fontVAO,
-                vbo,
+                resources.fontVao,
+                resources.vbo,
                 underlying.getUnicodeFlag(),
                 FontConfig.fontAAMode,
                 FontConfig.fontAAStrength,
@@ -406,38 +448,32 @@ public class BatchingFontRenderer {
         GLStateManager.tryBlendFuncSeparate(blendSrcRGB, blendDstRGB, GL11.GL_ONE, GL11.GL_ZERO);
         GLStateManager.glShadeModel(GL11.GL_FLAT);
 
-        GLStateManager.glUseProgram(fontShaderId);
-        GLStateManager.glUniform1i(samplerLocation, 0);
+        GLStateManager.glUseProgram(resources.fontShaderId);
+        GLStateManager.glUniform1i(resources.samplerLocation, 0);
         if (FontConfig.fontAAMode != fontAAModeLast) {
             fontAAModeLast = FontConfig.fontAAMode;
-            GLStateManager.glUniform1i(AAMode, FontConfig.fontAAMode);
+            GLStateManager.glUniform1i(resources.aaModeLocation, FontConfig.fontAAMode);
         }
         if (FontConfig.fontAAStrength != fontAAStrengthLast) {
             fontAAStrengthLast = FontConfig.fontAAStrength;
-            GLStateManager.glUniform1f(AAStrength, FontConfig.fontAAStrength / 120.f);
+            GLStateManager.glUniform1f(resources.aaStrengthLocation, FontConfig.fontAAStrength / 120.f);
         }
-        GLStateManager.glUniform1f(alphaTestRefLocation, GLStateManager.getAlphaState().getReference());
+        GLStateManager.glUniform1f(resources.alphaTestRefLocation, GLStateManager.getAlphaState().getReference());
         try (MemoryStack stack = stackPush()) {
             final FloatBuffer mvpBuf = stack.mallocFloat(16);
             GLStateManager.getProjectionMatrix().mul(GLStateManager.getModelViewMatrix(), scratchMvp);
             scratchMvp.get(mvpBuf);
-            GLStateManager.glUniformMatrix4(mvpMatrixLocation, false, mvpBuf);
+            GLStateManager.glUniformMatrix4(resources.mvpMatrixLocation, false, mvpBuf);
         }
 
-        if (fontVAO == 0) {
-            fontVAO = GLStateManager.glGenVertexArrays();
-
-            GLStateManager.glBindVertexArray(fontVAO);
-        }
-
-        GLStateManager.glBindVertexArray(fontVAO);
-        setupFontVertexArray();
+        GLStateManager.glBindVertexArray(resources.fontVao);
+        setupFontVertexArray(resources);
         if (logFlush) {
             LOGGER.info(
                 "font-shader-ready shader={} activeProgram={} samplerLoc={} samplerUnit={} aaMode={} aaStrength={} alphaRef={}",
-                fontShaderId,
+                resources.fontShaderId,
                 GLStateManager.glGetInteger(GL20.GL_CURRENT_PROGRAM),
-                samplerLocation,
+                resources.samplerLocation,
                 0,
                 FontConfig.fontAAMode,
                 FontConfig.fontAAStrength,
@@ -492,7 +528,7 @@ public class BatchingFontRenderer {
         if (logFlush) {
             LOGGER.info(
                 "font-flush-end shader={} restoredProgram={} tex0Now={} activeBeforeRestore={} restoreTex={} textureChanged={} restoreColor=[{},{},{},{}]",
-                fontShaderId,
+                resources.fontShaderId,
                 prevProgram,
                 GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D),
                 GLStateManager.getActiveTextureUnit(),
@@ -517,9 +553,9 @@ public class BatchingFontRenderer {
         idxWriterIndex = 0;
     }
 
-    private static void setupFontVertexArray() {
-        GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-        ebo.bind();
+    private static void setupFontVertexArray(SharedGlResources resources) {
+        GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, resources.vbo);
+        resources.ebo.bind();
 
         // position
         GLStateManager.glVertexAttribPointer(0, 2, GL11.GL_FLOAT, false, VERTEX_SIZE, 0);

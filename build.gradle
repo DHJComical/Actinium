@@ -234,6 +234,17 @@ unimined.minecraft {
             if (extraArgs != null && !extraArgs.trim().isEmpty()) {
                 jvmArgs += extraArgs.split('\\s+').toList()
             }
+
+            // Unimined omits source output paths here when a clean build has not created their directories yet.
+            def extraPathArgument = '-Dcrl.dev.extrapath='
+            def extraPaths = new LinkedHashSet<String>()
+            extraPaths.addAll(project.sourceSets.main.output.files.collect { it.absolutePath })
+            jvmArgs.findAll { it.toString().startsWith(extraPathArgument) }.each { argument ->
+                extraPaths.addAll(argument.toString().substring(extraPathArgument.length()).tokenize(File.pathSeparator))
+            }
+            jvmArgs = jvmArgs.findAll { !it.toString().startsWith(extraPathArgument) }
+            jvmArgs += "${extraPathArgument}${extraPaths.join(File.pathSeparator)}"
+
             if (propertyBool('is_coremod')) {
                 systemProperty 'fml.coreMods.load', propertyString('coremod_plugin_class_name')
             }
@@ -294,6 +305,15 @@ def prepareCompatBridgeRun = tasks.register('prepareCompatBridgeRun') {
             into runModsDirectory
         }
     }
+}
+
+tasks.named('preRunClient').configure {
+    dependsOn tasks.named('classes')
+    dependsOn prepareCompatBridgeRun
+}
+
+tasks.named('preRunServer').configure {
+    dependsOn tasks.named('classes')
 }
 
 tasks.named('assemble').configure {

@@ -81,5 +81,6 @@ dependencies {
     modRuntimeOnly "curse.maven:celeritas-extra-1451214:8362538"
     modRuntimeOnly "curse.maven:celeritasleafculling-1449111:7550650"
 
-    modCompileOnly "curse.maven:ichunutil-229060:2801262"
+    modImplementation "curse.maven:ichunutil-229060:2801262"
+    modImplementation "curse.maven:mobdismemberment-229067:2487081"
 }
