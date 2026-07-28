@@ -47,7 +47,7 @@ public abstract class MixinMinecraftCoreProfileDisplay {
                 ContextAttribs attribs = CoreProfileContextAttributes.create(major, minor, lwjglDebug);
                 try {
                     celeritas$createDisplay(format, attribs);
-                } catch (LWJGLException | RuntimeException e) {
+                } catch (Exception e) {
                     lastException = e;
                     celeritas$LOGGER.debug(
                         "Failed to create requested OpenGL {}.{} core profile context (debug={})",
