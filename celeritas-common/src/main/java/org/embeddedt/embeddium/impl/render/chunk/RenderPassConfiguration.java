@@ -35,6 +35,10 @@ public record RenderPassConfiguration<R>(Map<R, Material> chunkRenderTypeToMater
         return material;
     }
 
+    public boolean usesSameRenderPass(Object firstType, Object secondType) {
+        return getMaterialForRenderType(firstType).pass == getMaterialForRenderType(secondType).pass;
+    }
+
     public Stream<TerrainRenderPass> getAllKnownRenderPasses() {
         return vanillaRenderStages().values().stream().flatMap(Collection::stream).distinct();
     }

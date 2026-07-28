@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
@@ -27,7 +28,9 @@ import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.resources.IResourceManagerReloadListener;
 import net.minecraft.client.settings.GameSettings;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.util.BlockRenderLayer;
 import org.joml.Vector3d;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
@@ -362,6 +365,30 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     private void actinium$checkAfterCutoutMippedTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-cutout-mipped");
         IrisGlDebug.recordWorldPassStage("terrain-cutout-mipped-to-cutout");
+    }
+
+    @Redirect(
+        method = "renderWorldPass(IFJ)V",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I",
+            ordinal = 2
+        )
+    )
+    private int actinium$skipDuplicateConsolidatedCutout(
+        RenderGlobal renderGlobal,
+        BlockRenderLayer blockLayer,
+        double partialTicks,
+        int pass,
+        Entity entity
+    ) {
+        if (blockLayer == BlockRenderLayer.CUTOUT
+            && ActiniumWorldRenderer.instance().getRenderPassConfiguration()
+                .usesSameRenderPass(BlockRenderLayer.CUTOUT_MIPPED, BlockRenderLayer.CUTOUT)) {
+            return 0;
+        }
+
+        return renderGlobal.renderBlockLayer(blockLayer, partialTicks, pass, entity);
     }
 
     @Inject(
