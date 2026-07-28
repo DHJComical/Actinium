@@ -2,6 +2,7 @@ package com.dhj.actinium.mixin.vintage.core.startup;
 
 import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
 import com.dhj.actinium.debug.CoreProfileContextAttributes;
+import com.dhj.actinium.debug.OpenGlVersion;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.ForgeHooksClient;
 import org.apache.logging.log4j.LogManager;
@@ -10,6 +11,7 @@ import org.lwjgl.LWJGLException;
 import org.lwjgl.LWJGLUtil;
 import org.lwjgl.opengl.ContextAttribs;
 import org.lwjgl.opengl.Display;
+import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.PixelFormat;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -44,36 +46,76 @@ public abstract class MixinMinecraftCoreProfileDisplay {
             for (int minor = startMinor; minor >= endMinor; --minor) {
                 ContextAttribs attribs = CoreProfileContextAttributes.create(major, minor, lwjglDebug);
                 try {
-                    Display.create(format, attribs);
-                    celeritas$LOGGER.info(
-                        "Created OpenGL {}.{} core profile context (debug={})",
-                        major,
-                        minor,
-                        lwjglDebug
-                    );
-                    ForgeHooksClient.initializeWindowsInformation();
-                    ForgeHooksClient.setWindowStyle(this.fullscreen);
-                    ForgeHooksClient.initializeTaskbarAPI();
-                    ci.cancel();
-                    return;
-                } catch (RuntimeException e) {
+                    celeritas$createDisplay(format, attribs);
+                } catch (LWJGLException | RuntimeException e) {
                     lastException = e;
                     celeritas$LOGGER.debug(
-                        "Failed to create OpenGL {}.{} core profile context (debug={})",
+                        "Failed to create requested OpenGL {}.{} core profile context (debug={})",
                         major,
                         minor,
                         lwjglDebug,
                         e
                     );
-                    try {
-                        Display.destroy();
-                    } catch (RuntimeException destroyFailure) {
-                        celeritas$LOGGER.warn("Failed to destroy an unsuccessful OpenGL context", destroyFailure);
-                    }
+                    celeritas$destroyDisplayAfterFailure();
+                    continue;
                 }
+
+                String actualVersionString = null;
+                OpenGlVersion actualVersion;
+                try {
+                    actualVersionString = GL11.glGetString(GL11.GL_VERSION);
+                    actualVersion = OpenGlVersion.parse(actualVersionString);
+                    if (!actualVersion.isAtLeast(3, 3)) {
+                        throw new IllegalStateException(
+                            "OpenGL 3.3 or newer is required, but the created context reports " + actualVersion
+                        );
+                    }
+                } catch (RuntimeException e) {
+                    celeritas$LOGGER.error(
+                        "Created requested OpenGL {}.{} core profile context, but actual GL_VERSION is unusable: {}",
+                        major,
+                        minor,
+                        actualVersionString,
+                        e
+                    );
+                    celeritas$destroyDisplayAfterFailure();
+                    throw new LWJGLException("Created context does not provide valid OpenGL 3.3+", e);
+                }
+
+                celeritas$LOGGER.info(
+                    "Created OpenGL core profile context: requested={}.{} (debug={}), actual={}.{} ({})",
+                    major,
+                    minor,
+                    lwjglDebug,
+                    actualVersion.major(),
+                    actualVersion.minor(),
+                    actualVersionString
+                );
+                ForgeHooksClient.initializeWindowsInformation();
+                ForgeHooksClient.setWindowStyle(this.fullscreen);
+                ForgeHooksClient.initializeTaskbarAPI();
+                ci.cancel();
+                return;
             }
         }
 
         throw new LWJGLException("Failed to create an OpenGL 3.3+ core profile context", lastException);
+    }
+
+    @Unique
+    private static void celeritas$createDisplay(PixelFormat format, ContextAttribs attribs) throws LWJGLException {
+        Display.create(format, attribs);
+        if (!Display.isCreated()) {
+            throw new LWJGLException("Display.create returned without creating an OpenGL context");
+        }
+    }
+
+    @Unique
+    private static void celeritas$destroyDisplayAfterFailure() {
+        try {
+            Display.destroy();
+        } catch (RuntimeException destroyFailure) {
+            celeritas$LOGGER.warn("Failed to destroy an unsuccessful OpenGL context", destroyFailure);
+        }
     }
 }
