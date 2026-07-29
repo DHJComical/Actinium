@@ -83,6 +83,35 @@ class GLSMPerfDebugTest {
         assertEquals(1, GLSMPerfDebug.getSampledCount(GLSMPerfDebug.Stage.QUAD_ELEMENTS));
     }
 
+    @Test
+    void accumulatesPersistentFenceReclaimAndQueueMetrics() {
+        GLSMPerfDebugHooks.setConfiguredEnabled(false);
+        GLSMPerfDebugHooks.setConfiguredEnabled(true);
+
+        GLSMPerfDebug.recordFenceReclaim(128);
+        GLSMPerfDebug.recordFenceReclaim(384);
+        GLSMPerfDebug.recordFenceQueueDepth(2);
+        GLSMPerfDebug.recordFenceQueueDepth(5);
+        GLSMPerfDebug.recordFenceQueueDepth(3);
+
+        assertEquals(2, GLSMPerfDebug.getFenceReclaimedRegions());
+        assertEquals(512L, GLSMPerfDebug.getFenceReclaimedBytes());
+        assertEquals(5, GLSMPerfDebug.getFenceQueuePeak());
+    }
+
+    @Test
+    void samplesEveryLowFrequencyFenceEvent() {
+        GLSMPerfDebugHooks.setConfiguredEnabled(false);
+        GLSMPerfDebugHooks.setConfiguredEnabled(true);
+
+        long first = GLSMPerfDebug.begin(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE);
+        GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE, first);
+        long second = GLSMPerfDebug.begin(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE);
+        GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE, second);
+
+        assertEquals(2, GLSMPerfDebug.getSampledCount(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE));
+    }
+
     private static void primeNextSample(GLSMPerfDebug.Stage stage) {
         GLSMPerfDebugHooks.setConfiguredEnabled(false);
         GLSMPerfDebugHooks.setConfiguredEnabled(true);

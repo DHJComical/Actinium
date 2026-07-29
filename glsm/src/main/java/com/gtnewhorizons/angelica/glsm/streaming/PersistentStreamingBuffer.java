@@ -1,6 +1,7 @@
 package com.gtnewhorizons.angelica.glsm.streaming;
 
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30;
@@ -20,6 +21,7 @@ import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memCopy;
 public class PersistentStreamingBuffer implements StreamingBuffer {
 
     public static final int DEFAULT_CAPACITY = 16 * 1024 * 1024; // 16 MB
+    static final int FENCE_BATCH_SEGMENTS = 4;
 
     private int bufferId;
     private final int capacity;
@@ -30,6 +32,7 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
     private int writePos;
     private int remaining;
     private int pendingBytes;
+    private boolean fenceRequested;
 
     public PersistentStreamingBuffer() {
         this(DEFAULT_CAPACITY);
@@ -91,7 +94,10 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
     /** Sync fences until {@code needed} bytes are available, or no fences remain. */
     private boolean ensureRemaining(int needed) {
         while (remaining < needed) {
-            if (!syncOldest()) return false;
+            if (!syncOldest()) {
+                fenceRequested = pendingBytes > 0;
+                return false;
+            }
         }
         return true;
     }
@@ -130,14 +136,31 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
 
     @Override
     public void postDraw() {
-        if (pendingBytes > 0) {
-            final long fenceId = RENDER_BACKEND.fenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-            if (fenceId == 0) {
-                throw new RuntimeException("Failed to create persistent streaming fence");
-            }
-            fenceQueue.enqueue(new FencedRegion(new GlFence(fenceId), pendingBytes));
-            pendingBytes = 0;
+        if (shouldCreateFence(pendingBytes, capacity, fenceRequested)) {
+            createPendingFence();
         }
+    }
+
+    static boolean shouldCreateFence(int pendingBytes, int capacity, boolean fenceRequested) {
+        return pendingBytes > 0 && (fenceRequested || pendingBytes >= Math.max(1, capacity / FENCE_BATCH_SEGMENTS));
+    }
+
+    private void createPendingFence() {
+        final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+        final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE) : 0L;
+        final long fenceId = RENDER_BACKEND.fenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (perfDebugEnabled) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE, perfStart);
+        }
+        if (fenceId == 0) {
+            throw new RuntimeException("Failed to create persistent streaming fence");
+        }
+        fenceQueue.enqueue(new FencedRegion(new GlFence(fenceId), pendingBytes));
+        if (perfDebugEnabled) {
+            GLSMPerfDebug.recordFenceQueueDepth(fenceQueue.size());
+        }
+        pendingBytes = 0;
+        fenceRequested = false;
     }
 
     @Override
@@ -145,6 +168,8 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
         while (!fenceQueue.isEmpty()) {
             fenceQueue.dequeue().fence.delete();
         }
+        pendingBytes = 0;
+        fenceRequested = false;
         if (bufferId != 0) {
             RENDER_BACKEND.bindBuffer(GL15.GL_ARRAY_BUFFER, bufferId);
             RENDER_BACKEND.unmapBuffer(GL15.GL_ARRAY_BUFFER);
@@ -157,10 +182,19 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
     private void reclaim() {
         while (!fenceQueue.isEmpty()) {
             final FencedRegion region = fenceQueue.first();
-            if (!region.fence.isCompleted()) break;
+            final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+            final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.STREAM_FENCE_POLL) : 0L;
+            final boolean completed = region.fence.isCompleted();
+            if (perfDebugEnabled) {
+                GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_FENCE_POLL, perfStart);
+            }
+            if (!completed) break;
             region.fence.delete();
             fenceQueue.dequeue();
             remaining += region.bytes;
+            if (perfDebugEnabled) {
+                GLSMPerfDebug.recordFenceReclaim(region.bytes);
+            }
         }
     }
 
@@ -168,10 +202,18 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
     private boolean syncOldest() {
         if (fenceQueue.isEmpty()) return false;
         final FencedRegion region = fenceQueue.first();
+        final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+        final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.STREAM_FENCE_WAIT) : 0L;
         region.fence.sync();
+        if (perfDebugEnabled) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_FENCE_WAIT, perfStart);
+        }
         region.fence.delete();
         fenceQueue.dequeue();
         remaining += region.bytes;
+        if (perfDebugEnabled) {
+            GLSMPerfDebug.recordFenceReclaim(region.bytes);
+        }
         reclaim(); // opportunistically reclaim any additional completed fences
         return true;
     }

@@ -21,6 +21,9 @@ public final class GLSMPerfDebug {
         STREAM_UPLOAD_AND_DRAW("stream.uploadAndDraw"),
         STREAM_PERSISTENT_UPLOAD("stream.persistentUpload"),
         STREAM_ORPHAN_UPLOAD("stream.orphanUpload"),
+        STREAM_FENCE_CREATE("stream.fenceCreate", true),
+        STREAM_FENCE_POLL("stream.fencePoll", true),
+        STREAM_FENCE_WAIT("stream.fenceWait", true),
         STREAM_SHADER_PREDRAW("stream.shaderPreDraw"),
         STREAM_DRAW_CALL("stream.drawCall"),
         FFP_PREDRAW("ffp.preDraw"),
@@ -36,9 +39,15 @@ public final class GLSMPerfDebug {
         BUFFERBUILDER_DRAW_CALL("bufferbuilder.drawCall");
 
         private final String label;
+        private final boolean alwaysSample;
 
         Stage(String label) {
+            this(label, false);
+        }
+
+        Stage(String label, boolean alwaysSample) {
             this.label = label;
+            this.alwaysSample = alwaysSample;
         }
     }
 
@@ -62,6 +71,9 @@ public final class GLSMPerfDebug {
     private static final int[] sourceCounts = new int[Source.values().length];
     private static final Map<String, Integer> bufferBuilderSourceCounts = new HashMap<>();
     private static final Map<String, Integer> bufferBuilderStackSamples = new HashMap<>();
+    private static long fenceReclaimedBytes;
+    private static int fenceReclaimedRegions;
+    private static int fenceQueuePeak;
     private static long lastReportNanos;
 
     private GLSMPerfDebug() {}
@@ -98,13 +110,16 @@ public final class GLSMPerfDebug {
         Arrays.fill(sourceCounts, 0);
         bufferBuilderSourceCounts.clear();
         bufferBuilderStackSamples.clear();
+        fenceReclaimedBytes = 0L;
+        fenceReclaimedRegions = 0;
+        fenceQueuePeak = 0;
         lastReportNanos = 0L;
     }
 
     public static long begin(Stage stage) {
         final int index = stage.ordinal();
         observedCounts[index]++;
-        if ((observedCounts[index] & SAMPLE_MASK) != 0) {
+        if (!stage.alwaysSample && (observedCounts[index] & SAMPLE_MASK) != 0) {
             return 0L;
         }
         return System.nanoTime();
@@ -133,6 +148,29 @@ public final class GLSMPerfDebug {
             final String stackKey = sourceKey + "/" + findBufferBuilderCaller() + "/vertices~" + bucketVertexCount(vertexCount);
             bufferBuilderStackSamples.put(stackKey, bufferBuilderStackSamples.getOrDefault(stackKey, 0) + 1);
         }
+    }
+
+    public static void recordFenceReclaim(int bytes) {
+        fenceReclaimedRegions++;
+        fenceReclaimedBytes += bytes;
+    }
+
+    public static void recordFenceQueueDepth(int depth) {
+        if (depth > fenceQueuePeak) {
+            fenceQueuePeak = depth;
+        }
+    }
+
+    static int getFenceReclaimedRegions() {
+        return fenceReclaimedRegions;
+    }
+
+    static long getFenceReclaimedBytes() {
+        return fenceReclaimedBytes;
+    }
+
+    static int getFenceQueuePeak() {
+        return fenceQueuePeak;
     }
 
     public static void record(Stage stage, long startNanos, long endNanos) {
@@ -190,6 +228,16 @@ public final class GLSMPerfDebug {
         }
         appendTopEntries(sb, "bufferbuilder.source", bufferBuilderSourceCounts, MAX_BUFFERBUILDER_SOURCE_LINES);
         appendTopEntries(sb, "bufferbuilder.stackSample", bufferBuilderStackSamples, MAX_BUFFERBUILDER_SOURCE_LINES);
+        if (fenceReclaimedRegions != 0 || fenceQueuePeak != 0) {
+            sb.append(" stream.fence[")
+                .append("reclaimedRegions=").append(fenceReclaimedRegions)
+                .append(",reclaimedBytes=").append(fenceReclaimedBytes)
+                .append(",queuePeak=").append(fenceQueuePeak)
+                .append(']');
+            fenceReclaimedRegions = 0;
+            fenceReclaimedBytes = 0L;
+            fenceQueuePeak = 0;
+        }
         String extraStats = GLSMPerfDebugHooks.getExtraStats();
         if (extraStats != null && !extraStats.isEmpty()) {
             sb.append(' ').append(extraStats);

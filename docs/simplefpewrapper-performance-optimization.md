@@ -122,6 +122,11 @@ renderer；不要在通用 `BufferBuilderStreamingDrawer` 中跨调用缓存。�
 
 ### P4：针对 ring 大小和 fence 分段做跨厂商调优
 
+状态：已实测并实现按四分之一 ring 容量合并 fence。优化前稳定段每秒创建并轮询约 361-378 个
+fence，`queuePeak=1` 且没有 `stream.fenceWait`；单次 `fenceCreate` 采样约 28-42 us。新实现继续
+使用 FIFO region 回收，但只在 pending bytes 达到 `capacity / 4` 或容量压力请求同步时创建 fence。
+低频 fence stage 改为全采样，便于优化后继续验证。
+
 证据：SimpleFPEWrapper 证明 rotating offset 与 fence 是必要成本，但没有证明其容量和分段参数
 适用于 Minecraft。Actinium 目前固定 16 MiB，并已有 remaining、persistent/orphan upload stage。
 
