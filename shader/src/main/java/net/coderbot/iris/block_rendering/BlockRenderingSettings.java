@@ -70,8 +70,13 @@ public class BlockRenderingSettings {
 		hasSnowyEntries = false;
 	}
 
-    public void clearReloadRequired() {
+	public void clearReloadRequired() {
 		reloadRequired = false;
+	}
+
+	/** Marks renderer resources for recreation when an external shader layout changes. */
+	public void requestRendererReload() {
+		this.reloadRequired = true;
 	}
 
 	public void reloadRendererIfRequired() {

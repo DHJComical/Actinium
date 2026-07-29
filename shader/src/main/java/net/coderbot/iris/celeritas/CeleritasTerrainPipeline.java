@@ -23,6 +23,9 @@ import net.coderbot.iris.uniforms.CommonUniforms;
 import net.coderbot.iris.uniforms.builtin.BuiltinReplacementUniforms;
 import net.coderbot.iris.shaderpack.ProgramSource;
 import net.coderbot.iris.uniforms.custom.CustomUniforms;
+import net.coderbot.iris.celeritas.vertices.TerrainVertexFormatRequirements;
+import org.embeddedt.embeddium.api.shader.ShaderProvider;
+import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -39,6 +42,9 @@ public class CeleritasTerrainPipeline {
 
     @Getter
     private final CustomUniforms customUniforms;
+
+    @Getter
+    private final TerrainVertexFormatRequirements vertexFormatRequirements;
 
     private final IntFunction<ProgramSamplers> createTerrainSamplers;
     private final IntFunction<ProgramSamplers> createShadowSamplers;
@@ -153,21 +159,27 @@ public class CeleritasTerrainPipeline {
         }
 
         // Process and apply shader sources
-        processShaderFuture(terrainFuture, terrainSource, passInfoMap.get(IrisTerrainPass.GBUFFER_SOLID), passInfoMap.get(IrisTerrainPass.GBUFFER_CUTOUT));
-        processShaderFuture(translucentFuture, translucentSource, passInfoMap.get(IrisTerrainPass.GBUFFER_TRANSLUCENT));
-        processShaderFuture(shadowFuture, shadowSource, passInfoMap.get(IrisTerrainPass.SHADOW), passInfoMap.get(IrisTerrainPass.SHADOW_CUTOUT));
-        processShaderFuture(shadowTranslucentFuture, shadowTranslucentSource.isPresent() ? shadowTranslucentSource : shadowSource, passInfoMap.get(IrisTerrainPass.SHADOW_TRANSLUCENT));
+        List<String> transformedVertexSources = new ArrayList<>();
+        processShaderFuture(terrainFuture, terrainSource, transformedVertexSources, passInfoMap.get(IrisTerrainPass.GBUFFER_SOLID), passInfoMap.get(IrisTerrainPass.GBUFFER_CUTOUT));
+        processShaderFuture(translucentFuture, translucentSource, transformedVertexSources, passInfoMap.get(IrisTerrainPass.GBUFFER_TRANSLUCENT));
+        processShaderFuture(shadowFuture, shadowSource, transformedVertexSources, passInfoMap.get(IrisTerrainPass.SHADOW), passInfoMap.get(IrisTerrainPass.SHADOW_CUTOUT));
+        processShaderFuture(shadowTranslucentFuture, shadowTranslucentSource.isPresent() ? shadowTranslucentSource : shadowSource, transformedVertexSources, passInfoMap.get(IrisTerrainPass.SHADOW_TRANSLUCENT));
+        this.vertexFormatRequirements = TerrainVertexFormatRequirements.analyze(transformedVertexSources);
+        updateVertexFormatRequirements(this.vertexFormatRequirements);
     }
 
-    private void processShaderFuture(@Nullable CompletableFuture<Map<PatchShaderType, String>> future, Optional<ProgramSource> source, PassInfo... targets) {
+    private void processShaderFuture(@Nullable CompletableFuture<Map<PatchShaderType, String>> future, Optional<ProgramSource> source,
+                                     List<String> transformedVertexSources, PassInfo... targets) {
         if (future == null || source.isEmpty()) {
             return;
         }
         final String sourceName = source.get().getName();
         try {
             final Map<PatchShaderType, String> result = future.join();
+            final String vertexSource = result.get(PatchShaderType.VERTEX);
+            transformedVertexSources.add(vertexSource == null ? "" : vertexSource);
             for (PassInfo target : targets) {
-                target.setSource(PatchShaderType.VERTEX, result.get(PatchShaderType.VERTEX));
+                target.setSource(PatchShaderType.VERTEX, vertexSource);
                 target.setSource(PatchShaderType.GEOMETRY, result.get(PatchShaderType.GEOMETRY));
                 target.setSource(PatchShaderType.FRAGMENT, result.get(PatchShaderType.FRAGMENT));
             }
@@ -176,6 +188,13 @@ public class CeleritasTerrainPipeline {
         } catch (Exception e) {
             Iris.logger.error("Failed to transform shader for Celeritas: {}", sourceName, e);
             throw new RuntimeException("Shader transformation failed for " + sourceName, e);
+        }
+    }
+
+    private static void updateVertexFormatRequirements(TerrainVertexFormatRequirements requirements) {
+        ShaderProvider provider = ShaderProviderHolder.getProvider();
+        if (provider instanceof IrisCeleritasShaderProvider celeritasProvider) {
+            celeritasProvider.setVertexFormatRequirements(requirements);
         }
     }
 

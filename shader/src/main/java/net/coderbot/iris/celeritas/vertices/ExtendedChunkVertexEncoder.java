@@ -18,43 +18,71 @@ import org.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncoder {
-    private static final int MID_TEX_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("mc_midTexCoord").getPointer();
-    private static final int TANGENT_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("at_tangent").getPointer();
-    private static final int NORMAL_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("iris_Normal").getPointer();
-    private static final int MC_ENTITY_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("mc_Entity").getPointer();
-    private static final int MID_BLOCK_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("at_midBlock").getPointer();
-    private static final int A_TEXCOORD_OFFSET = ExtendedChunkVertexType.VERTEX_FORMAT.getAttribute("a_TexCoord").getPointer();
-
     private static final float TEX_CENTROID_BIAS = 1.0f / 32768.0f;
 
+    private final ExtendedChunkVertexType vertexType;
     private final ChunkVertexEncoder baseEncoder = ExtendedChunkVertexType.BASE_TYPE.createEncoder();
     private final LwjglQuadView quad = new LwjglQuadView();
     private final Vector3f normal = new Vector3f();
+    private final int midTexOffset;
+    private final int tangentOffset;
+    private final int normalOffset;
+    private final int mcEntityOffset;
+    private final int midBlockOffset;
+    private final int texCoordOffset;
+    private final int stride;
 
     private BlockRenderContext context;
     private int vertexCount;
     private float uSum;
     private float vSum;
 
+    public ExtendedChunkVertexEncoder(ExtendedChunkVertexType vertexType) {
+        this.vertexType = vertexType;
+        this.midTexOffset = getOffset(TerrainVertexFormatRequirements.Attribute.MID_TEX_COORD, "mc_midTexCoord");
+        this.tangentOffset = getOffset(TerrainVertexFormatRequirements.Attribute.TANGENT, "at_tangent");
+        this.normalOffset = getOffset(TerrainVertexFormatRequirements.Attribute.NORMAL, "iris_Normal");
+        this.mcEntityOffset = getOffset(TerrainVertexFormatRequirements.Attribute.MC_ENTITY, "mc_Entity");
+        this.midBlockOffset = getOffset(TerrainVertexFormatRequirements.Attribute.MID_BLOCK, "at_midBlock");
+        this.texCoordOffset = vertexType.getVertexFormat().getAttribute("a_TexCoord").getPointer();
+        this.stride = vertexType.getVertexFormat().getStride();
+    }
+
     @Override
     public void prepareToRenderBlock(BlockRenderContext ctx, Block block, int metadata, short renderType, byte lightValue) {
+        if (!requiresBlockContext()) {
+            return;
+        }
         this.context = ctx;
-        ctx.blockId = resolveBlockStateId(block, metadata);
-        ctx.renderType = renderType;
-        ctx.lightValue = lightValue;
+        if (this.mcEntityOffset >= 0) {
+            ctx.blockId = resolveBlockStateId(block, metadata);
+            ctx.renderType = renderType;
+        }
+        if (this.midBlockOffset >= 0) {
+            ctx.lightValue = lightValue;
+        }
     }
 
     @Override
     public void prepareToRenderFluid(BlockRenderContext ctx, Block block, int metadata, byte lightValue) {
+        if (!requiresBlockContext()) {
+            return;
+        }
         this.context = ctx;
-        ctx.blockId = resolveFluidBlockStateId(block, metadata);
-        ctx.renderType = ExtendedDataHelper.FLUID_RENDER_TYPE;
-        ctx.lightValue = lightValue;
+        if (this.mcEntityOffset >= 0) {
+            ctx.blockId = resolveFluidBlockStateId(block, metadata);
+            ctx.renderType = ExtendedDataHelper.FLUID_RENDER_TYPE;
+        }
+        if (this.midBlockOffset >= 0) {
+            ctx.lightValue = lightValue;
+        }
     }
 
     @Override
     public void prepareToRenderVanilla(BlockRenderContext ctx) {
-        this.context = ctx;
+        if (requiresBlockContext()) {
+            this.context = ctx;
+        }
     }
 
     @Override
@@ -70,76 +98,99 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
 
     @Override
     public long write(long ptr, Material material, Vertex vertex, int sectionIndex) {
-        this.uSum += vertex.u;
-        this.vSum += vertex.v;
-        this.vertexCount++;
-
-        BlockRenderContext ctx = this.context;
-        if (ctx == null) {
-            ctx = new BlockRenderContext();
+        if (this.midTexOffset >= 0) {
+            this.uSum += vertex.u;
+            this.vSum += vertex.v;
+        }
+        if (needsQuadData()) {
+            this.vertexCount++;
         }
 
         this.baseEncoder.write(ptr, material, vertex, sectionIndex);
 
-        LWJGL.memPutInt(ptr + MC_ENTITY_OFFSET, ((ctx.blockId + 1) << 1) | (ctx.renderType & 1));
-        if (this.vertexCount == 1) {
-            IrisGlDebug.logTerrainMaterialSample(
-                    "encoder",
-                    ctx.blockId,
-                    ctx.renderType,
-                    ctx.lightValue,
-                    ctx.localPosX,
-                    ctx.localPosY,
-                    ctx.localPosZ,
-                    vertex.u,
-                    vertex.v
-            );
+        BlockRenderContext ctx = this.context;
+        if (this.mcEntityOffset >= 0 || this.midBlockOffset >= 0) {
+            if (ctx == null) {
+                ctx = new BlockRenderContext();
+            }
         }
 
-        int midBlock = ExtendedDataHelper.computeMidBlock(vertex.x, vertex.y, vertex.z, ctx.localPosX, ctx.localPosY, ctx.localPosZ);
-        LWJGL.memPutInt(ptr + MID_BLOCK_OFFSET, midBlock);
-        LWJGL.memPutByte(ptr + MID_BLOCK_OFFSET + 3L, ctx.lightValue);
+        if (this.mcEntityOffset >= 0) {
+            LWJGL.memPutInt(ptr + this.mcEntityOffset, ((ctx.blockId + 1) << 1) | (ctx.renderType & 1));
+            if (this.vertexCount == 1) {
+                IrisGlDebug.logTerrainMaterialSample(
+                        "encoder",
+                        ctx.blockId,
+                        ctx.renderType,
+                        ctx.lightValue,
+                        ctx.localPosX,
+                        ctx.localPosY,
+                        ctx.localPosZ,
+                        vertex.u,
+                        vertex.v
+                );
+            }
+        }
 
-        if (this.vertexCount == 4) {
+        if (this.midBlockOffset >= 0) {
+            int midBlock = ExtendedDataHelper.computeMidBlock(vertex.x, vertex.y, vertex.z, ctx.localPosX, ctx.localPosY, ctx.localPosZ);
+            LWJGL.memPutInt(ptr + this.midBlockOffset, midBlock);
+            LWJGL.memPutByte(ptr + this.midBlockOffset + 3L, ctx.lightValue);
+        }
+
+        if (needsQuadData() && this.vertexCount == 4) {
             this.vertexCount = 0;
 
-            int midUV = ExtendedChunkVertexType.encodeMidTexture(this.uSum * 0.25f, this.vSum * 0.25f);
-            LWJGL.memPutInt(ptr + MID_TEX_OFFSET, midUV);
-            LWJGL.memPutInt(ptr + MID_TEX_OFFSET - ExtendedChunkVertexType.STRIDE, midUV);
-            LWJGL.memPutInt(ptr + MID_TEX_OFFSET - (ExtendedChunkVertexType.STRIDE * 2L), midUV);
-            LWJGL.memPutInt(ptr + MID_TEX_OFFSET - (ExtendedChunkVertexType.STRIDE * 3L), midUV);
+            if (this.midTexOffset >= 0) {
+                int midUV = ExtendedChunkVertexType.encodeMidTexture(this.uSum * 0.25f, this.vSum * 0.25f);
+                writeQuadInt(ptr, this.midTexOffset, midUV);
 
-            float midU = this.uSum * 0.25f;
-            float midV = this.vSum * 0.25f;
+                float midU = this.uSum * 0.25f;
+                float midV = this.vSum * 0.25f;
+                for (int vertexIndex = 0; vertexIndex < 4; vertexIndex++) {
+                    long uvBase = ptr - (long) (3 - vertexIndex) * this.stride + this.texCoordOffset;
+                    float vertexU = LWJGL.memGetFloat(uvBase);
+                    float vertexV = LWJGL.memGetFloat(uvBase + 4L);
 
-            for (int vertexIndex = 0; vertexIndex < 4; vertexIndex++) {
-                long uvBase = ptr - (long) (3 - vertexIndex) * ExtendedChunkVertexType.STRIDE + A_TEXCOORD_OFFSET;
-                float vertexU = LWJGL.memGetFloat(uvBase);
-                float vertexV = LWJGL.memGetFloat(uvBase + 4L);
-
-                LWJGL.memPutFloat(uvBase, vertexU + (vertexU < midU ? TEX_CENTROID_BIAS : -TEX_CENTROID_BIAS));
-                LWJGL.memPutFloat(uvBase + 4L, vertexV + (vertexV < midV ? TEX_CENTROID_BIAS : -TEX_CENTROID_BIAS));
+                    LWJGL.memPutFloat(uvBase, vertexU + (vertexU < midU ? TEX_CENTROID_BIAS : -TEX_CENTROID_BIAS));
+                    LWJGL.memPutFloat(uvBase + 4L, vertexV + (vertexV < midV ? TEX_CENTROID_BIAS : -TEX_CENTROID_BIAS));
+                }
+                this.uSum = 0.0f;
+                this.vSum = 0.0f;
             }
 
-            this.quad.setup(ptr, ExtendedChunkVertexType.STRIDE);
-            NormalHelper.computeFaceNormal(this.normal, this.quad);
-            int packedNormal = NormI8.pack(this.normal);
-            LWJGL.memPutInt(ptr + NORMAL_OFFSET, packedNormal);
-            LWJGL.memPutInt(ptr + NORMAL_OFFSET - ExtendedChunkVertexType.STRIDE, packedNormal);
-            LWJGL.memPutInt(ptr + NORMAL_OFFSET - (ExtendedChunkVertexType.STRIDE * 2L), packedNormal);
-            LWJGL.memPutInt(ptr + NORMAL_OFFSET - (ExtendedChunkVertexType.STRIDE * 3L), packedNormal);
-
-            int tangent = NormalHelper.computeTangent(this.normal.x(), this.normal.y(), this.normal.z(), this.quad);
-            LWJGL.memPutInt(ptr + TANGENT_OFFSET, tangent);
-            LWJGL.memPutInt(ptr + TANGENT_OFFSET - ExtendedChunkVertexType.STRIDE, tangent);
-            LWJGL.memPutInt(ptr + TANGENT_OFFSET - (ExtendedChunkVertexType.STRIDE * 2L), tangent);
-            LWJGL.memPutInt(ptr + TANGENT_OFFSET - (ExtendedChunkVertexType.STRIDE * 3L), tangent);
-
-            this.uSum = 0.0f;
-            this.vSum = 0.0f;
+            if (this.normalOffset >= 0 || this.tangentOffset >= 0) {
+                this.quad.setup(ptr, this.stride);
+                NormalHelper.computeFaceNormal(this.normal, this.quad);
+                if (this.normalOffset >= 0) {
+                    writeQuadInt(ptr, this.normalOffset, NormI8.pack(this.normal));
+                }
+                if (this.tangentOffset >= 0) {
+                    int tangent = NormalHelper.computeTangent(this.normal.x(), this.normal.y(), this.normal.z(), this.quad);
+                    writeQuadInt(ptr, this.tangentOffset, tangent);
+                }
+            }
         }
 
-        return ptr + ExtendedChunkVertexType.STRIDE;
+        return ptr + this.stride;
+    }
+
+    private int getOffset(TerrainVertexFormatRequirements.Attribute attribute, String name) {
+        return this.vertexType.requires(attribute) ? this.vertexType.getVertexFormat().getAttribute(name).getPointer() : -1;
+    }
+
+    private boolean requiresBlockContext() {
+        return this.mcEntityOffset >= 0 || this.midBlockOffset >= 0;
+    }
+
+    private boolean needsQuadData() {
+        return this.midTexOffset >= 0 || this.normalOffset >= 0 || this.tangentOffset >= 0;
+    }
+
+    private void writeQuadInt(long ptr, int offset, int value) {
+        for (int vertexIndex = 0; vertexIndex < 4; vertexIndex++) {
+            LWJGL.memPutInt(ptr - (long) vertexIndex * this.stride + offset, value);
+        }
     }
 
     private static int resolveBlockStateId(Block block, int metadata) {

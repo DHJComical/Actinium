@@ -27,7 +27,10 @@ Actinium 渲染栈
 
 **优先级：P0**
 
-**现状：** `VintageRenderSectionManager` 已支持基础遮挡裁剪 (`useFogOcclusion`, `shouldUseOcclusionCulling`)，但在阴影 pass 期间没有使用紧致裁剪。这意味着阴影 pass 会渲染大量玩家背后或视野外的区块。
+**现状：已接入。** `ShadowRenderer` 会在 shader pack 允许高级裁剪时，复用
+`AdvancedShadowCullingFrustum`，由玩家视锥、阴影光向量和 `BoxCuller` 构造阴影 terrain
+frustum；距离条件变化时只更新缓存的距离盒。`VintageRenderSectionManager` 通过该 frustum
+执行 shadow terrain 裁剪，因此玩家背后或视野外、且不可能影响可见区域的区块会被提前排除。
 
 **Iris 实现：** `D:\Code\Iris\common\src\main\java\net\irisshaders\iris\shadows\frustum\advanced\AdvancedShadowCullingFrustum.java:39-98`
 
@@ -53,23 +56,20 @@ public boolean isCulled(double minX, double minY, double minZ, double maxX, doub
 }
 ```
 
-**可迁移性：** 高。`AdvancedShadowCullingFrustum` 已实现 Sodium 的 `ViewportProvider` 接口，可以直接与 Actinium 的 `VintageRenderSectionManager` 集成。Actinium 已在 `ActiniumWorldRenderer.java:80-83` 中有阴影 pass 检测逻辑：
-
-```java
-if (this.renderSectionManager != null && this.renderSectionManager.isInShadowPass()) {
-    return new ChunkRenderMatrices(ShadowRenderer.PROJECTION, ShadowRenderer.MODELVIEW);
-}
-```
-
-只需在此分支中切换到 `AdvancedShadowCullingFrustum` 作为视锥体即可。
+**验证：** `ShadowOptimizationRegressionTest` 直接覆盖高级视锥的可见/剔除契约，以及
+`BoxCuller` 的距离盒边界。后续只应针对包声明的 `ShadowCullState`、体素化和安全区语义调整
+选择策略，不能绕过这一已接入的裁剪路径。
 
 ---
 
-### 1.2 ShadowMatrices — 阴影贴图间隔更新 + 网格对齐
+### 1.2 ShadowMatrices — 网格对齐（不是阴影贴图更新间隔）
 
 **优先级：P0**
 
-**现状：** 如果 Actinium 每帧都渲染阴影贴图，是不必要的开销。Iris 通过 `intervalSize` 控制更新频率，配合网格对齐消除阴影抖动（shimmering）。
+**现状：已接入网格对齐。** `ShadowRenderer#getShadowModelView()` 每个 shadow pass 都会调用
+`ShadowMatrices.createModelViewMatrix(...)`。其中 `intervalSize` 表示**以方块为单位的吸附网格大小**：
+相机在同一格内移动时，固定世界点的阴影投影保持稳定；越过格边界时才按一个格宽平移，
+从而消除阴影抖动（shimmering）。
 
 **Iris 实现：** `D:\Code\Iris\common\src\main\java\net\irisshaders\iris\shadows\ShadowMatrices.java:71-106`
 
@@ -92,9 +92,11 @@ public static void snapModelViewToGrid(PoseStack target, float shadowIntervalSiz
 }
 ```
 
-`ShadowRenderer.java:91` 的 `intervalSize` 字段控制频率。`intervalSize = 4.0` 意味着每 4 帧才完全重渲染阴影贴图——60fps 下约 15 次/秒，视觉差异通常不可察觉。
+`ShadowRenderer` 的 `intervalSize` **不是更新帧间隔**，也不表示 `4.0` 时每 4 帧渲染一次。
+当前实现不会任意跳过阴影 pass；这样做会破坏实体、方块实体和动态光照阴影的时序正确性，
+除非未来建立完整的失效追踪和 shader-pack 兼容契约，否则不应把它作为性能优化建议。
 
-**可迁移性：** 高。结合 Actinium 的 `ShadowRenderingState`，只需增加帧计数器和网格吸附逻辑。
+**验证：** `ShadowOptimizationRegressionTest` 覆盖同格稳定、跨格平移和负坐标三种吸附情形。
 
 ---
 
@@ -181,7 +183,14 @@ for (CachedUniform uniform : this.variables.values()) {
 }
 ```
 
-**可迁移性：** 中。Actinium 已集成 stareval 表达式解析器和 TransformPatcher，需确认 `ShaderMap` 的惰性加载和 `optimise()` 调用已正确启用。
+**Actinium 现状：已启用，但作用域有限。** `DeferredWorldRenderingPipeline` 在构建完 eager
+composite/prepare/deferred/final renderer，并强制创建所需 shadow pass 后调用
+`customUniforms.optimise()`。它只根据调用当时 `locationMap` 中已分配的 program location，保留被
+引用的 uniform 和依赖，并从求值顺序中移除其余节点；它不是按帧的上传缓存，也不会优化之后才
+惰性创建的 pass。
+
+因此不应重复增加 `optimise()` 调用，更不能把它当作无条件减少所有 uniform 上传的优化。后续应以
+实际 shader pack 验证 eager/惰性 pass 的 location 覆盖范围，再决定是否需要调整调用时机或上传策略。
 
 ---
 
@@ -198,7 +207,22 @@ FormatAnalyzer.createFormat(hasBlockId, hasNormal, hasMidUv, hasMidBlock);
 
 如果 shader 不读取 `midBlock` 或 `tangent`，这些属性就不会写入 VBO——直接减少顶点步长（stride）和显存带宽。
 
-**可迁移性：** 中。Actinium 使用 Celeritas 的 `ChunkVertexType`（`COMPACT` 20 字节 / `VANILLA_LIKE` 28 字节），但 Iris shader 集成时可以根据 `SodiumCoreTransformer` 的分析结果动态选择最小格式。
+**Actinium 现状：已实现。** `TerrainVertexFormatRequirements` 使用 GLSL lexer 检查转换后的
+terrain、water、shadow 和 shadow-water vertex shader，并以 pack 级并集决定共享 section VBO
+需要的扩展属性。`ExtendedChunkVertexType` 与 `ExtendedChunkVertexEncoder` 从同一需求对象生成
+layout、stride、offset 和条件写入；布局可在基础 28 字节和完整 48 字节之间收缩。shader reload
+导致需求变化时，会通过 `BlockRenderingSettings` 触发现有 renderer reload，确保旧 VBO 不会与新
+program layout 混用。源码缺失或无法分析时会记录警告并保守回退完整格式。
+
+**验证：** `TerrainVertexFormatRequirementsTest` 覆盖跨 pass 属性并集、仅声明属性剔除、不可分析
+源码的完整格式回退，以及动态 layout 的对齐和 offset。
+
+2026-07-29 实机连续切换 BSL 10.0、Complementary Reimagined/Unbound r5.5.1、Eclipse、
+iterationRP 0.8.7、iterationT 3.2.0、MakeUp Ultra Fast 9.1f 和春 v2，画面表现与完整 48 字节
+格式一致，且未出现 vertex format 分析失败、shader transform 异常或切换后的渲染错误。日志记录到
+三种实际 layout：iterationRP/iterationT 为 40 字节，BSL/Complementary/MakeUp/春为 44 字节，
+Eclipse 因使用全部扩展属性保留 48 字节。相对原完整格式，前两组分别减少约 16.7% 和 8.3% 的
+terrain vertex 数据；本轮只确认兼容性与 layout 命中，尚未用同场景 A/B 隔离 GPU 带宽收益。
 
 ---
 
@@ -492,7 +516,13 @@ float blueNoise(){
 | 体积云 early rejection | `volumetricClouds.glsl` | 低密度区域随机丢弃 |
 | FP16/FP10 颜色量化抖动 | `color_dither.glsl` | 减少 banding in post |
 
-**可迁移性：** 高。确保 `noises.png` 在 Actinium 资源包中可用，并在 deferred shader 中提供标准 `blueNoise()` 函数。
+**Actinium 现状：** 已完整提供 shader-pack 的 `noisetex` sampler。`texture.noise` 指向的自定义
+纹理优先使用；未声明时 `CustomTextureManager` 按 `noiseTextureResolution`（默认 256）生成固定种子的
+RGBA 随机噪声纹理，并注入 terrain、shadow composite、composite 与 final pass。它不是内置的
+`noises.png`/blue-noise 资源，也没有向所有转换后的 shader 注入标准 `blueNoise()` 函数。
+
+因此 blue noise 目前是 shader pack 可选择的质量方案，不是应直接写入 Actinium 资源包的既有优化；
+若要引入，必须先定义采样格式、时序策略和对现有 `texture.noise` 覆盖语义的兼容方式。
 
 ---
 
@@ -516,12 +546,12 @@ if (fo && lu == 0) {
 
 | 优先级 | 优化项 | 预期收益 | 参考文件 | 状态 |
 |--------|--------|----------|----------|------|
-| **P0** | AdvancedShadowCullingFrustum | 阴影 pass 裁剪 30-60% 区块 | `AdvancedShadowCullingFrustum.java` | 待集成 |
-| **P0** | 阴影贴图间隔更新 + 网格对齐 | 减少 50-70% 阴影 pass 开销 | `ShadowMatrices.java` | 待集成 |
-| **P1** | Blue noise 纹理 + 标准函数 | 全局 dithering 质量提升 | `noises.png`, `color_dither.glsl` | 待集成 |
-| **P1** | CustomUniforms.optimise() 验证 | 减少无用 uniform 上传 | `CustomUniforms.java` | 需验证 |
+| **P0** | AdvancedShadowCullingFrustum | 阴影 pass 裁剪 | `AdvancedShadowCullingFrustum.java` | 已接入，需实机量化 |
+| **P0** | 网格对齐 | 消除 shadow shimmering | `ShadowMatrices.java` | 已接入；`intervalSize` 不跳帧 |
+| **P1** | Blue noise 纹理 + 标准函数 | 全局 dithering 质量提升 | `noises.png`, `color_dither.glsl` | shader pack 自定义 `noisetex` 已支持；标准 blue noise 尚未设计 |
+| **P1** | CustomUniforms.optimise() 验证 | 减少无用 uniform 上传 | `CustomUniforms.java` | 已在 pipeline 构建末尾执行 |
 | **P1** | Adaptive PCF early-bounds check | 阴影片元剔除 | `Shadows.glsl` (Eclipse) | 待移植 |
-| **P1** | FormatAnalyzer 顶点格式精简 | 减少顶点带宽 | `SodiumPrograms.java` | 需配合 Iris shader |
+| **P1** | FormatAnalyzer 顶点格式精简 | 扩展格式由 48 字节按需收缩，最低 28 字节 | `TerrainVertexFormatRequirements.java` | 已实机验证 40/44/48 字节布局；需同场景 A/B 量化 |
 | **P2** | GTAO fast_acos 参考实现 | 低成本屏幕空间 AO | `PhotonGTAO.glsl` | 参考储备 |
 | **P2** | LPV shared memory compute | 间接光照质量 | `shadowcomp.csh` | 参考储备 |
 | **P2** | 体积云层级裁剪 | 云雾 pass GPU 时间 | `volumetricClouds.glsl` | 参考储备 |
