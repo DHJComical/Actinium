@@ -85,6 +85,7 @@ public final class BufferBuilderStreamingDrawer {
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
         int firstVertex = -1;
+        boolean restoreArrayBuffer = false;
         boolean logDrawDiagnostics = GLSMDebug.shouldLogDrawDiagnostics();
         boolean checkDrawErrors = RenderDebugHooksHolder.shouldCaptureGlState();
         String formatDescription = logDrawDiagnostics || checkDrawErrors ? format.toString() : null;
@@ -98,17 +99,13 @@ public final class BufferBuilderStreamingDrawer {
                 }
             }
 
-            final int vao;
-            final int vbo;
-            if (firstVertex >= 0) {
-                vao = state.persistentVao;
-                vbo = persistentBuffer.getBufferId();
-                GLStateManager.glBindVertexArray(vao);
-                GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-            } else {
-                vao = state.orphanVao;
-                vbo = state.orphanBuffer.getBufferId();
-                GLStateManager.glBindVertexArray(vao);
+            final DrawPath drawPath = DrawPath.fromFirstVertex(firstVertex);
+            final int persistentVbo = drawPath == DrawPath.PERSISTENT ? persistentBuffer.getBufferId() : 0;
+            final int vao = drawPath.select(state.persistentVao, state.orphanVao);
+            final int vbo = drawPath.select(persistentVbo, state.orphanBuffer.getBufferId());
+            GLStateManager.glBindVertexArray(vao);
+            if (drawPath.changesArrayBufferBinding()) {
+                restoreArrayBuffer = true;
                 GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
                 final long uploadStart = perfDebugEnabled ? GLSMPerfDebug.now() : 0L;
                 state.orphanBuffer.upload(upload);
@@ -137,7 +134,9 @@ public final class BufferBuilderStreamingDrawer {
             }
         } finally {
             GLStateManager.glBindVertexArray(savedVao);
-            GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
+            if (restoreArrayBuffer) {
+                GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
+            }
             if (checkDrawErrors) {
                 RenderDebugHooksHolder.checkDrawError("bufferbuilder-stream:after-restore", debugSource, drawMode, state.vertexFlags, stride, vertexCount, formatDescription, savedVao, savedVbo);
             }
@@ -214,6 +213,30 @@ public final class BufferBuilderStreamingDrawer {
         private int orphanVao;
         private int persistentVao;
         private OrphanStreamingBuffer orphanBuffer;
+    }
+
+    /** Selects GL objects and binding restoration according to the completed upload path. */
+    enum DrawPath {
+        PERSISTENT(false),
+        ORPHAN(true);
+
+        private final boolean changesArrayBufferBinding;
+
+        DrawPath(boolean changesArrayBufferBinding) {
+            this.changesArrayBufferBinding = changesArrayBufferBinding;
+        }
+
+        static DrawPath fromFirstVertex(int firstVertex) {
+            return firstVertex >= 0 ? PERSISTENT : ORPHAN;
+        }
+
+        int select(int persistentObject, int orphanObject) {
+            return this == PERSISTENT ? persistentObject : orphanObject;
+        }
+
+        boolean changesArrayBufferBinding() {
+            return this.changesArrayBufferBinding;
+        }
     }
 }
 
