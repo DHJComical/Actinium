@@ -4420,6 +4420,9 @@ public class GLStateManager {
         if (program == 0 && ffp.isEnabled()) {
             final int prev = activeProgram;
             final boolean caching = isCachingEnabled();
+            if (caching && prev == 0 && ffp.isActive()) {
+                return;
+            }
             if (caching) {
                 activeProgram = 0; // Track that FFP was requested
             }

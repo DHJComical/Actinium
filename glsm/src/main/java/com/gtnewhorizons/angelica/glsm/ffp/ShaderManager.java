@@ -82,16 +82,19 @@ public class ShaderManager {
     }
 
     public void activate() {
+        if (active) return;
         active = true;
-        updateVariant(true, true, true, true);
+        updateVariant(
+            (currentVertexFlags & VertexFlags.COLOR_BIT) != 0,
+            (currentVertexFlags & VertexFlags.NORMAL_BIT) != 0,
+            (currentVertexFlags & VertexFlags.TEXTURE_BIT) != 0,
+            (currentVertexFlags & VertexFlags.BRIGHTNESS_BIT) != 0
+        );
         uploadUniforms();
     }
 
     public void deactivate() {
         active = false;
-        currentProgram = null;
-        currentVertexKeyPacked = Long.MIN_VALUE;
-        currentFKLen = 0;
     }
 
     public void preDraw(boolean hasColor, boolean hasNormal, boolean hasTexCoord, boolean hasLightmap) {
@@ -123,7 +126,7 @@ public class ShaderManager {
         final long vkPacked = VertexKey.packFromState(hasColor, hasNormal, hasTexCoord, hasLightmap);
         final int fkLen = FragmentKey.packFromState(currentFKScratch);
 
-        if (vkPacked != currentVertexKeyPacked || !Arrays.equals(currentFKScratch, 0, fkLen, currentFKPacked, 0, currentFKLen)) {
+        if (!isCurrentVariant(currentVertexKeyPacked, currentFKPacked, currentFKLen, vkPacked, currentFKScratch, fkLen)) {
             commitVariant(vkPacked, fkLen);
         }
 
@@ -153,7 +156,32 @@ public class ShaderManager {
     private void updateVariant(boolean hasColor, boolean hasNormal, boolean hasTexCoord, boolean hasLightmap) {
         final long vkPacked = VertexKey.packFromState(hasColor, hasNormal, hasTexCoord, hasLightmap);
         final int fkLen = FragmentKey.packFromState(currentFKScratch);
-        commitVariant(vkPacked, fkLen);
+        final boolean variantChanged = currentProgram == null
+            || !isCurrentVariant(currentVertexKeyPacked, currentFKPacked, currentFKLen, vkPacked, currentFKScratch, fkLen);
+        if (variantChanged) {
+            commitVariant(vkPacked, fkLen);
+        } else {
+            RENDER_BACKEND.useProgram(currentProgram.getProgramId());
+        }
+    }
+
+    static boolean isCurrentVariant(
+        long currentVertexKey,
+        long[] currentFragmentKey,
+        int currentFragmentKeyLength,
+        long candidateVertexKey,
+        long[] candidateFragmentKey,
+        int candidateFragmentKeyLength
+    ) {
+        return currentVertexKey == candidateVertexKey
+            && Arrays.equals(
+                currentFragmentKey,
+                0,
+                currentFragmentKeyLength,
+                candidateFragmentKey,
+                0,
+                candidateFragmentKeyLength
+            );
     }
 
     private void commitVariant(long vkPacked, int fkLen) {
