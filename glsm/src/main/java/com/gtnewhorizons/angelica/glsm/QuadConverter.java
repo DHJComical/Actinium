@@ -79,6 +79,21 @@ public final class QuadConverter {
     }
 
     /**
+     * Attach the shared quad index buffer to the currently bound Actinium-owned VAO.
+     * The caller must have selected the VAO before invoking this method.
+     */
+    public static void attachSharedEboToCurrentVao() {
+        ensureCapacity(1);
+        if (GLStateManager.getBoundEBO() != eboId) {
+            GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
+        }
+    }
+
+    static boolean needsSharedEboBind(int currentEbo, int sharedEbo) {
+        return currentEbo != sharedEbo;
+    }
+
+    /**
      * Convert a GL_QUADS glDrawArrays call to indexed GL_TRIANGLES.
      * Binds the shared EBO to the current VAO and issues glDrawElements.
      *
@@ -93,14 +108,19 @@ public final class QuadConverter {
         final int quadCount = vertexCount / 4;
         final int prevEbo = GLStateManager.getBoundEBO();
         ensureCapacity(first / 4 + quadCount);
-        RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
+        final boolean needsEboBind = needsSharedEboBind(prevEbo, eboId);
+        if (needsEboBind) {
+            RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
+        }
         // Index offset: first vertex / 4 quads * 6 indices * 4 bytes per int
         final long indexOffset = (long) (first / 4) * 6 * 4;
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logQuadConversion(first, vertexCount, eboId, prevEbo, indexOffset);
         }
         RENDER_BACKEND.drawElements(GL11.GL_TRIANGLES, quadCount * 6, INDEX_TYPE, indexOffset);
-        RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
+        if (needsEboBind) {
+            RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
+        }
         if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.QUAD_ARRAYS, perfStart);
         }

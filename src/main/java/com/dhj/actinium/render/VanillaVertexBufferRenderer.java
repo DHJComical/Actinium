@@ -90,6 +90,7 @@ public final class VanillaVertexBufferRenderer {
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         setupVertexFormatAttributes(format);
+        QuadConverter.attachSharedEboToCurrentVao();
         GLStateManager.glBindVertexArray(savedVao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
         return vao;
@@ -182,4 +183,3 @@ public final class VanillaVertexBufferRenderer {
                 || element.getUsage() == VertexFormatElement.EnumUsage.NORMAL;
     }
 }
-

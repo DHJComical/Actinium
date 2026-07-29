@@ -338,6 +338,7 @@ public class TessellatorStreamingDrawer {
             GLStateManager.glBindVertexArray(orphanVAOs[flags]);
             GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, orphanBuffers[flags].getBufferId());
             format.setupBufferState(0L);
+            QuadConverter.attachSharedEboToCurrentVao();
             GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
             GLStateManager.glBindVertexArray(0);
         }
@@ -347,6 +348,7 @@ public class TessellatorStreamingDrawer {
             GLStateManager.glBindVertexArray(persistentVAOs[flags]);
             GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, persistentBuffer.getBufferId());
             format.setupBufferState(0L);
+            QuadConverter.attachSharedEboToCurrentVao();
             GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
             GLStateManager.glBindVertexArray(0);
         }

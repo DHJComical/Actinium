@@ -74,7 +74,27 @@ SimpleFPEWrapper `d9b829e` 的核心结论一致：状态操作应按实际副�
 状态缓存失配。风险局限于 BufferBuilder streaming persistent path，且可通过强制 orphan 属性
 快速回退验证。
 
-### P1：统一 orphan uploader 与 GLSM 的 binding 所有权
+### P1：让内部 streaming VAO 持久携带共享 Quad EBO
+
+状态：本轮实现。
+
+最新日志中 `quad.arrays` 是持续命中的路径，稳定段约为 6k-15k calls/s。原实现每次转换都保存
+当前 EBO、直接 bind 共享 EBO、draw 后再恢复。`GLStateManager` 已维护 `vaoEboMap`，而
+`QuadConverter` 的 backend bind 不会更新该 shadow，因此优化必须只对 Actinium 创建的 streaming
+VAO 预附着共享 EBO，并用 shadow EBO 判断是否需要临时 bind。
+
+实现边界：
+
+- streaming VAO 创建时调用 `QuadConverter.attachSharedEboToCurrentVao()`，使 VAO-local EBO
+  和 `vaoEboMap` 同步。
+- draw 时当前 EBO 已是共享 EBO，则跳过 bind/restore；app-owned VAO 或其他 EBO 仍保持原路径。
+- 不修改 indexed `GL_QUADS` 的 scratch EBO 路径；该路径仍必须保存和恢复调用者 EBO。
+
+风险：VAO-local element-buffer 状态属于真实 GL 状态。若第三方代码复用 Actinium-owned VAO 并
+自行改变 EBO，shadow 判断必须继续让它走临时 bind/restore；需要覆盖资源重载、VAO 删除和
+`GL_QUADS`/indexed draw 混用场景。
+
+### P2：统一 orphan uploader 与 GLSM 的 binding 所有权
 
 证据：`OrphanStreamingBuffer.upload` 通过 `RENDER_BACKEND` 自行 bind VBO 并最终 bind 0，调用者
 为了恢复 GLSM cache 还要先通过 `GLStateManager` bind 一次、再在 draw 后恢复。这一所有权分裂
@@ -87,7 +107,7 @@ SimpleFPEWrapper `d9b829e` 的核心结论一致：状态操作应按实际副�
 风险跨模块改动。必须增加 fake backend 的调用序列测试，并验证调用者原先绑定的 VBO 为 0、
 普通 VBO 和同一 VBO 三种情况。
 
-### P2：按生产采样合并同源小 draw
+### P3：按生产采样合并同源小 draw
 
 证据：SimpleFPEWrapper `324c8c2` 将 tiny batch 从约 0.89 us 降到 0.33 us，但收益依赖严格的
 相邻状态兼容。Actinium 已能通过 `GLSMPerfDebug.countBufferBuilder` 按 debug source、draw mode
@@ -100,7 +120,7 @@ renderer；不要在通用 `BufferBuilderStreamingDrawer` 中跨调用缓存。�
 风险：draw order、透明混合、matrix、texture、shader uniform、debug attribution 和异常时 flush
 都可能改变，风险高。需要像 SimpleFPEWrapper 一样为每个 primitive 和状态切换边界做画面测试。
 
-### P3：针对 ring 大小和 fence 分段做跨厂商调优
+### P4：针对 ring 大小和 fence 分段做跨厂商调优
 
 证据：SimpleFPEWrapper 证明 rotating offset 与 fence 是必要成本，但没有证明其容量和分段参数
 适用于 Minecraft。Actinium 目前固定 16 MiB，并已有 remaining、persistent/orphan upload stage。
