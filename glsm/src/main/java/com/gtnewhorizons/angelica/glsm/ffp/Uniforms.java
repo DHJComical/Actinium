@@ -45,112 +45,93 @@ public class Uniforms {
     private static final double LN2 = Math.log(2.0);
     private static final double SQRT_LN2 = Math.sqrt(LN2);
 
-    // Dirty tracking: last-uploaded generation per category + program ID.
-    // Program change forces full re-upload since uniform locations differ.
-    private int lastProgramId = -1;
-    private int lastMvGen = -1;
-    private int lastProjGen = -1;
-    private int lastTexMatGen = -1;
-    private int lastLightingGen = -1;
-    private int lastFragmentGen = -1;
-    private int lastColorGen = -1;
-    private int lastNormalGen = -1;
-    private int lastTexCoordGen = -1;
-    private float lastLightmapX = Float.NaN;
-    private float lastLightmapY = Float.NaN;
-    private int lastTexGenGen = -1;
-    private int lastClipPlaneGen = -1;
-    private float lastLineWidth = Float.NaN;
-    private int lastViewportWidth = -1;
-    private int lastViewportHeight = -1;
-
     /**
      * Upload all relevant uniforms to the given FFP program based on current GLSM state.
      * Uses generation counters to skip categories that haven't changed since last upload.
      */
     public void upload(Program program) {
-        final boolean programChanged = program.getProgramId() != lastProgramId;
-        lastProgramId = program.getProgramId();
+        final ProgramUniformState uploaded = program.getUniformState();
 
         final int mvGen = GLStateManager.mvGeneration;
         final int projGen = GLStateManager.projGeneration;
         final int texMatGen = GLStateManager.texMatrixGeneration;
-        final boolean mvChanged = programChanged || mvGen != lastMvGen;
-        final boolean projChanged = programChanged || projGen != lastProjGen;
-        final boolean texMatChanged = programChanged || texMatGen != lastTexMatGen;
+        final boolean mvChanged = uploaded.needsModelViewUpload(mvGen);
+        final boolean projChanged = uploaded.needsProjectionUpload(projGen);
+        final boolean texMatChanged = uploaded.needsTextureMatrixUpload(texMatGen);
         if (mvChanged || projChanged || texMatChanged) {
             uploadMatrices(program, mvChanged, projChanged, texMatChanged);
-            lastMvGen = mvGen;
-            lastProjGen = projGen;
-            lastTexMatGen = texMatGen;
+            if (mvChanged) uploaded.markModelViewUploaded(mvGen);
+            if (projChanged) uploaded.markProjectionUploaded(projGen);
+            if (texMatChanged) uploaded.markTextureMatrixUploaded(texMatGen);
         }
 
         if (program.getVertexKey().lightingEnabled()) {
             final int litGen = GLStateManager.lightingGeneration;
-            if (programChanged || litGen != lastLightingGen) {
+            if (uploaded.needsLightingUpload(litGen)) {
                 uploadLighting(program);
-                lastLightingGen = litGen;
+                uploaded.markLightingUploaded(litGen);
             }
         }
 
         // Current color/normal/texcoord — skip if generation unchanged
         if (!program.getVertexKey().hasVertexColor()) {
             final int colorGen = GLStateManager.colorGeneration;
-            if (programChanged || colorGen != lastColorGen) {
+            if (uploaded.needsColorUpload(colorGen)) {
                 uploadCurrentColor(program);
-                lastColorGen = colorGen;
+                uploaded.markColorUploaded(colorGen);
             }
         }
 
         if (!program.getVertexKey().hasVertexNormal() && program.getVertexKey().lightingEnabled()) {
             final int normalGen = ShaderManager.getNormalGeneration();
-            if (programChanged || normalGen != lastNormalGen) {
+            if (uploaded.needsNormalUpload(normalGen)) {
                 uploadCurrentNormal(program);
-                lastNormalGen = normalGen;
+                uploaded.markNormalUploaded(normalGen);
             }
         }
 
         if (!program.getVertexKey().hasVertexTexCoord() && program.getVertexKey().textureEnabled()) {
             final int texGen = ShaderManager.getTexCoordGeneration();
-            if (programChanged || texGen != lastTexCoordGen) {
+            if (uploaded.needsTexCoordUpload(texGen)) {
                 uploadCurrentTexCoord(program);
-                lastTexCoordGen = texGen;
+                uploaded.markTexCoordUploaded(texGen);
             }
         }
 
         if (program.getVertexKey().lightmapEnabled() && !program.getVertexKey().hasVertexLightmap()) {
-            if (programChanged || GLSMConfig.lastBrightnessX != lastLightmapX || GLSMConfig.lastBrightnessY != lastLightmapY) {
+            final float lightmapX = GLSMConfig.lastBrightnessX;
+            final float lightmapY = GLSMConfig.lastBrightnessY;
+            if (uploaded.needsLightmapUpload(lightmapX, lightmapY)) {
                 uploadCurrentLightmapCoord(program);
-                lastLightmapX = GLSMConfig.lastBrightnessX;
-                lastLightmapY = GLSMConfig.lastBrightnessY;
+                uploaded.markLightmapUploaded(lightmapX, lightmapY);
             }
         }
 
         if (program.getVertexKey().texGenEnabled()) {
             final int tgGen = GLStateManager.texGenGeneration;
-            if (programChanged || tgGen != lastTexGenGen) {
+            if (uploaded.needsTexGenUpload(tgGen)) {
                 uploadTexGen(program);
-                lastTexGenGen = tgGen;
+                uploaded.markTexGenUploaded(tgGen);
             }
         }
 
         if (program.getVertexKey().clipPlanesEnabled()) {
             final int cpGen = GLStateManager.clipPlaneGeneration;
-            if (programChanged || cpGen != lastClipPlaneGen) {
+            if (uploaded.needsClipPlaneUpload(cpGen)) {
                 uploadClipPlanes(program);
-                lastClipPlaneGen = cpGen;
+                uploaded.markClipPlaneUploaded(cpGen);
             }
         }
 
         final int fragGen = GLStateManager.fragmentGeneration;
-        if (programChanged || fragGen != lastFragmentGen) {
+        if (uploaded.needsFragmentUpload(fragGen)) {
             uploadFragmentUniforms(program);
-            lastFragmentGen = fragGen;
+            uploaded.markFragmentUploaded(fragGen);
         }
 
         // Wide line emulation uniforms
         if (program.locLineWidth != -1 && program.locViewportSize != -1) {
-            uploadWideLineUniforms(program, programChanged);
+            uploadWideLineUniforms(program, uploaded);
         }
     }
 
@@ -458,18 +439,17 @@ public class Uniforms {
         }
     }
 
-    private void uploadWideLineUniforms(Program program, boolean programChanged) {
+    private void uploadWideLineUniforms(Program program, ProgramUniformState uploaded) {
         final float lineWidth = GLStateManager.getLineState().getWidth();
-        if (programChanged || lineWidth != lastLineWidth) {
+        if (uploaded.needsLineWidthUpload(lineWidth)) {
             RENDER_BACKEND.uniform1f(program.locLineWidth, lineWidth);
-            lastLineWidth = lineWidth;
+            uploaded.markLineWidthUploaded(lineWidth);
         }
         final int vw = GLStateManager.getViewportState().width;
         final int vh = GLStateManager.getViewportState().height;
-        if (programChanged || vw != lastViewportWidth || vh != lastViewportHeight) {
+        if (uploaded.needsViewportUpload(vw, vh)) {
             RENDER_BACKEND.uniform2f(program.locViewportSize, vw, vh);
-            lastViewportWidth = vw;
-            lastViewportHeight = vh;
+            uploaded.markViewportUploaded(vw, vh);
         }
     }
 

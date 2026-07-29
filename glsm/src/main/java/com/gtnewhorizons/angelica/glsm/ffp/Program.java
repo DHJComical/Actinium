@@ -25,6 +25,7 @@ public class Program {
     @Getter private final int programId;
     @Getter private final VertexKey vertexKey;
     @Getter private final FragmentKey fragmentKey;
+    private final ProgramUniformState uniformState = new ProgramUniformState();
 
     // Uniform locations (-1 = not present in this variant)
     // Matrices
@@ -175,6 +176,10 @@ public class Program {
 
     private int loc(String name) {
         return RENDER_BACKEND.getUniformLocation(programId, name);
+    }
+
+    ProgramUniformState getUniformState() {
+        return uniformState;
     }
 
     public void destroy() {
