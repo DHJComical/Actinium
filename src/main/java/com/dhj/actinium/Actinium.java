@@ -14,6 +14,7 @@ import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 import com.mojang.realmsclient.gui.ChatFormatting;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.pipeline.AdaptiveShadowBoundsStats;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.minecraft.client.Minecraft;
@@ -33,6 +34,7 @@ import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
 import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
 import org.embeddedt.embeddium.impl.runtime.EmbeddiumRuntimeOptions;
+import java.io.IOException;
 import java.lang.management.ManagementFactory;
 
 @Mod(modid = Actinium.MODID, useMetadata = true, clientSideOnly = true, acceptableRemoteVersions = "*")
@@ -50,10 +52,11 @@ public class Actinium {
         EmbeddiumRuntimeOptions.setChunkMultiDrawMode(() -> ActiniumRuntime.options().advanced.multiDrawMode);
         PostProcessingBridge.setDepthTextureProvider(framebuffer -> ((IRenderTargetExt) framebuffer).iris$getDepthTextureId());
         PostProcessingBridge.setLightmapColorAccessor(renderer -> ((AccessorEntityRenderer) renderer).getLightmapColors());
-        GLSMPerfDebugHooks.setExtraStatsSupplier(FastLitItemDisplayListCache::dumpStatsAndReset);
+        GLSMPerfDebugHooks.setExtraStatsSupplier(Actinium::dumpExtraPerfStats);
         GLSMPerfDebugHooks.setConfiguredEnabled(
             ActiniumRuntimeOptions.resolvePerfDebugEnabled(ActiniumRuntime.options().debug.enableActiniumPerfDebug)
         );
+        GLSMPerfDebugHooks.setEnabledChangeListener(Actinium::reloadShaderPipelineForPerfDebug);
 
         ActiniumDiagnostics.logConstruction();
         initializeDistantHorizonsCompat();
@@ -79,6 +82,29 @@ public class Actinium {
         if (Iris.enabled && Loader.isModLoaded("distanthorizons")) {
             ActiniumDHIrisCompat.registerAccessor();
             DHCompat.run();
+        }
+    }
+
+    private static String dumpExtraPerfStats() {
+        String fastLitStats = FastLitItemDisplayListCache.dumpStatsAndReset();
+        String shadowStats = AdaptiveShadowBoundsStats.dumpStatsAndReset();
+        if (shadowStats.isEmpty()) {
+            return fastLitStats;
+        }
+        if (fastLitStats.isEmpty()) {
+            return shadowStats;
+        }
+        return fastLitStats + " " + shadowStats;
+    }
+
+    private static void reloadShaderPipelineForPerfDebug() {
+        if (!Iris.enabled || Minecraft.getMinecraft().world == null) {
+            return;
+        }
+        try {
+            Iris.reload();
+        } catch (IOException | RuntimeException exception) {
+            Iris.logger.error("Failed to reload shader pipeline after changing Actinium perf debug", exception);
         }
     }
 

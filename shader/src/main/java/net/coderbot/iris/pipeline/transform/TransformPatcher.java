@@ -12,6 +12,7 @@ import net.coderbot.iris.pipeline.transform.parameter.ComputeParameters;
 import net.coderbot.iris.pipeline.transform.parameter.DHParameters;
 import net.coderbot.iris.pipeline.transform.parameter.Parameters;
 import net.coderbot.iris.pipeline.transform.parameter.TextureStageParameters;
+import net.coderbot.iris.pipeline.AdaptiveShadowBoundsStats;
 import net.coderbot.iris.shaderpack.texture.TextureStage;
 
 import java.util.Collections;
@@ -51,6 +52,8 @@ public class TransformPatcher {
         final String tessEval;
         final String fragment;
         final String compute;
+        final boolean adaptiveShadowBoundsInstrumentation;
+        final int adaptiveShadowBoundsBinding;
 
         public CacheKey(Parameters parameters, String vertex, String geometry, String tessControl, String tessEval, String fragment) {
             this.parameters = parameters;
@@ -60,6 +63,9 @@ public class TransformPatcher {
             this.tessEval = tessEval;
             this.fragment = fragment;
             this.compute = null;
+            this.adaptiveShadowBoundsInstrumentation = AdaptiveShadowBoundsStats.isInstrumentationEnabled();
+            this.adaptiveShadowBoundsBinding = this.adaptiveShadowBoundsInstrumentation
+                ? AdaptiveShadowBoundsStats.getActiveBinding() : -1;
         }
 
         public CacheKey(Parameters parameters, String compute) {
@@ -70,6 +76,9 @@ public class TransformPatcher {
             this.tessEval = null;
             this.fragment = null;
             this.compute = compute;
+            this.adaptiveShadowBoundsInstrumentation = AdaptiveShadowBoundsStats.isInstrumentationEnabled();
+            this.adaptiveShadowBoundsBinding = this.adaptiveShadowBoundsInstrumentation
+                ? AdaptiveShadowBoundsStats.getActiveBinding() : -1;
         }
 
         @Override
@@ -83,6 +92,8 @@ public class TransformPatcher {
             result = prime * result + ((parameters == null) ? 0 : parameters.hashCode());
             result = prime * result + ((vertex == null) ? 0 : vertex.hashCode());
             result = prime * result + ((compute == null) ? 0 : compute.hashCode());
+            result = prime * result + (adaptiveShadowBoundsInstrumentation ? 1 : 0);
+            result = prime * result + adaptiveShadowBoundsBinding;
             return result;
         }
 
@@ -97,7 +108,9 @@ public class TransformPatcher {
                 && Objects.equals(tessEval, other.tessEval)
                 && Objects.equals(parameters, other.parameters)
                 && Objects.equals(vertex, other.vertex)
-                && Objects.equals(compute, other.compute);
+                && Objects.equals(compute, other.compute)
+                && adaptiveShadowBoundsInstrumentation == other.adaptiveShadowBoundsInstrumentation
+                && adaptiveShadowBoundsBinding == other.adaptiveShadowBoundsBinding;
         }
     }
 

@@ -11,6 +11,7 @@ import net.coderbot.iris.Iris;
 import net.coderbot.iris.gl.shader.ShaderType;
 import net.coderbot.iris.pipeline.transform.parameter.AttributeParameters;
 import net.coderbot.iris.pipeline.transform.parameter.Parameters;
+import net.coderbot.iris.pipeline.AdaptiveShadowBoundsStats;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderConstants;
 import org.embeddedt.embeddium.impl.render.shader.ShaderLoader;
 import org.taumc.glsl.ShaderParser;
@@ -262,7 +263,12 @@ public class ShaderTransformer {
             int versionInt = Integer.parseInt(versionString);
 
             // Include celeritas header in scan — it's injected post-negotiation but contains uint/uvec3
-            final String scanSource = (patchType == Patch.CELERITAS_TERRAIN && type == PatchShaderType.VERTEX) ? input + computeCeleritasHeader() : input;
+            String scanSource = (patchType == Patch.CELERITAS_TERRAIN && type == PatchShaderType.VERTEX) ? input + computeCeleritasHeader() : input;
+            if (type == PatchShaderType.FRAGMENT
+                && AdaptiveShadowBoundsStats.isInstrumentationEnabled()
+                && AdaptiveShadowBoundsTransformer.mayInjectRuntimeStats(input)) {
+                scanSource += "\n" + AdaptiveShadowBoundsStats.shaderVersionMarker();
+            }
             final int requiredVersion = getRequiredVersion(scanSource, versionInt);
             if (requiredVersion > versionInt) {
                 Iris.logger.debug("Shader requires GLSL {} for detected features, hoisting from {}", requiredVersion, versionInt);

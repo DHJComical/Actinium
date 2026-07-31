@@ -1,6 +1,6 @@
 # Actinium 架构说明
 
-最后更新：2026-07-10。
+最后更新：2026-07-31。
 
 ## 运行时组成
 
@@ -28,6 +28,10 @@ Actinium 是一个客户端模组和 coremod。`com.dhj.actinium.Actinium` 处�
 5. `CeleritasTerrainPipeline` 为区块 pass 提供变换后的 shader program；无光影时使用
    `FixedFunctionWorldRenderingPipeline`。
 6. pipeline 在维度切换或光影重载时销毁 GL 资源并重建，最后恢复 Minecraft 主 framebuffer。
+7. `AdaptiveShadowBoundsTransformer` 在可识别的 PCF helper 入口加入 shadow-map bounds
+   early return；仅在 GLSM 性能调试开启、且 SSBO/GLSL 4.30 可用时，
+   `DeferredWorldRenderingPipeline` 才分配独立 SSBO 并注入运行期 `atomicAdd` 统计。
+   统计通过 `GLSM perf:` 输出并在每个报告窗口清零，不能作为无调试开销的 FPS 基线。
 
 ## 构建模型
 

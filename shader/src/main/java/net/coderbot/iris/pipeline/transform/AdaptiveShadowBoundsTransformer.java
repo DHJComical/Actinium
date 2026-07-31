@@ -4,6 +4,7 @@ import com.gtnewhorizons.angelica.glsm.GlslTransformUtils;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.gl.shader.ShaderType;
+import net.coderbot.iris.pipeline.AdaptiveShadowBoundsStats;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.taumc.glsl.Transformer;
 import org.taumc.glsl.grammar.GLSLParser;
@@ -30,6 +31,17 @@ final class AdaptiveShadowBoundsTransformer {
     }
 
     static void transform(Transformer root, ShaderType shaderType) {
+        final boolean instrumentationEnabled = AdaptiveShadowBoundsStats.isInstrumentationEnabled();
+        final int instrumentationBinding = instrumentationEnabled ? AdaptiveShadowBoundsStats.getActiveBinding() : -1;
+        transform(root, shaderType, instrumentationEnabled, instrumentationBinding);
+    }
+
+    static boolean mayInjectRuntimeStats(String source) {
+        return source.contains("shadowMapResolution")
+            && (source.contains("texture2DShadow2x2") || source.contains("SampleFilteredShadow"));
+    }
+
+    static void transform(Transformer root, ShaderType shaderType, boolean instrumentationEnabled, int instrumentationBinding) {
         if (shaderType != ShaderType.FRAGMENT || !root.hasVariable("shadowMapResolution")) {
             return;
         }
@@ -64,11 +76,15 @@ final class AdaptiveShadowBoundsTransformer {
 
             root.replaceExpression(
                 candidate.source(),
-                candidate.patchedSource(),
+                candidate.patchedSource(instrumentationEnabled),
                 GLSLParser::function_definition
             );
             injected++;
             debug(candidate.name());
+        }
+
+        if (injected > 0 && instrumentationEnabled) {
+            root.injectVariable(AdaptiveShadowBoundsStats.declarationForBinding(instrumentationBinding));
         }
 
         if (GLSMPerfDebug.isEnabled()) {
@@ -132,7 +148,7 @@ final class AdaptiveShadowBoundsTransformer {
             );
         }
 
-        private String patchedSource() {
+        private String patchedSource(boolean instrumentationEnabled) {
             final int bodyStart = source.indexOf('{');
             if (bodyStart < 0) {
                 throw new IllegalStateException("PCF helper has no function body: " + name);
@@ -146,8 +162,18 @@ final class AdaptiveShadowBoundsTransformer {
                 + " && " + coordinate + ".y < 1.0 - " + margin
                 + " && " + coordinate + ".z > 0.0"
                 + " && " + coordinate + ".z < 1.0";
-            final String guard = "if (!(" + bounds + ")) return " + defaultValue + ";";
-            return source.substring(0, bodyStart + 1) + guard + source.substring(bodyStart + 1);
+            if (!instrumentationEnabled) {
+                final String guard = "if (!(" + bounds + ")) return " + defaultValue + ";";
+                return source.substring(0, bodyStart + 1) + guard + source.substring(bodyStart + 1);
+            }
+
+            final String guard = "if (!(" + bounds + ")) {"
+                + AdaptiveShadowBoundsStats.rejectedCounter(name)
+                + "return " + defaultValue + ";}";
+            return source.substring(0, bodyStart + 1)
+                + AdaptiveShadowBoundsStats.callCounter(name)
+                + guard
+                + source.substring(bodyStart + 1);
         }
 
         private boolean hasBoundsGuard() {

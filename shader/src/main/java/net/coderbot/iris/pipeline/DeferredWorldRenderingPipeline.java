@@ -165,6 +165,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	private final GlImage[] imagesToClear;
 	@Nullable
 	private final ShaderStorageBufferHolder ssboHolder;
+	private final AdaptiveShadowBoundsStats adaptiveShadowBoundsStats;
 
 	private final Map<Pair<String, InputAvailability>, Map<PatchShaderType, String>> attributeTransforms;
 
@@ -212,6 +213,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	public DeferredWorldRenderingPipeline(ProgramSet programs) {
 		Objects.requireNonNull(programs);
+		this.adaptiveShadowBoundsStats = AdaptiveShadowBoundsStats.create(programs.getPack().getBufferObjects());
+		AdaptiveShadowBoundsStats.activate(this.adaptiveShadowBoundsStats);
 
 		final Map<Integer, CompletableFuture<Map<PatchShaderType, String>>> prepareTransformFutures =
 			submitCompositeTransforms(programs.getPrepare(), TextureStage.PREPARE, programs.getPackDirectives().getTextureMap());
@@ -1311,6 +1314,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		customImages.clear();
 
 		// Destroy SSBOs
+		AdaptiveShadowBoundsStats.deactivate(adaptiveShadowBoundsStats);
+		adaptiveShadowBoundsStats.destroy();
 		if (ssboHolder != null) {
 			ssboHolder.destroyBuffers();
 		}

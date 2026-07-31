@@ -156,7 +156,31 @@ if (abs(projectedShadowPosition.x) < 1.0 - 1.5/shadowMapResolution && ...)
     return 1.0;
 ```
 
-**建议：** 在 Actinium 的阴影 shader 中加入类似 bounds check，避免阴影贴图外的片元浪费 PCF 采样。
+**现状：已接入，并已完成运行期命中验证。**
+
+`AdaptiveShadowBoundsTransformer` 在识别到 `texture2DShadow2x2` 或 `SampleFilteredShadow`
+时，在 helper 入口加入统一的 shadow-map bounds check。坐标的 `x/y` 必须位于
+`1.5 / shadowMapResolution` 与 `1.0 - 1.5 / shadowMapResolution` 之间，`z` 必须位于
+`(0, 1)`；越界时直接返回全亮结果，从而跳过后续 PCF 纹理访问。已经带有等价检查的 helper
+不会重复注入，无法确认签名或采样语义的函数也不会被改写。
+
+当 GLSM 性能调试由 GUI 或 `-Dactinium.glsmPerfDebug=true` 开启，并且运行环境支持 SSBO 与
+GLSL 4.30 以上时，`DeferredWorldRenderingPipeline` 会为当前 shader pack 选择未占用的 SSBO
+binding。变换器额外注入 `atomicAdd` 计数，`GLSM perf:` 日志会输出调用数、拒绝数和估算的
+采样节省量；关闭性能调试时不注入这些计数器，生产路径只保留 bounds check。
+
+**2026-07-31 实机验证（BSL_v10.0）：** `run/client/logs/latest.log` 记录 runtime stats
+使用 binding `95`，并持续输出 14 个有效统计窗口（忽略启动预热窗口）。累计
+`709,042,107` 次 helper 调用中有 `73,586,511` 次提前拒绝，拒绝率 `10.38%`，加权通过率
+`89.62%`；后期窗口的拒绝率稳定在 `13.2% - 13.4%`。本次场景全部命中
+`SampleFilteredShadow`，`texture2DShadow2x2` 的调用数为 `0`，且未出现
+`readbackError=true`。这证明 bounds 优化已经在实际渲染片元中执行，而不是只有编译期注入。
+
+`estimatedPcfSamplesSaved` 是保守下界：当前每次拒绝只计 `1`，而 BSL 的
+`SampleFilteredShadow` 至少包含一组 9 次深度采样，条件满足时还会执行第二组 9 次采样及
+颜色纹理读取。因此该字段不能直接当作真实 FPS 或实际纹理 tap 数。由于 Debug 计数器自身
+会增加 GPU 原子操作开销，FPS 收益仍需在相同场景下关闭统计并对比启用/禁用 bounds check
+的 A/B 基线后再量化。
 
 ---
 
@@ -567,7 +591,7 @@ if (fo && lu == 0) {
 | **P0** | 网格对齐 | 消除 shadow shimmering | `ShadowMatrices.java` | 已接入；`intervalSize` 不跳帧 |
 | **P1** | Blue noise 纹理 + 标准函数 | 全局 dithering 质量提升 | `noises.png`, `color_dither.glsl` | shader pack 自定义 `noisetex` 已支持；标准 blue noise 尚未设计 |
 | **P1** | CustomUniforms.optimise() 验证 | 减少无用 uniform 上传 | `CustomUniforms.java` | 已在 pipeline 构建末尾执行 |
-| **P1** | Adaptive PCF early-bounds check | 阴影片元剔除 | `Shadows.glsl` (Eclipse) | 待移植 |
+| **P1** | Adaptive PCF early-bounds check | 阴影片元剔除 | `Shadows.glsl` (Eclipse) | 已接入；BSL 10.0 实测命中 10.38% 越界调用；需关闭 Debug 的同场景 A/B 量化 |
 | **P1** | FormatAnalyzer 顶点格式精简 | 扩展格式由 48 字节按需收缩，最低 28 字节 | `TerrainVertexFormatRequirements.java` | 已实机验证 40/44/48 字节布局；需同场景 A/B 量化 |
 | **P2** | GTAO fast_acos 参考实现 | 低成本屏幕空间 AO | `PhotonGTAO.glsl` | 参考储备 |
 | **P2** | LPV shared memory compute | 间接光照质量 | `shadowcomp.csh` | 参考储备 |

@@ -93,6 +93,38 @@ class AdaptiveShadowBoundsTransformerTest {
     }
 
     @Test
+    void instrumentsRecognizedHelpersWhenRuntimeStatsAreEnabled() {
+        Transformer transformer = transformer("""
+            #version 430 core
+            const float shadowMapResolution = 2048.0;
+            float texture2DShadow2x2(sampler2D shadowtex, vec3 shadowPos) {
+                return texture(shadowtex, shadowPos.xy).x + 0.0 / shadowMapResolution;
+            }
+            vec3 SampleFilteredShadow(vec3 shadowPos, float offset, float subsurface) {
+                return vec3(texture(shadowtex0, shadowPos.xy).x + offset + subsurface);
+            }
+            void main() {
+                gl_FragColor = vec4(
+                    texture2DShadow2x2(shadowtex, vec3(0.0))
+                    + SampleFilteredShadow(vec3(0.0), 0.0, 0.0),
+                    1.0
+                );
+            }
+        """);
+
+        AdaptiveShadowBoundsTransformer.transform(transformer, ShaderType.FRAGMENT, true, 7);
+
+        String transformed = format(transformer);
+        List<GLSLParser.Function_definitionContext> functions = functions(transformed);
+        assertEquals(0, ShaderParser.parseShader(transformed).parser().getNumberOfSyntaxErrors(), transformed);
+        assertEquals(3, calls(findFunction(functions, "texture2DShadow2x2")).stream()
+            .filter("atomicAdd"::equals).count());
+        assertEquals(3, calls(findFunction(functions, "SampleFilteredShadow")).stream()
+            .filter("atomicAdd"::equals).count());
+        assertTrue(transformed.contains("binding = 7"));
+    }
+
+    @Test
     void leavesFunctionWithExistingBoundsGuardUntouched() {
         Transformer transformer = transformer("""
             #version 330 core
