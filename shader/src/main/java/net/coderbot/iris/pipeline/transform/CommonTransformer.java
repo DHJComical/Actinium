@@ -74,6 +74,7 @@ public class CommonTransformer {
 		root.renameFunctionCall(GlslTransformUtils.TEXTURE_RENAMES);
 		root.renameAndWrapShadow("shadow2D", "texture");
 		root.renameAndWrapShadow("shadow2DLod", "textureLod");
+		AdaptiveShadowBoundsTransformer.transform(root, parameters.type);
 
 		if (parameters.patch == Patch.ATTRIBUTES && parameters.type == ShaderType.VERTEX) {
 			root.injectVariable("uniform bool angelica_ClipPlanesEnabled;");
