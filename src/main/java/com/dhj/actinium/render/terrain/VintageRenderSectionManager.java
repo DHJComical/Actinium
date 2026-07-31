@@ -72,7 +72,10 @@ public class VintageRenderSectionManager extends RenderSectionManager {
         }
 
         if (ShaderProviderHolder.isShadowPass()) {
-            return true;
+            // Iris/Sodium shadow rendering owns its caster distance through the shadow
+            // frustum. The legacy fixed-function fog state belongs to the main view and
+            // may truncate the shadow render list when it is reused here.
+            return false;
         }
 
         if (!ShaderProviderHolder.isActive()) {
@@ -84,6 +87,13 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
     @Override
     protected boolean shouldUseOcclusionCulling(Viewport positionedViewport, boolean spectator) {
+        if (ShaderProviderHolder.isShadowPass()) {
+            // Shadow casters must not depend on paths reachable from the player's view.
+            // Sodium/Iris enumerate the shadow frustum independently of main-view
+            // occlusion; retaining the BFS here drops open terrain from the shadow map.
+            return false;
+        }
+
         final boolean useOcclusionCulling;
         var camBlockPos = positionedViewport.getBlockCoord();
         BlockPos origin = new BlockPos(camBlockPos.x(), camBlockPos.y(), camBlockPos.z());

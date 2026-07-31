@@ -1,7 +1,8 @@
 package net.coderbot.iris.texture.pbr;
 
 import com.gtnewhorizons.angelica.compat.mojang.AutoClosableAbstractTexture;
-import com.dhj.actinium.config.ActiniumConfig;
+import com.dhj.actinium.config.ActiniumRuntimeOptions;
+import com.dhj.actinium.debug.PBRDebug;
 import lombok.Getter;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.texture.util.TextureExporter;
@@ -44,7 +45,7 @@ public class PBRAtlasTexture extends AutoClosableAbstractTexture {
 
 	public void addSprite(TextureAtlasSprite sprite) {
 		sprites.put(completeResourceLocation(new ResourceLocation(sprite.getIconName())), sprite);
-		if (sprite.hasAnimationMetadata()) {
+		if (isAnimated(sprite)) {
 			animatedSprites.add(sprite);
 		}
 	}
@@ -88,7 +89,8 @@ public class PBRAtlasTexture extends AutoClosableAbstractTexture {
 			}
 		}
 
-		if (ActiniumConfig.enablePBRDebug) {
+		PBRDebug.atlasUploaded(this, atlasWidth, atlasHeight, mipLevel, sprites.size(), animatedSprites.size());
+		if (ActiniumRuntimeOptions.pbrDebugEnabled()) {
 			TextureExporter.exportTextures("pbr_debug/atlas", id.getNamespace() + "_" + id.getPath().replaceAll("/", "_"), glId, mipLevel, atlasWidth, atlasHeight);
 		}
 	}
@@ -109,11 +111,10 @@ public class PBRAtlasTexture extends AutoClosableAbstractTexture {
     }
 
     protected void uploadSprite(TextureAtlasSprite sprite) {
-
-		if (sprite.animationMetadata.getFrameCount() > 1) {
-			final AnimationMetadataSection metadata = sprite.animationMetadata;
+		final AnimationMetadataSection metadata = sprite.animationMetadata;
+		if (metadata != null && metadata.getFrameCount() > 0) {
 			final int frameCount = sprite.getFrameCount();
-			for (int frame = sprite.frameCounter; frame >= 0; frame--) {
+			for (int frame = Math.min(sprite.frameCounter, metadata.getFrameCount() - 1); frame >= 0; frame--) {
 				final int frameIndex = metadata.getFrameIndex(frame);
 				if (frameIndex >= 0 && frameIndex < frameCount) {
                     TextureUtil.uploadTextureMipmap(sprite.getFrameTextureData(frameIndex), sprite.getIconWidth(), sprite.getIconHeight(), sprite.getOriginX(), sprite.getOriginY(), false, false);
@@ -124,7 +125,16 @@ public class PBRAtlasTexture extends AutoClosableAbstractTexture {
 		TextureUtil.uploadTextureMipmap(sprite.getFrameTextureData(0), sprite.getIconWidth(), sprite.getIconHeight(), sprite.getOriginX(), sprite.getOriginY(), false, false);
 	}
 
+	private static boolean isAnimated(TextureAtlasSprite sprite) {
+		final AnimationMetadataSection metadata = sprite.animationMetadata;
+		return metadata != null && metadata.getFrameCount() > 1;
+	}
+
 	public void cycleAnimationFrames() {
+		if (animatedSprites.isEmpty()) {
+			return;
+		}
+
 		bind();
 		for (TextureAtlasSprite sprite : animatedSprites) {
             sprite.updateAnimation();
@@ -140,9 +150,19 @@ public class PBRAtlasTexture extends AutoClosableAbstractTexture {
 		final PBRAtlasHolder pbrHolder = ((TextureAtlasExtension) texMap).getPBRHolder();
 		if (pbrHolder != null) {
             switch (type) {
-                case NORMAL -> pbrHolder.setNormalAtlas(null);
-                case SPECULAR -> pbrHolder.setSpecularAtlas(null);
+                case NORMAL -> {
+                    if (pbrHolder.getNormalAtlas() == this) {
+                        pbrHolder.setNormalAtlas(null);
+                    }
+                }
+                case SPECULAR -> {
+                    if (pbrHolder.getSpecularAtlas() == this) {
+                        pbrHolder.setSpecularAtlas(null);
+                    }
+                }
             }
 		}
+		clear();
+		PBRDebug.atlasClosed(this);
 	}
 }

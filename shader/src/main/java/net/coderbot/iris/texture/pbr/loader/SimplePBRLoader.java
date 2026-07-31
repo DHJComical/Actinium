@@ -1,5 +1,6 @@
 package net.coderbot.iris.texture.pbr.loader;
 
+import com.dhj.actinium.debug.PBRDebug;
 import net.coderbot.iris.texture.pbr.PBRType;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.SimpleTexture;
@@ -32,7 +33,9 @@ public class SimplePBRLoader implements PBRTextureLoader<SimpleTexture> {
 		SimpleTexture pbrTexture = new SimpleTexture(pbrImageLocation);
 		try {
 			pbrTexture.loadTexture(resourceManager);
+			PBRDebug.textureLoaded(pbrType, pbrImageLocation);
 		} catch (IOException e) {
+			PBRDebug.spriteMissing(pbrType, pbrImageLocation, e);
 			return null;
 		}
 

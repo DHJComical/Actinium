@@ -29,6 +29,8 @@ import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import net.coderbot.iris.pipeline.ShadowRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
+import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 
 import java.util.*;
 
@@ -84,7 +86,16 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         if (this.portalCamera) {
             return Objects.requireNonNull(this.portalMatrices, "Portal matrices must be captured before terrain rendering");
         }
-        return new ChunkRenderMatrices(RenderingState.INSTANCE.getProjectionMatrix(), RenderingState.INSTANCE.getModelViewMatrix());
+
+        Matrix4fc modelView = RenderingState.INSTANCE.getModelViewMatrix();
+        Entity view = Minecraft.getMinecraft().getRenderViewEntity();
+        if (view != null) {
+            // Vanilla's model-view is anchored at the player's feet while chunk vertices use that same origin.
+            // Restore the eye-height offset so terrain coordinates match the shader gbufferModelView uniform.
+            modelView = new Matrix4f(modelView).translate(0f, view.getEyeHeight(), 0f);
+        }
+
+        return new ChunkRenderMatrices(RenderingState.INSTANCE.getProjectionMatrix(), modelView);
     }
 
     @Override
@@ -145,6 +156,11 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         if (this.renderSectionManager.isInShadowPass() && ShaderProviderHolder.isActive()) {
             this.renderSectionManager.finishAllGraphUpdates();
             collectTileEntitiesForShadow();
+            RenderDebugHooksHolder.logShadowTerrainLayer(
+                "culling",
+                "fogOcclusion=false,occlusionCulling=false",
+                this.renderSectionManager.getVisibleChunkCount()
+            );
         }
     }
 

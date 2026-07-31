@@ -467,6 +467,14 @@ public class ActiniumGameOptionPages {
                         .setBinding((opts, value) -> opts.debug.enableActiniumGlDebug = value, opts -> opts.debug.enableActiniumGlDebug)
                         .build())
                 .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_PBR_DEBUG.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.pbr_debug.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.pbr_debug.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.HIGH)
+                        .setBinding((opts, value) -> opts.debug.enablePbrDebug = value, opts -> opts.debug.enablePbrDebug)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
                         .setId(StandardOptions.Option.ACTINIUM_CLOUD_CONTROL_DEBUG.cast())
                         .setName(TextComponent.translatable("sodium.options.actinium.cloud_control_debug.name"))
                         .setTooltip(TextComponent.translatable("sodium.options.actinium.cloud_control_debug.tooltip"))
@@ -555,5 +563,4 @@ public class ActiniumGameOptionPages {
         return sodiumOpts;
     }
 }
-
 

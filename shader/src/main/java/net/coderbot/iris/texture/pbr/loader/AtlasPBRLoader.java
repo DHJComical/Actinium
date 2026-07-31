@@ -1,10 +1,9 @@
 package net.coderbot.iris.texture.pbr.loader;
 
-import com.google.common.collect.Lists;
 import com.gtnewhorizons.angelica.compat.mojang.NativeImage;
 import com.gtnewhorizons.angelica.glsm.texture.TextureInfo;
 import com.gtnewhorizons.angelica.glsm.texture.TextureInfoCache;
-import com.gtnewhorizons.angelica.mixins.interfaces.ISpriteExt;
+import com.dhj.actinium.debug.PBRDebug;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.texture.format.TextureFormat;
 import net.coderbot.iris.texture.format.TextureFormatLoader;
@@ -20,6 +19,7 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.client.resources.IResource;
 import net.minecraft.client.resources.IResourceManager;
+import net.minecraft.client.resources.data.AnimationFrame;
 import net.minecraft.client.resources.data.AnimationMetadataSection;
 import net.minecraft.util.ResourceLocation;
 import org.apache.commons.lang3.tuple.Pair;
@@ -27,7 +27,10 @@ import org.apache.commons.lang3.tuple.Pair;
 import javax.annotation.Nullable;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
     public static final ChannelMipmapGenerator LINEAR_MIPMAP_GENERATOR = new ChannelMipmapGenerator(
@@ -37,7 +40,6 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
         LinearBlendFunction.INSTANCE
     );
 
-    @SuppressWarnings("unchecked")
     @Override
     public void load(TextureMap texMap, IResourceManager resourceManager, PBRTextureConsumer pbrTextureConsumer) {
         final TextureInfo textureInfo = TextureInfoCache.INSTANCE.getInfo(texMap.getGlTextureId());
@@ -47,7 +49,7 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
 
         PBRAtlasTexture normalAtlas = null;
         PBRAtlasTexture specularAtlas = null;
-        for (TextureAtlasSprite sprite : (Collection<TextureAtlasSprite>) texMap.mapUploadedSprites.values()) {
+        for (TextureAtlasSprite sprite : texMap.mapUploadedSprites.values()) {
             if (!(sprite.getIconName().equals("missingno"))) {
                 TextureAtlasSprite normalSprite = createPBRSprite(sprite, resourceManager, texMap, atlasWidth, atlasHeight, mipLevel, PBRType.NORMAL);
                 TextureAtlasSprite specularSprite = createPBRSprite(sprite, resourceManager, texMap, atlasWidth, atlasHeight, mipLevel, PBRType.SPECULAR);
@@ -105,9 +107,6 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
             if (animationMetadata == null) {
                 final IResource resourceOriginal = resourceManager.getResource(imageLocation);
                 animationMetadata = (AnimationMetadataSection) resourceOriginal.getMetadata("animation");
-                if (animationMetadata == null) {
-                    animationMetadata = new AnimationMetadataSection(Lists.newArrayList(), -1, -1, -1, false);
-                }
             }
 
             final Pair<Integer, Integer> frameSize = this.getFrameSize(nativeImage.getWidth(), nativeImage.getHeight(), animationMetadata);
@@ -138,17 +137,12 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
                 frameWidth = targetFrameWidth;
                 frameHeight = targetFrameHeight;
 
-                if (!animationMetadata.equals(new AnimationMetadataSection(Lists.newArrayList(), -1, -1, -1, false))) {
-                    final int internalFrameWidth = animationMetadata.getFrameWidth();
-                    final int internalFrameHeight = animationMetadata.getFrameHeight();
-                    if (internalFrameWidth != -1 || internalFrameHeight != -1) {
-                        animationMetadata = new AnimationMetadataSection(
-                            Lists.newArrayList(),
-                            internalFrameWidth != -1 ? frameWidth : -1,
-                            internalFrameHeight != -1 ? frameHeight : -1,
-                            animationMetadata.getFrameTime(),
-                            animationMetadata.isInterpolate()
-                        );
+                if (animationMetadata != null) {
+                    if (animationMetadata.getFrameWidth() != -1) {
+                        animationMetadata.frameWidth = frameWidth;
+                    }
+                    if (animationMetadata.getFrameHeight() != -1) {
+                        animationMetadata.frameHeight = frameHeight;
                     }
                 }
             }
@@ -156,15 +150,21 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
             final ResourceLocation pbrSpriteName = new ResourceLocation(spriteName.getNamespace(), spriteName.getPath() + pbrType.getSuffix());
             final TextureAtlasSpriteInfo pbrSpriteInfo = new PBRTextureAtlasSpriteInfo(pbrSpriteName, frameWidth, frameHeight, pbrType);
 
+            animationMetadata = normalizeAnimationMetadata(animationMetadata, nativeImage.getHeight(), frameWidth, frameHeight);
+
             final int x = sprite.getOriginX();
             final int y = sprite.getOriginY();
-            pbrSprite = new PBRTextureAtlasSprite(pbrSpriteInfo, animationMetadata, atlasWidth, atlasHeight, x, y, nativeImage, texMap, mipLevel);
+            pbrSprite = new PBRTextureAtlasSprite(pbrSpriteInfo, animationMetadata, atlasWidth, atlasHeight, x, y, nativeImage, mipLevel);
             syncAnimation(sprite, pbrSprite);
+            PBRDebug.spriteLoaded(pbrType, pbrImageLocation, pbrSprite);
         } catch (FileNotFoundException e) {
-            //
+            PBRDebug.spriteMissing(pbrType, pbrImageLocation, e);
+            return null;
         } catch (RuntimeException e) {
+            PBRDebug.spriteFailed(pbrType, pbrImageLocation, e);
             Iris.logger.error("Unable to parse metadata from {} : {}", pbrImageLocation, e);
         } catch (IOException e) {
+            PBRDebug.spriteFailed(pbrType, pbrImageLocation, e);
             Iris.logger.error("Unable to load {} : {}", pbrImageLocation, e);
         }
 
@@ -173,7 +173,7 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
 
 
 	protected void syncAnimation(TextureAtlasSprite source, TextureAtlasSprite target) {
-        if (!((ISpriteExt)source).isAnimation() || !((ISpriteExt)target).isAnimation()) {
+        if (!isAnimated(source) || !isAnimated(target)) {
 			return;
 		}
 
@@ -190,6 +190,9 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
         final int frameCount = targetMetadata.getFrameCount();
 		for (int f = 0; f < frameCount; f++) {
 			cycleTime += targetMetadata.getFrameTimeSingle(f);
+		}
+		if (cycleTime <= 0) {
+			return;
 		}
 		ticks %= cycleTime;
 
@@ -208,6 +211,30 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
 		target.tickCounter = ticks + source.tickCounter;
 	}
 
+    private static boolean isAnimated(TextureAtlasSprite sprite) {
+        final AnimationMetadataSection metadata = sprite.animationMetadata;
+        return metadata != null && metadata.getFrameCount() > 1;
+    }
+
+    private static AnimationMetadataSection normalizeAnimationMetadata(@Nullable AnimationMetadataSection metadata,
+                                                                       int imageHeight, int frameWidth, int frameHeight) {
+        if (metadata == null || metadata.getFrameCount() > 0) {
+            return metadata;
+        }
+
+        int frameCount = imageHeight / frameHeight;
+        if (frameCount <= 1) {
+            return null;
+        }
+
+        List<AnimationFrame> frames = new ArrayList<>(frameCount);
+        for (int frame = 0; frame < frameCount; frame++) {
+            frames.add(new AnimationFrame(frame, -1));
+        }
+        return new AnimationMetadataSection(frames, frameWidth, frameHeight,
+            metadata.getFrameTime(), metadata.isInterpolate());
+    }
+
 	protected static class PBRTextureAtlasSpriteInfo extends TextureAtlasSpriteInfo {
 		protected final PBRType pbrType;
 
@@ -219,13 +246,36 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
 
     public static class PBRTextureAtlasSprite extends TextureAtlasSprite implements CustomMipmapGenerator.Provider {
         // This feels super janky
-        protected PBRTextureAtlasSprite(TextureAtlasSpriteInfo info, AnimationMetadataSection animationMetaDataSection, int atlasWidth, int atlasHeight, int x, int y, NativeImage nativeImage, TextureMap texMap, int miplevel) {
+        protected PBRTextureAtlasSprite(TextureAtlasSpriteInfo info, AnimationMetadataSection animationMetaDataSection, int atlasWidth, int atlasHeight, int x, int y, NativeImage nativeImage, int miplevel) {
             super(info.name().toString());
             super.setIconWidth(info.width());
             super.setIconHeight(info.height());
             super.initSprite(atlasWidth, atlasHeight, x, y, false);
-            this.framesTextureData.add(toMipmapData(getMipmapGenerator(info, atlasWidth, atlasHeight).generateMipLevels(nativeImage, miplevel)));
             this.animationMetadata = animationMetaDataSection;
+
+            final CustomMipmapGenerator mipmapGenerator = getMipmapGenerator(info, atlasWidth, atlasHeight);
+            final Set<Integer> frameIndices = new HashSet<>();
+            if (animationMetaDataSection == null) {
+                frameIndices.add(0);
+            } else {
+                for (int frame = 0; frame < animationMetaDataSection.getFrameCount(); frame++) {
+                    frameIndices.add(animationMetaDataSection.getFrameIndex(frame));
+                }
+            }
+
+            int maxFrameIndex = frameIndices.stream().mapToInt(Integer::intValue).max().orElse(0);
+            for (int frame = 0; frame <= maxFrameIndex; frame++) {
+                this.framesTextureData.add(null);
+            }
+
+            for (int frameIndex : frameIndices) {
+                int frameY = frameIndex * info.height();
+                if (frameIndex < 0 || frameY + info.height() > nativeImage.getHeight()) {
+                    throw new IllegalArgumentException("PBR animation frame " + frameIndex + " is outside image bounds");
+                }
+                NativeImage frameImage = copyFrame(nativeImage, frameY, info.width(), info.height());
+                this.framesTextureData.set(frameIndex, toMipmapData(mipmapGenerator.generateMipLevels(frameImage, miplevel)));
+            }
         }
 
         @Override
@@ -258,7 +308,17 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
         return data;
     }
 
-    private Pair<Integer, Integer> getFrameSize(int i, int j, AnimationMetadataSection animationMetadataSection) {
+    private static NativeImage copyFrame(NativeImage source, int sourceY, int width, int height) {
+        NativeImage frame = new NativeImage(source.getFormat(), width, height, false);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                frame.setPixelRGBA(x, y, source.getPixelRGBA(x, sourceY + y));
+            }
+        }
+        return frame;
+    }
+
+    private Pair<Integer, Integer> getFrameSize(int i, int j, @Nullable AnimationMetadataSection animationMetadataSection) {
         final Pair<Integer, Integer> pair = this.calculateFrameSize(i, j, animationMetadataSection);
         final int k = pair.getLeft();
         final int l = pair.getRight();
@@ -269,7 +329,10 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
         }
     }
 
-    private Pair<Integer, Integer> calculateFrameSize(int i, int j, AnimationMetadataSection animationMetadataSection) {
+    private Pair<Integer, Integer> calculateFrameSize(int i, int j, @Nullable AnimationMetadataSection animationMetadataSection) {
+        if (animationMetadataSection == null) {
+            return Pair.of(i, j);
+        }
         if (animationMetadataSection.getFrameWidth() != -1) {
             return animationMetadataSection.getFrameHeight() != -1 ? Pair.of(animationMetadataSection.getFrameWidth(), animationMetadataSection.getFrameHeight()) : Pair.of(animationMetadataSection.getFrameWidth(), j);
         } else if (animationMetadataSection.getFrameHeight() != -1) {
@@ -281,7 +344,7 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
     }
 
     private static boolean isDivisionInteger(int i, int j) {
-        return i / j * j == i;
+        return j > 0 && i % j == 0;
     }
 
 }

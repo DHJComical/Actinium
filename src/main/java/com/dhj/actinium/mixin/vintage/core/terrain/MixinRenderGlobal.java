@@ -164,7 +164,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         this.mc.entityRenderer.enableLightmap();
 
         double d3 = entityIn.lastTickPosX + (entityIn.posX - entityIn.lastTickPosX) * partialTicks;
-        double d4 = entityIn.lastTickPosY + (entityIn.posY - entityIn.lastTickPosY) * partialTicks;
+        double d4 = entityIn.lastTickPosY + (entityIn.posY - entityIn.lastTickPosY) * partialTicks + entityIn.getEyeHeight();
         double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
         long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
@@ -435,5 +435,4 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         return renderPlayer || !playerEntity;
     }
 }
-
 

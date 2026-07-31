@@ -3,6 +3,7 @@ package net.coderbot.iris.celeritas;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.debug.IrisGlDebug;
+import net.coderbot.iris.gl.blending.AlphaTestOverride;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.blending.BufferBlendOverride;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
@@ -58,16 +59,20 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
     private final CustomUniforms customUniforms;
 
     // Rendering state
+    @Nullable
+    private final AlphaTestOverride alphaTestOverride;
+    private final float alphaReference;
     private final BlendModeOverride blendModeOverride;
     private final List<BufferBlendOverride> bufferBlendOverrides;
     private final boolean hasOverrides;
+    private boolean alphaTestOverrideApplied;
 
     // Stored matrices for inverse and normal matrix computation
     private final Matrix4f projectionMatrixInverse = new Matrix4f();
     private final Matrix4f modelViewMatrixInverse = new Matrix4f();
     private final Matrix3f normalMatrix = new Matrix3f();
 
-    public IrisCeleritasChunkShaderInterface(int handle, ShaderBindingContext context, CeleritasTerrainPipeline pipeline, boolean isShadowPass, BlendModeOverride blendModeOverride, List<BufferBlendOverride> bufferBlendOverrides, CustomUniforms customUniforms) {
+    public IrisCeleritasChunkShaderInterface(int handle, ShaderBindingContext context, CeleritasTerrainPipeline pipeline, boolean isShadowPass, @Nullable AlphaTestOverride alphaTestOverride, float alphaReference, BlendModeOverride blendModeOverride, List<BufferBlendOverride> bufferBlendOverrides, CustomUniforms customUniforms) {
         this.handle = handle;
         this.shadowPass = isShadowPass;
         this.uniformModelViewMatrix = context.bindUniformIfPresent("iris_ModelViewMatrix", GlUniformMatrix4f::new);
@@ -77,6 +82,8 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         this.uniformNormalMatrix = context.bindUniformIfPresent("iris_NormalMatrix", GlUniformMatrix3f::new);
         this.uniformRegionOffset = context.bindUniformIfPresent("u_RegionOffset", GlUniformFloat3v::new);
 
+        this.alphaTestOverride = alphaTestOverride;
+        this.alphaReference = alphaReference;
         this.blendModeOverride = blendModeOverride;
         this.bufferBlendOverrides = bufferBlendOverrides;
         this.hasOverrides = bufferBlendOverrides != null && !bufferBlendOverrides.isEmpty();
@@ -112,6 +119,15 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
             bufferBlendOverrides.forEach(BufferBlendOverride::apply);
         }
 
+        // Upload the alpha-test state before uniforms read iris_currentAlphaTest.
+        if (alphaTestOverride != null) {
+            alphaTestOverride.apply();
+            alphaTestOverrideApplied = true;
+        } else {
+            AlphaTestOverride.restore();
+            alphaTestOverrideApplied = false;
+        }
+
         if (irisProgramUniforms != null) {
             irisProgramUniforms.update();
         }
@@ -123,11 +139,16 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         }
 
         customUniforms.push(this);
-        IrisGlDebug.logCeleritasTerrainState(pass.name(), this.handle);
+        IrisGlDebug.logCeleritasTerrainState(pass.name(), this.handle, alphaTestOverride != null, alphaReference);
     }
 
     @Override
     public void restoreState() {
+        if (alphaTestOverrideApplied) {
+            AlphaTestOverride.restore();
+            alphaTestOverrideApplied = false;
+        }
+
         if (blendModeOverride != null || hasOverrides) {
             BlendModeOverride.restore();
         }

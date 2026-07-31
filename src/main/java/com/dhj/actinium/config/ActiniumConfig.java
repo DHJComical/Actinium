@@ -10,7 +10,6 @@ public final class ActiniumConfig {
     public static boolean speedupAnimations = false;
     public static boolean useTotalWorldTime = false;
     public static boolean enableHardcodedCustomUniforms = false;
-    public static boolean enablePBRDebug = false;
     public static boolean defineIsIris = true;
     public static int itemRendererCacheSize = 512;
 

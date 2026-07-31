@@ -91,7 +91,7 @@ public class IrisCeleritasChunkProgramOverrides {
 
             return builder.link(context -> {
                 IrisGlDebug.logCeleritasProgram(pass.getName(), ((GlObject) context).handle(), vertexType.getVertexFormat().getAttributes());
-                return new IrisCeleritasChunkShaderInterface(((GlObject) context).handle(), context, pipeline, pass.isShadow(), blendOverride, bufferOverrides, pipeline.getCustomUniforms());
+                return new IrisCeleritasChunkShaderInterface(((GlObject) context).handle(), context, pipeline, pass.isShadow(), passInfo.alphaTestOverride(), passInfo.alphaReference(), blendOverride, bufferOverrides, pipeline.getCustomUniforms());
             });
         } finally {
             vertShader.delete();

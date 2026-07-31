@@ -210,16 +210,7 @@ public class ShadowRenderer {
 	}
 
 	private static Vector3d getShadowCameraAnchor(float tickDelta) {
-		Entity renderViewEntity = Minecraft.getMinecraft().getRenderViewEntity();
-		if (renderViewEntity == null) {
-			return Camera.INSTANCE.getEntityPos();
-		}
-
-		return new Vector3d(
-			renderViewEntity.lastTickPosX + (renderViewEntity.posX - renderViewEntity.lastTickPosX) * tickDelta,
-			renderViewEntity.lastTickPosY + (renderViewEntity.posY - renderViewEntity.lastTickPosY) * tickDelta,
-			renderViewEntity.lastTickPosZ + (renderViewEntity.posZ - renderViewEntity.lastTickPosZ) * tickDelta
-		);
+		return Camera.INSTANCE.getEntityPos();
 	}
 
 	private static WorldClient getLevel() {
@@ -803,13 +794,12 @@ public class ShadowRenderer {
 		final double entityX = entityPos.x;
 		final double entityY = entityPos.y;
 		final double entityZ = entityPos.z;
-		final Entity renderViewEntity = mc.getRenderViewEntity();
-		final double terrainX = renderViewEntity != null ? renderViewEntity.lastTickPosX + (renderViewEntity.posX - renderViewEntity.lastTickPosX) * tickDelta : entityX;
-		final double terrainY = renderViewEntity != null ? renderViewEntity.lastTickPosY + (renderViewEntity.posY - renderViewEntity.lastTickPosY) * tickDelta : entityY;
-		final double terrainZ = renderViewEntity != null ? renderViewEntity.lastTickPosZ + (renderViewEntity.posZ - renderViewEntity.lastTickPosZ) * tickDelta : entityZ;
-		final double renderOriginX = terrainX;
-		final double renderOriginY = terrainY;
-		final double renderOriginZ = terrainZ;
+		final double terrainX = entityX;
+		final double terrainY = entityY;
+		final double terrainZ = entityZ;
+		final double renderOriginX = entityX;
+		final double renderOriginY = entityY;
+		final double renderOriginZ = entityZ;
 
 		// Center the frustum on the player position
 		terrainFrustumHolder.getFrustum().setPosition(entityX, entityY, entityZ);
@@ -1044,4 +1034,3 @@ public class ShadowRenderer {
 		}
 	}
 }
-

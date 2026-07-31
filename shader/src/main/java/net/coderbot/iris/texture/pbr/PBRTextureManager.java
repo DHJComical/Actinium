@@ -126,6 +126,13 @@ public class PBRTextureManager {
 	}
 
 	private static void closeTexture(AbstractTexture texture) {
+		if (texture instanceof PBRAtlasTexture atlasTexture) {
+			try {
+				atlasTexture.close();
+			} catch (RuntimeException e) {
+				Iris.logger.error("Failed to close PBR atlas {}", atlasTexture.getAtlasId(), e);
+			}
+		}
 		texture.deleteGlTexture();
 	}
 

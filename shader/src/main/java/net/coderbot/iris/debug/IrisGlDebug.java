@@ -1085,7 +1085,7 @@ public final class IrisGlDebug {
         );
     }
 
-    public static void logCeleritasTerrainState(String passName, int program) {
+    public static void logCeleritasTerrainState(String passName, int program, boolean hasAlphaTestOverride, float expectedAlphaReference) {
         if (!shouldCaptureGlState()) {
             return;
         }
@@ -1113,12 +1113,12 @@ public final class IrisGlDebug {
         float viewHeight = getFloatUniform(program, "viewHeight");
         float pixelSizeX = getFloatUniform(program, "pixelSizeX");
         float pixelSizeY = getFloatUniform(program, "pixelSizeY");
-        float alphaTest = getFloatUniform(program, "iris_currentAlphaTest");
+        float actualAlphaTestReference = getFloatUniform(program, "iris_currentAlphaTest");
         String textureMatrix = getMatrixUniform(program, "iris_TextureMatrix");
         String lightmapTextureMatrix = getMatrixUniform(program, "iris_LightmapTextureMatrix");
 
         logDebugInfo(
-            "celeritas-state pass={} program={} currentProgram={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} viewport=[{},{},{},{}] activeTex={} samplers[tex={}, lightmap={}, shadow0={}, shadow1={}, shadowColor0={}] textures[0={}, 1={}, 2={}, 3={}] values[frameMod={}, frameCounter={}, viewWidth={}, viewHeight={}, pixelSizeX={}, pixelSizeY={}, alphaTest={}] matrices[tex={}, lightmap={}]",
+            "celeritas-state pass={} program={} currentProgram={} fb={} readFb={} drawFb={} drawBuffer={} readBuffer={} viewport=[{},{},{},{}] activeTex={} samplers[tex={}, lightmap={}, shadow0={}, shadow1={}, shadowColor0={}] textures[0={}, 1={}, 2={}, 3={}] values[frameMod={}, frameCounter={}, viewWidth={}, viewHeight={}, pixelSizeX={}, pixelSizeY={}, hasAlphaTestOverride={}, expectedAlphaReference={}, actualAlphaTestReference={}] matrices[tex={}, lightmap={}]",
             passName,
             program,
             GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM),
@@ -1147,7 +1147,9 @@ public final class IrisGlDebug {
             viewHeight,
             pixelSizeX,
             pixelSizeY,
-            alphaTest,
+            hasAlphaTestOverride,
+            expectedAlphaReference,
+            actualAlphaTestReference,
             textureMatrix,
             lightmapTextureMatrix
         );

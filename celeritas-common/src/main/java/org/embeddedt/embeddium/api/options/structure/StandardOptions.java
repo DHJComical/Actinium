@@ -81,6 +81,7 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> ACTINIUM_PRODUCTION_DIAGNOSTICS = OptionIdentifier.create(ACTINIUM_MOD_NAME, "production_diagnostics");
         public static final OptionIdentifier<Void> ACTINIUM_IGNORE_FRAMEBUFFER_ERRORS = OptionIdentifier.create(ACTINIUM_MOD_NAME, "ignore_framebuffer_errors");
         public static final OptionIdentifier<Void> ACTINIUM_GL_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "gl_debug");
+        public static final OptionIdentifier<Void> ACTINIUM_PBR_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "pbr_debug");
         public static final OptionIdentifier<Void> ACTINIUM_CLOUD_CONTROL_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "cloud_control_debug");
         public static final OptionIdentifier<Void> ACTINIUM_PERF_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "perf_debug");
         public static final OptionIdentifier<Void> ACTINIUM_GPU_PERF_DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "gpu_perf_debug");

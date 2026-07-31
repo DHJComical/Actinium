@@ -107,8 +107,9 @@ public final class ActiniumDiagnostics {
                 + ",fastLitItemDisplayLists=" + ActiniumRuntimeOptions.useFastLitItemDisplayLists()
                 + "} debug{gl=" + options.debug.enableActiniumGlDebug
                 + ",perf=" + options.debug.enableActiniumPerfDebug
-                + ",gpuPerf=" + options.debug.enableActiniumGpuPerfDebug
-                + ",preGlError=" + options.debug.enableFrameGlErrorCheck
+                 + ",gpuPerf=" + options.debug.enableActiniumGpuPerfDebug
+                 + ",pbr=" + ActiniumRuntimeOptions.pbrDebugEnabled()
+                 + ",preGlError=" + options.debug.enableFrameGlErrorCheck
                 + ",postGlError=" + options.debug.enablePostRenderGlErrorCheck
                 + ",diagnostics=" + options.debug.enableProductionDiagnostics
                 + ",redirectorDebug=" + options.debug.enableRedirectorDebug
