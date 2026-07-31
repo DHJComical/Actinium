@@ -1,6 +1,6 @@
 # 光影路径性能优化分析
 
-最后更新：2026-07-29。
+最后更新：2026-07-31。
 
 ## 目的与范围
 
@@ -226,9 +226,9 @@ terrain vertex 数据；本轮只确认兼容性与 layout 命中，尚未用同
 
 ---
 
-### 2.3 TransformPatcher 两阶段解析缓存
+### 2.3 TransformPatcher 统一变换缓存
 
-**优先级：P2**
+**优先级：已接入，待实机量化**
 
 **Iris 实现：** `D:\Code\Iris\common\src\main\java\net\irisshaders\iris\pipeline\transform\TransformPatcher.java`
 
@@ -237,9 +237,14 @@ private static final ParsingCacheStrategy PARSING_CACHE_STRATEGY = ParsingCacheS
 private static final int PARSING_CACHE_MAX_ENTRIES = 400; // LRU cache
 ```
 
-两阶段缓存：先检查源码字符串是否变化，再检查变换参数是否变化。400 条目的 LRU 缓存避免重复解析未修改的 shader。
+Actinium 现在以单个 400 条目的 access-order LRU 缓存 graphics 与 compute 变换结果。缓存键覆盖 graphics
+的 vertex/geometry/tessControl/tessEval/fragment source，或 compute source，以及完整的变换参数；结果 map
+在发布前冻结，避免调用方修改污染后续命中。`ShaderTransformer` 不再持有重复的 100 条目结果缓存。
 
-**可迁移性：** 高。Actinium 的 `shader/` 模块已包含相同的 `TransformPatcher`，只需对齐缓存参数。
+在 GUI 的“渲染计时 DEBUG”中开启 Actinium 性能调试，或以 `-Dactinium.glsmPerfDebug=true` 强制开启后，
+可在游戏日志中观察 `[ShaderTransformCache]`：每次
+`graphics` / `compute` 的 `hit`、`miss`、`raceReuse` 和 `cleared` 都会记录 cache size，实际变换还会记录
+`transformMs`。同一 shader pack 连续 reload 时，命中数上升且 miss 的总变换时间下降即为该优化生效的直接证据。
 
 ---
 
@@ -373,21 +378,33 @@ if (variantChanged) {
 
 ---
 
-### 4.4 CompatUniformManager — 分类脏追踪
+### 4.4 CompatUniformManager — 按 program 分类脏追踪
 
-**优先级：** 中
+**优先级：** 已接入，已完成兼容性验证
 
-Angelica 的 `CompatUniformManager` 管理 `angelica_*` 和 `iris_*` uniform。按类别（mv/proj/texMat/lighting/fragment/color/clipPlane）存储最后上传的 generation counter，上传时逐类别比较，未变化则跳过整批上传：
+Angelica 的 `CompatUniformManager` 管理 `angelica_*` 和 `iris_*` uniform。当前实现按 linked program
+分别保存类别（mv/proj/texMat/lighting/fragment/color/clipPlane）的最后上传 generation counter；程序切换回来时，
+generation 未变化的类别会跳过整批上传：
 
 ```java
-final boolean mvChanged = mvGen != st.mvGen;
+final boolean mvChanged = state.needsModelViewUpload(mvGen);
 if (mvChanged || projChanged || texMatChanged) {
     uploadMatrices(...);
-    st.mvGen = mvGen; st.projGen = projGen; ...
+    if (mvChanged) state.markModelViewUploaded(mvGen);
+    if (projChanged) state.markProjectionUploaded(projGen);
+    ...
 }
 ```
 
-Actinium 的 Iris 集成已有类似机制（`CommonUniforms`），但 GLSM FFP 路径的 uniform 上传可以借鉴此 pattern。
+重链时会先清理该 program 的旧 state，避免新的链接结果不再包含 compat uniform 时复用失效 location。
+
+2026-07-30 已在实机 compat 日志中确认：切回已上传过的 program 时，未变化类别会跳过上传，且没有出现画面或
+兼容性回归。本轮只验证功能正确性，未采集 A/B 性能数据。为完成这次验证临时加入的 `compat.uniforms` 专项计数
+已经移除，避免长期在 `onUseProgram()` 热路径保留额外分支、计数和日志维护成本。
+
+SharedDrawable 不拥有 `GLStateManager` 的缓存状态。本轮不会在该 context 上传 compat uniform 或更新 program
+generation，避免以主 context 可能已过期的缓存状态作为 uniform 数据源；位置缓存和上传 scratch buffer 分别受同步和
+线程局部存储保护。
 
 ---
 
@@ -399,8 +416,8 @@ Actinium 的 Iris 集成已有类似机制（`CommonUniforms`），但 GLSM FFP 
 
 通过 `-Dactinium.glsmPerfDebug=true` 启用。跟踪 20+ 个 stage（stream draw、FFP uniforms、buffer upload、fence 操作等），每秒自动报告。
 
-FFP variant、compat uniform 等专项统计只在验证具体假设时临时加入。完成一次实机验证后移除，避免
-长期增加热路径分支和日志维护成本；稳定保留的 stage 计时用于后续回归比较。
+FFP variant、compat uniform 等专项统计只在验证具体假设时临时加入。本轮 compat uniform 专项统计已在完成
+实机验证后移除；稳定保留的 stage 计时用于后续回归比较。
 
 ---
 
@@ -556,8 +573,8 @@ if (fo && lu == 0) {
 | **P2** | LPV shared memory compute | 间接光照质量 | `shadowcomp.csh` | 参考储备 |
 | **P2** | 体积云层级裁剪 | 云雾 pass GPU 时间 | `volumetricClouds.glsl` | 参考储备 |
 | **P2** | SSRT 手电筒阴影 | 手持光源真实遮挡 | `diffuse_lighting.glsl` | 参考储备 |
-| **P3** | TransformPatcher 缓存调参 | 减少 shader 重编译 | `TransformPatcher.java` | 需验证 |
-| **P3** | CompatUniformManager 分类脏追踪 | FFP 路径 uniform 上传优化 | Angelica CompatUniformManager | 可选 |
+| **P3** | TransformPatcher 缓存调参 | 减少 shader 重编译 | `TransformPatcher.java` | 已接入；用 GUI 性能调试或 `actinium.glsmPerfDebug` 量化 |
+| **P3** | CompatUniformManager 分类脏追踪 | FFP 路径 uniform 上传优化 | Angelica CompatUniformManager | 已接入，已完成兼容性验证 |
 
 ---
 

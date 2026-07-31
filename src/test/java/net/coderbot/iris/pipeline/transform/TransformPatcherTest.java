@@ -11,10 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TransformPatcherTest {
     @BeforeAll
-    static void provideHeadlessGlslCapability() throws ReflectiveOperationException {
-        var maxGlslVersion = RenderSystem.class.getDeclaredField("maxGlslVersion");
-        maxGlslVersion.setAccessible(true);
-        maxGlslVersion.setInt(null, 460);
+    static void provideHeadlessGlslCapability() {
+        RenderSystem.initializeGlslCapabilityForTesting(460);
     }
 
     @Test

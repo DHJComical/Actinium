@@ -6,11 +6,8 @@ import com.gtnewhorizons.angelica.glsm.states.ClipPlaneState;
 import com.gtnewhorizons.angelica.glsm.states.LightModelState;
 import com.gtnewhorizons.angelica.glsm.states.LightState;
 import com.gtnewhorizons.angelica.glsm.states.MaterialState;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACKEND;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.lwjgl.BufferUtils;
@@ -107,157 +104,158 @@ public class CompatUniformManager {
         }
     }
 
-    /** Per-program cached uniform locations. Maps program ID → int[LOC_COUNT]. */
-    private static final Int2ObjectOpenHashMap<int[]> programLocations = new Int2ObjectOpenHashMap<>();
+    /** Per-program compat uniform locations and upload generations. */
+    private static final CompatProgramUniformStates programStates = new CompatProgramUniformStates();
 
-    // Reusable NIO buffers for upload
-    private static final FloatBuffer mat4Buf = BufferUtils.createFloatBuffer(16);
-    private static final FloatBuffer mat3Buf = BufferUtils.createFloatBuffer(9);
-    private static final FloatBuffer vec4Buf = BufferUtils.createFloatBuffer(4);
-    private static final FloatBuffer clipPlaneBuf = BufferUtils.createFloatBuffer(32); // 8 planes * vec4
-    private static final Matrix3f normalMatrix = new Matrix3f();
-    private static final Matrix4f scratchMatrix = new Matrix4f();
+    /** Upload scratch state is thread-local because a shared drawable can be current on another thread. */
+    private static final ThreadLocal<UploadBuffers> UPLOAD_BUFFERS = ThreadLocal.withInitial(UploadBuffers::new);
 
     private static final float LIGHTMAP_SCALE = 1.0f / 256.0f;
-    private static final FloatBuffer lightmapMatrixBuf;
-
-    static {
-        lightmapMatrixBuf = BufferUtils.createFloatBuffer(16);
-        new Matrix4f().scale(LIGHTMAP_SCALE).translate(8.0f, 8.0f, 8.0f).get(lightmapMatrixBuf);
-    }
-
-    // Dirty tracking: skip uploads when state hasn't changed and program is the same
-    private static int lastProgram = -1;
-    private static int lastMvGen = -1;
-    private static int lastProjGen = -1;
-    private static int lastTexMatGen = -1;
-    private static int lastFragmentGen = -1;
-    private static int lastColorGen = -1;
-    private static int lastLightingGen = -1;
-    private static int lastClipPlaneGen = -1;
-
     private CompatUniformManager() {}
 
-    public static void onLinkProgram(int program) {
-        int[] locs = new int[LOC_COUNT];
-        boolean hasAny = false;
+    public static long beforeLinkProgram(int program) {
+        return programStates.invalidate(program);
+    }
 
-        for (int i = 0; i < LOC_COUNT; i++) {
-            locs[i] = RENDER_BACKEND.getUniformLocation(program, UNIFORM_NAMES[i]);
-            if (locs[i] != -1) hasAny = true;
+    public static void onLinkProgram(int program, long linkEpoch) {
+        if (RENDER_BACKEND.getProgrami(program, GL20.GL_LINK_STATUS) != GL11.GL_TRUE) {
+            GLStateManager.LOGGER.warn("CompatUniformManager: not caching uniforms for unsuccessfully linked program {}", program);
+            return;
         }
 
-        if (hasAny) {
-            programLocations.put(program, locs);
+        int[] locs = new int[LOC_COUNT];
+        for (int i = 0; i < LOC_COUNT; i++) {
+            locs[i] = RENDER_BACKEND.getUniformLocation(program, UNIFORM_NAMES[i]);
+        }
+
+        if (programStates.storeLinkedProgram(program, linkEpoch, locs)) {
             GLStateManager.LOGGER.debug("CompatUniformManager: program {} has compat uniforms", program);
         }
     }
 
     public static void onUseProgram(int program) {
         if (program == 0) return;
+        if (!GLStateManager.isCachingEnabled()) {
+            // SharedDrawable does not keep GLStateManager's source cache current.
+            return;
+        }
 
-        int[] locs = programLocations.get(program);
-        if (locs == null) return;
+        CompatProgramUniformState state = programStates.get(program);
+        if (state == null || !state.isValid()) return;
 
-        final boolean programChanged = program != lastProgram;
-        lastProgram = program;
-
-        // Matrix uniforms — skip if generation unchanged and same program
+        int[] locs = state.getLocations();
+        // Uniform values are program-local, so each category is tracked per linked program on the cache-owning context.
         final int mvGen = GLStateManager.mvGeneration;
         final int projGen = GLStateManager.projGeneration;
         final int texMatGen = GLStateManager.texMatrixGeneration;
-        final boolean mvChanged = programChanged || mvGen != lastMvGen;
-        final boolean projChanged = programChanged || projGen != lastProjGen;
-        final boolean texMatChanged = programChanged || texMatGen != lastTexMatGen;
+        final boolean mvChanged = state.needsModelViewUpload(mvGen);
+        final boolean projChanged = state.needsProjectionUpload(projGen);
+        final boolean texMatChanged = state.needsTextureMatrixUpload(texMatGen);
         if (mvChanged || projChanged || texMatChanged) {
+            if (!state.isValid()) return;
             uploadMatrices(locs, mvChanged, projChanged, texMatChanged);
-            lastMvGen = mvGen;
-            lastProjGen = projGen;
-            lastTexMatGen = texMatGen;
+            if (mvChanged) state.markModelViewUploaded(mvGen);
+            if (projChanged) state.markProjectionUploaded(projGen);
+            if (texMatChanged) state.markTextureMatrixUploaded(texMatGen);
         }
 
-        // Fragment-category uniforms (fog, alpha) — skip if generation unchanged
         final int fragGen = GLStateManager.fragmentGeneration;
-        if (programChanged || fragGen != lastFragmentGen) {
-            lastFragmentGen = fragGen;
+        final boolean fragmentChanged = state.needsFragmentUpload(fragGen);
+        if (fragmentChanged) {
+            if (!state.isValid()) return;
             uploadFragmentUniforms(locs);
+            state.markFragmentUploaded(fragGen);
         }
 
         final int colorGen = GLStateManager.colorGeneration;
-        if (programChanged || colorGen != lastColorGen) {
-            lastColorGen = colorGen;
+        final boolean colorChanged = state.needsColorUpload(colorGen);
+        if (colorChanged) {
+            if (!state.isValid()) return;
             uploadColorModulator(locs);
+            state.markColorUploaded(colorGen);
         }
 
-        // Lighting-derived uniforms (scene color, light sources, material)
         final int litGen = GLStateManager.lightingGeneration;
-        if (programChanged || litGen != lastLightingGen) {
-            lastLightingGen = litGen;
+        final boolean lightingChanged = state.needsLightingUpload(litGen);
+        if (lightingChanged) {
+            if (!state.isValid()) return;
             if (locs[LOC_SCENE_COLOR] != -1) uploadSceneColor(locs);
             uploadLightSources(locs);
             uploadMaterial(locs);
+            state.markLightingUploaded(litGen);
         }
 
-        // Clip plane equations + enabled bool — uploaded when enable state or equations change
-        if (locs[LOC_CLIP_PLANES] != -1 || locs[LOC_CLIP_PLANES_ENABLED] != -1) {
+        final boolean hasClipPlaneUniforms = locs[LOC_CLIP_PLANES] != -1 || locs[LOC_CLIP_PLANES_ENABLED] != -1;
+        if (hasClipPlaneUniforms) {
             final int cpGen = GLStateManager.clipPlaneGeneration;
-            if (programChanged || cpGen != lastClipPlaneGen) {
-                lastClipPlaneGen = cpGen;
+            final boolean clipPlaneChanged = state.needsClipPlaneUpload(cpGen);
+            if (clipPlaneChanged) {
+                if (!state.isValid()) return;
                 uploadClipPlanes(locs);
+                state.markClipPlaneUploaded(cpGen);
             }
         }
     }
 
     public static void refreshCurrentProgramMatrices() {
+        if (!GLStateManager.isCachingEnabled()) {
+            // Matrix state belongs to the cache-owning context during the splash screen.
+            return;
+        }
+
         final int program = GLStateManager.getActiveProgram();
         if (program == 0) {
             return;
         }
 
-        int[] locs = programLocations.get(program);
-        if (locs == null) {
+        CompatProgramUniformState state = programStates.get(program);
+        if (state == null || !state.isValid()) {
             return;
         }
 
+        int[] locs = state.getLocations();
+        if (!state.isValid()) {
+            return;
+        }
         uploadMatrices(locs, true, true, true);
-        lastProgram = program;
-        lastMvGen = GLStateManager.mvGeneration;
-        lastProjGen = GLStateManager.projGeneration;
-        lastTexMatGen = GLStateManager.texMatrixGeneration;
+        state.markModelViewUploaded(GLStateManager.mvGeneration);
+        state.markProjectionUploaded(GLStateManager.projGeneration);
+        state.markTextureMatrixUploaded(GLStateManager.texMatrixGeneration);
     }
 
     private static void uploadMatrices(int[] locs, boolean mvChanged, boolean projChanged, boolean texMatChanged) {
         final Matrix4f mv = GLStateManager.getModelViewMatrix();
         final Matrix4f proj = GLStateManager.getProjectionMatrix();
+        final UploadBuffers buffers = UPLOAD_BUFFERS.get();
 
         if (mvChanged) {
             // ModelView
             if (locs[LOC_MODELVIEW] != -1 || locs[LOC_IRIS_MODELVIEW] != -1) {
-                mv.get(mat4Buf);
+                mv.get(buffers.mat4Buf);
                 if (locs[LOC_MODELVIEW] != -1) {
-                    RENDER_BACKEND.uniformMatrix4(locs[LOC_MODELVIEW], false, mat4Buf);
+                    RENDER_BACKEND.uniformMatrix4(locs[LOC_MODELVIEW], false, buffers.mat4Buf);
                 }
                 if (locs[LOC_IRIS_MODELVIEW] != -1) {
-                    RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_MODELVIEW], false, mat4Buf);
+                    RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_MODELVIEW], false, buffers.mat4Buf);
                 }
             }
 
             // ModelView Inverse
             if (locs[LOC_MODELVIEW_INVERSE] != -1) {
-                mv.invert(scratchMatrix);
-                scratchMatrix.get(mat4Buf);
-                RENDER_BACKEND.uniformMatrix4(locs[LOC_MODELVIEW_INVERSE], false, mat4Buf);
+                mv.invert(buffers.scratchMatrix);
+                buffers.scratchMatrix.get(buffers.mat4Buf);
+                RENDER_BACKEND.uniformMatrix4(locs[LOC_MODELVIEW_INVERSE], false, buffers.mat4Buf);
             }
 
             // Normal Matrix (inverse-transpose of upper-left 3x3 of ModelView)
             if (locs[LOC_NORMAL] != -1 || locs[LOC_IRIS_NORMAL] != -1) {
-                mv.normal(normalMatrix);
-                normalMatrix.get(mat3Buf);
+                mv.normal(buffers.normalMatrix);
+                buffers.normalMatrix.get(buffers.mat3Buf);
                 if (locs[LOC_NORMAL] != -1) {
-                    RENDER_BACKEND.uniformMatrix3(locs[LOC_NORMAL], false, mat3Buf);
+                    RENDER_BACKEND.uniformMatrix3(locs[LOC_NORMAL], false, buffers.mat3Buf);
                 }
                 if (locs[LOC_IRIS_NORMAL] != -1) {
-                    RENDER_BACKEND.uniformMatrix3(locs[LOC_IRIS_NORMAL], false, mat3Buf);
+                    RENDER_BACKEND.uniformMatrix3(locs[LOC_IRIS_NORMAL], false, buffers.mat3Buf);
                 }
             }
         }
@@ -265,39 +263,39 @@ public class CompatUniformManager {
         if (projChanged) {
             // Projection
             if (locs[LOC_PROJECTION] != -1 || locs[LOC_IRIS_PROJECTION] != -1) {
-                proj.get(mat4Buf);
+                proj.get(buffers.mat4Buf);
                 if (locs[LOC_PROJECTION] != -1) {
-                    RENDER_BACKEND.uniformMatrix4(locs[LOC_PROJECTION], false, mat4Buf);
+                    RENDER_BACKEND.uniformMatrix4(locs[LOC_PROJECTION], false, buffers.mat4Buf);
                 }
                 if (locs[LOC_IRIS_PROJECTION] != -1) {
-                    RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_PROJECTION], false, mat4Buf);
+                    RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_PROJECTION], false, buffers.mat4Buf);
                 }
             }
 
             // Projection Inverse
             if (locs[LOC_PROJECTION_INVERSE] != -1) {
-                proj.invert(scratchMatrix);
-                scratchMatrix.get(mat4Buf);
-                RENDER_BACKEND.uniformMatrix4(locs[LOC_PROJECTION_INVERSE], false, mat4Buf);
+                proj.invert(buffers.scratchMatrix);
+                buffers.scratchMatrix.get(buffers.mat4Buf);
+                RENDER_BACKEND.uniformMatrix4(locs[LOC_PROJECTION_INVERSE], false, buffers.mat4Buf);
             }
         }
 
         if (texMatChanged) {
             // Iris lightmap texture matrix (constant)
             if (locs[LOC_IRIS_LIGHTMAP_TEXTURE_MATRIX] != -1) {
-                RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_LIGHTMAP_TEXTURE_MATRIX], false, lightmapMatrixBuf);
+                RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_LIGHTMAP_TEXTURE_MATRIX], false, buffers.lightmapMatrixBuf);
             }
 
             // angelica_LightmapTextureMatrix — actual GLSM texture unit 1 matrix (set by enableLightmap())
             if (locs[LOC_LIGHTMAP_TEXTURE_MATRIX] != -1) {
-                GLStateManager.getTextures().getTextureUnitMatrix(1).get(mat4Buf);
-                RENDER_BACKEND.uniformMatrix4(locs[LOC_LIGHTMAP_TEXTURE_MATRIX], false, mat4Buf);
+                GLStateManager.getTextures().getTextureUnitMatrix(1).get(buffers.mat4Buf);
+                RENDER_BACKEND.uniformMatrix4(locs[LOC_LIGHTMAP_TEXTURE_MATRIX], false, buffers.mat4Buf);
             }
 
             // iris_TextureMatrix — texture unit 0 matrix (animated by glints, etc.)
             if (locs[LOC_IRIS_TEXTURE_MATRIX] != -1) {
-                GLStateManager.getTextures().getTextureUnitMatrix(0).get(mat4Buf);
-                RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_TEXTURE_MATRIX], false, mat4Buf);
+                GLStateManager.getTextures().getTextureUnitMatrix(0).get(buffers.mat4Buf);
+                RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_TEXTURE_MATRIX], false, buffers.mat4Buf);
             }
         }
     }
@@ -305,6 +303,7 @@ public class CompatUniformManager {
     private static void uploadFragmentUniforms(int[] locs) {
         // Fog uniforms
         FogStateStack fog = GLStateManager.getFogState();
+        FloatBuffer vec4Buf = UPLOAD_BUFFERS.get().vec4Buf;
         if (locs[LOC_FOG_DENSITY] != -1) {
             RENDER_BACKEND.uniform1f(locs[LOC_FOG_DENSITY], Math.max(0.0f, fog.getDensity()));
         }
@@ -341,6 +340,7 @@ public class CompatUniformManager {
         }
 
         final var color = GLStateManager.getColor();
+        FloatBuffer vec4Buf = UPLOAD_BUFFERS.get().vec4Buf;
         vec4Buf.clear();
         vec4Buf.put(color.getRed()).put(color.getGreen()).put(color.getBlue()).put(color.getAlpha());
         vec4Buf.flip();
@@ -353,6 +353,7 @@ public class CompatUniformManager {
     private static void uploadSceneColor(int[] locs) {
         final MaterialState mat = GLStateManager.getFrontMaterial();
         final LightModelState lm = GLStateManager.getLightModel();
+        FloatBuffer vec4Buf = UPLOAD_BUFFERS.get().vec4Buf;
         vec4Buf.clear();
         vec4Buf.put(mat.emission.x + mat.ambient.x * lm.ambient.x)
                .put(mat.emission.y + mat.ambient.y * lm.ambient.y)
@@ -363,8 +364,7 @@ public class CompatUniformManager {
     }
 
     private static void uploadLightSources(int[] locs) {
-        // Early exit: if the first light field isn't present, no lighting uniforms exist
-        if (locs[LOC_LIGHT_BASE] == -1) return;
+        if (!hasUniformLocation(locs, LOC_LIGHT_BASE, 2 * LIGHT_FIELDS)) return;
         final LightStateStack[] lights = GLStateManager.getLightDataStates();
         for (int li = 0; li < 2; li++) {
             final int base = LOC_LIGHT_BASE + li * LIGHT_FIELDS;
@@ -410,8 +410,7 @@ public class CompatUniformManager {
     }
 
     private static void uploadMaterial(int[] locs) {
-        // Early exit: if the first material field isn't present, no material uniforms exist
-        if (locs[LOC_MAT_BASE] == -1) return;
+        if (!hasUniformLocation(locs, LOC_MAT_BASE, MAT_FIELDS)) return;
         final MaterialState mat = GLStateManager.getFrontMaterial();
         if (locs[LOC_MAT_BASE + MF_EMISSION] != -1)
             RENDER_BACKEND.uniform4f(locs[LOC_MAT_BASE + MF_EMISSION], mat.emission.x, mat.emission.y, mat.emission.z, mat.emission.w);
@@ -425,12 +424,22 @@ public class CompatUniformManager {
             RENDER_BACKEND.uniform1f(locs[LOC_MAT_BASE + MF_SHININESS], mat.shininess);
     }
 
+    static boolean hasUniformLocation(int[] locations, int offset, int count) {
+        for (int index = offset; index < offset + count; index++) {
+            if (locations[index] != -1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void uploadClipPlanes(int[] locs) {
         if (locs[LOC_CLIP_PLANES_ENABLED] != -1) {
             RENDER_BACKEND.uniform1i(locs[LOC_CLIP_PLANES_ENABLED], GLStateManager.anyClipPlaneEnabled() ? 1 : 0);
         }
         if (locs[LOC_CLIP_PLANES] != -1) {
             final ClipPlaneState cps = GLStateManager.getClipPlaneState();
+            FloatBuffer clipPlaneBuf = UPLOAD_BUFFERS.get().clipPlaneBuf;
             clipPlaneBuf.clear();
             for (int i = 0; i < GLStateManager.MAX_CLIP_PLANES; i++) {
                 cps.putEyePlane(i, clipPlaneBuf);
@@ -441,14 +450,21 @@ public class CompatUniformManager {
     }
 
     public static void onDeleteProgram(int program) {
-        programLocations.remove(program);
+        programStates.invalidate(program);
     }
 
-    public static boolean hasProgram(int program) {
-        return programLocations.containsKey(program);
-    }
+    /** Upload scratch buffers local to one GL-owning thread. */
+    private static final class UploadBuffers {
+        private final FloatBuffer mat4Buf = BufferUtils.createFloatBuffer(16);
+        private final FloatBuffer mat3Buf = BufferUtils.createFloatBuffer(9);
+        private final FloatBuffer vec4Buf = BufferUtils.createFloatBuffer(4);
+        private final FloatBuffer clipPlaneBuf = BufferUtils.createFloatBuffer(32);
+        private final FloatBuffer lightmapMatrixBuf = BufferUtils.createFloatBuffer(16);
+        private final Matrix3f normalMatrix = new Matrix3f();
+        private final Matrix4f scratchMatrix = new Matrix4f();
 
-    public static int[] getLocations(int program) {
-        return programLocations.get(program);
+        private UploadBuffers() {
+            new Matrix4f().scale(LIGHTMAP_SCALE).translate(8.0f, 8.0f, 8.0f).get(lightmapMatrixBuf);
+        }
     }
 }

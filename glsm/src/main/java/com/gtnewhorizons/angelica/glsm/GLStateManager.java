@@ -5793,8 +5793,9 @@ public class GLStateManager {
         if (ShaderManager.getInstance().isEnabled()) {
             generateVertexShaderIfNeeded(program);
         }
+        long linkEpoch = CompatUniformManager.beforeLinkProgram(program);
         RENDER_BACKEND.linkProgram(program);
-        CompatUniformManager.onLinkProgram(program);
+        CompatUniformManager.onLinkProgram(program, linkEpoch);
     }
 
     private static final IntBuffer SHADER_BUF = BufferUtils.createIntBuffer(8);

@@ -7,7 +7,6 @@ import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import net.coderbot.iris.celeritas.vertices.ExtendedChunkVertexType;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
-import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.gl.shader.ShaderType;
 import net.coderbot.iris.pipeline.transform.parameter.AttributeParameters;
@@ -21,7 +20,6 @@ import org.taumc.glsl.grammar.GLSLLexer;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
@@ -30,17 +28,10 @@ import java.util.regex.Pattern;
 public class ShaderTransformer {
     private static final Pattern versionPattern = Pattern.compile("#version\\s+(\\d+)(?:\\s+(\\w+))?");
 
-    private static final int CACHE_SIZE = 100;
-    private static final Object2ObjectLinkedOpenHashMap<TransformKey<?>, Map<PatchShaderType, String>> shaderTransformationCache = new Object2ObjectLinkedOpenHashMap<>();
-    private static final boolean useCache = true;
-
     // Track logged negotiations to avoid spam - cleared on shader pack reload
     private static final Set<String> loggedNegotiations = new HashSet<>();
 
-    public static void clearCache() {
-        synchronized (shaderTransformationCache) {
-            shaderTransformationCache.clear();
-        }
+    static void clearSessionState() {
         loggedNegotiations.clear();
     }
 
@@ -145,116 +136,33 @@ public class ShaderTransformer {
         return required;
     }
 
-    private static final class TransformKey<P extends Parameters> {
-        private final Patch patchType;
-        private final EnumMap<PatchShaderType, String> inputs;
-        private final P params;
-
-        private TransformKey(Patch patchType, EnumMap<PatchShaderType, String> inputs, P params) {
-            this.patchType = patchType;
-            this.inputs = inputs;
-            this.params = params;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == this) return true;
-            if (obj == null || obj.getClass() != this.getClass()) return false;
-            var that = (TransformKey<?>) obj;
-            return Objects.equals(this.patchType, that.patchType) &&
-                Objects.equals(this.inputs, that.inputs) &&
-                Objects.equals(this.params, that.params);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(patchType, inputs, params);
-        }
-
-        @Override
-        public String toString() {
-            return "TransformKey[" +
-                "patchType=" + patchType + ", " +
-                "inputs=" + inputs + ", " +
-                "params=" + params + ']';
-        }
-    }
-
     public static <P extends Parameters> Map<PatchShaderType, String> transform(String vertex, String geometry, String tessControl, String tessEval, String fragment, P parameters) {
         if (vertex == null && geometry == null && tessControl == null && tessEval == null && fragment == null) {
             return null;
-        } else {
-            Map<PatchShaderType, String> result;
+        }
 
-            var patchType = parameters.patch;
-
-            EnumMap<PatchShaderType, String> inputs = new EnumMap<>(PatchShaderType.class);
-            inputs.put(PatchShaderType.VERTEX, vertex);
-            inputs.put(PatchShaderType.GEOMETRY, geometry);
-            inputs.put(PatchShaderType.TESS_CONTROL, tessControl);
-            inputs.put(PatchShaderType.TESS_EVAL, tessEval);
-            inputs.put(PatchShaderType.FRAGMENT, fragment);
-
-            var key = new TransformKey<>(patchType, inputs, parameters);
-
-            synchronized (shaderTransformationCache) {
-                result = shaderTransformationCache.getAndMoveToLast(key);
-            }
-            if(result == null || !useCache) {
-                result = transformInternal(inputs, patchType, parameters);
-                // Clear this, we don't want whatever random type was last transformed being considered for the key
-                parameters.type = null;
-                synchronized (shaderTransformationCache) {
-                    // Double-check in case another thread added it while we were transforming
-                    Map<PatchShaderType, String> existing = shaderTransformationCache.getAndMoveToLast(key);
-                    if (existing != null) {
-                        return existing;
-                    }
-                    if(shaderTransformationCache.size() >= CACHE_SIZE) {
-                        shaderTransformationCache.removeFirst();
-                    }
-                    shaderTransformationCache.putAndMoveToLast(key, result);
-                }
-            }
-
-            return result;
+        final EnumMap<PatchShaderType, String> inputs = new EnumMap<>(PatchShaderType.class);
+        inputs.put(PatchShaderType.VERTEX, vertex);
+        inputs.put(PatchShaderType.GEOMETRY, geometry);
+        inputs.put(PatchShaderType.TESS_CONTROL, tessControl);
+        inputs.put(PatchShaderType.TESS_EVAL, tessEval);
+        inputs.put(PatchShaderType.FRAGMENT, fragment);
+        try {
+            return transformInternal(inputs, parameters.patch, parameters);
+        } finally {
+            parameters.type = null;
         }
     }
 
     public static <P extends Parameters> Map<PatchShaderType, String> transformCompute(String compute, P parameters) {
         if (compute == null) {
             return null;
-        } else {
-            Map<PatchShaderType, String> result;
+        }
 
-            final var patchType = parameters.patch;
-
-            EnumMap<PatchShaderType, String> inputs = new EnumMap<>(PatchShaderType.class);
-            inputs.put(PatchShaderType.COMPUTE, compute);
-
-            final var key = new TransformKey<>(patchType, inputs, parameters);
-
-            synchronized (shaderTransformationCache) {
-                result = shaderTransformationCache.getAndMoveToLast(key);
-            }
-            if (result == null || !useCache) {
-                result = transformComputeInternal(compute, patchType, parameters);
-                // Clear this, we don't want whatever random type was last transformed being considered for the key
-                parameters.type = null;
-                synchronized (shaderTransformationCache) {
-                    // Double-check in case another thread added it while we were transforming
-                    final Map<PatchShaderType, String> existing = shaderTransformationCache.getAndMoveToLast(key);
-                    if (existing != null) {
-                        return existing;
-                    }
-                    if (shaderTransformationCache.size() >= CACHE_SIZE) {
-                        shaderTransformationCache.removeFirst();
-                    }
-                    shaderTransformationCache.putAndMoveToLast(key, result);
-                }
-            }
-
-            return result;
+        try {
+            return transformComputeInternal(compute, parameters.patch, parameters);
+        } finally {
+            parameters.type = null;
         }
     }
 

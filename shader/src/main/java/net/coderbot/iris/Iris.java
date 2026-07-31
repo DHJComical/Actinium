@@ -304,7 +304,6 @@ public class Iris {
 
                     // Clear transformation caches - no longer needed after loading
                     TransformPatcher.clearCache();
-                    ShaderTransformer.clearCache();
                 } else {
                     // Still active (or in-flight), schedule another check.
                     final long remainingSeconds = Math.max(1, IDLE_TIMEOUT_SECONDS - idleSeconds + 1);

@@ -1,6 +1,8 @@
 package net.coderbot.iris.pipeline.transform;
 
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
+import net.coderbot.iris.Iris;
 import net.coderbot.iris.gbuffer_overrides.matching.InputAvailability;
 import net.coderbot.iris.gl.texture.TextureType;
 import net.coderbot.iris.helpers.Tri;
@@ -12,8 +14,11 @@ import net.coderbot.iris.pipeline.transform.parameter.Parameters;
 import net.coderbot.iris.pipeline.transform.parameter.TextureStageParameters;
 import net.coderbot.iris.shaderpack.texture.TextureStage;
 
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class TransformPatcher {
 
@@ -27,13 +32,25 @@ public class TransformPatcher {
 
     private static final boolean useCache = true;
 
-    private static class CacheKey {
+    private enum CacheDomain {
+        GRAPHICS("graphics"),
+        COMPUTE("compute");
+
+        private final String logLabel;
+
+        CacheDomain(String logLabel) {
+            this.logLabel = logLabel;
+        }
+    }
+
+    private static final class CacheKey {
         final Parameters parameters;
         final String vertex;
         final String geometry;
         final String tessControl;
         final String tessEval;
         final String fragment;
+        final String compute;
 
         public CacheKey(Parameters parameters, String vertex, String geometry, String tessControl, String tessEval, String fragment) {
             this.parameters = parameters;
@@ -42,6 +59,17 @@ public class TransformPatcher {
             this.tessControl = tessControl;
             this.tessEval = tessEval;
             this.fragment = fragment;
+            this.compute = null;
+        }
+
+        public CacheKey(Parameters parameters, String compute) {
+            this.parameters = parameters;
+            this.vertex = null;
+            this.geometry = null;
+            this.tessControl = null;
+            this.tessEval = null;
+            this.fragment = null;
+            this.compute = compute;
         }
 
         @Override
@@ -54,6 +82,7 @@ public class TransformPatcher {
             result = prime * result + ((tessEval == null) ? 0 : tessEval.hashCode());
             result = prime * result + ((parameters == null) ? 0 : parameters.hashCode());
             result = prime * result + ((vertex == null) ? 0 : vertex.hashCode());
+            result = prime * result + ((compute == null) ? 0 : compute.hashCode());
             return result;
         }
 
@@ -62,12 +91,13 @@ public class TransformPatcher {
             if (this == obj) return true;
             if (obj == null || getClass() != obj.getClass()) return false;
             final TransformPatcher.CacheKey other = (TransformPatcher.CacheKey) obj;
-            return java.util.Objects.equals(fragment, other.fragment)
-                && java.util.Objects.equals(geometry, other.geometry)
-                && java.util.Objects.equals(tessControl, other.tessControl)
-                && java.util.Objects.equals(tessEval, other.tessEval)
-                && java.util.Objects.equals(parameters, other.parameters)
-                && java.util.Objects.equals(vertex, other.vertex);
+            return Objects.equals(fragment, other.fragment)
+                && Objects.equals(geometry, other.geometry)
+                && Objects.equals(tessControl, other.tessControl)
+                && Objects.equals(tessEval, other.tessEval)
+                && Objects.equals(parameters, other.parameters)
+                && Objects.equals(vertex, other.vertex)
+                && Objects.equals(compute, other.compute);
         }
     }
 
@@ -76,32 +106,106 @@ public class TransformPatcher {
             return null;
         }
 
-        // check if this has been cached
-        TransformPatcher.CacheKey key = null;
-        Map<PatchShaderType, String> result = null;
+        final CacheKey key = new CacheKey(parameters, vertex, geometry, tessControl, tessEval, fragment);
+        final boolean logCacheEvents = GLSMPerfDebug.isEnabled();
         if (useCache) {
-            key = new TransformPatcher.CacheKey(parameters, vertex, geometry, tessControl, tessEval, fragment);
-            synchronized (cache) {
-                result = cache.get(key);
+            final Map<PatchShaderType, String> cached = getCached(key, CacheDomain.GRAPHICS, logCacheEvents);
+            if (cached != null) {
+                return cached;
             }
         }
 
-        // if there is no cache result, transform the shaders
-        if (result == null) {
-            result = ShaderTransformer.transform(vertex, geometry, tessControl, tessEval, fragment, parameters);
-            if (useCache) {
-                synchronized (cache) {
-                    // Double-check in case another thread added it while we were transforming
-                    final Map<PatchShaderType, String> existing = cache.get(key);
-                    if (existing != null) {
-                        return existing;
-                    }
-                    cache.put(key, result);
-                }
+        final long transformStart = logCacheEvents ? System.nanoTime() : 0L;
+        final Map<PatchShaderType, String> transformed = ShaderTransformer.transform(vertex, geometry, tessControl, tessEval, fragment, parameters);
+        if (!useCache) {
+            return finishWithoutCache(transformed, CacheDomain.GRAPHICS, transformStart, logCacheEvents);
+        }
+
+        return cacheResult(key, transformed, CacheDomain.GRAPHICS, transformStart, logCacheEvents);
+    }
+
+    static Map<PatchShaderType, String> transformCompute(String compute, Parameters parameters) {
+        if (compute == null) {
+            return null;
+        }
+
+        final CacheKey key = new CacheKey(parameters, compute);
+        final boolean logCacheEvents = GLSMPerfDebug.isEnabled();
+        if (useCache) {
+            final Map<PatchShaderType, String> cached = getCached(key, CacheDomain.COMPUTE, logCacheEvents);
+            if (cached != null) {
+                return cached;
             }
         }
 
+        final long transformStart = logCacheEvents ? System.nanoTime() : 0L;
+        final Map<PatchShaderType, String> transformed = ShaderTransformer.transformCompute(compute, parameters);
+        if (!useCache) {
+            return finishWithoutCache(transformed, CacheDomain.COMPUTE, transformStart, logCacheEvents);
+        }
+
+        return cacheResult(key, transformed, CacheDomain.COMPUTE, transformStart, logCacheEvents);
+    }
+
+    private static Map<PatchShaderType, String> getCached(CacheKey key, CacheDomain domain, boolean logCacheEvents) {
+        final Map<PatchShaderType, String> cached;
+        synchronized (cache) {
+            cached = cache.get(key);
+        }
+        if (cached != null && logCacheEvents) {
+            Iris.logger.info("[ShaderTransformCache] {} hit cacheSize={}", domain.logLabel, cacheSize());
+        }
+        return cached;
+    }
+
+    private static Map<PatchShaderType, String> cacheResult(CacheKey key, Map<PatchShaderType, String> transformed,
+                                                             CacheDomain domain, long transformStart, boolean logCacheEvents) {
+        final Map<PatchShaderType, String> immutable = immutableResult(transformed);
+        final Map<PatchShaderType, String> result;
+        final boolean reused;
+        final int size;
+        synchronized (cache) {
+            // Another transform may have completed while this caller was parsing GLSL.
+            final Map<PatchShaderType, String> existing = cache.get(key);
+            if (existing != null) {
+                result = existing;
+                reused = true;
+            } else {
+                cache.put(key, immutable);
+                result = immutable;
+                reused = false;
+            }
+            size = cache.size();
+        }
+        if (logCacheEvents) {
+            final long transformNanos = System.nanoTime() - transformStart;
+            Iris.logger.info("[ShaderTransformCache] {} {} transformMs={} cacheSize={}",
+                domain.logLabel, reused ? "raceReuse" : "miss", transformNanos / 1_000_000.0, size);
+        }
         return result;
+    }
+
+    private static Map<PatchShaderType, String> finishWithoutCache(Map<PatchShaderType, String> transformed,
+                                                                     CacheDomain domain, long transformStart, boolean logCacheEvents) {
+        final Map<PatchShaderType, String> immutable = immutableResult(transformed);
+        if (logCacheEvents) {
+            final long transformNanos = System.nanoTime() - transformStart;
+            Iris.logger.info("[ShaderTransformCache] {} uncached transformMs={}", domain.logLabel,
+                transformNanos / 1_000_000.0);
+        }
+        return immutable;
+    }
+
+    private static int cacheSize() {
+        synchronized (cache) {
+            return cache.size();
+        }
+    }
+
+    private static Map<PatchShaderType, String> immutableResult(Map<PatchShaderType, String> transformed) {
+        final EnumMap<PatchShaderType, String> copy = new EnumMap<>(PatchShaderType.class);
+        copy.putAll(transformed);
+        return Collections.unmodifiableMap(copy);
     }
 
     public static Map<PatchShaderType, String> patchAttributes(String vertex, String geometry, String tessControl, String tessEval, String fragment, InputAvailability inputs) {
@@ -146,16 +250,19 @@ public class TransformPatcher {
     }
 
     public static String patchCompute(String name, String compute, TextureStage stage, Object2ObjectMap<Tri<String, TextureType, TextureStage>, String> textureMap) {
-        if (compute == null) {
-            return null;
-        }
-        Map<PatchShaderType, String> result = ShaderTransformer.transformCompute(compute, new ComputeParameters(Patch.COMPUTE, stage, textureMap));
+        Map<PatchShaderType, String> result = transformCompute(compute, new ComputeParameters(Patch.COMPUTE, stage, textureMap));
         return result != null ? result.get(PatchShaderType.COMPUTE) : null;
     }
 
     public static void clearCache() {
+        final int cachedEntries;
         synchronized (cache) {
+            cachedEntries = cache.size();
             cache.clear();
         }
+        if (GLSMPerfDebug.isEnabled()) {
+            Iris.logger.info("[ShaderTransformCache] cleared entries={}", cachedEntries);
+        }
+        ShaderTransformer.clearSessionState();
     }
 }

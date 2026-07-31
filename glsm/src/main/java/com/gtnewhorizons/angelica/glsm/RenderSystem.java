@@ -492,6 +492,17 @@ public class RenderSystem {
         return maxGlslVersion;
     }
 
+    /**
+     * Supplies a deterministic GLSL capability for headless shader transformation tests.
+     * This method only changes the cached version value and does not initialize OpenGL.
+     */
+    public static void initializeGlslCapabilityForTesting(int maximumGlslVersion) {
+        if (maximumGlslVersion < 0) {
+            throw new IllegalArgumentException("maximumGlslVersion must not be negative");
+        }
+        maxGlslVersion = maximumGlslVersion;
+    }
+
     public static boolean supportsGpuShader4() {
         return supportsGpuShader4;
     }
