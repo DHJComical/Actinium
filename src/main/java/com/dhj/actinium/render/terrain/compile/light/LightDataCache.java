@@ -4,6 +4,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import org.embeddedt.embeddium.impl.model.light.data.LightDataAccess;
 import com.dhj.actinium.world.EmptyBlockAccess;
+import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 
 public class LightDataCache extends LightDataAccess {
     private final IBlockAccess world;
@@ -49,12 +50,18 @@ public class LightDataCache extends LightDataAccess {
         // FIX: Do not apply AO from blocks that emit light
         float ao;
         if (lu == 0) {
-            ao = state.getAmbientOcclusionLightValue();
+            float vanillaAo = state.getAmbientOcclusionLightValue();
+            float aoLevel = BlockRenderingSettings.INSTANCE.getAmbientOcclusionLevel();
+            ao = applyAmbientOcclusionLevel(vanillaAo, aoLevel);
         } else {
             ao = 1.0f;
         }
 
         return packFC(fc) | packFO(fo) | packOP(op) | packEM(em) | packAO(ao) | packLU(lu) | packSL(sl) | packBL(bl);
+    }
+
+    static float applyAmbientOcclusionLevel(float vanillaAo, float aoLevel) {
+        return 1.0f - aoLevel * (1.0f - vanillaAo);
     }
 }
 
