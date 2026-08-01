@@ -104,6 +104,7 @@ public class CeleritasTerrainPipeline {
         gbufferProgramSource.put(IrisTerrainPass.GBUFFER_CUTOUT, terrainSource);
         gbufferProgramSource.put(IrisTerrainPass.GBUFFER_TRANSLUCENT, translucentSource.isPresent() ? translucentSource : terrainSource);
         gbufferProgramSource.put(IrisTerrainPass.SHADOW, shadowSource);
+        gbufferProgramSource.put(IrisTerrainPass.SHADOW_CUTOUT, shadowSource);
         gbufferProgramSource.put(IrisTerrainPass.SHADOW_TRANSLUCENT, shadowTranslucentSource.isPresent() ? shadowTranslucentSource : shadowSource);
 
         // Initialize PassInfo, framebuffers, blend modes, and alpha in single pass
@@ -148,14 +149,16 @@ public class CeleritasTerrainPipeline {
                 passInfo.bufferBlendOverrides = Collections.emptyList();
             }
 
-            // Set alpha reference
+            // Set alpha reference. The shader pack directive wins; otherwise match Iris/Sodium defaults
+            // for terrain passes so translucent water does not inherit a stale vanilla alpha test.
             passInfo.alphaReference = switch (pass) {
                 case GBUFFER_CUTOUT, SHADOW_CUTOUT -> 0.1f;
+                case GBUFFER_TRANSLUCENT, SHADOW_TRANSLUCENT -> 0.0001f;
                 default -> 0.0f;
             };
-            passInfo.alphaTestOverride = passInfo.alphaReference > 0.0f
-                    ? new AlphaTestOverride(new AlphaTest(AlphaTestFunction.GREATER, passInfo.alphaReference))
-                    : null;
+            passInfo.alphaTestOverride = resolveAlphaTestOverride(
+                    gbufferProgramSource.get(pass).flatMap(source -> source.getDirectives().getAlphaTestOverride()),
+                    pass);
         }
 
         // Process and apply shader sources
@@ -230,5 +233,13 @@ public class CeleritasTerrainPipeline {
 
     public ProgramImages initShadowImages(int programId) {
         return createShadowImages.apply(programId);
+    }
+
+    static AlphaTestOverride resolveAlphaTestOverride(Optional<AlphaTestOverride> shaderPackOverride, IrisTerrainPass pass) {
+        return shaderPackOverride.orElseGet(() -> switch (pass) {
+            case GBUFFER_CUTOUT, SHADOW_CUTOUT -> new AlphaTestOverride(new AlphaTest(AlphaTestFunction.GREATER, 0.1f));
+            case GBUFFER_TRANSLUCENT, SHADOW_TRANSLUCENT -> new AlphaTestOverride(new AlphaTest(AlphaTestFunction.GREATER, 0.0001f));
+            default -> AlphaTestOverride.OFF;
+        });
     }
 }

@@ -13,6 +13,10 @@ public class AlphaTestOverride {
 		AlphaTestStorage.overrideAlphaTest(this.alphaTest);
 	}
 
+	public float getReference() {
+		return alphaTest == null ? -1.0f : alphaTest.getReference();
+	}
+
 	public static void restore() {
 		AlphaTestStorage.restoreAlphaTest();
 	}
