@@ -9,10 +9,27 @@ import org.taumc.glsl.grammar.GLSLLexer;
 import org.taumc.glsl.grammar.GLSLParser;
 
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class CompatibilityTransformer {
 
     private static final ShaderType[] pipeline = {ShaderType.VERTEX, ShaderType.GEOMETRY, ShaderType.FRAGMENT};
+
+    private static final Pattern CLOUD_RGB_SKYHOLE = Pattern.compile(
+        "VolumetricClouds\\.rgb\\s*\\*=\\s*1\\.0\\s*-\\s*skyhole\\s*;"
+    );
+    private static final Pattern CLOUD_ALPHA_SKYHOLE = Pattern.compile(
+        "VolumetricClouds\\.a\\s*=\\s*mix\\s*\\(\\s*VolumetricClouds\\.a\\s*,\\s*1\\.0\\s*,\\s*skyhole\\s*\\)\\s*;"
+    );
+    private static final Pattern SKY_COLOR_SKYHOLE = Pattern.compile(
+        "isSky\\s*\\?\\s*skyhole\\s*\\*\\s*caveDetection\\s*\\*\\s*caveFactor\\s*:\\s*0\\.0"
+    );
+
+    static String patchCaveSkyholeClouds(String fragment) {
+        String patched = CLOUD_RGB_SKYHOLE.matcher(fragment).replaceAll("VolumetricClouds.rgb *= 1.0;");
+        patched = CLOUD_ALPHA_SKYHOLE.matcher(patched).replaceAll("VolumetricClouds.a = mix(VolumetricClouds.a, 1.0, 0.0);");
+        return SKY_COLOR_SKYHOLE.matcher(patched).replaceAll("isSky ? 0.0 : 0.0");
+    }
 
 
     public static void transformEach(Transformer transformer, Parameters parameters) {

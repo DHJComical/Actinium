@@ -297,6 +297,9 @@ public class ShaderTransformer {
             input = GlslTransformUtils.replaceTexture(input);
             input = GlslTransformUtils.renameReservedWords(input, versionInt);
             input = CompatShaderTransformer.fixupQualifiers(input, parameters.type == ShaderType.FRAGMENT);
+            if (patchType == Patch.COMPOSITE && parameters.type == ShaderType.FRAGMENT) {
+                input = CompatibilityTransformer.patchCaveSkyholeClouds(input);
+            }
 
             final var parsedShader = ShaderParser.parseShader(input);
             final var transformer = new Transformer(parsedShader.full());
