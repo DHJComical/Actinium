@@ -24,6 +24,10 @@ public class CompatibilityTransformer {
     private static final Pattern SKY_COLOR_SKYHOLE = Pattern.compile(
         "isSky\\s*\\?\\s*skyhole\\s*\\*\\s*caveDetection\\s*\\*\\s*caveFactor\\s*:\\s*0\\.0"
     );
+    private static final Pattern VLC_REFERENCE_DISTANCE = Pattern.compile(
+        "float\\s+lViewPosM\\s*=\\s*length\\s*\\(\\s*viewPos\\s*\\)\\s*<\\s*maxdist"
+            + "\\s*\\?\\s*length\\s*\\(\\s*viewPos\\s*\\)\\s*-\\s*1\\.0\\s*:\\s*100000000\\.0\\s*;"
+    );
 
     static String patchCaveSkyholeClouds(String fragment) {
         String patched = CLOUD_RGB_SKYHOLE.matcher(fragment).replaceAll("VolumetricClouds.rgb *= 1.0;");
@@ -31,6 +35,12 @@ public class CompatibilityTransformer {
         return SKY_COLOR_SKYHOLE.matcher(patched).replaceAll("isSky ? 0.0 : 0.0");
     }
 
+    static String patchVolumetricCloudReferenceDistance(String fragment) {
+        return VLC_REFERENCE_DISTANCE.matcher(fragment).replaceAll(
+            "float lViewPosM = length(viewPos) >= far - 1.0 ? 100000000.0"
+                + " : length(viewPos) < maxdist ? length(viewPos) - 1.0 : 100000000.0;"
+        );
+    }
 
     public static void transformEach(Transformer transformer, Parameters parameters) {
         if (parameters.type == ShaderType.VERTEX) {

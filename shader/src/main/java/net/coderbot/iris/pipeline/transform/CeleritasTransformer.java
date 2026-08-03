@@ -1,5 +1,6 @@
 package net.coderbot.iris.pipeline.transform;
 
+import net.coderbot.iris.gl.shader.ShaderType;
 import net.coderbot.iris.pipeline.transform.parameter.Parameters;
 import org.taumc.glsl.Transformer;
 
@@ -13,8 +14,10 @@ class CeleritasTransformer {
 
         switch (parameters.type) {
             case FRAGMENT:
-            case GEOMETRY:
                 transformFragment(transformer, parameters);
+                break;
+            case GEOMETRY:
+                transformGeometry(transformer, parameters);
                 break;
             case VERTEX:
                 transformVertex(transformer, parameters);
@@ -37,6 +40,11 @@ class CeleritasTransformer {
             "iris_LightTexCoord = vec4(vec2(_vert_tex_light_coord), 0.0, 1.0); }");
         transformer.prependMain("_celeritas_init();");
         transformShared(transformer, parameters);
+
+        // Eclipse-style terrain packs emit world-space positions from the vertex stage and
+        // reproject them in their geometry stage. Celeritas must keep gl_Position in clip
+        // space, so restore the correct projection that iris_ftransform already computed.
+        transformer.replaceExpression("vec4(worldpos, 0.0)", "iris_ftransform()");
 
         final Map<String, String> vertexReplacements = new HashMap<>();
         vertexReplacements.put("gl_Vertex", "_celeritas_getVertexPosition()");
@@ -61,6 +69,17 @@ class CeleritasTransformer {
 
     public static void transformFragment(Transformer transformer, Parameters parameters) {
         transformShared(transformer, parameters);
+    }
+
+    private static void transformGeometry(Transformer transformer, Parameters parameters) {
+        transformShared(transformer, parameters);
+
+        // The geometry stage above is written for the pack's world-space vertex output.
+        // Celeritas now receives clip-space positions, so it must not reproject them.
+        transformer.replaceExpression(
+            "toClipSpace3(mat3(gbufferModelView) * vec3(vertex) + gbufferModelView[3].xyz)",
+            "vertex"
+        );
     }
 
     private static void transformShared(Transformer transformer, Parameters parameters) {

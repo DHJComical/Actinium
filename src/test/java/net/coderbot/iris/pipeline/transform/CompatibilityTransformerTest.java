@@ -17,6 +17,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CompatibilityTransformerTest {
     @Test
+    void volumetricCloudReferenceDistanceAllowsFarPlaneRays() {
+        String source = """
+            #version 330 core
+            uniform vec3 viewPos;
+            uniform float far;
+            uniform float maxdist;
+            void main() {
+                float lViewPosM = length(viewPos) < maxdist ? length(viewPos) - 1.0 : 100000000.0;
+            }
+            """;
+
+        String patched = CompatibilityTransformer.patchVolumetricCloudReferenceDistance(source);
+        ShaderParser.ParsedShader parsed = ShaderParser.parseShader(patched);
+
+        assertEquals(0, parsed.parser().getNumberOfSyntaxErrors(), patched);
+        assertEquals(1, occurrences(patched, "length(viewPos) >= far - 1.0"), patched);
+    }
+
+    @Test
     void groupedTransformAddsParseableOutputsForMissingFragmentInputs() {
         String vertex = """
             #version 330 core
@@ -70,5 +89,15 @@ class CompatibilityTransformerTest {
 
     private static String typeOf(GLSLParser.Single_declarationContext declaration) {
         return declaration.fully_specified_type().type_specifier().type_specifier_nonarray().getText();
+    }
+
+    private static int occurrences(String source, String needle) {
+        int count = 0;
+        int index = 0;
+        while ((index = source.indexOf(needle, index)) >= 0) {
+            count++;
+            index += needle.length();
+        }
+        return count;
     }
 }

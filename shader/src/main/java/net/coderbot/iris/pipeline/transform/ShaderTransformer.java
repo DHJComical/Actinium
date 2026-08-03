@@ -299,6 +299,7 @@ public class ShaderTransformer {
             input = CompatShaderTransformer.fixupQualifiers(input, parameters.type == ShaderType.FRAGMENT);
             if (patchType == Patch.COMPOSITE && parameters.type == ShaderType.FRAGMENT) {
                 input = CompatibilityTransformer.patchCaveSkyholeClouds(input);
+                input = CompatibilityTransformer.patchVolumetricCloudReferenceDistance(input);
             }
 
             final var parsedShader = ShaderParser.parseShader(input);
