@@ -313,6 +313,9 @@ public class FinalPassRenderer {
 			FullScreenQuadRenderer.INSTANCE.renderQuad();
             IrisGlDebug.check("final:render-quad");
             IrisGlDebug.logCurrentFramebufferSamples("final:" + finalPass.sourceName, 1);
+            if (this.pipeline != null) {
+                IrisGlDebug.logCloudTerrainChainPixels("FINAL", finalPass.sourceName, this.renderTargets, this.pipeline.getDHCompat().getDepthTex(), this.pipeline.getDHCompat().getDepthTexNoTranslucent());
+            }
             IrisGlDebug.restoreFramebufferSamplePhase(previousSamplePhase);
 			restoreBlendOverrides(finalPass);
 

@@ -349,6 +349,7 @@ public class CompositeRenderer {
             IrisGlDebug.logCompositeChainPixels(this.textureStage.name(), renderPass.sourceName, this.renderTargets);
             if (this.pipeline != null) {
                 IrisGlDebug.logCompositeDepthPixels(this.textureStage.name(), renderPass.sourceName, this.renderTargets, this.pipeline.getDHCompat().getDepthTex(), this.pipeline.getDHCompat().getDepthTexNoTranslucent());
+                IrisGlDebug.logCloudTerrainChainPixels(this.textureStage.name(), renderPass.sourceName, this.renderTargets, this.pipeline.getDHCompat().getDepthTex(), this.pipeline.getDHCompat().getDepthTexNoTranslucent());
             }
 			FullScreenQuadRenderer.uploadCompositeMatrices();
             IrisGlDebug.check("composite:matrices");

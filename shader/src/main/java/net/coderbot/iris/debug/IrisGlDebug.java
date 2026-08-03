@@ -2075,6 +2075,97 @@ public final class IrisGlDebug {
         GLStateManager.glActiveTexture(previousActiveTexture);
     }
 
+    public static void logCloudTerrainChainPixels(
+        String stage,
+        String subject,
+        RenderTargets renderTargets,
+        int dhDepthTex,
+        int dhDepthTex1
+    ) {
+        if (!shouldCaptureGlState() || renderTargets == null || renderTargets.getRenderTargetCount() <= 14) {
+            return;
+        }
+        if (!"composite3".equals(subject) && !"FINAL".equals(stage)) {
+            return;
+        }
+
+        String label = "cloud-terrain:" + stage + ":" + subject;
+        int count = CLOUD_CONTROL_SAMPLE_COUNTS.merge(label, 1, Integer::sum);
+        if (count > 4) {
+            return;
+        }
+
+        VIEWPORT.clear();
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+        int width = Math.max(1, VIEWPORT.get(2));
+        int height = Math.max(1, VIEWPORT.get(3));
+
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+
+        RenderTarget target3 = renderTargets.get(3);
+        RenderTarget target10 = renderTargets.getRenderTargetCount() > 10 ? renderTargets.get(10) : null;
+        DepthPixels depth0 = readDepthTexture(renderTargets.getDepthTexture());
+        DepthPixels depth1 = readDepthTexture(renderTargets.getDepthTextureNoTranslucents().getTextureId());
+        DepthPixels dhDepth0 = readDepthTexture(dhDepthTex);
+        DepthPixels dhDepth1 = readDepthTexture(dhDepthTex1);
+
+        StringBuilder builder = new StringBuilder();
+        int currentProgram = GL20.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        builder.append(" far=").append(getFloatUniform(currentProgram, "far"));
+        builder.append(" viewWidth=").append(getFloatUniform(currentProgram, "viewWidth"));
+        builder.append(" viewHeight=").append(getFloatUniform(currentProgram, "viewHeight"));
+        builder.append(" dhLoaded=").append(DHCompat.isDistantHorizonsLoaded());
+        builder.append(" dhRendering=").append(DHCompat.hasRenderingEnabled());
+        builder.append(" dhNear=").append(getFloatUniform(currentProgram, "dhNearPlane"));
+        builder.append(" dhFar=").append(getFloatUniform(currentProgram, "dhFarPlane"));
+        builder.append(" dhRenderDistance=").append(getIntUniform(currentProgram, "dhRenderDistance"));
+        builder.append(" viewport=").append(width).append("x").append(height);
+        builder.append(" depth0Size=").append(depth0 != null ? depth0.width + "x" + depth0.height + ",format=0x" + Integer.toHexString(depth0.internalFormat) : "missing");
+        builder.append(" dhDepth0Size=").append(dhDepth0 != null ? dhDepth0.width + "x" + dhDepth0.height + ",format=0x" + Integer.toHexString(dhDepth0.internalFormat) : "missing");
+
+        float[][] points = {
+            {0.5f, 0.25f},
+            {0.5f, 0.45f},
+            {0.5f, 0.50f},
+            {0.5f, 0.55f},
+            {0.5f, 0.75f},
+            {0.25f, 0.50f},
+            {0.75f, 0.50f}
+        };
+
+        for (float[] point : points) {
+            int x = (int) (point[0] * width);
+            int y = (int) (point[1] * height);
+
+            builder.append("\n point=").append(point[0]).append(",").append(point[1])
+                .append(" viewport=(").append(x).append(",").append(y).append(")");
+            appendDepthPixel(builder, "depthtex0", depth0, x, y);
+            appendDepthPixel(builder, "depthtex1", depth1, x, y);
+            appendDepthPixel(builder, "dhDepthTex", dhDepth0, x, y);
+            appendDepthPixel(builder, "dhDepthTex1", dhDepth1, x, y);
+            appendTargetPixel(builder, "colortex3.main", target3.getMainTexture(), x, y);
+            appendTargetPixel(builder, "colortex3.alt", target3.getAltTexture(), x, y);
+            if (target10 != null) {
+                appendTargetPixel(builder, "colortex10.main", target10.getMainTexture(), x, y);
+                appendTargetPixel(builder, "colortex10.alt", target10.getAltTexture(), x, y);
+            }
+            appendCurrentFramebufferPixel(builder, "fbo", x, y);
+            appendCurrentDepthPixel(builder, "fboDepth", x, y);
+        }
+
+        logDebugInfo("cloud-terrain-chain label={} count={}{}", label, count, builder);
+
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
+        GLStateManager.glActiveTexture(previousActiveTexture);
+    }
+
     public static void logCloudControlPixels(String stage, String subject, RenderTargets renderTargets) {
         if (!isCloudControlDebugEnabled() || renderTargets == null || renderTargets.getRenderTargetCount() <= 14) {
             return;
@@ -2468,6 +2559,105 @@ public final class IrisGlDebug {
             .append(formatFloat(pixel[3])).append(")");
     }
 
+    private static DepthPixels readDepthTexture(int texture) {
+        if (texture <= 0) {
+            return null;
+        }
+
+        int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+
+        GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
+        int previousTexture0 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, texture);
+
+        int width = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
+        int height = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
+        int internalFormat = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_INTERNAL_FORMAT);
+        DepthPixels result = null;
+        if (width > 0 && height > 0) {
+            result = new DepthPixels(texture, width, height, internalFormat);
+        }
+
+        GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, previousTexture0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
+        GLStateManager.glActiveTexture(previousActiveTexture);
+        return result;
+    }
+
+    private static void appendDepthPixel(StringBuilder builder, String name, DepthPixels depth, int x, int y) {
+        builder.append(" ").append(name).append("@(").append(x).append(",").append(y).append(")=");
+        if (depth == null) {
+            builder.append("missing");
+            return;
+        }
+
+        int sampleX = Math.max(0, Math.min(x, depth.width - 1));
+        int sampleY = Math.max(0, Math.min(y, depth.height - 1));
+        float value = readDepthTexturePixel(depth.texture, sampleX, sampleY);
+        builder.append("(").append(formatFloat(value)).append(")");
+    }
+
+    private static float readDepthTexturePixel(int texture, int x, int y) {
+        int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int previousReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int previousDrawFramebuffer = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+
+        if (debugFramebuffer == 0) {
+            debugFramebuffer = GL30.glGenFramebuffers();
+        }
+
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, debugFramebuffer);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, texture, 0);
+        GL11.glDrawBuffer(GL11.GL_NONE);
+        GL11.glReadBuffer(GL11.GL_NONE);
+
+        float value = 1.0f;
+        int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+        if (status == GL30.GL_FRAMEBUFFER_COMPLETE) {
+            FloatBuffer pixel = BufferUtils.createFloatBuffer(1);
+            GL11.glReadPixels(x, y, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, pixel);
+            value = pixel.get(0);
+        }
+
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, 0, 0);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, previousFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousReadFramebuffer);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, previousDrawFramebuffer);
+        GL11.glReadBuffer(previousReadBuffer);
+        return value;
+    }
+
+    private static void appendCurrentFramebufferPixel(StringBuilder builder, String name, int x, int y) {
+        int previousReadBuffer = GL11.glGetInteger(GL11.GL_READ_BUFFER);
+        int framebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        GL11.glReadBuffer(framebuffer == 0 ? GL11.GL_BACK : GL30.GL_COLOR_ATTACHMENT0);
+
+        float[] pixel = new float[4];
+        readPixel(x, y, pixel);
+        builder.append(" ").append(name).append("@(").append(x).append(",").append(y).append(")=(")
+            .append(formatFloat(pixel[0])).append(",")
+            .append(formatFloat(pixel[1])).append(",")
+            .append(formatFloat(pixel[2])).append(",")
+            .append(formatFloat(pixel[3])).append(")");
+
+        GL11.glReadBuffer(previousReadBuffer);
+    }
+
+    private static void appendCurrentDepthPixel(StringBuilder builder, String name, int x, int y) {
+        FloatBuffer pixel = BufferUtils.createFloatBuffer(1);
+        GL11.glReadPixels(x, y, 1, 1, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, pixel);
+        builder.append(" ").append(name).append("@(").append(x).append(",").append(y).append(")=(")
+            .append(formatFloat(pixel.get(0))).append(")");
+    }
+
     private static float[] readTexturePixel(int texture, int x, int y) {
         int previousActiveTexture = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
         int previousFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
@@ -2583,5 +2773,19 @@ public final class IrisGlDebug {
             mc.displayWidth,
             mc.displayHeight
         );
+    }
+
+    private static final class DepthPixels {
+        private final int texture;
+        private final int width;
+        private final int height;
+        private final int internalFormat;
+
+        private DepthPixels(int texture, int width, int height, int internalFormat) {
+            this.texture = texture;
+            this.width = width;
+            this.height = height;
+            this.internalFormat = internalFormat;
+        }
     }
 }

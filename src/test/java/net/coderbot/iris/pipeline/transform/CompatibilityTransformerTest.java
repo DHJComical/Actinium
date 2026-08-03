@@ -36,6 +36,33 @@ class CompatibilityTransformerTest {
     }
 
     @Test
+    void volumetricCloudReferenceDistanceClampsLodDepth() {
+        String source = """
+            #version 330 core
+            uniform sampler2D depthtex0;
+            uniform sampler2D depthtex1;
+            uniform sampler2D dhDepthTex;
+            uniform sampler2D dhDepthTex1;
+            uniform vec3 viewPos;
+            uniform float far;
+            uniform float maxdist;
+            void main() {
+                texelFetch(depthtex1, ivec2(0), 0);
+                texelFetch(dhDepthTex, ivec2(0), 0);
+                texelFetch(dhDepthTex1, ivec2(0), 0);
+                float lViewPosM = length(viewPos) < maxdist ? length(viewPos) - 1.0 : 100000000.0;
+            }
+            """;
+
+        String patched = CompatibilityTransformer.patchVolumetricCloudReferenceDistance(source);
+        ShaderParser.ParsedShader parsed = ShaderParser.parseShader(patched);
+
+        assertEquals(0, parsed.parser().getNumberOfSyntaxErrors(), patched);
+        assertEquals(1, occurrences(patched, "texelFetch(dhDepthTex1, _irisCloudTexel, 0)"), patched);
+        assertEquals(1, occurrences(patched, "lViewPosM = length(viewPos) - 1.0"), patched);
+    }
+
+    @Test
     void groupedTransformAddsParseableOutputsForMissingFragmentInputs() {
         String vertex = """
             #version 330 core
