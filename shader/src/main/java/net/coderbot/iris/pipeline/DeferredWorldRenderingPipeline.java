@@ -68,6 +68,7 @@ import net.coderbot.iris.shaderpack.ProgramFallbackResolver;
 import net.coderbot.iris.shaderpack.ProgramSet;
 import net.coderbot.iris.shaderpack.ProgramSource;
 import net.coderbot.iris.shaderpack.loading.ProgramId;
+import net.coderbot.iris.shaderpack.option.values.OptionValues;
 import net.coderbot.iris.shaderpack.texture.TextureStage;
 import net.coderbot.iris.shadows.ShadowCompositeRenderer;
 import net.coderbot.iris.shadows.ShadowRenderTargets;
@@ -87,6 +88,7 @@ import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.init.Blocks;
 import org.apache.commons.lang3.tuple.Pair;
 import org.embeddedt.embeddium.impl.gl.profiling.TimerQueryManager;
+import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
 import org.joml.Vector4f;
@@ -308,10 +310,16 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		ItemMaterialHelper.clearCache();
 		BlockRenderingSettings.INSTANCE.setItemIds(programs.getPack().getIdMap().getItemIdMap());
 		BlockRenderingSettings.INSTANCE.setItemNbtMap(BlockMaterialMapping.createNamespacedNbtMap(programs.getPack().getIdMap().getItemNbtEntries()));
-		BlockRenderingSettings.INSTANCE.setAmbientOcclusionLevel(programs.getPackDirectives().getAmbientOcclusionLevel());
+		float ambientOcclusionLevel = resolveAmbientOcclusionLevel(programs);
+		BlockRenderingSettings.INSTANCE.setAmbientOcclusionLevel(ambientOcclusionLevel);
 		BlockRenderingSettings.INSTANCE.setDisableDirectionalShading(shouldDisableDirectionalShading());
 		BlockRenderingSettings.INSTANCE.setUseSeparateAo(programs.getPackDirectives().shouldUseSeparateAo());
 		BlockRenderingSettings.INSTANCE.setUseExtendedVertexFormat(true);
+		AODebug.logSettings(
+			"deferred",
+			ambientOcclusionLevel,
+			programs.getPackDirectives().shouldUseSeparateAo()
+		);
 
 		// Don't clobber anything in texture unit 0. It probably won't cause issues, but we're just being cautious here.
 		GLStateManager.glActiveTexture(GL13.GL_TEXTURE2);
@@ -630,6 +638,27 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	private RenderTargets getRenderTargets() {
 		return renderTargets;
+	}
+
+	private static float resolveAmbientOcclusionLevel(ProgramSet programs) {
+		float directiveLevel = programs.getPackDirectives().getAmbientOcclusionLevel();
+		AODebug.logSettings("directive", directiveLevel, programs.getPackDirectives().shouldUseSeparateAo());
+		OptionValues optionValues = programs.getPack().getShaderPackOptions().getOptionValues();
+		Optional<String> optionLevel = optionValues.getStringValue("ambientOcclusionLevel");
+
+		if (optionLevel.isEmpty()) {
+			return directiveLevel;
+		}
+
+		try {
+			float optionLevelValue = Math.max(0.0F, Math.min(1.0F, Float.parseFloat(optionLevel.get())));
+			AODebug.logSettings("option", optionLevelValue, programs.getPackDirectives().shouldUseSeparateAo());
+			return optionLevelValue;
+		} catch (NumberFormatException e) {
+			Iris.logger.error("Failed to parse ambientOcclusionLevel shader option value '{}', using directive value {}",
+				optionLevel.get(), directiveLevel);
+			return directiveLevel;
+		}
 	}
 
 	private void checkWorld() {

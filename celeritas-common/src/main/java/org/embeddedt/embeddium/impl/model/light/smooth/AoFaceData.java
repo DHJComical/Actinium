@@ -2,6 +2,7 @@ package org.embeddedt.embeddium.impl.model.light.smooth;
 
 import org.embeddedt.embeddium.impl.model.light.data.LightDataAccess;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
+import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
 
 import static org.embeddedt.embeddium.impl.model.light.data.LightDataAccess.*;
 
@@ -139,6 +140,19 @@ class AoFaceData {
         ao[1] = (e2ao + e0ao + c0ao + caao) * 0.25f;
         ao[2] = (e2ao + e1ao + c2ao + caao) * 0.25f;
         ao[3] = (e3ao + e1ao + c3ao + caao) * 0.25f;
+
+        if (AODebug.isEnabled()) {
+            AODebug.logFaceData(
+                "face",
+                adjX,
+                adjY,
+                adjZ,
+                direction.name(),
+                offset,
+                new float[] {caao, e0ao, e1ao, e2ao, e3ao, c0ao, c1ao, c2ao, c3ao},
+                new float[] {ao[0], ao[1], ao[2], ao[3]}
+            );
+        }
 
         int[] cb = this.lm;
         cb[0] = calculateCornerBrightness(e3lm, e0lm, c1lm, calm, e3em, e0em, c1em, caem);

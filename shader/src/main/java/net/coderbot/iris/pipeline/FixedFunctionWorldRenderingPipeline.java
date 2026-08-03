@@ -17,6 +17,7 @@ import net.coderbot.iris.helpers.Tri;
 import net.coderbot.iris.shaderpack.CloudSetting;
 import net.coderbot.iris.shaderpack.texture.TextureStage;
 import net.coderbot.iris.uniforms.FrameUpdateNotifier;
+import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 
@@ -29,6 +30,7 @@ public class FixedFunctionWorldRenderingPipeline implements WorldRenderingPipeli
 		BlockRenderingSettings.INSTANCE.setUseSeparateAo(false);
 		BlockRenderingSettings.INSTANCE.setAmbientOcclusionLevel(1.0f);
 		BlockRenderingSettings.INSTANCE.setUseExtendedVertexFormat(false);
+		AODebug.logSettings("fixed", 1.0f, false);
 		BlockRenderingSettings.INSTANCE.setBlockMetaMatches(null);
 		BlockRenderingSettings.INSTANCE.setBlockNbtMap(null);
 		BlockRenderingSettings.INSTANCE.setBlockTypeIds(null);

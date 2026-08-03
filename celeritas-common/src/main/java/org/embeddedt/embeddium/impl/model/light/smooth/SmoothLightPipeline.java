@@ -5,6 +5,7 @@ import org.embeddedt.embeddium.impl.model.light.DiffuseProvider;
 import org.embeddedt.embeddium.impl.model.light.LightPipeline;
 import org.embeddedt.embeddium.impl.model.light.data.LightDataAccess;
 import org.embeddedt.embeddium.impl.model.light.data.QuadLightData;
+import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
 import org.embeddedt.embeddium.impl.model.quad.ModelQuadView;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFlags;
@@ -111,6 +112,19 @@ public class SmoothLightPipeline implements LightPipeline {
             this.applySidedBrightness(out, lightFace, shade);
         } else {
             this.applySidedBrightnessFromNormals(out, quad, shade);
+        }
+
+        if (AODebug.isEnabled()) {
+            AODebug.logVertexBrightness(
+                "smooth",
+                x,
+                y,
+                z,
+                lightFace.name(),
+                shade,
+                applyAoDepthBlending,
+                out.br
+            );
         }
     }
 

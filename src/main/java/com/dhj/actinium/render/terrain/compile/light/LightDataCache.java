@@ -5,6 +5,8 @@ import net.minecraft.world.IBlockAccess;
 import org.embeddedt.embeddium.impl.model.light.data.LightDataAccess;
 import com.dhj.actinium.world.EmptyBlockAccess;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
+import net.minecraft.block.Block;
+import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
 
 public class LightDataCache extends LightDataAccess {
     private final IBlockAccess world;
@@ -48,14 +50,25 @@ public class LightDataCache extends LightDataAccess {
         }
 
         // FIX: Do not apply AO from blocks that emit light
-        float ao;
-        if (lu == 0) {
-            float vanillaAo = state.getAmbientOcclusionLightValue();
-            float aoLevel = BlockRenderingSettings.INSTANCE.getAmbientOcclusionLevel();
-            ao = applyAmbientOcclusionLevel(vanillaAo, aoLevel);
-        } else {
-            ao = 1.0f;
-        }
+        float vanillaAo = lu == 0 ? state.getAmbientOcclusionLightValue() : 1.0f;
+        float aoLevel = BlockRenderingSettings.INSTANCE.getAmbientOcclusionLevel();
+        float ao = lu == 0 ? applyAmbientOcclusionLevel(vanillaAo, aoLevel) : 1.0f;
+
+        AODebug.logLightData(
+            "cache",
+            Block.getIdFromBlock(state.getBlock()),
+            x,
+            y,
+            z,
+            vanillaAo,
+            aoLevel,
+            ao,
+            packFC(fc) | packFO(fo) | packOP(op) | packEM(em) | packAO(ao) | packLU(lu) | packSL(sl) | packBL(bl),
+            lu,
+            op,
+            fc,
+            fo
+        );
 
         return packFC(fc) | packFO(fo) | packOP(op) | packEM(em) | packAO(ao) | packLU(lu) | packSL(sl) | packBL(bl);
     }

@@ -23,6 +23,7 @@ import org.embeddedt.embeddium.impl.model.light.LightMode;
 import org.embeddedt.embeddium.impl.model.light.LightPipeline;
 import org.embeddedt.embeddium.impl.model.light.LightPipelineProvider;
 import org.embeddedt.embeddium.impl.model.light.data.QuadLightData;
+import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
 import org.embeddedt.embeddium.impl.model.quad.BakedQuadView;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadOrientation;
@@ -130,6 +131,20 @@ public class VintageBlockRenderer {
         var aoEnabled = Minecraft.isAmbientOcclusionEnabled() && state.getLightValue(blockAccess, pos) == 0 && model.isAmbientOcclusion(state);
 
         var lighter = this.lighters.getLighter(aoEnabled ? LightMode.SMOOTH : LightMode.FLAT);
+
+        AODebug.logRenderDecision(
+            "block",
+            Block.getIdFromBlock(state.getBlock()),
+            pos.getX(),
+            pos.getY(),
+            pos.getZ(),
+            Minecraft.isAmbientOcclusionEnabled(),
+            state.getLightValue(blockAccess, pos),
+            model.isAmbientOcclusion(state),
+            aoEnabled,
+            BlockRenderingSettings.INSTANCE.getAmbientOcclusionLevel(),
+            BlockRenderingSettings.INSTANCE.shouldUseSeparateAo()
+        );
 
         for (var dir : EnumFacing.VALUES) {
             var quads = model.getQuads(state, dir, rand);
@@ -330,7 +345,21 @@ public class VintageBlockRenderer {
             out.y = localY + quad.getY(srcIndex) + (float) offset.y;
             out.z = localZ + quad.getZ(srcIndex) + (float) offset.z;
 
-            out.color = colorWriter.writeColor(ModelQuadUtil.mixARGBColors(colors[srcIndex], quad.getColor(srcIndex)), light.br[srcIndex]);
+            int mixedColor = ModelQuadUtil.mixARGBColors(colors[srcIndex], quad.getColor(srcIndex));
+            int writtenColor = colorWriter.writeColor(mixedColor, light.br[srcIndex]);
+            out.color = writtenColor;
+            AODebug.logVertexColor(
+                "geometry",
+                Block.getIdFromBlock(this.currentState.getBlock()),
+                localX,
+                localY,
+                localZ,
+                dstIndex,
+                light.br[srcIndex],
+                mixedColor,
+                writtenColor,
+                BlockRenderingSettings.INSTANCE.shouldUseSeparateAo()
+            );
 
             out.u = quad.getTexU(srcIndex);
             out.v = quad.getTexV(srcIndex);
