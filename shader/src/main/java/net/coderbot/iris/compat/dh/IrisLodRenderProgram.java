@@ -4,6 +4,7 @@ import com.google.common.primitives.Ints;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.api.objects.math.DhApiVec3f;
+import net.coderbot.iris.gl.blending.AlphaTestOverride;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.blending.BufferBlendOverride;
 import net.coderbot.iris.gl.program.ProgramImages;
@@ -54,6 +55,7 @@ public class IrisLodRenderProgram {
     private final CustomUniforms customUniforms;
     private final ProgramSamplers samplers;
     private final ProgramImages images;
+    private final AlphaTestOverride alphaTestOverride;
     private final BlendModeOverride blend;
     private final BufferBlendOverride[] bufferBlendOverrides;
     private final Matrix4f tempMat4a = new Matrix4f();
@@ -61,7 +63,7 @@ public class IrisLodRenderProgram {
     private final Matrix3f tempMat3 = new Matrix3f();
 
     // This will bind  AbstractVertexAttribute
-    private IrisLodRenderProgram(String name, boolean isShadowPass, boolean translucent, BlendModeOverride override, BufferBlendOverride[] bufferBlendOverrides, String vertex, String tessControl, String tessEval, String geometry, String fragment, CustomUniforms customUniforms, DeferredWorldRenderingPipeline pipeline, ProgramSource source) {
+    private IrisLodRenderProgram(String name, boolean isShadowPass, boolean translucent, AlphaTestOverride alphaTestOverride, BlendModeOverride override, BufferBlendOverride[] bufferBlendOverrides, String vertex, String tessControl, String tessEval, String geometry, String fragment, CustomUniforms customUniforms, DeferredWorldRenderingPipeline pipeline, ProgramSource source) {
         id = GLStateManager.glCreateProgram();
 
         GLStateManager.glBindAttribLocation(this.id, 0, "vPosition");
@@ -69,6 +71,7 @@ public class IrisLodRenderProgram {
         GLStateManager.glBindAttribLocation(this.id, 2, "irisExtra");
 
         this.bufferBlendOverrides = bufferBlendOverrides;
+        this.alphaTestOverride = alphaTestOverride;
 
         GlShader vert = new GlShader(ShaderType.VERTEX, name + ".vsh", vertex);
         GLStateManager.glAttachShader(id, vert.getHandle());
@@ -166,7 +169,11 @@ public class IrisLodRenderProgram {
             }
         });
 
-        return new IrisLodRenderProgram(name, isShadowPass, translucent, source.getDirectives().getBlendModeOverride().orElse(null), bufferOverrides.toArray(BufferBlendOverride[]::new), vertex, tessControl, tessEval, geometry, fragment, uniforms, pipeline, source);
+        return new IrisLodRenderProgram(name, isShadowPass, translucent,
+            source.getDirectives().getAlphaTestOverride().orElse(AlphaTestOverride.OFF),
+            source.getDirectives().getBlendModeOverride().orElse(null),
+            bufferOverrides.toArray(BufferBlendOverride[]::new),
+            vertex, tessControl, tessEval, geometry, fragment, uniforms, pipeline, source);
     }
 
     // Noise Uniforms
@@ -202,6 +209,9 @@ public class IrisLodRenderProgram {
     // Override ShaderProgram.bind()
     public void bind() {
         GLStateManager.glUseProgram(id);
+        if (alphaTestOverride != null) {
+            alphaTestOverride.apply();
+        }
         if (blend != null) blend.apply();
 
         for (BufferBlendOverride override : bufferBlendOverrides) {
@@ -211,9 +221,10 @@ public class IrisLodRenderProgram {
 
     public void unbind() {
         GLStateManager.glUseProgram(0);
+        AlphaTestOverride.restore();
+        BlendModeOverride.restore();
         ProgramUniforms.clearActiveUniforms();
         ProgramSamplers.clearActiveSamplers();
-        BlendModeOverride.restore();
     }
 
     public void free() {
