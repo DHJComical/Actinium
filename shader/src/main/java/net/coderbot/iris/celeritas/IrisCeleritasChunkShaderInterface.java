@@ -66,6 +66,10 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
     private final List<BufferBlendOverride> bufferBlendOverrides;
     private final boolean hasOverrides;
     private boolean alphaTestOverrideApplied;
+    private boolean depthStateOverridden;
+    private boolean previousDepthTestEnabled;
+    private boolean previousDepthMaskEnabled;
+    private int previousDepthFunc;
 
     // Stored matrices for inverse and normal matrix computation
     private final Matrix4f projectionMatrixInverse = new Matrix4f();
@@ -99,6 +103,18 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
     @Override
     public void setupState(TerrainRenderPass pass) {
         bindFramebuffer(pass);
+
+        if (!depthStateOverridden) {
+            previousDepthTestEnabled = GLStateManager.glIsEnabled(GL11.GL_DEPTH_TEST);
+            previousDepthMaskEnabled = GLStateManager.getDepthState().isEnabled();
+            previousDepthFunc = GLStateManager.getDepthState().getFunc();
+            depthStateOverridden = true;
+        }
+
+        // Hand and fullscreen passes can leave depth disabled or mask writes off before terrain draws.
+        GLStateManager.enableDepthTest();
+        GLStateManager.glDepthFunc(GL11.GL_LEQUAL);
+        GLStateManager.glDepthMask(true);
 
         if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             GLStateManager.disableCull();
@@ -144,6 +160,17 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
 
     @Override
     public void restoreState() {
+        if (depthStateOverridden) {
+            if (previousDepthTestEnabled) {
+                GLStateManager.enableDepthTest();
+            } else {
+                GLStateManager.disableDepthTest();
+            }
+            GLStateManager.glDepthFunc(previousDepthFunc);
+            GLStateManager.glDepthMask(previousDepthMaskEnabled);
+            depthStateOverridden = false;
+        }
+
         if (alphaTestOverrideApplied) {
             AlphaTestOverride.restore();
             alphaTestOverrideApplied = false;

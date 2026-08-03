@@ -34,7 +34,7 @@ public class IrisInternalUniforms {
             .uniform1f(PER_FRAME, "iris_FogDensity", () -> Math.max(0.0F, GLStateManager.getFogState().getDensity()));
 
         uniforms
-            .uniform1f(PER_FRAME, "iris_currentAlphaTest", IrisInternalUniforms::getEffectiveAlphaRef)
-            .uniform1f(PER_FRAME, "alphaTestRef", IrisInternalUniforms::getEffectiveAlphaRef);
+            .uniform1f("iris_currentAlphaTest", IrisInternalUniforms::getEffectiveAlphaRef, notifier -> { })
+            .uniform1f("alphaTestRef", IrisInternalUniforms::getEffectiveAlphaRef, notifier -> { });
     }
 }
