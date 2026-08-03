@@ -53,18 +53,11 @@ Actinium 的 `far` uniform 为 `renderDistanceChunks * 16`。1.12.2 的实际投
 在 `CompatibilityTransformer` 中重写 `lViewPosM`：
 
 ```glsl
-float lViewPosM = length(viewPos) < maxdist ? length(viewPos) - 1.0 : 100000000.0;
-ivec2 _irisCloudTexel = ivec2(floor(gl_FragCoord.xy) * 2.0 + 0.5);
-float _irisCloudDepth = texelFetch(depthtex0, _irisCloudTexel, 0).x;
-// 若该 pass 使用了 depthtex1 / dhDepthTex / dhDepthTex1，继续对对应深度取 min。
-if (_irisCloudDepth >= 1.0 - 1e-5 && length(viewPos) >= far - 1.0) lViewPosM = 100000000.0;
+float lViewPosM = length(viewPos) >= far - 1.0 ? 100000000.0
+    : length(viewPos) < maxdist ? length(viewPos) - 1.0 : 100000000.0;
 ```
 
-该补丁只对深度仍为天空的 ray 放开截断；地形像素即使重建出的 `viewPos` 长度接近远平面，也会保留
-Eclipse 原本的 `length(viewPos) - 1.0` 距离裁剪，避免远处云盖住较近地形。
-
-`_irisCloudTexel` 复用 Eclipse 半分辨率 composite pass 中 `texcoord = ivec2(tc / texelSize)`
-的换算关系，避免直接用 `gl_FragCoord.xy` 采样到错误深度。
+该补丁只对接近远平面的天空 ray 放开截断，仍保留普通地形像素的原距离裁剪语义。
 
 ## 验证
 
