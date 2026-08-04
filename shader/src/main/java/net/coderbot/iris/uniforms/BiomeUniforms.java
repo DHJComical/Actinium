@@ -37,7 +37,7 @@ public class BiomeUniforms {
                 .uniform1i(PER_TICK, "biome_category", BiomeUniforms::getBiomeCategory)
                 .uniform1i(PER_TICK, "biome_precipitation", BiomeUniforms::getBiomePrecipitation)
                 .uniform1f(PER_TICK, "rainfall", BiomeUniforms::getBiomeRainfall)
-                .uniform1f(PER_TICK, "temperature", BiomeUniforms::getBiomeTemperature);
+                .uniform1f(PER_TICK, "temperature", () -> BiomeUniforms.getBiomeTemperature());
     }
 
     /**
@@ -64,8 +64,7 @@ public class BiomeUniforms {
         return cachedBiome;
     }
 
-    public static int getBiomePrecipitation() {
-        final Biome biome = getCachedBiome();
+    static int getBiomePrecipitation(Biome biome, BlockPos pos) {
         if (biome == null) {
             return 0;
         }
@@ -74,13 +73,22 @@ public class BiomeUniforms {
             return 0;
         }
 
+        final float temp = biome.getTemperature(pos);
+
+        return temp > 0.15F ? 1 : 2;
+    }
+
+    public static int getBiomePrecipitation() {
+        final Biome biome = getCachedBiome();
+        if (biome == null) {
+            return 0;
+        }
+
         final BlockPos pos = new BlockPos(
                 MathHelper.floor(client.player.posX),
                 MathHelper.floor(client.player.posY),
                 MathHelper.floor(client.player.posZ));
-        final float temp = biome.getTemperature(pos);
-
-        return temp > 0.15F ? 1 : 2;
+        return getBiomePrecipitation(biome, pos);
     }
 
     public static float getBiomeRainfall() {
@@ -88,9 +96,12 @@ public class BiomeUniforms {
         return biome != null ? biome.getRainfall() : 0.0F;
     }
 
-    public static float getBiomeTemperature() {
-        final Biome biome = getCachedBiome();
+    static float getBiomeTemperature(Biome biome) {
         return biome != null ? biome.getDefaultTemperature() : 0.0F;
+    }
+
+    public static float getBiomeTemperature() {
+        return getBiomeTemperature(getCachedBiome());
     }
 
     /**
@@ -101,8 +112,7 @@ public class BiomeUniforms {
         return biome != null ? Biome.getIdForBiome(biome) : 0;
     }
 
-    public static int getBiomeCategory() {
-        final Biome biome = getCachedBiome();
+    static int getBiomeCategory(Biome biome) {
         if (biome == null) {
             return BiomeCategories.NONE.ordinal();
         }
@@ -128,6 +138,10 @@ public class BiomeUniforms {
 
         // Fallback if mixin didn't apply (shouldn't happen)
         return determineBiomeCategory(biome);
+    }
+
+    public static int getBiomeCategory() {
+        return getBiomeCategory(getCachedBiome());
     }
 
     private static int determineBiomeCategory(Biome biome) {

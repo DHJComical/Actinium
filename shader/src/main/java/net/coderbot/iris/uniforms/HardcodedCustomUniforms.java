@@ -4,6 +4,7 @@ import com.dhj.actinium.config.ActiniumConfig;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import net.coderbot.iris.gl.uniform.UniformHolder;
 import net.coderbot.iris.gl.uniform.UniformUpdateFrequency;
+import net.coderbot.iris.parsing.BiomeCategories;
 import net.coderbot.iris.uniforms.transforms.SmoothedFloat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
@@ -17,18 +18,8 @@ import org.joml.Vector3d;
 // mostly working under Iris.
 public class HardcodedCustomUniforms {
 	private static final Minecraft client = Minecraft.getMinecraft();
-    // TODO: Biome
-//	private static Biome storedBiome;
 
 	public static void addHardcodedCustomUniforms(UniformHolder holder, FrameUpdateNotifier updateNotifier) {
-		updateNotifier.addListener(() -> {
-//			if (Minecraft.getMinecraft().level != null) {
-//				storedBiome = Minecraft.getMinecraft().level.getBiome(Minecraft.getMinecraft().getCameraEntity().blockPosition());
-//			} else {
-//				storedBiome = null;
-//			}
-		});
-
 		CameraUniforms.CameraPositionTracker tracker = new CameraUniforms.CameraPositionTracker(updateNotifier);
 
         final SmoothedFloat eyeInCave = new SmoothedFloat(6, 12, HardcodedCustomUniforms::getEyeInCave, updateNotifier);
@@ -57,22 +48,9 @@ public class HardcodedCustomUniforms {
 		holder.uniform1f(UniformUpdateFrequency.PER_FRAME, "rainFactor", rainStrengthS);
 
 		// The following uniforms are Sildur's specific.
-		holder.uniform1f(UniformUpdateFrequency.PER_FRAME, "inSwamp", new SmoothedFloat(5, 5, () -> {
-            return 0;
-//			if (storedBiome == null) {
-//				return 0;
-//			} else {
-//				return storedBiome.getBiomeCategory() == Biome.BiomeCategory.SWAMP ? 1 : 0;
-//			}
-		}, updateNotifier));
-		holder.uniform1f(UniformUpdateFrequency.PER_FRAME, "BiomeTemp", () -> {
-            return 0;
-//			if (storedBiome == null) {
-//				return 0;
-//			} else {
-//				return storedBiome.getTemperature(Minecraft.getMinecraft().getCameraEntity().blockPosition());
-//			}
-		});
+		holder.uniform1f(UniformUpdateFrequency.PER_FRAME, "inSwamp", new SmoothedFloat(5, 5,
+			() -> BiomeUniforms.getBiomeCategory() == BiomeCategories.SWAMP.ordinal() ? 1 : 0, updateNotifier));
+		holder.uniform1f(UniformUpdateFrequency.PER_FRAME, "BiomeTemp", () -> BiomeUniforms.getBiomeTemperature());
 
 		// The following uniforms are specific to Super Duper Vanilla Shaders.
 		holder.uniform1f(UniformUpdateFrequency.PER_FRAME, "day", HardcodedCustomUniforms::getDay);
@@ -183,17 +161,7 @@ public class HardcodedCustomUniforms {
 	}
 
 	private static float getRawPrecipitation() {
-        // TODO: Biome
-//		if (storedBiome == null) {
-//			return 0;
-//		}
-				return 0;
-//		Biome.Precipitation precipitation = storedBiome.getPrecipitation();
-//        return switch (precipitation) {
-//            case RAIN -> 1;
-//            case SNOW -> 2;
-//            default -> 0;
-//        };
+		return BiomeUniforms.getBiomePrecipitation();
 	}
 
 	private static float getBlindFactor() {
