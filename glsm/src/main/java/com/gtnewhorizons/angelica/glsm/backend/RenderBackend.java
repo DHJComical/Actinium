@@ -77,6 +77,9 @@ public abstract class RenderBackend {
     public abstract void multiDrawElementsIndirect(int mode, int type, long indirect, int drawcount, int stride);
     public abstract void copyBufferSubData(int readTarget, int writeTarget, long readOffset, long writeOffset, long size);
     public abstract void drawElementsInstanced(int mode, int count, int type, long indices, int primcount);
+    public void drawArraysInstanced(int mode, int first, int count, int primcount) {
+        throw new UnsupportedOperationException("drawArraysInstanced is only supported by the LWJGL3 backend");
+    }
     public abstract void drawElementsBaseVertex(int mode, int count, int type, long indices, int baseVertex);
     public abstract void multiDrawElementsBaseVertex(int mode, long pCount, int type, long pIndices, int drawcount, long pBaseVertex);
     public abstract void drawBuffer(int mode);
@@ -190,8 +193,23 @@ public abstract class RenderBackend {
     public abstract void uniform3i(int location, int v0, int v1, int v2);
     public abstract void uniform4f(int location, float v0, float v1, float v2, float v3);
     public abstract void uniform4i(int location, int v0, int v1, int v2, int v3);
+    public void uniform2(int location, FloatBuffer value) {
+        throw new UnsupportedOperationException("uniform2 is only supported by the LWJGL3 backend");
+    }
     public abstract void uniform3(int location, FloatBuffer value);
     public abstract void uniform4(int location, FloatBuffer value);
+    public void uniform1iv(int location, IntBuffer value) {
+        throw new UnsupportedOperationException("uniform1iv is only supported by the LWJGL3 backend");
+    }
+    public void uniform2iv(int location, IntBuffer value) {
+        throw new UnsupportedOperationException("uniform2iv is only supported by the LWJGL3 backend");
+    }
+    public void uniform3iv(int location, IntBuffer value) {
+        throw new UnsupportedOperationException("uniform3iv is only supported by the LWJGL3 backend");
+    }
+    public void uniform4iv(int location, IntBuffer value) {
+        throw new UnsupportedOperationException("uniform4iv is only supported by the LWJGL3 backend");
+    }
     public abstract void uniformMatrix3(int location, boolean transpose, FloatBuffer value);
     public abstract void uniformMatrix4(int location, boolean transpose, FloatBuffer value);
     public void uniformMatrix2(int location, boolean transpose, FloatBuffer matrices) {}
@@ -237,6 +255,9 @@ public abstract class RenderBackend {
     public abstract int genVertexArrays();
     public abstract void deleteVertexArrays(int array);
     public abstract void bindVertexArray(int array);
+    public boolean isVertexArray(int array) {
+        throw new UnsupportedOperationException("isVertexArray is only supported by the LWJGL3 backend");
+    }
     public abstract void vertexAttribPointer(int index, int size, int type, boolean normalized, int stride, long pointer);
     public void vertexAttribPointer(int index, int size, int type, boolean normalized, int stride, ByteBuffer pointer) {
         vertexAttribPointer(index, size, type, normalized, stride, MemoryUtilities.memAddress0(pointer));

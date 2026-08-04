@@ -33,6 +33,7 @@ public class GLSMRedirector {
     private static final String GL_PREFIX = "org/lwjgl/opengl/GL";
     private static final String ARB_VERTEX_ARRAY_OBJECT = "org/lwjgl/opengl/ARBVertexArrayObject";
     private static final String APPLE_VERTEX_ARRAY_OBJECT = "org/lwjgl/opengl/APPLEVertexArrayObject";
+    private static final String EXT_INSTANCED_ARRAYS = "org/lwjgl/opengl/EXTInstancedArrays";
     private static final String PROJECT = "org/lwjgl/util/glu/Project";
     private static final String GLU = "org/lwjgl/util/glu/GLU";
     private static final String VANILLA_GL_STATE_MANAGER = "net/minecraft/client/renderer/GlStateManager";
@@ -332,6 +333,7 @@ public class GLSMRedirector {
             .add("glGenVertexArrays")
             .add("glBindVertexArray")
             .add("glDeleteVertexArrays")
+            .add("glIsVertexArray")
             .add("glBindFramebuffer")
             .add("glDeleteFramebuffers")
             .add("glGenFramebuffers")
@@ -342,7 +344,8 @@ public class GLSMRedirector {
             .add("glGetFramebufferAttachmentParameteri")
             .add("glBlitFramebuffer");
         Map<String, String> gl31 = RedirectMap.newMap()
-            .add("glDrawElementsInstanced");
+            .add("glDrawElementsInstanced")
+            .add("glDrawArraysInstanced");
         Map<String, String> gl32 = RedirectMap.newMap()
             .add("glFramebufferTexture");
         Map<String, String> gl33 = RedirectMap.newMap()
@@ -675,7 +678,11 @@ public class GLSMRedirector {
             .add("glBindVertexArray")
             .add("glDeleteVertexArrays")
         );
-        METHOD_REDIRECTS.put(ARB_INSTANCED_ARRAYS, RedirectMap.newMap().add("glVertexAttribDivisorARB"));
+        METHOD_REDIRECTS.put(ARB_INSTANCED_ARRAYS, RedirectMap.newMap()
+            .add("glVertexAttribDivisorARB")
+            .add("glDrawArraysInstancedARB", "glDrawArraysInstanced"));
+        METHOD_REDIRECTS.put(EXT_INSTANCED_ARRAYS, RedirectMap.newMap()
+            .add("glDrawArraysInstancedEXT", "glDrawArraysInstanced"));
         METHOD_REDIRECTS.put(APPLE_VERTEX_ARRAY_OBJECT, RedirectMap.newMap().add("glBindVertexArrayAPPLE", "glBindVertexArray"));
         METHOD_REDIRECTS.put(UNIVERSAL_VAO, RedirectMap.newMap()
             .add("bindVertexArray", "glBindVertexArray")

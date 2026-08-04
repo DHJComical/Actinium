@@ -294,6 +294,11 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
     }
 
     @Override
+    public void drawArraysInstanced(int mode, int first, int count, int primcount) {
+        GL31C.glDrawArraysInstanced(mode, first, count, primcount);
+    }
+
+    @Override
     public void multiDrawElementsIndirect(int mode, int type, long indirect, int drawcount, int stride) {
         GL43C.glMultiDrawElementsIndirect(mode, type, indirect, drawcount, stride);
     }
@@ -807,6 +812,11 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
     }
 
     @Override
+    public void uniform2(int location, FloatBuffer value) {
+        GL20C.glUniform2fv(location, value);
+    }
+
+    @Override
     public void uniform3(int location, FloatBuffer value) {
         GL20C.glUniform3fv(location, value);
     }
@@ -814,6 +824,26 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
     @Override
     public void uniform4(int location, FloatBuffer value) {
         GL20C.glUniform4fv(location, value);
+    }
+
+    @Override
+    public void uniform1iv(int location, IntBuffer value) {
+        GL20C.glUniform1iv(location, value);
+    }
+
+    @Override
+    public void uniform2iv(int location, IntBuffer value) {
+        GL20C.glUniform2iv(location, value);
+    }
+
+    @Override
+    public void uniform3iv(int location, IntBuffer value) {
+        GL20C.glUniform3iv(location, value);
+    }
+
+    @Override
+    public void uniform4iv(int location, IntBuffer value) {
+        GL20C.glUniform4iv(location, value);
     }
 
     @Override
@@ -1024,6 +1054,11 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
     @Override
     public void bindVertexArray(int array) {
         GL30C.glBindVertexArray(array);
+    }
+
+    @Override
+    public boolean isVertexArray(int array) {
+        return GL30C.glIsVertexArray(array);
     }
 
     @Override

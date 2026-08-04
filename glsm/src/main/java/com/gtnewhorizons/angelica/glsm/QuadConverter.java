@@ -127,6 +127,31 @@ public final class QuadConverter {
     }
 
     /**
+     * Convert an instanced GL_QUADS glDrawArrays call to indexed GL_TRIANGLES.
+     */
+    public static void drawQuadsAsTrianglesInstanced(int first, int vertexCount, int primcount) {
+        final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
+        final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.QUAD_ARRAYS) : 0L;
+        assert first % 4 == 0 : "QuadConverter: first (" + first + ") must be a multiple of 4";
+        assert vertexCount % 4 == 0 : "QuadConverter: vertexCount (" + vertexCount + ") must be a multiple of 4";
+        final int quadCount = vertexCount / 4;
+        final int prevEbo = GLStateManager.getBoundEBO();
+        ensureCapacity(first / 4 + quadCount);
+        final boolean needsEboBind = needsSharedEboBind(prevEbo, eboId);
+        if (needsEboBind) {
+            RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
+        }
+        final long indexOffset = (long) (first / 4) * 6 * 4;
+        RENDER_BACKEND.drawElementsInstanced(GL11.GL_TRIANGLES, quadCount * 6, INDEX_TYPE, indexOffset, primcount);
+        if (needsEboBind) {
+            RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
+        }
+        if (perfDebugEnabled) {
+            GLSMPerfDebug.end(GLSMPerfDebug.Stage.QUAD_ARRAYS, perfStart);
+        }
+    }
+
+    /**
      * Upload converted triangle indices to the scratch EBO and draw.
      * Saves/restores the caller's EBO binding so subsequent indexed draws
      * (or glGetBufferSubData reads) still see the original EBO.
