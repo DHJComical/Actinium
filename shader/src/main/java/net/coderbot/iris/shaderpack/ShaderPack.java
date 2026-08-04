@@ -479,9 +479,10 @@ public class ShaderPack {
 			path = path.substring(1);
 		}
 
-		// Read mcmeta for filtering data
-		boolean blur = false;
-		boolean clamp = false;
+		// Read mcmeta for filtering data. Raw textures default to linear/clamped filtering,
+		// matching Iris and preventing shaderpack LUTs from displaying banding artifacts.
+		boolean blur = true;
+		boolean clamp = true;
 
 		String mcMetaPath = path + ".mcmeta";
 		Path mcMetaResolvedPath = root.resolve(mcMetaPath);
