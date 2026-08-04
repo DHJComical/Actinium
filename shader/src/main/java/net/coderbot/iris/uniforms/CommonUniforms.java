@@ -36,6 +36,7 @@ import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_FRAME;
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_TICK;
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.ONCE;
+import static java.lang.Math.PI;
 
 public final class CommonUniforms {
 	private static final Minecraft client = Minecraft.getMinecraft();
@@ -87,6 +88,8 @@ public final class CommonUniforms {
 			return scratch2i.set(0, 0);
 		}, StateUpdateNotifiers.bindTextureNotifier);
 
+		uniforms.uniform1i("gtextureId", () -> GLStateManager.getBoundTextureForServerState(0), StateUpdateNotifiers.bindTextureNotifier);
+
 		uniforms.uniform2i("gtextureSize", () -> {
 			final int glId = GLStateManager.getBoundTextureForServerState(0);
 
@@ -130,6 +133,7 @@ public final class CommonUniforms {
 			// TODO: Do we need to clamp this to avoid fullbright breaking shaders? Or should shaders be able to detect
 			//       that the player is trying to turn on fullbright?
 			.uniform1f(PER_FRAME, "screenBrightness", () -> client.gameSettings.gammaSetting)
+			.uniform1f(ONCE, "pi", () -> PI)
 			// just a dummy value for shaders where entityColor isn't supplied through a vertex attribute (and thus is
 			// not available) - suppresses warnings. See AttributeShaderTransformer for the actual entityColor code.
             .uniform1f(PER_TICK, "playerMood", CommonUniforms::getPlayerMood)
