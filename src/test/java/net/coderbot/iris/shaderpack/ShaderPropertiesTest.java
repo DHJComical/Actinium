@@ -57,6 +57,21 @@ class ShaderPropertiesTest {
         assertTrue(properties.getExplicitFlips().get("composite").getBoolean("colortex2"));
     }
 
+    @Test
+    void parsesNumericBooleans() throws IOException {
+        ShaderProperties properties = parse("""
+            oldLighting=1
+            sky=0
+            flip.composite.colortex1=1
+            flip.composite.colortex2=0
+            """);
+
+        assertTrue(properties.getOldLighting().orElse(false));
+        assertFalse(properties.getSky().orElse(true));
+        assertTrue(properties.getExplicitFlips().get("composite").getBoolean("colortex1"));
+        assertFalse(properties.getExplicitFlips().get("composite").getBoolean("colortex2"));
+    }
+
     private ShaderProperties parse(String source) throws IOException {
         return parse(source, List.of());
     }

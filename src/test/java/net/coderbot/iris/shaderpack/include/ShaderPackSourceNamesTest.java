@@ -26,6 +26,40 @@ class ShaderPackSourceNamesTest {
         assertTrue(starts.contains("begin.csh"));
         assertTrue(starts.contains("begin1.csh"));
         assertTrue(starts.contains("begin99_z.csh"));
+        assertTrue(starts.contains("composite.tcs"));
+        assertTrue(starts.contains("composite.tes"));
+    }
+
+    @Test
+    void discoversTessellationSourcesWithTheirIncludes() throws IOException {
+        Path world0 = Files.createDirectories(packRoot.resolve("world0"));
+        Path includeDirectory = Files.createDirectories(packRoot.resolve("lib"));
+        Files.writeString(includeDirectory.resolve("shared.glsl"), "const int sharedValue = 7;\n");
+        Files.writeString(world0.resolve("composite.tcs"), "#version 400\n#include \"/lib/shared.glsl\"\nvoid main() {}\n");
+        Files.writeString(world0.resolve("composite.tes"), "#version 400\n#include \"/lib/shared.glsl\"\nvoid main() {}\n");
+
+        ImmutableList.Builder<AbsolutePackPath> starts = ImmutableList.builder();
+        boolean found = ShaderPackSourceNames.findPresentSources(
+            starts,
+            packRoot,
+            AbsolutePackPath.fromAbsolutePath("/world0"),
+            ShaderPackSourceNames.POTENTIAL_STARTS
+        );
+
+        assertTrue(found);
+        ImmutableList<AbsolutePackPath> discoveredSources = starts.build();
+        assertTrue(discoveredSources.contains(AbsolutePackPath.fromAbsolutePath("/world0/composite.tcs")));
+        assertTrue(discoveredSources.contains(AbsolutePackPath.fromAbsolutePath("/world0/composite.tes")));
+
+        IncludeProcessor processor = new IncludeProcessor(new IncludeGraph(packRoot, discoveredSources));
+        assertEquals(
+            List.of("#version 400", "const int sharedValue = 7;", "void main() {}"),
+            processor.getIncludedFile(AbsolutePackPath.fromAbsolutePath("/world0/composite.tcs"))
+        );
+        assertEquals(
+            List.of("#version 400", "const int sharedValue = 7;", "void main() {}"),
+            processor.getIncludedFile(AbsolutePackPath.fromAbsolutePath("/world0/composite.tes"))
+        );
     }
 
     @Test

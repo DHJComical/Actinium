@@ -27,6 +27,7 @@ public class JcppProcessor {
 		//       That's not the behavior we want. If you're reading this, don't rely on this behavior.
 		source = source.replace("#version", GlslCollectingListener.VERSION_MARKER);
 		source = source.replace("#extension", GlslCollectingListener.EXTENSION_MARKER);
+		source = source.replace("\u0000", "");
 
 		GlslCollectingListener listener = new GlslCollectingListener();
 
