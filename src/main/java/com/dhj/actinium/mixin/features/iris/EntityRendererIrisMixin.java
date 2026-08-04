@@ -131,9 +131,9 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
         Camera.INSTANCE.update(viewEntity, partialTicks);
         RenderingState.INSTANCE.setCameraPosition(
-            Camera.INSTANCE.getEntityPos().x,
-            Camera.INSTANCE.getEntityPos().y,
-            Camera.INSTANCE.getEntityPos().z
+            Camera.INSTANCE.getPos().x,
+            Camera.INSTANCE.getPos().y,
+            Camera.INSTANCE.getPos().z
         );
     }
 

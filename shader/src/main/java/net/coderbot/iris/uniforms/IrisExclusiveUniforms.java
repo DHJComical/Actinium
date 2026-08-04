@@ -105,7 +105,7 @@ public class IrisExclusiveUniforms {
 	private static Vector3d getRelativeEyePosition() {
 		final Vector3dc cameraPos = CameraUniforms.getUnshiftedCameraPosition();
 		final Vector3d eyePos = getEyePosition();
-		return relativeEyePositionCache.set(eyePos).sub(cameraPos);
+		return relativeEyePositionCache.set(cameraPos).sub(eyePos);
 	}
 
 	private static Vector4f getLightningBoltPosition() {

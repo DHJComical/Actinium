@@ -1,6 +1,7 @@
 package net.coderbot.iris.uniforms;
 
 import com.dhj.actinium.config.ActiniumConfig;
+import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.states.BlendState;
 import com.gtnewhorizons.angelica.glsm.texture.TextureInfo;
@@ -18,10 +19,10 @@ import net.coderbot.iris.uniforms.transforms.SmoothedFloat;
 import net.coderbot.iris.uniforms.transforms.SmoothedVec2f;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.init.MobEffects;
 import net.minecraft.potion.PotionEffect;
@@ -264,15 +265,23 @@ public final class CommonUniforms {
 	}
 
 	static int isEyeInWater() {
-        Entity cameraEntity = client.getRenderViewEntity();
-        if (client.gameSettings.thirdPersonView == 0 && cameraEntity instanceof EntityLivingBase living && !living.isPlayerSleeping() && client.player != null) {
-            if (client.player.isInsideOfMaterial(Material.WATER))
-			return 1;
-            else if (client.player.isInsideOfMaterial(Material.LAVA))
-			return 2;
-        }
+		if (client.world == null) {
 			return 0;
 		}
+
+		Material material = ActiveRenderInfo.getBlockStateAtEntityViewpoint(
+			client.world,
+			client.getRenderViewEntity(),
+			CapturedRenderingState.INSTANCE.getTickDelta()
+		).getMaterial();
+		if (material == Material.WATER) {
+			return 1;
+		}
+		if (material == Material.LAVA && !GameModeUtil.isSpectator()) {
+			return 2;
+		}
+		return 0;
+	}
 
 	static {
 		GbufferPrograms.init();
