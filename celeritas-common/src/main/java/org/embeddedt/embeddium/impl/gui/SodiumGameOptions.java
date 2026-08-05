@@ -79,6 +79,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public boolean useRenderPassConsolidation = true;
         public boolean useFasterClouds = true;
         public boolean useNoErrorGLContext = true;
+        public int loadingScreenFramerateLimit = 60;
 
         public AsyncOcclusionMode asyncOcclusionMode = AsyncOcclusionMode.ONLY_SHADOW;
     }

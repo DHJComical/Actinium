@@ -29,3 +29,5 @@ sodium.options.actinium.shader_debug.render_pass_optimization.tooltip=当方块�
 sodium.options.actinium.ignore_framebuffer_errors.name=忽略帧缓冲错误
 sodium.options.actinium.ignore_framebuffer_errors.tooltip=允许直接使用未通过显卡驱动完整性检查的帧缓冲。如果在 Android 设备上运行（如 MobileGlues 渲染器）且部分渲染无法正常工作，可以尝试打开此选项。警告：这会降低真实图形错误的可诊断性。
 options.actinium.shaderPackSelection=Iris 光影包
+options.actinium.loadingScreenFramerateLimit=加载界面帧率上限
+options.actinium.loadingScreenFramerateLimit.tooltip=在没有进入世界时（包括加载界面）限制每秒最大帧数，默认 60。

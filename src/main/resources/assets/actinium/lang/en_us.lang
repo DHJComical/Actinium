@@ -29,3 +29,5 @@ sodium.options.actinium.shader_debug.render_pass_optimization.tooltip=Reassigns 
 sodium.options.actinium.ignore_framebuffer_errors.name=Ignore Framebuffer Errors
 sodium.options.actinium.ignore_framebuffer_errors.tooltip=Allows framebuffers that fail the graphics driver's completeness check to be used anyway. If you are running on an Android device (e.g. the MobileGlues renderer) and some rendering does not work correctly, try enabling this. Warning: reduces the diagnosability of real graphics errors.
 options.actinium.shaderPackSelection=Iris Shader Packs
+options.actinium.loadingScreenFramerateLimit=Loading Screen FPS Limit
+options.actinium.loadingScreenFramerateLimit.tooltip=Limits frames per second while no world is loaded, including the loading screen. Defaults to 60.

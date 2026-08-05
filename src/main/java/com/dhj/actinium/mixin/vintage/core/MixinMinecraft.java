@@ -15,6 +15,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Minecraft.class)
 public class MixinMinecraft {
@@ -24,6 +25,14 @@ public class MixinMinecraft {
     @Inject(method = "runTick", at = @At("HEAD"))
     private void preRender(CallbackInfo ci) {
         ActiniumWindowModeController.synchronize((Minecraft) (Object) this);
+    }
+
+    @Inject(method = "getLimitFramerate", at = @At("HEAD"), cancellable = true)
+    private void actinium$useLoadingScreenFramerateLimit(CallbackInfoReturnable<Integer> cir) {
+        Minecraft minecraft = (Minecraft) (Object) this;
+        if (minecraft.world == null && minecraft.currentScreen != null) {
+            cir.setReturnValue(ActiniumRuntime.options().performance.loadingScreenFramerateLimit);
+        }
     }
 
     @Inject(method = "runGameLoop", at = @At("HEAD"))

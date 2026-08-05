@@ -181,6 +181,14 @@ public class ActiniumGameOptionPages {
                         .setControl(option -> new SliderControl(option, 10, 260, 10, ControlValueFormatter.fpsLimit()))
                         .setBinding((opts, value) -> opts.limitFramerate = value, opts -> opts.limitFramerate)
                         .build())
+                .add(OptionImpl.createBuilder(int.class, sodiumOpts)
+                        .setId(OptionIdentifier.create(ActiniumRuntime.MODID, "loading_screen_framerate_limit", int.class))
+                        .setName(TextComponent.translatable("options.actinium.loadingScreenFramerateLimit"))
+                        .setTooltip(TextComponent.translatable("options.actinium.loadingScreenFramerateLimit.tooltip"))
+                        .setControl(option -> new SliderControl(option, 30, 240, 10, ControlValueFormatter.fpsLimit()))
+                        .setBinding((opts, value) -> opts.performance.loadingScreenFramerateLimit = value,
+                                opts -> opts.performance.loadingScreenFramerateLimit)
+                        .build())
                 .build());
 
         groups.add(OptionGroup.createBuilder()
@@ -563,4 +571,3 @@ public class ActiniumGameOptionPages {
         return sodiumOpts;
     }
 }
-
