@@ -546,7 +546,10 @@ public abstract class RenderSectionManager {
 
         for (var holder : outputs) {
             var output = holder.output();
-            if (output.render.isDisposed() || output.render.getLastBuiltFrame() > output.buildTime) {
+            if (output.render.isDisposed()
+                    || output.render.getLastBuiltFrame() > output.buildTime
+                    || (output instanceof ChunkBuildOutput buildOutput
+                        && output.render.getLastSubmittedBuildFrame() > buildOutput.buildTime)) {
                 continue;
             }
 
@@ -628,6 +631,9 @@ public abstract class RenderSectionManager {
             }
 
             section.setLastSubmittedFrame(frame);
+            if (!type.isSort()) {
+                section.setLastSubmittedBuildFrame(frame);
+            }
             section.setPendingUpdate(null);
         }
     }
@@ -735,6 +741,15 @@ public abstract class RenderSectionManager {
         if (section != null) {
             this.invalidateCachedSectionData(section);
 
+            boolean cancelledInFlightBuild = false;
+            var inFlightBuild = section.getBuildCancellationToken();
+            if (inFlightBuild != null) {
+                // A newer block/light update must not wait for an older mesh that may already contain stale data.
+                inFlightBuild.setCancelled();
+                section.setBuildCancellationToken(null);
+                cancelledInFlightBuild = true;
+            }
+
             ChunkUpdateType pendingUpdate;
 
             if (allowImportantRebuilds() && (important || this.shouldPrioritizeRebuild(section))) {
@@ -743,7 +758,7 @@ public abstract class RenderSectionManager {
                 pendingUpdate = ChunkUpdateType.REBUILD;
             }
 
-            if (section.requestUpdate(pendingUpdate)) {
+            if (section.requestUpdate(pendingUpdate) || cancelledInFlightBuild) {
                 if (!this.getCurrentRenderListManager().isNeedsUpdate() && this.sectionsRequestingUpdate.size() < this.builder.getSchedulingBudget()) {
                     this.sectionsRequestingUpdate.add(section);
                 } else {
@@ -757,6 +772,11 @@ public abstract class RenderSectionManager {
         for (var section : this.sectionByPosition.values()) {
             if (!this.isSectionVisuallyEmpty(section.getChunkX(), section.getChunkY(), section.getChunkZ())) {
                 this.invalidateCachedSectionData(section);
+                var inFlightBuild = section.getBuildCancellationToken();
+                if (inFlightBuild != null) {
+                    inFlightBuild.setCancelled();
+                    section.setBuildCancellationToken(null);
+                }
                 section.requestUpdate(ChunkUpdateType.REBUILD);
             }
         }

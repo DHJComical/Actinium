@@ -69,6 +69,7 @@ public class RenderSection extends AbstractSection {
 
     private int lastBuiltFrame = -1;
     private int lastSubmittedFrame = -1;
+    private int lastSubmittedBuildFrame = -1;
 
     // Lifetime state
     private boolean disposed;
@@ -206,5 +207,13 @@ public class RenderSection extends AbstractSection {
 
     public void setLastSubmittedFrame(int lastSubmittedFrame) {
         this.lastSubmittedFrame = lastSubmittedFrame;
+    }
+
+    public int getLastSubmittedBuildFrame() {
+        return this.lastSubmittedBuildFrame;
+    }
+
+    public void setLastSubmittedBuildFrame(int lastSubmittedBuildFrame) {
+        this.lastSubmittedBuildFrame = lastSubmittedBuildFrame;
     }
 }
