@@ -5,6 +5,7 @@ import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
@@ -12,7 +13,9 @@ import it.unimi.dsi.fastutil.objects.ReferenceSet;
 import net.coderbot.iris.shaderpack.materialmap.BlockEntry;
 import net.coderbot.iris.shaderpack.materialmap.BlockRenderType;
 import net.coderbot.iris.shaderpack.materialmap.FlatteningMap;
+import net.coderbot.iris.shaderpack.materialmap.LegacyBlockTags;
 import net.coderbot.iris.shaderpack.materialmap.NamespacedId;
+import net.coderbot.iris.shaderpack.materialmap.TagEntry;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockDoublePlant;
 import net.minecraft.init.Blocks;
@@ -35,7 +38,7 @@ public class BlockMaterialMapping {
 	 * Legacy helper kept for older call sites. New code should prefer {@link #createBlockIdMaps(Int2ObjectMap, boolean)}.
 	 */
 	public static Reference2ObjectMap<Block, Int2IntMap> createBlockMetaIdMap(Int2ObjectMap<List<BlockEntry>> blockPropertiesMap) {
-		BlockIdMaps blockIdMaps = createBlockIdMaps(blockPropertiesMap, false);
+		BlockIdMaps blockIdMaps = createBlockIdMaps(blockPropertiesMap, new Int2ObjectOpenHashMap<>(), false);
 		BlockRenderingSettings.INSTANCE.setBlockNbtMap(blockIdMaps.blockNbtMap());
 		return blockIdMaps.blockMetaMap();
 	}
@@ -45,6 +48,12 @@ public class BlockMaterialMapping {
 	 * snowy blocks on {@link BlockRenderingSettings}.
 	 */
 	public static BlockIdMaps createBlockIdMaps(Int2ObjectMap<List<BlockEntry>> blockPropertiesMap, boolean skipFlattening) {
+		return createBlockIdMaps(blockPropertiesMap, new Int2ObjectOpenHashMap<>(), skipFlattening);
+	}
+
+	public static BlockIdMaps createBlockIdMaps(Int2ObjectMap<List<BlockEntry>> blockPropertiesMap,
+	                                            Int2ObjectMap<List<TagEntry>> blockTagMap,
+	                                            boolean skipFlattening) {
 		final it.unimi.dsi.fastutil.objects.Reference2ObjectMap<Block, Int2IntMap> blockMatches =
 			new it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap<>();
 		final NbtConditionalIdMap<Block> blockNbtMap = new NbtConditionalIdMap<>();
@@ -56,6 +65,14 @@ public class BlockMaterialMapping {
 					addTileEntityEntry(entry, blockNbtMap, intId);
 				} else {
 					addBlockMetas(entry, blockMatches, blockNbtMap, intId, skipFlattening, snowyBlocks);
+				}
+			}
+		});
+
+		blockTagMap.forEach((intId, entries) -> {
+			for (TagEntry entry : entries) {
+				for (BlockEntry resolved : LegacyBlockTags.resolve(entry)) {
+					addBlockMetas(resolved, blockMatches, blockNbtMap, intId, skipFlattening, snowyBlocks);
 				}
 			}
 		});

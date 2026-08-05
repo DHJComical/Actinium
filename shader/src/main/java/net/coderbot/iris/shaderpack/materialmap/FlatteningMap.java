@@ -146,6 +146,8 @@ public final class FlatteningMap {
         doublePlant("large_fern", 3);
         doublePlant("rose_bush", 4);
         doublePlant("peony", 5);
+        state("double_plant", "half", "lower", entryMetas("double_plant", 0, 1, 2, 3, 4, 5));
+        state("double_plant", "half", "upper", entryMetas("double_plant", 8, 9, 10, 11, 12, 13));
 
         meta("poppy", "red_flower", 0);
         meta("blue_orchid", "red_flower", 1);
@@ -509,6 +511,8 @@ public final class FlatteningMap {
         stairStates("quartz_stairs", "quartz_stairs");
         stairStates("acacia_stairs", "acacia_stairs");
         stairStates("dark_oak_stairs", "dark_oak_stairs");
+        stairStates("red_sandstone_stairs", "red_sandstone_stairs");
+        stairStates("purpur_stairs", "purpur_stairs");
         doorStates("oak_door", "wooden_door");
         doorStates("iron_door", "iron_door");
         sixDirectionalStates("piston", "piston", "extended", "false", "true");
@@ -521,7 +525,13 @@ public final class FlatteningMap {
             bedStates(color + "_bed");
         }
 
-        trapdoorStates();
+        trapdoorStates("oak_trapdoor", "trapdoor");
+        trapdoorStates("spruce_trapdoor", "spruce_trapdoor");
+        trapdoorStates("birch_trapdoor", "birch_trapdoor");
+        trapdoorStates("jungle_trapdoor", "jungle_trapdoor");
+        trapdoorStates("acacia_trapdoor", "acacia_trapdoor");
+        trapdoorStates("dark_oak_trapdoor", "dark_oak_trapdoor");
+        trapdoorStates("iron_trapdoor", "iron_trapdoor");
         fenceGateStates();
     }
 
@@ -782,15 +792,15 @@ public final class FlatteningMap {
         state(modern, "facing", "north", entryMetas(legacy, 4, 12));
     }
 
-    private static void trapdoorStates() {
-        state("oak_trapdoor", "facing", "south", entryMetas("trapdoor", 0, 4, 8, 12));
-        state("oak_trapdoor", "facing", "north", entryMetas("trapdoor", 1, 5, 9, 13));
-        state("oak_trapdoor", "facing", "east", entryMetas("trapdoor", 2, 6, 10, 14));
-        state("oak_trapdoor", "facing", "west", entryMetas("trapdoor", 3, 7, 11, 15));
-        state("oak_trapdoor", "open", "false", entryMetas("trapdoor", 0, 1, 2, 3, 8, 9, 10, 11));
-        state("oak_trapdoor", "open", "true", entryMetas("trapdoor", 4, 5, 6, 7, 12, 13, 14, 15));
-        state("oak_trapdoor", "half", "bottom", entryMetas("trapdoor", 0, 1, 2, 3, 4, 5, 6, 7));
-        state("oak_trapdoor", "half", "top", entryMetas("trapdoor", 8, 9, 10, 11, 12, 13, 14, 15));
+    private static void trapdoorStates(String modern, String legacy) {
+        state(modern, "facing", "south", entryMetas(legacy, 0, 4, 8, 12));
+        state(modern, "facing", "north", entryMetas(legacy, 1, 5, 9, 13));
+        state(modern, "facing", "east", entryMetas(legacy, 2, 6, 10, 14));
+        state(modern, "facing", "west", entryMetas(legacy, 3, 7, 11, 15));
+        state(modern, "open", "false", entryMetas(legacy, 0, 1, 2, 3, 8, 9, 10, 11));
+        state(modern, "open", "true", entryMetas(legacy, 4, 5, 6, 7, 12, 13, 14, 15));
+        state(modern, "half", "bottom", entryMetas(legacy, 0, 1, 2, 3, 4, 5, 6, 7));
+        state(modern, "half", "top", entryMetas(legacy, 8, 9, 10, 11, 12, 13, 14, 15));
     }
 
     private static void fenceGateStates() {

@@ -298,6 +298,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 		final BlockMaterialMapping.BlockIdMaps blockIdMaps = BlockMaterialMapping.createBlockIdMaps(
 			programs.getPack().getIdMap().getBlockProperties(),
+			programs.getPack().getIdMap().getTagEntries(),
 			programs.getPack().getIdMap().hasLegacySection());
 		BlockRenderingSettings.INSTANCE.setBlockMetaMatches(blockIdMaps.blockMetaMap());
 		BlockRenderingSettings.INSTANCE.setBlockNbtMap(blockIdMaps.blockNbtMap());

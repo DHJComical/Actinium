@@ -12,6 +12,7 @@ import net.coderbot.iris.shaderpack.materialmap.BlockEntry;
 import net.coderbot.iris.shaderpack.materialmap.BlockRenderType;
 import net.coderbot.iris.shaderpack.materialmap.EntityFlatteningMap;
 import net.coderbot.iris.shaderpack.materialmap.NamespacedId;
+import net.coderbot.iris.shaderpack.materialmap.TagEntry;
 import net.coderbot.iris.shaderpack.option.ShaderPackOptions;
 import net.coderbot.iris.shaderpack.preprocessor.PropertiesPreprocessor;
 import net.minecraft.item.Item;
@@ -47,19 +48,27 @@ public class IdMap {
     private final Int2ObjectMap<List<BlockEntry>> entityNbtEntries;
 
     private Int2ObjectMap<List<BlockEntry>> blockPropertiesMap;
+    private Int2ObjectMap<List<TagEntry>> blockTagMap;
     private Map<NamespacedId, BlockRenderType> blockRenderTypeMap;
 
     private final boolean hasLegacySection;
 
     private static final Pattern LEGACY_DIRECTIVE_PATTERN = Pattern.compile(
             "(?m)^\\s*#\\s*(?:if|elif|ifdef|ifndef)\\b[^\\n]*\\bMC_VERSION\\b[^\\n]*\\b11202\\b");
+    private static final Pattern MC_VERSION_CONDITIONAL_PATTERN = Pattern.compile(
+            "(?m)^\\s*#\\s*(?:if|elif|ifdef|ifndef)\\b[^\\n]*\\bMC_VERSION\\b");
+    private static final Pattern LEGACY_FALLBACK_PATTERN = Pattern.compile(
+            "(?m)^\\s*#\\s*(?:else|elif)\\b");
 
     record ParsedIdMap(Object2IntMap<NamespacedId> simpleMap, Int2ObjectMap<List<BlockEntry>> nbtEntries) {}
 
     IdMap(Path shaderPath, ShaderPackOptions shaderPackOptions, Iterable<StringPair> environmentDefines) {
         String rawBlockProperties = readProperties(shaderPath, "block.properties");
-        this.hasLegacySection = rawBlockProperties != null
-                && LEGACY_DIRECTIVE_PATTERN.matcher(rawBlockProperties).find();
+        boolean hasMcVersionConditional = rawBlockProperties != null
+                && MC_VERSION_CONDITIONAL_PATTERN.matcher(rawBlockProperties).find();
+        this.hasLegacySection = hasMcVersionConditional
+                && (LEGACY_DIRECTIVE_PATTERN.matcher(rawBlockProperties).find()
+                    || LEGACY_FALLBACK_PATTERN.matcher(rawBlockProperties).find());
 
         Iterable<StringPair> resolvedDefines = environmentDefines;
         if (!this.hasLegacySection) {
@@ -73,8 +82,9 @@ public class IdMap {
             resolvedDefines = modernDefines;
         }
 
+        blockTagMap = new Int2ObjectOpenHashMap<>();
         loadProperties(shaderPath, "block.properties", shaderPackOptions, resolvedDefines).ifPresent(blockProperties -> {
-            blockPropertiesMap = parseBlockMap(blockProperties, "block.", "block.properties");
+            blockPropertiesMap = parseBlockMap(blockProperties, "block.", "block.properties", blockTagMap);
             blockRenderTypeMap = parseRenderTypeMap(blockProperties, "layer.", "block.properties");
         });
 
@@ -271,7 +281,8 @@ public class IdMap {
         return new ParsedIdMap(Object2IntMaps.unmodifiable(idMap), nbtEntries);
     }
 
-    private static Int2ObjectMap<List<BlockEntry>> parseBlockMap(Properties properties, String keyPrefix, String fileName) {
+    private static Int2ObjectMap<List<BlockEntry>> parseBlockMap(Properties properties, String keyPrefix, String fileName,
+                                                                 Int2ObjectMap<List<TagEntry>> tagsById) {
         Int2ObjectMap<List<BlockEntry>> entriesById = new Int2ObjectOpenHashMap<>();
 
         properties.forEach((keyObject, valueObject) -> {
@@ -291,6 +302,7 @@ public class IdMap {
             }
 
             List<BlockEntry> entries = new ArrayList<>();
+            List<TagEntry> tags = new ArrayList<>();
 
             if (value.toString().contains("minecraft:leaves")) {
                 List<ItemStack> leaves = OreDictionary.getOres("treeLeaves");
@@ -309,13 +321,20 @@ public class IdMap {
                 }
 
                 try {
-                    entries.add(BlockEntry.parse(part));
+                    if (part.startsWith("%")) {
+                        tags.add(TagEntry.parse(part));
+                    } else {
+                        entries.add(BlockEntry.parse(part));
+                    }
                 } catch (Exception e) {
                     Iris.logger.warn("Unexpected error while parsing an entry from " + fileName + " for the key " + key + ":", e);
                 }
             }
 
             entriesById.put(intId, Collections.unmodifiableList(entries));
+            if (!tags.isEmpty()) {
+                tagsById.put(intId, Collections.unmodifiableList(tags));
+            }
         });
 
         return Int2ObjectMaps.unmodifiable(entriesById);
@@ -349,6 +368,10 @@ public class IdMap {
 
     public Int2ObjectMap<List<BlockEntry>> getBlockProperties() {
         return blockPropertiesMap;
+    }
+
+    public Int2ObjectMap<List<TagEntry>> getTagEntries() {
+        return blockTagMap;
     }
 
     public Object2IntFunction<NamespacedId> getItemIdMap() {
@@ -385,11 +408,12 @@ public class IdMap {
         return Objects.equals(itemIdMap, idMap.itemIdMap)
                 && Objects.equals(entityIdMap, idMap.entityIdMap)
                 && Objects.equals(blockPropertiesMap, idMap.blockPropertiesMap)
+                && Objects.equals(blockTagMap, idMap.blockTagMap)
                 && Objects.equals(blockRenderTypeMap, idMap.blockRenderTypeMap);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(itemIdMap, entityIdMap, blockPropertiesMap, blockRenderTypeMap);
+        return Objects.hash(itemIdMap, entityIdMap, blockPropertiesMap, blockTagMap, blockRenderTypeMap);
     }
 }

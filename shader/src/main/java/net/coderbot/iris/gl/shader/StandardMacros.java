@@ -83,6 +83,7 @@ public class StandardMacros {
 		if (ActiniumConfig.defineIsIris) {
 			define(standardDefines, "IS_IRIS");
 		}
+		define(standardDefines, "IRIS_TAG_SUPPORT", "2");
 
 		if (DHCompat.hasRenderingEnabled()) {
 			define(standardDefines, "DISTANT_HORIZONS");
