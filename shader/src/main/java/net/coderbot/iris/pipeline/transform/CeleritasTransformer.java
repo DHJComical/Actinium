@@ -41,10 +41,13 @@ class CeleritasTransformer {
         transformer.prependMain("_celeritas_init();");
         transformShared(transformer, parameters);
 
-        // Eclipse-style terrain packs emit world-space positions from the vertex stage and
-        // reproject them in their geometry stage. Celeritas must keep gl_Position in clip
-        // space, so restore the correct projection that iris_ftransform already computed.
-        transformer.replaceExpression("vec4(worldpos, 0.0)", "iris_ftransform()");
+        // Eclipse-style terrain packs displace worldpos in the vertex stage and emit it as
+        // gl_Position. Celeritas still needs clip space, so project the displaced world
+        // position here and let the geometry stage pass the clip position through.
+        transformer.replaceExpression(
+            "vec4(worldpos, 0.0)",
+            "iris_ProjectionMatrix * gbufferModelView * vec4(worldpos, 1.0)"
+        );
 
         final Map<String, String> vertexReplacements = new HashMap<>();
         vertexReplacements.put("gl_Vertex", "_celeritas_getVertexPosition()");
