@@ -19,6 +19,11 @@ public final class BooleanControl extends OptionControl<BooleanOption> {
     }
 
     @Override
+    protected boolean isRowClickable() {
+        return true;
+    }
+
+    @Override
     protected void renderControl(GuiRect control, boolean enabled, int mouseX, int mouseY) {
         int size = 10;
         int x = control.right() - size;

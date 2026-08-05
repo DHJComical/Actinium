@@ -26,6 +26,11 @@ public final class EnumControl<E extends Enum<E>> extends OptionControl<EnumOpti
     }
 
     @Override
+    protected boolean isRowClickable() {
+        return true;
+    }
+
+    @Override
     protected void renderControl(GuiRect control, boolean enabled, int mouseX, int mouseY) {
         String value = this.option.getElementName(this.option.getPendingValue()).getUnformattedText();
         value = this.font.trimStringToWidth(value, Math.max(1, control.width() - 8));

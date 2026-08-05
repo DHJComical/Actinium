@@ -87,7 +87,8 @@ public abstract class OptionControl<O extends Option> implements FocusTarget {
             this.option.resetToDefault();
             return true;
         }
-        return !this.shouldHideControl() && this.onMouseClicked(this.controlBounds(), mouseX, mouseY);
+        GuiRect clickArea = this.isRowClickable() ? this.bounds : this.controlBounds();
+        return !this.shouldHideControl() && this.onMouseClicked(clickArea, mouseX, mouseY);
     }
 
     public final boolean keyPressed(int keyCode) {
@@ -128,6 +129,11 @@ public abstract class OptionControl<O extends Option> implements FocusTarget {
     protected abstract boolean onMouseClicked(GuiRect control, int mouseX, int mouseY);
 
     protected abstract boolean onKeyPressed(int keyCode);
+
+    /** Returns whether a click anywhere in the option row should activate this control. */
+    protected boolean isRowClickable() {
+        return false;
+    }
 
     protected boolean onMouseDragged(GuiRect control, int mouseX, int mouseY) {
         return false;
