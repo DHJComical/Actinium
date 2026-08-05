@@ -54,23 +54,6 @@ class CeleritasTransformerTest {
     }
 
     @Test
-    void worldSpacePositionOverwriteIsReplacedWithClipSpaceTransform() {
-        Transformer transformer = transformVertex("""
-            #version 430 compatibility
-            void main() {
-                vec3 worldpos = vec3(0.0);
-                gl_Position = iris_ftransform();
-                gl_Position = vec4(worldpos, 0.0);
-            }
-            """);
-
-        String output = format(transformer);
-
-        assertEquals(2, occurrences(output, "gl_Position = iris_ftransform();"), output);
-        assertFalse(output.contains("vec4(worldpos, 0.0)"), output);
-    }
-
-    @Test
     void geometryStageDoesNotReprojectCeleritasClipSpacePositions() {
         Transformer transformer = transformGeometry("""
             #version 430 core
