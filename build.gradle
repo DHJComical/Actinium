@@ -23,6 +23,13 @@ setDefaultProperty 'generate_sources_jar', true, true
 setDefaultProperty 'generate_javadocs_jar', true, false
 setDefaultProperty 'minecraft_username', true, 'Developer'
 setDefaultProperty 'extra_jvm_args', false, ''
+setDefaultProperty 'bridge_mod_name', true, 'Celeritas Compatibility Bridge'
+setDefaultProperty 'bridge_mod_description', true, 'Legacy celeritas mod id bridge bundled with Actinium for Celeritas addon compatibility.'
+setDefaultProperty 'bridge_mod_authors', true, 'DHJComical, embeddedt'
+setDefaultProperty 'bridge_mod_credits', true, 'Actinium'
+setDefaultProperty 'bridge_mod_url', true, 'https://github.com/DHJComical/Actinium'
+setDefaultProperty 'bridge_mod_update_json', false, ''
+setDefaultProperty 'bridge_mod_logo_path', true, 'assets/celeritas/textures/gui/icon.png'
 
 version = propertyString('mod_version')
 group = propertyString('root_package')
@@ -106,14 +113,35 @@ tasks.named('compileCompatBridgeJava', JavaCompile).configure {
 }
 
 tasks.named('processCompatBridgeResources').configure {
-    inputs.property 'minecraft_version', '1.12.2'
-    inputs.property 'mod_version', propertyString('mod_version')
+    def bridgeResourceProperties = [
+        minecraft_version       : '1.12.2',
+        mod_version             : propertyString('mod_version'),
+        bridge_mod_name         : propertyString('bridge_mod_name'),
+        bridge_mod_description  : propertyString('bridge_mod_description'),
+        bridge_mod_authors_json : groovy.json.JsonOutput.toJson(
+            propertyStringList('bridge_mod_authors', ',').collect { it.trim() }
+        ),
+        bridge_mod_credits      : propertyString('bridge_mod_credits'),
+        bridge_mod_url          : propertyString('bridge_mod_url'),
+        bridge_mod_update_json  : propertyString('bridge_mod_update_json'),
+        bridge_mod_logo_path    : propertyString('bridge_mod_logo_path')
+    ]
+
+    inputs.properties(bridgeResourceProperties)
+    filteringCharset = 'UTF-8'
 
     filesMatching('mcmod.info') {
-        expand(
-            'minecraft_version': '1.12.2',
-            'mod_version': propertyString('mod_version')
-        )
+        expand(bridgeResourceProperties)
+        filter { line ->
+            bridgeResourceProperties.inject(line) { acc, entry ->
+                if (entry.key == 'bridge_mod_authors_json') {
+                    acc = acc
+                            .replace("\"{{ ${entry.key} }}\"", entry.value)
+                            .replace("\"{{${entry.key}}}\"", entry.value)
+                }
+                acc.replace("{{ ${entry.key} }}", entry.value).replace("{{${entry.key}}}", entry.value)
+            }
+        }
     }
 }
 
@@ -341,6 +369,9 @@ processResources {
         mod_version    : propertyString('mod_version'),
         mod_description: propertyString('mod_description'),
         mod_authors    : propertyString('mod_authors'),
+        mod_authors_json: groovy.json.JsonOutput.toJson(
+            propertyStringList('mod_authors', ',').collect { it.trim() }
+        ),
         mod_credits    : propertyString('mod_credits'),
         mod_url        : propertyString('mod_url'),
         mod_update_json: propertyString('mod_update_json'),
@@ -354,6 +385,11 @@ processResources {
         expand(resourceProperties)
         filter { line ->
             resourceProperties.inject(line) { acc, entry ->
+                if (entry.key == 'mod_authors_json') {
+                    acc = acc
+                            .replace("\"{{ ${entry.key} }}\"", entry.value)
+                            .replace("\"{{${entry.key}}}\"", entry.value)
+                }
                 acc.replace("{{ ${entry.key} }}", entry.value).replace("{{${entry.key}}}", entry.value)
             }
         }
@@ -538,6 +574,56 @@ def verifyRemapJar = tasks.register('verifyRemapJar') {
         if (manifest.getValue('FMLAT') != propertyString('access_transformer_locations').tokenize('/\\').last()) {
             throw new GradleException('Remapped mod jar has an invalid FMLAT manifest entry')
         }
+
+        new java.util.jar.JarFile(remapOutput.get().asFile).withCloseable { jar ->
+            def metadataEntry = jar.getEntry('mcmod.info')
+            if (metadataEntry == null) {
+                throw new GradleException('Remapped mod jar is missing mcmod.info')
+            }
+            def metadata = new groovy.json.JsonSlurper().parse(jar.getInputStream(metadataEntry))
+            def mod = metadata[0]
+            def expectedAuthors = propertyStringList('mod_authors', ',').collect { it.trim() }
+            if (mod.description != propertyString('mod_description')
+                    || mod.authorList != expectedAuthors
+                    || mod.credits != propertyString('mod_credits')
+                    || mod.url != propertyString('mod_url')
+                    || mod.updateJSON != propertyString('mod_update_json')
+                    || mod.logoFile != propertyString('mod_logo_path')) {
+                throw new GradleException('Remapped mod jar metadata does not match Gradle mod metadata properties')
+            }
+            if (!mod.logoFile.isEmpty() && jar.getEntry(mod.logoFile) == null) {
+                throw new GradleException("Remapped mod jar is missing configured logo: ${mod.logoFile}")
+            }
+        }
+    }
+}
+
+def verifyCompatBridgeJar = tasks.register('verifyCompatBridgeJar') {
+    dependsOn tasks.named('remapCompatBridgeJar')
+    inputs.file(compatBridgeRemapOutput)
+
+    doLast {
+        new java.util.jar.JarFile(compatBridgeRemapOutput.get().asFile).withCloseable { jar ->
+            def metadataEntry = jar.getEntry('mcmod.info')
+            if (metadataEntry == null) {
+                throw new GradleException('Compatibility bridge jar is missing mcmod.info')
+            }
+            def metadata = new groovy.json.JsonSlurper().parse(jar.getInputStream(metadataEntry))
+            def bridge = metadata[0]
+            def expectedAuthors = propertyStringList('bridge_mod_authors', ',').collect { it.trim() }
+            if (bridge.name != propertyString('bridge_mod_name')
+                    || bridge.description != propertyString('bridge_mod_description')
+                    || bridge.authorList != expectedAuthors
+                    || bridge.credits != propertyString('bridge_mod_credits')
+                    || bridge.url != propertyString('bridge_mod_url')
+                    || bridge.updateJSON != propertyString('bridge_mod_update_json')
+                    || bridge.logoFile != propertyString('bridge_mod_logo_path')) {
+                throw new GradleException('Compatibility bridge jar metadata does not match Gradle bridge metadata properties')
+            }
+            if (!bridge.logoFile.isEmpty() && jar.getEntry(bridge.logoFile) == null) {
+                throw new GradleException("Compatibility bridge jar is missing configured logo: ${bridge.logoFile}")
+            }
+        }
     }
 }
 
@@ -575,6 +661,7 @@ def verifyModuleBoundaries = tasks.register('verifyModuleBoundaries') {
 
 tasks.named('check').configure {
     dependsOn verifyRemapJar
+    dependsOn verifyCompatBridgeJar
     dependsOn verifyModuleBoundaries
 }
 

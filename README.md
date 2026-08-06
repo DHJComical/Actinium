@@ -52,6 +52,16 @@ For a faster compile-only check:
 Install `build/libs/Actinium-<version>.jar` in a compatible Cleanroom instance. The
 `-sources.jar` file is for development, and the unremapped `-all.jar` is not a runtime mod.
 
+## Mod Metadata
+
+Mod List metadata for Actinium and the Celeritas compatibility bridge is configured from
+Gradle properties in `gradle.properties`. Main mod fields use the `mod_*` prefix
+(`mod_description`, `mod_url`, `mod_authors`, `mod_credits`, `mod_logo_path`), while
+bridge fields use `bridge_mod_*` (`bridge_mod_name`, `bridge_mod_description`,
+`bridge_mod_authors`, `bridge_mod_credits`, `bridge_mod_url`, `bridge_mod_update_json`,
+`bridge_mod_logo_path`). Values can also be overridden per build with `-P` arguments,
+for example `-Pmod_description=... -Pbridge_mod_name=...`.
+
 ## Repository Layout
 
 - `src/` contains Actinium integration, compatibility hooks, mixins, and runtime resources.
