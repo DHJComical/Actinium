@@ -27,8 +27,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,18 +59,12 @@ public class IdMap {
             "(?m)^\\s*#\\s*(?:if|elif|ifdef|ifndef)\\b[^\\n]*\\bMC_VERSION\\b[^\\n]*\\b11202\\b");
     private static final Pattern MC_VERSION_CONDITIONAL_PATTERN = Pattern.compile(
             "(?m)^\\s*#\\s*(?:if|elif|ifdef|ifndef)\\b[^\\n]*\\bMC_VERSION\\b");
-    private static final Pattern LEGACY_FALLBACK_PATTERN = Pattern.compile(
-            "(?m)^\\s*#\\s*(?:else|elif)\\b");
 
     record ParsedIdMap(Object2IntMap<NamespacedId> simpleMap, Int2ObjectMap<List<BlockEntry>> nbtEntries) {}
 
     IdMap(Path shaderPath, ShaderPackOptions shaderPackOptions, Iterable<StringPair> environmentDefines) {
         String rawBlockProperties = readProperties(shaderPath, "block.properties");
-        boolean hasMcVersionConditional = rawBlockProperties != null
-                && MC_VERSION_CONDITIONAL_PATTERN.matcher(rawBlockProperties).find();
-        this.hasLegacySection = hasMcVersionConditional
-                && (LEGACY_DIRECTIVE_PATTERN.matcher(rawBlockProperties).find()
-                    || LEGACY_FALLBACK_PATTERN.matcher(rawBlockProperties).find());
+        this.hasLegacySection = hasLegacySection(rawBlockProperties);
 
         Iterable<StringPair> resolvedDefines = environmentDefines;
         if (!this.hasLegacySection) {
@@ -108,6 +104,44 @@ public class IdMap {
         if (blockRenderTypeMap == null) {
             blockRenderTypeMap = Collections.emptyMap();
         }
+    }
+
+    static boolean hasLegacySection(String rawBlockProperties) {
+        if (rawBlockProperties == null) {
+            return false;
+        }
+
+        if (LEGACY_DIRECTIVE_PATTERN.matcher(rawBlockProperties).find()) {
+            return true;
+        }
+
+        Deque<Boolean> mcVersionConditionals = new ArrayDeque<>();
+        for (String line : rawBlockProperties.split("\\R")) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("#")) {
+                continue;
+            }
+
+            String directive = trimmed.substring(1).trim();
+            if (directive.startsWith("if ") || directive.startsWith("ifdef ") || directive.startsWith("ifndef ")) {
+                mcVersionConditionals.push(MC_VERSION_CONDITIONAL_PATTERN.matcher(line).find());
+            } else if (directive.startsWith("elif ")) {
+                if (!mcVersionConditionals.isEmpty()
+                        && (mcVersionConditionals.peek() || MC_VERSION_CONDITIONAL_PATTERN.matcher(line).find())) {
+                    return true;
+                }
+            } else if (directive.startsWith("else")) {
+                if (!mcVersionConditionals.isEmpty() && mcVersionConditionals.peek()) {
+                    return true;
+                }
+            } else if (directive.startsWith("endif")) {
+                if (!mcVersionConditionals.isEmpty()) {
+                    mcVersionConditionals.pop();
+                }
+            }
+        }
+
+        return false;
     }
 
     public boolean hasLegacySection() {
