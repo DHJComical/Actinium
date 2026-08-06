@@ -15,6 +15,7 @@ import net.coderbot.iris.celeritas.debug.IrisRenderDebugHooks;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.config.IrisConfig;
 import net.coderbot.iris.celeritas.IrisCeleritasShaderProvider;
+import net.coderbot.iris.client.IrisDebugScreenHandler;
 import net.coderbot.iris.gbuffer_overrides.matching.InputAvailability;
 import net.coderbot.iris.gl.shader.StandardMacros;
 import net.coderbot.iris.gui.screen.ShaderPackScreen;
@@ -45,6 +46,7 @@ import net.minecraft.launchwrapper.Launch;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.InputEvent;
 import org.jetbrains.annotations.NotNull;
@@ -316,6 +318,7 @@ public class Iris {
     private static KeyBinding reloadKeybind;
     private static KeyBinding toggleShadersKeybind;
     private static KeyBinding shaderpackScreenKeybind;
+    private static KeyBinding wireframeKeybind;
 
     public static Iris INSTANCE = new Iris();
 
@@ -351,8 +354,20 @@ public class Iris {
         } else if (shaderpackScreenKeybind.isPressed()) {
             final Minecraft mc = Minecraft.getMinecraft();
             mc.displayGuiScreen(new ShaderPackScreen(null));
+        } else if (wireframeKeybind.isPressed()) {
+            final Minecraft mc = Minecraft.getMinecraft();
+            if (irisConfig.areDebugOptionsEnabled() && mc.player != null && !mc.isSingleplayer()) {
+                mc.player.sendMessage(new TextComponentString(I18n.format("iris.wireframe.singleplayer")));
+            }
         }
 
+    }
+
+    public static boolean shouldActivateWireframe() {
+        return irisConfig != null
+                && irisConfig.areDebugOptionsEnabled()
+                && wireframeKeybind != null
+                && wireframeKeybind.isKeyDown();
     }
 
     @SubscribeEvent
@@ -926,13 +941,17 @@ public class Iris {
 
     public void fmlInitEvent() {
         IRIS_VERSION = Tags.VERSION;
-        reloadKeybind = new KeyBinding("Reload Shaders", 0, "Iris Keybinds");
-        toggleShadersKeybind = new KeyBinding("Toggle Shaders", 0, "Iris Keybinds");
-        shaderpackScreenKeybind = new KeyBinding("Shaderpack Selection Screen", 0, "Iris Keybinds");
+        String keybindCategory = I18n.format("key.category.iris.keybinds");
+        reloadKeybind = new KeyBinding(I18n.format("iris.keybind.reload"), Keyboard.KEY_R, keybindCategory);
+        toggleShadersKeybind = new KeyBinding(I18n.format("iris.keybind.toggleShaders"), Keyboard.KEY_K, keybindCategory);
+        shaderpackScreenKeybind = new KeyBinding(I18n.format("iris.keybind.shaderPackSelection"), Keyboard.KEY_O, keybindCategory);
+        wireframeKeybind = new KeyBinding(I18n.format("iris.keybind.wireframe"), 0, keybindCategory);
 
         ClientRegistry.registerKeyBinding(reloadKeybind);
         ClientRegistry.registerKeyBinding(toggleShadersKeybind);
         ClientRegistry.registerKeyBinding(shaderpackScreenKeybind);
+        ClientRegistry.registerKeyBinding(wireframeKeybind);
+        MinecraftForge.EVENT_BUS.register(IrisDebugScreenHandler.INSTANCE);
     }
 
     public static void setShaderMaterialOverride(Block block, int meta) {

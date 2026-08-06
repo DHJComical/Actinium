@@ -1693,8 +1693,6 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	@Override
 	public void addDebugText(List<String> messages) {
-		messages.add("");
-
 		if (shadowRenderer != null) {
 			shadowRenderer.addDebugText(messages);
 		} else {

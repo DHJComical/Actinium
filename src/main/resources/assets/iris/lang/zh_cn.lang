@@ -1,5 +1,11 @@
 iris.shaders.disabled=光影包已禁用！
 iris.shaders.toggled=光影包已切换为 %s！
+iris.keybind.reload=重新加载光影包
+iris.keybind.toggleShaders=启用/禁用光影
+iris.keybind.shaderPackSelection=光影包选择界面
+iris.keybind.wireframe=线框模式（仅单人游戏）
+key.category.iris.keybinds=Iris
+iris.wireframe.singleplayer=禁止作弊；线框模式仅限单人游戏！
 iris.unsupported.irisorpc=Iris 或你的电脑
 iris.unsupported.iris=Iris
 iris.unsupported.pc=你的电脑

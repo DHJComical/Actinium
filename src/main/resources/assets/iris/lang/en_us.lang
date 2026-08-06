@@ -1,5 +1,11 @@
 iris.shaders.disabled=Shaders disabled!
 iris.shaders.toggled=Toggled shaders to %s!
+iris.keybind.reload=Reload Shaders
+iris.keybind.toggleShaders=Toggle Shaders
+iris.keybind.shaderPackSelection=Shaderpack Selection Screen
+iris.keybind.wireframe=Wireframe (SP only)
+key.category.iris.keybinds=Iris
+iris.wireframe.singleplayer=No cheating; wireframe only in singleplayer!
 iris.unsupported.irisorpc=Iris or your PC
 iris.unsupported.iris=Iris
 iris.unsupported.pc=your PC

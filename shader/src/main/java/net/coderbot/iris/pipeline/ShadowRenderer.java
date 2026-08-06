@@ -997,17 +997,30 @@ public class ShadowRenderer {
 	}
 
 	public void addDebugText(List<String> messages) {
-		messages.add("[" + Iris.MODNAME + " - Shadow Pass]");
-		messages.add("  Shadow Maps: " + debugStringOverall);
-		messages.add("  Shadow Distance Terrain: " + terrainFrustumHolder.getDistanceInfo() + " Entity: " + entityFrustumHolder.getDistanceInfo());
-		messages.add("  Shadow Culling Terrain: " + terrainFrustumHolder.getCullingInfo() + " Entity: " + entityFrustumHolder.getCullingInfo());
-		messages.add("  Shadow Terrain: " + ActiniumWorldRenderer.instance().getChunksDebugString() + (shouldRenderTerrain ? "" : " (no terrain) ") + (shouldRenderTranslucent ? "" : "(no translucent)"));
-		messages.add("  Shadow Entities: " + getEntitiesDebugString());
-		messages.add("  Shadow Block Entities: " + getTileEntitiesDebugString());
+		if (IrisVideoSettings.getOverriddenShadowDistance(IrisVideoSettings.shadowDistance) == 0) {
+			messages.add("[" + Iris.MODNAME + "] Shadow Maps: off, shadow distance 0");
+			return;
+		}
 
-//		if (buffers instanceof DrawCallTrackingRenderBuffers drawCallTracker && (shouldRenderEntities || shouldRenderPlayer)) {
-//            messages.add("[" + Iris.MODNAME + "] Shadow Entity Batching: " + BatchingDebugMessageHelper.getDebugMessage(drawCallTracker));
-//		}
+		String shadowTerrain = ActiniumWorldRenderer.instance().getChunksDebugString();
+		if (Iris.getIrisConfig().areDebugOptionsEnabled()) {
+			messages.add("[" + Iris.MODNAME + "] Shadow Maps: " + debugStringOverall);
+			messages.add("[" + Iris.MODNAME + "] Shadow Distance Terrain: " + terrainFrustumHolder.getDistanceInfo() + " Entity: " + entityFrustumHolder.getDistanceInfo());
+			messages.add("[" + Iris.MODNAME + "] Shadow Culling Terrain: " + terrainFrustumHolder.getCullingInfo() + " Entity: " + entityFrustumHolder.getCullingInfo());
+			messages.add("[" + Iris.MODNAME + "] Shadow Projection: " + getProjectionInfo());
+			messages.add("[" + Iris.MODNAME + "] Shadow Terrain: " + shadowTerrain
+				+ (shouldRenderTerrain ? "" : " (no terrain) ") + (shouldRenderTranslucent ? "" : "(no translucent)"));
+			messages.add("[" + Iris.MODNAME + "] Shadow Entities: " + getEntitiesDebugString());
+			messages.add("[" + Iris.MODNAME + "] Shadow Block Entities: " + getTileEntitiesDebugString());
+		} else {
+			messages.add("[" + Iris.MODNAME + "] Shadow info: " + shadowTerrain);
+			messages.add("[" + Iris.MODNAME + "] E: " + renderedShadowEntities);
+			messages.add("[" + Iris.MODNAME + "] BE: " + renderedShadowTileEntities);
+		}
+	}
+
+	private String getProjectionInfo() {
+		return "Near: " + nearPlane + " Far: " + farPlane + " distance " + halfPlaneLength;
 	}
 
 	private String getEntitiesDebugString() {

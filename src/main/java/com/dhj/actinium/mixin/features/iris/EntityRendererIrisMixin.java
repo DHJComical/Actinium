@@ -36,6 +36,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -43,6 +44,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(EntityRenderer.class)
 public abstract class EntityRendererIrisMixin implements IResourceManagerReloadListener {
+    @Unique
+    private boolean actinium$wireframeActive;
+
     @Shadow
     public Minecraft mc;
 
@@ -60,10 +64,18 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     @Inject(method = "renderWorldPass(IFJ)V", at = @At("HEAD"))
     private void actinium$beginWorldPassTiming(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.beginWorldPassTiming(pass);
+        if (Iris.shouldActivateWireframe() && this.mc.isSingleplayer()) {
+            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
+            this.actinium$wireframeActive = true;
+        }
     }
 
     @Inject(method = "renderWorldPass(IFJ)V", at = @At("RETURN"))
     private void actinium$finishWorldPassTiming(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (this.actinium$wireframeActive) {
+            GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
+            this.actinium$wireframeActive = false;
+        }
         IrisGlDebug.finishWorldPassTiming();
     }
 
