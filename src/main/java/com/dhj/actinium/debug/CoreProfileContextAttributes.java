@@ -1,5 +1,6 @@
 package com.dhj.actinium.debug;
 
+import net.minecraftforge.common.ForgeEarlyConfig;
 import org.lwjgl.opengl.ContextAttribs;
 
 import java.util.function.Consumer;
@@ -34,6 +35,24 @@ public final class CoreProfileContextAttributes {
             value -> value.withForwardCompatible(true),
             value -> value.withDebug(lwjglDebug)
         );
+    }
+
+    /**
+     * Configures the Forge early OpenGL context used by Cleanroom's LWJGLXX implementation.
+     *
+     * <p>LWJGLXX ignores {@code Display.create(PixelFormat, ContextAttribs)} and reads the desired version,
+     * profile, and debug state from {@code ForgeEarlyConfig}. Without this override, macOS can downgrade a
+     * requested modern compatibility-profile context to the legacy 2.1 Metal context.</p>
+     *
+     * @param major requested OpenGL major version
+     * @param minor requested OpenGL minor version
+     * @param lwjglDebug whether the debug context was requested at startup
+     */
+    public static void applyForgeEarlyCoreProfile(int major, int minor, boolean lwjglDebug) {
+        ForgeEarlyConfig.OPENGL_VERSION_MAJOR = major;
+        ForgeEarlyConfig.OPENGL_VERSION_MINOR = minor;
+        ForgeEarlyConfig.OPENGL_COMPAT_PROFILE = false;
+        ForgeEarlyConfig.OPENGL_DEBUG_CONTEXT = lwjglDebug;
     }
 
     /**

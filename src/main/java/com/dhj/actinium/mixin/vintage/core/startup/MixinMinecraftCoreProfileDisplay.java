@@ -44,6 +44,9 @@ public abstract class MixinMinecraftCoreProfileDisplay {
             int endMinor = major == 3 ? 3 : 0;
 
             for (int minor = startMinor; minor >= endMinor; --minor) {
+                if (LWJGLUtil.getPlatform() == LWJGLUtil.PLATFORM_MACOSX) {
+                    CoreProfileContextAttributes.applyForgeEarlyCoreProfile(major, minor, lwjglDebug);
+                }
                 ContextAttribs attribs = CoreProfileContextAttributes.create(major, minor, lwjglDebug);
                 try {
                     celeritas$createDisplay(format, attribs);
@@ -71,7 +74,8 @@ public abstract class MixinMinecraftCoreProfileDisplay {
                         );
                     }
                 } catch (RuntimeException e) {
-                    celeritas$LOGGER.error(
+                    lastException = celeritas$createContextValidationFailure(e);
+                    celeritas$LOGGER.warn(
                         "Created requested OpenGL {}.{} core profile context, but actual GL_VERSION is unusable: {}",
                         major,
                         minor,
@@ -79,7 +83,7 @@ public abstract class MixinMinecraftCoreProfileDisplay {
                         e
                     );
                     celeritas$destroyDisplayAfterFailure();
-                    throw new LWJGLException("Created context does not provide valid OpenGL 3.3+", e);
+                    continue;
                 }
 
                 celeritas$LOGGER.info(
@@ -100,6 +104,12 @@ public abstract class MixinMinecraftCoreProfileDisplay {
         }
 
         throw new LWJGLException("Failed to create an OpenGL 3.3+ core profile context", lastException);
+    }
+
+    @Unique
+    private static Exception celeritas$createContextValidationFailure(RuntimeException e) {
+        // Keep the return type as Exception so CleanMix can still resolve the lastException frame during transformation.
+        return new LWJGLException("Created context does not provide valid OpenGL 3.3+", e);
     }
 
     @Unique
