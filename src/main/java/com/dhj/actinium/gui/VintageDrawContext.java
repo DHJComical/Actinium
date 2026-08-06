@@ -137,7 +137,10 @@ public class VintageDrawContext implements DrawContext {
         );
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         Minecraft.getMinecraft().getTextureManager().bindTexture(new ResourceLocation(icon));
-        Gui.drawModalRectWithCustomSizedTexture(x, y, 0, 0, width, height, (float)width, (float)height);
+        int textureWidth = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
+        int textureHeight = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
+        Gui.drawScaledCustomSizeModalRect(x, y, 0.0F, 0.0F,
+                textureWidth, textureHeight, width, height, textureWidth, textureHeight);
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         if (!blendWasEnabled) {
             GlStateManager.disableBlend();

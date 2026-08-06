@@ -12,6 +12,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.GlStateManager;
+import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -74,17 +75,30 @@ public final class PageListWidget extends AbstractWidget {
     private void renderOwner(ModOptions owner, GuiRect row) {
         int textX = row.x() + 8;
         if (owner.icon() != null) {
+            boolean blendWasEnabled = GL11.glIsEnabled(GL11.GL_BLEND);
+            GlStateManager.enableBlend();
+            GlStateManager.tryBlendFuncSeparate(
+                    GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                    GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO
+            );
             Minecraft.getMinecraft().getTextureManager().bindTexture(owner.icon());
             if (owner.iconMonochrome()) {
                 ColorTheme theme = owner.theme();
                 GlStateManager.color(((theme.theme() >>> 16) & 0xFF) / 255.0F,
                         ((theme.theme() >>> 8) & 0xFF) / 255.0F, (theme.theme() & 0xFF) / 255.0F, 1.0F);
+            } else {
+                GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
             }
             int iconSize = Math.max(1, row.height() - Layout.ICON_MARGIN * 2);
+            int textureWidth = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
+            int textureHeight = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
             Gui.drawScaledCustomSizeModalRect(row.x() + Layout.ICON_MARGIN,
                     row.y() + (row.height() - iconSize) / 2, 0.0F, 0.0F,
-                    iconSize, iconSize, iconSize, iconSize, iconSize, iconSize);
+                    textureWidth, textureHeight, iconSize, iconSize, textureWidth, textureHeight);
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            if (!blendWasEnabled) {
+                GlStateManager.disableBlend();
+            }
             textX = row.x() + Layout.ICON_MARGIN * 2 + iconSize;
         }
         String name = this.font.trimStringToWidth(owner.name(), Math.max(1, row.right() - textX - 4));
