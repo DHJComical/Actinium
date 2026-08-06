@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.compat.ichunutil.PortalViewportProvider;
+import com.dhj.actinium.compat.rfp2.Rfp2Compat;
 import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.dhj.actinium.shadows.ShadowRenderingState;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
@@ -421,6 +422,9 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     private boolean actinium$shouldRenderShadowEntity(Entity entity, Entity renderViewEntity) {
         if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             return true;
+        }
+        if (Rfp2Compat.isPlayerDummy(entity)) {
+            return false;
         }
 
         boolean renderEntities = InternalShadowRenderingState.shouldRenderShadowEntities();

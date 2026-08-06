@@ -17,6 +17,8 @@ import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.client.event.RenderHandEvent;
+import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.Project;
 
@@ -28,6 +30,7 @@ public class HandRenderer {
     public static final HandRenderer INSTANCE = new HandRenderer();
 
     private boolean ACTIVE;
+    private boolean handRenderCancelled;
     private @Getter boolean renderingSolid;
     public static final float DEPTH = 0.125F;
 
@@ -82,6 +85,10 @@ public class HandRenderer {
                !mc.playerController.isSpectatorMode();
     }
 
+    private boolean isHandRenderingCancelled(RenderGlobal gameRenderer, float tickDelta) {
+        return MinecraftForge.EVENT_BUS.post(new RenderHandEvent(gameRenderer, tickDelta, 0));
+    }
+
     public boolean isHandTranslucent(InteractionHand hand) {
         ItemStack heldItem = hand.getItemInHand(Minecraft.getMinecraft().player);
 
@@ -103,6 +110,10 @@ public class HandRenderer {
     public void renderSolid(float tickDelta, Camera camera, RenderGlobal gameRenderer, WorldRenderingPipeline pipeline) {
         IrisGlDebug.markStage("hand-solid:entry");
         if (!canRender(camera, gameRenderer) || !IrisApi.getInstance().isShaderPackInUse()) {
+            return;
+        }
+        this.handRenderCancelled = isHandRenderingCancelled(gameRenderer, tickDelta);
+        if (this.handRenderCancelled) {
             return;
         }
         Minecraft mc = Minecraft.getMinecraft();
@@ -156,6 +167,9 @@ public class HandRenderer {
     public void renderTranslucent(float tickDelta, Camera camera, RenderGlobal gameRenderer, WorldRenderingPipeline pipeline) {
         IrisGlDebug.markStage("hand-translucent:entry");
         if (!canRender(camera, gameRenderer) || !isAnyHandTranslucent() || !IrisApi.getInstance().isShaderPackInUse()) {
+            return;
+        }
+        if (this.handRenderCancelled) {
             return;
         }
         Minecraft mc = Minecraft.getMinecraft();

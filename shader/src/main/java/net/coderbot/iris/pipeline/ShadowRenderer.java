@@ -5,6 +5,7 @@ import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
 import com.dhj.actinium.config.ActiniumConfig;
+import com.dhj.actinium.compat.rfp2.Rfp2Compat;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.shadows.InternalShadowRenderingState;
 import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
@@ -497,6 +498,7 @@ public class ShadowRenderer {
 
 		for (Entity entity : getLevel().loadedEntityList) {
 			if (playerIsSpectator && entity == player) continue;
+			if (Rfp2Compat.isPlayerDummy(entity)) continue;
 
 			if (!entity.ignoreFrustumCheck && !frustum.isBoundingBoxInFrustum(entity.getEntityBoundingBox())) continue;
 
