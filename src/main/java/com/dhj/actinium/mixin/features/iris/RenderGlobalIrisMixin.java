@@ -55,7 +55,7 @@ public class RenderGlobalIrisMixin {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/settings/GameSettings;shouldRenderClouds()I")
     )
     private int actinium$forceCloudsBelowMinimumDistance(GameSettings settings) {
-        return Iris.enabled ? settings.clouds : settings.shouldRenderClouds();
+        return settings.clouds;
     }
 
     @Inject(
