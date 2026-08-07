@@ -1,6 +1,8 @@
 package com.dhj.actinium;
 
 import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
+import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
+import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
 import com.dhj.actinium.command.TogglePassCommand;
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.dhj.actinium.debug.ActiniumDiagnostics;
@@ -28,6 +30,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLConstructionEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.embeddedt.embeddium.impl.common.util.MathUtil;
 import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
@@ -64,7 +67,17 @@ public class Actinium {
     }
 
     @EventHandler
+    public void onPreInit(FMLPreInitializationEvent event) {
+        ensureDistantHorizonsBindings();
+    }
+
+    @EventHandler
     public void onInit(FMLInitializationEvent event) {
+        ensureDistantHorizonsBindings();
+        if (Loader.isModLoaded("neofontrender")) {
+            NeoFontRenderCompat.initialize();
+        }
+
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
         }
@@ -82,6 +95,12 @@ public class Actinium {
         if (Iris.enabled && Loader.isModLoaded("distanthorizons")) {
             ActiniumDHIrisCompat.registerAccessor();
             DHCompat.run();
+        }
+    }
+
+    private static void ensureDistantHorizonsBindings() {
+        if (Loader.isModLoaded("distanthorizons")) {
+            DistantHorizonsCompat.ensureClientBindings();
         }
     }
 

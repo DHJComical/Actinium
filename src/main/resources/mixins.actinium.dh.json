@@ -11,6 +11,8 @@
     "MixinClientApi",
     "MixinFogRenderParamFactory",
     "MixinFullDataToRenderDataTransformer",
+    "MixinConfig",
+    "MixinDependencySetup",
     "MixinLodRenderer",
     "MixinMinecraftClientWrapper",
     "MixinRenderUtil"

@@ -3,6 +3,7 @@ package com.dhj.actinium.compat.dh;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.common.wrappers.world.ClientLevelWrapper;
+import com.seibel.distanthorizons.common.wrappers.DependencySetup;
 import com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftRenderWrapper;
 import com.seibel.distanthorizons.core.api.internal.ClientApi;
 import com.seibel.distanthorizons.core.api.internal.SharedApi;
@@ -13,6 +14,7 @@ import com.seibel.distanthorizons.core.util.math.DhMat4f;
 import com.seibel.distanthorizons.core.world.IDhClientWorld;
 import com.seibel.distanthorizons.core.dependencyInjection.SingletonInjector;
 import com.seibel.distanthorizons.core.wrapperInterfaces.minecraft.IMinecraftRenderWrapper;
+import com.seibel.distanthorizons.core.wrapperInterfaces.minecraft.IMinecraftSharedWrapper;
 import com.seibel.distanthorizons.core.wrapperInterfaces.world.IClientLevelWrapper;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompatInternal;
@@ -41,6 +43,33 @@ public final class DistantHorizonsCompat {
     private static long lastDiagnosticLogTimeMs;
 
     private DistantHorizonsCompat() {
+    }
+
+    public static boolean hasClientBindings() {
+        try {
+            var bindings = SingletonInjector.INSTANCE.getAll(IMinecraftSharedWrapper.class);
+            return !bindings.isEmpty() && bindings.get(0) != null;
+        } catch (RuntimeException e) {
+            return true;
+        }
+    }
+
+    /**
+     * Binds the DH client wrappers before another mod can load DH config classes that require
+     * {@code IMinecraftSharedWrapper}. Safe to call repeatedly; DH's own later binding call is
+     * skipped by {@code MixinDependencySetup}.
+     */
+    public static void ensureClientBindings() {
+        var indexedMods = Loader.instance().getIndexedModList();
+        if (indexedMods == null || !indexedMods.containsKey(MODID) || hasClientBindings()) {
+            return;
+        }
+
+        try {
+            DependencySetup.createClientBindings();
+        } catch (RuntimeException e) {
+            LOGGER.warn("Failed to pre-initialize Distant Horizons client bindings", e);
+        }
     }
 
     public static boolean prepareVanillaLodRender(WorldClient world, double partialTicks) {

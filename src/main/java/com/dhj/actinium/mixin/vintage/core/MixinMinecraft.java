@@ -2,6 +2,7 @@ package com.dhj.actinium.mixin.vintage.core;
 
 import com.dhj.actinium.debug.flight.GlFlightRecording;
 import com.dhj.actinium.debug.flight.GlFlightStreamingSource;
+import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.gui.ActiniumWindowModeController;
 import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
 import com.dhj.actinium.render.EndPortalCompositeRenderer;
@@ -21,6 +22,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class MixinMinecraft {
     @Unique
     private final RenderAheadManager celeritas$renderAheadManager = new RenderAheadManager();
+
+    @Inject(method = "init", at = @At("RETURN"))
+    private void actinium$prepareDistantHorizonsBindingsLate(CallbackInfo ci) {
+        DistantHorizonsCompat.ensureClientBindings();
+    }
 
     @Inject(method = "runTick", at = @At("HEAD"))
     private void preRender(CallbackInfo ci) {
