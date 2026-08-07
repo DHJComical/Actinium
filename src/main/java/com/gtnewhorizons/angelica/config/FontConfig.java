@@ -16,6 +16,6 @@ public final class FontConfig {
     public static float whitespaceScale = 1.0f;
     public static float glyphSpacing = 0.0f;
 
-    public static int fontAAMode = 2;
+    public static int fontAAMode = 0;
     public static int fontAAStrength = 7;
 }
