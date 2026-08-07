@@ -31,8 +31,9 @@ setDefaultProperty 'bridge_mod_url', true, 'https://github.com/DHJComical/Actini
 setDefaultProperty 'bridge_mod_update_json', false, ''
 setDefaultProperty 'bridge_mod_logo_path', true, 'assets/celeritas/textures/gui/icon.png'
 
-version = propertyString('mod_version')
-group = propertyString('root_package')
+def cliProjectProperties = gradle.startParameter.projectProperties
+version = cliProjectProperties.containsKey('version') ? cliProjectProperties['version'] : propertyString('mod_version')
+group = cliProjectProperties.containsKey('group') ? cliProjectProperties['group'] : propertyString('root_package')
 
 base {
     archivesName = propertyString('mod_name')
