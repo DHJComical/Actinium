@@ -627,7 +627,8 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/settings/GameSettings;shouldRenderClouds()I")
     )
     private int actinium$forceCloudsBelowMinimumDistance(GameSettings settings) {
-        return settings.clouds;
+        return settings.renderDistanceChunks < SkyRenderDistance.MINIMUM_RENDER_DISTANCE_CHUNKS
+            && settings.clouds == 0 ? 2 : settings.clouds;
     }
 
     @Inject(

@@ -4,6 +4,7 @@ import net.coderbot.iris.Iris;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.DeferredWorldRenderingPipeline;
+import net.coderbot.iris.pipeline.SkyRenderDistance;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
@@ -55,7 +56,8 @@ public class RenderGlobalIrisMixin {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/settings/GameSettings;shouldRenderClouds()I")
     )
     private int actinium$forceCloudsBelowMinimumDistance(GameSettings settings) {
-        return settings.clouds;
+        return settings.renderDistanceChunks < SkyRenderDistance.MINIMUM_RENDER_DISTANCE_CHUNKS
+            && settings.clouds == 0 ? 2 : settings.clouds;
     }
 
     @Inject(

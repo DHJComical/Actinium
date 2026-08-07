@@ -19,7 +19,7 @@ public abstract class MixinGameSettingsClouds {
     @Inject(method = "shouldRenderClouds", at = @At("HEAD"), cancellable = true)
     private void actinium$keepCloudsAtLowRenderDistance(CallbackInfoReturnable<Integer> cir) {
         if (this.renderDistanceChunks < SkyRenderDistance.MINIMUM_RENDER_DISTANCE_CHUNKS) {
-            cir.setReturnValue(this.clouds);
+            cir.setReturnValue(this.clouds == 0 ? 2 : this.clouds);
         }
     }
 }
