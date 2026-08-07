@@ -623,6 +623,25 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     }
 
     @Redirect(
+        method = "renderCloudsCheck",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/settings/GameSettings;shouldRenderClouds()I")
+    )
+    private int actinium$forceCloudsBelowMinimumDistance(GameSettings settings) {
+        return Iris.enabled ? settings.clouds : settings.shouldRenderClouds();
+    }
+
+    @Inject(
+        method = "renderCloudsCheck",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;setupFog(IF)V", shift = At.Shift.AFTER)
+    )
+    private void actinium$disableFogForClouds(CallbackInfo ci) {
+        if (Iris.enabled
+            && this.mc.gameSettings.renderDistanceChunks < SkyRenderDistance.MINIMUM_RENDER_DISTANCE_CHUNKS) {
+            GLStateManager.disableFog();
+        }
+    }
+
+    @Redirect(
         method = "renderWorldPass(IFJ)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderRainSnow(F)V")
     )

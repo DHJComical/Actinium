@@ -13,6 +13,7 @@ import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.renderer.vertex.VertexBuffer;
+import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.RayTraceResult;
@@ -47,6 +48,14 @@ public class RenderGlobalIrisMixin {
         if (pipeline != null) {
             pipeline.setPhase(WorldRenderingPhase.NONE);
         }
+    }
+
+    @Redirect(
+        method = "renderClouds",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/settings/GameSettings;shouldRenderClouds()I")
+    )
+    private int actinium$forceCloudsBelowMinimumDistance(GameSettings settings) {
+        return Iris.enabled ? settings.clouds : settings.shouldRenderClouds();
     }
 
     @Inject(
