@@ -3,6 +3,7 @@ package net.coderbot.iris.uniforms;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import lombok.Getter;
 import net.coderbot.iris.gl.uniform.UniformHolder;
+import net.coderbot.iris.pipeline.SkyRenderDistance;
 import net.minecraft.client.Minecraft;
 import org.joml.Matrix3f;
 import org.joml.Vector3d;
@@ -58,7 +59,7 @@ public class CameraUniforms {
 
 	private static int getRenderDistanceInBlocks() {
 		// TODO: Should we ask the game renderer for this?
-		return client.gameSettings.renderDistanceChunks * 16;
+		return SkyRenderDistance.effectiveBlocks(client.gameSettings.renderDistanceChunks);
 	}
 
 	public static Vector3d getUnshiftedCameraPosition() {

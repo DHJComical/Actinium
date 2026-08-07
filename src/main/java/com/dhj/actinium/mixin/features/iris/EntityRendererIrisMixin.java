@@ -12,6 +12,7 @@ import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
 import net.coderbot.iris.gl.program.Program;
 import net.coderbot.iris.pipeline.HandRenderer;
+import net.coderbot.iris.pipeline.SkyRenderDistance;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import net.coderbot.iris.shaderpack.CloudSetting;
@@ -592,7 +593,23 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I")
     )
     private int actinium$alwaysRenderSky(GameSettings settings) {
-        return Math.max(settings.renderDistanceChunks, 4);
+        return SkyRenderDistance.effectiveChunks(settings.renderDistanceChunks);
+    }
+
+    @Redirect(
+        method = "setupCameraTransform(FI)V",
+        at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I")
+    )
+    private int actinium$alwaysUseSkyRenderDistanceForProjection(GameSettings settings) {
+        return SkyRenderDistance.effectiveChunks(settings.renderDistanceChunks);
+    }
+
+    @Redirect(
+        method = "updateFogColor(F)V",
+        at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I")
+    )
+    private int actinium$alwaysApplySunsetColors(GameSettings settings) {
+        return SkyRenderDistance.effectiveChunks(settings.renderDistanceChunks);
     }
 
     @Redirect(
