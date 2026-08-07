@@ -138,6 +138,7 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
 
     public static class WindowSettings {
         public String fullscreenMode;
+        public String lastFullscreenMode;
     }
 
     public enum GraphicsQuality implements TextProvider {

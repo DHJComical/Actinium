@@ -27,6 +27,12 @@ public class MixinMinecraft {
         ActiniumWindowModeController.synchronize((Minecraft) (Object) this);
     }
 
+    @Inject(method = "toggleFullscreen", at = @At("HEAD"), cancellable = true)
+    private void actinium$toggleFullscreenMode(CallbackInfo ci) {
+        ActiniumWindowModeController.toggleFullscreen((Minecraft) (Object) this);
+        ci.cancel();
+    }
+
     @Inject(method = "getLimitFramerate", at = @At("HEAD"), cancellable = true)
     private void actinium$useLoadingScreenFramerateLimit(CallbackInfoReturnable<Integer> cir) {
         Minecraft minecraft = (Minecraft) (Object) this;

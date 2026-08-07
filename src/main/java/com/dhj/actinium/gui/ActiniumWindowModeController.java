@@ -1,25 +1,16 @@
 package com.dhj.actinium.gui;
 
+import com.dhj.actinium.mixin.vintage.core.MinecraftAccessor;
+import com.dhj.actinium.runtime.ActiniumRuntime;
 import net.minecraft.client.Minecraft;
 import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
-import org.lwjgl.glfw.GLFW;
-import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.Display;
-import org.lwjgl.system.MemoryStack;
-import com.dhj.actinium.runtime.ActiniumRuntime;
-import com.dhj.actinium.mixin.vintage.core.MinecraftAccessor;
-
-import java.nio.IntBuffer;
 
 public final class ActiniumWindowModeController {
     private static final Logger LOGGER = ActiniumRuntime.logger();
-    private static final long WINDOW_LOOKUP_FAILED = Long.MIN_VALUE;
     private static boolean synchronizing;
-    private static boolean loggedWindowLookupFailure;
     private static String loggedInvalidFullscreenMode;
-    private static long cachedWindowHandle = -1L;
-    private static final WindowBounds savedWindowedBounds = new WindowBounds();
 
     private ActiniumWindowModeController() {
     }
@@ -27,30 +18,76 @@ public final class ActiniumWindowModeController {
     public static FullscreenMode resolveConfiguredMode(SodiumGameOptions options) {
         String configuredModeName = options.window.fullscreenMode;
         if (configuredModeName != null) {
+            if ("FULLSCREEN".equals(configuredModeName)) {
+                options.window.fullscreenMode = FullscreenMode.EXCLUSIVE.name();
+                return FullscreenMode.EXCLUSIVE;
+            }
             try {
                 return FullscreenMode.valueOf(configuredModeName);
             } catch (IllegalArgumentException e) {
                 if (!configuredModeName.equals(loggedInvalidFullscreenMode)) {
                     loggedInvalidFullscreenMode = configuredModeName;
-                    LOGGER.warn("Unknown fullscreen mode '{}' in the options file, falling back to {}", configuredModeName, FullscreenMode.FULLSCREEN);
+                    LOGGER.warn(
+                        "Unknown fullscreen mode '{}' in the options file, falling back to {}",
+                        configuredModeName,
+                        FullscreenMode.OFF
+                    );
                 }
             }
         }
 
-        return FullscreenMode.FULLSCREEN;
+        return FullscreenMode.OFF;
     }
 
     public static void applyMode(Minecraft client, SodiumGameOptions options, FullscreenMode mode) {
         options.window.fullscreenMode = mode.name();
-
-        if (client.gameSettings.fullScreen || client.isFullScreen()) {
-            synchronize(client);
+        if (mode != FullscreenMode.OFF) {
+            options.window.lastFullscreenMode = mode.name();
         }
+        client.gameSettings.fullScreen = mode != FullscreenMode.OFF;
+        synchronize(client);
     }
 
-    public static void applyFullscreenEnabled(Minecraft client, boolean enabled) {
-        client.gameSettings.fullScreen = enabled;
-        synchronize(client);
+    public static void toggleFullscreen(Minecraft client) {
+        SodiumGameOptions options = ActiniumRuntime.options();
+        FullscreenMode current = resolveConfiguredMode(options);
+        if (current != FullscreenMode.OFF && options.window.lastFullscreenMode == null) {
+            options.window.lastFullscreenMode = current.name();
+        }
+        applyMode(client, options, nextMode(current, resolveLastFullscreenMode(options)));
+    }
+
+    static FullscreenMode nextMode(FullscreenMode current, FullscreenMode lastFullscreenMode) {
+        return current == FullscreenMode.OFF ? lastFullscreenMode : FullscreenMode.OFF;
+    }
+
+    static FullscreenMode resolveLastFullscreenMode(SodiumGameOptions options) {
+        String configuredModeName = options.window.lastFullscreenMode;
+        if (configuredModeName == null) {
+            FullscreenMode current = resolveConfiguredMode(options);
+            if (current != FullscreenMode.OFF) {
+                return current;
+            }
+        }
+        if (configuredModeName != null) {
+            try {
+                FullscreenMode mode = FullscreenMode.valueOf(configuredModeName);
+                if (mode != FullscreenMode.OFF) {
+                    return mode;
+                }
+            } catch (IllegalArgumentException e) {
+                if (!configuredModeName.equals(loggedInvalidFullscreenMode)) {
+                    loggedInvalidFullscreenMode = configuredModeName;
+                    LOGGER.warn(
+                        "Unknown last fullscreen mode '{}', falling back to {}",
+                        configuredModeName,
+                        FullscreenMode.EXCLUSIVE
+                    );
+                }
+            }
+        }
+
+        return FullscreenMode.EXCLUSIVE;
     }
 
     public static void synchronize(Minecraft client) {
@@ -58,179 +95,64 @@ public final class ActiniumWindowModeController {
             return;
         }
 
-        boolean shouldBeFullscreen = client.gameSettings.fullScreen;
-        FullscreenMode desiredMode = resolveConfiguredMode(ActiniumRuntime.options());
-
-        long windowHandle = findWindowHandle();
-
-        if (isWindowStateCompatible(client, windowHandle, shouldBeFullscreen, desiredMode)) {
+        SodiumGameOptions options = ActiniumRuntime.options();
+        FullscreenMode desiredMode = resolveConfiguredMode(options);
+        if (options.window.fullscreenMode == null && client.gameSettings.fullScreen) {
+            desiredMode = FullscreenMode.EXCLUSIVE;
+            options.window.fullscreenMode = desiredMode.name();
+        }
+        if (isWindowStateCompatible(client, desiredMode)) {
             return;
         }
 
         synchronizing = true;
 
         try {
-            if (!shouldBeFullscreen) {
-                applyWindowed(client, windowHandle);
-            } else {
-                switch (desiredMode) {
-                    case FULLSCREEN -> applyExclusiveFullscreen(client, windowHandle);
-                    case BORDERLESS -> applyBorderlessFullscreen(client, windowHandle);
-                }
+            switch (desiredMode) {
+                case OFF -> applyWindowed(client);
+                case EXCLUSIVE -> applyExclusiveFullscreen(client);
+                case BORDERLESS -> applyBorderlessFullscreen(client);
             }
         } finally {
             synchronizing = false;
         }
     }
 
-    private static boolean isWindowStateCompatible(Minecraft client, long windowHandle, boolean shouldBeFullscreen, FullscreenMode desiredMode) {
-        if (windowHandle == 0L) {
-            return client.isFullScreen() == shouldBeFullscreen;
-        }
-
-        if (!shouldBeFullscreen) {
-            return !client.isFullScreen() && !isBorderless(windowHandle) && GLFW.glfwGetWindowMonitor(windowHandle) == 0L;
-        }
-
+    private static boolean isWindowStateCompatible(Minecraft client, FullscreenMode desiredMode) {
         return switch (desiredMode) {
-            case FULLSCREEN -> client.isFullScreen() && !isBorderless(windowHandle);
-            case BORDERLESS -> client.isFullScreen() && isBorderless(windowHandle);
+            case OFF -> !client.isFullScreen() && !Display.isFullscreen() && !Display.isBorderless();
+            case EXCLUSIVE -> client.isFullScreen() && Display.isFullscreen() && !Display.isBorderless();
+            case BORDERLESS -> client.isFullScreen() && Display.isBorderless();
         };
     }
 
-    private static void applyWindowed(Minecraft client, long windowHandle) {
-        if (windowHandle == 0L) {
-            if (client.isFullScreen()) {
-                client.toggleFullscreen();
-            }
-
-            return;
+    private static void applyWindowed(Minecraft client) {
+        if (Display.isBorderless()) {
+            Display.setBorderless(false);
         }
-
-        restoreWindowDecorations(windowHandle);
-        WindowBounds bounds = getSavedWindowedBounds(windowHandle);
-        GLFW.glfwSetWindowMonitor(windowHandle, 0L, bounds.x, bounds.y, bounds.width, bounds.height, GLFW.GLFW_DONT_CARE);
+        if (Display.isFullscreen()) {
+            Display.setFullscreen(false);
+        }
         setFullscreenState(client, false);
-        updateClientDisplaySize(client, windowHandle);
+        updateClientDisplaySize(client);
     }
 
-    private static void applyExclusiveFullscreen(Minecraft client, long windowHandle) {
-        if (windowHandle == 0L) {
-            if (!client.isFullScreen()) {
-                client.toggleFullscreen();
-            }
-
-            return;
+    private static void applyExclusiveFullscreen(Minecraft client) {
+        if (Display.isBorderless()) {
+            Display.setBorderless(false);
         }
-
-        captureWindowedBounds(windowHandle);
-        long monitor = resolveMonitor(windowHandle);
-        GLFWVidMode videoMode = GLFW.glfwGetVideoMode(monitor);
-
-        if (videoMode == null) {
-            return;
-        }
-
-        GLFW.glfwSetWindowAttrib(windowHandle, GLFW.GLFW_DECORATED, GLFW.GLFW_TRUE);
-        GLFW.glfwSetWindowMonitor(windowHandle, monitor, 0, 0, videoMode.width(), videoMode.height(), videoMode.refreshRate());
+        Display.setFullscreen(true);
         setFullscreenState(client, true);
-        updateClientDisplaySize(client, windowHandle);
+        updateClientDisplaySize(client);
     }
 
-    private static void applyBorderlessFullscreen(Minecraft client, long windowHandle) {
-        if (windowHandle == 0L) {
-            if (!client.isFullScreen()) {
-                client.toggleFullscreen();
-            }
-
-            return;
+    private static void applyBorderlessFullscreen(Minecraft client) {
+        if (Display.isFullscreen()) {
+            Display.setFullscreen(false);
         }
-
-        captureWindowedBounds(windowHandle);
-        long monitor = resolveMonitor(windowHandle);
-        GLFWVidMode videoMode = GLFW.glfwGetVideoMode(monitor);
-
-        if (videoMode == null) {
-            return;
-        }
-
-        int monitorX = 0;
-        int monitorY = 0;
-
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer x = stack.mallocInt(1);
-            IntBuffer y = stack.mallocInt(1);
-            GLFW.glfwGetMonitorPos(monitor, x, y);
-            monitorX = x.get(0);
-            monitorY = y.get(0);
-        }
-
-        GLFW.glfwSetWindowAttrib(windowHandle, GLFW.GLFW_DECORATED, GLFW.GLFW_FALSE);
-        GLFW.glfwSetWindowMonitor(windowHandle, 0L, monitorX, monitorY, videoMode.width(), videoMode.height(), videoMode.refreshRate());
+        Display.setBorderless(true);
         setFullscreenState(client, true);
-        updateClientDisplaySize(client, windowHandle);
-    }
-
-    private static void restoreWindowDecorations(long windowHandle) {
-        if (windowHandle == 0L) {
-            return;
-        }
-
-        GLFW.glfwSetWindowAttrib(windowHandle, GLFW.GLFW_DECORATED, GLFW.GLFW_TRUE);
-    }
-
-    private static boolean isBorderless(long windowHandle) {
-        return windowHandle != 0L
-                && GLFW.glfwGetWindowMonitor(windowHandle) == 0L
-                && GLFW.glfwGetWindowAttrib(windowHandle, GLFW.GLFW_DECORATED) == GLFW.GLFW_FALSE;
-    }
-
-    private static void captureWindowedBounds(long windowHandle) {
-        if (windowHandle == 0L || isBorderless(windowHandle) || GLFW.glfwGetWindowMonitor(windowHandle) != 0L) {
-            return;
-        }
-
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer x = stack.mallocInt(1);
-            IntBuffer y = stack.mallocInt(1);
-            IntBuffer width = stack.mallocInt(1);
-            IntBuffer height = stack.mallocInt(1);
-            GLFW.glfwGetWindowPos(windowHandle, x, y);
-            GLFW.glfwGetWindowSize(windowHandle, width, height);
-            savedWindowedBounds.set(x.get(0), y.get(0), width.get(0), height.get(0));
-        }
-    }
-
-    private static WindowBounds getSavedWindowedBounds(long windowHandle) {
-        if (savedWindowedBounds.isValid()) {
-            return savedWindowedBounds;
-        }
-
-        long monitor = resolveMonitor(windowHandle);
-        GLFWVidMode videoMode = GLFW.glfwGetVideoMode(monitor);
-
-        if (videoMode == null) {
-            savedWindowedBounds.set(100, 100, 1280, 720);
-            return savedWindowedBounds;
-        }
-
-        int monitorX = 0;
-        int monitorY = 0;
-
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer x = stack.mallocInt(1);
-            IntBuffer y = stack.mallocInt(1);
-            GLFW.glfwGetMonitorPos(monitor, x, y);
-            monitorX = x.get(0);
-            monitorY = y.get(0);
-        }
-
-        int width = Math.max(854, (int) (videoMode.width() * 0.8f));
-        int height = Math.max(480, (int) (videoMode.height() * 0.8f));
-        int x = monitorX + Math.max(0, (videoMode.width() - width) / 2);
-        int y = monitorY + Math.max(0, (videoMode.height() - height) / 2);
-        savedWindowedBounds.set(x, y, width, height);
-        return savedWindowedBounds;
+        updateClientDisplaySize(client);
     }
 
     private static void setFullscreenState(Minecraft client, boolean fullscreen) {
@@ -238,70 +160,14 @@ public final class ActiniumWindowModeController {
         client.gameSettings.fullScreen = fullscreen;
     }
 
-    private static void updateClientDisplaySize(Minecraft client, long windowHandle) {
-        if (windowHandle == 0L) {
-            return;
-        }
+    private static void updateClientDisplaySize(Minecraft client) {
+        int width = Display.getFramebufferWidth();
+        int height = Display.getFramebufferHeight();
 
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer framebufferWidth = stack.mallocInt(1);
-            IntBuffer framebufferHeight = stack.mallocInt(1);
-            GLFW.glfwGetFramebufferSize(windowHandle, framebufferWidth, framebufferHeight);
-
-            int width = framebufferWidth.get(0);
-            int height = framebufferHeight.get(0);
-
-            if (width > 0 && height > 0) {
-                client.displayWidth = width;
-                client.displayHeight = height;
-                client.resize(width, height);
-            }
-        }
-    }
-
-    private static long resolveMonitor(long windowHandle) {
-        long monitor = GLFW.glfwGetWindowMonitor(windowHandle);
-        return monitor != 0L ? monitor : GLFW.glfwGetPrimaryMonitor();
-    }
-
-    private static long findWindowHandle() {
-        if (cachedWindowHandle == WINDOW_LOOKUP_FAILED) {
-            return 0L;
-        }
-
-        if (cachedWindowHandle > 0L) {
-            return cachedWindowHandle;
-        }
-
-        long displayWindow = Display.getWindow();
-        if (displayWindow != 0L) {
-            cachedWindowHandle = displayWindow;
-            return displayWindow;
-        }
-
-        cachedWindowHandle = WINDOW_LOOKUP_FAILED;
-        if (!loggedWindowLookupFailure) {
-            loggedWindowLookupFailure = true;
-            LOGGER.warn("Unable to resolve the GLFW window handle, borderless fullscreen will be unavailable");
-        }
-
-        return 0L;
-    }
-    private static final class WindowBounds {
-        private int x;
-        private int y;
-        private int width;
-        private int height;
-
-        private void set(int x, int y, int width, int height) {
-            this.x = x;
-            this.y = y;
-            this.width = width;
-            this.height = height;
-        }
-
-        private boolean isValid() {
-            return this.width > 0 && this.height > 0;
+        if (width > 0 && height > 0) {
+            client.displayWidth = width;
+            client.displayHeight = height;
+            client.resize(width, height);
         }
     }
 }

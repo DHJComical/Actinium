@@ -4,7 +4,8 @@ import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.embeddedt.embeddium.impl.gui.options.TextProvider;
 
 public enum FullscreenMode implements TextProvider {
-    FULLSCREEN("celeritas.options.fullscreen_mode.fullscreen"),
+    OFF("celeritas.options.fullscreen_mode.off"),
+    EXCLUSIVE("celeritas.options.fullscreen_mode.exclusive"),
     BORDERLESS("celeritas.options.fullscreen_mode.borderless");
 
     private final TextComponent name;

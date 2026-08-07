@@ -147,14 +147,6 @@ public class ActiniumGameOptionPages {
                             mc.resize(mc.displayWidth, mc.displayHeight);
                         }, opts -> opts.guiScale)
                         .build())
-                .add(OptionImpl.createBuilder(boolean.class, vanillaOpts)
-                        .setId(StandardOptions.Option.FULLSCREEN.cast())
-                        .setName(TextComponent.translatable("options.fullscreen"))
-                        .setTooltip(TextComponent.translatable("sodium.options.fullscreen.tooltip"))
-                        .setControl(TickBoxControl::new)
-                        .setBinding((opts, value) -> ActiniumWindowModeController.applyFullscreenEnabled(Minecraft.getMinecraft(), value),
-                                opts -> opts.fullScreen)
-                        .build())
                 .add(OptionImpl.createBuilder(FullscreenMode.class, sodiumOpts)
                         .setId(StandardOptions.Option.FULLSCREEN_MODE.cast())
                         .setName(TextComponent.translatable("celeritas.options.fullscreen_mode.name"))
