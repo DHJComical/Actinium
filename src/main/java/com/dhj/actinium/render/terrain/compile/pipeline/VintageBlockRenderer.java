@@ -1,5 +1,6 @@
 package com.dhj.actinium.render.terrain.compile.pipeline;
 
+import com.dhj.actinium.api.render.terrain.BlockQuadTransformerHolder;
 import com.dhj.actinium.debug.ShaderRegressionDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -153,6 +154,12 @@ public class VintageBlockRenderer {
                 continue;
             }
 
+            quads = BlockQuadTransformerHolder.transform(
+                    state, pos, blockAccess, layer, dir, quads);
+            if (quads.isEmpty()) {
+                continue;
+            }
+
             this.currentQuadRenderingFlags = this.analyzer.getFlagsForRendering(VintageDiffuseProvider.fromEnumFacing(dir), BakedQuadView.ofList(quads));
             renderQuadList(buffer, buffers, material, pos, dir, lighter, colorProvider, offset, quads);
         }
@@ -160,8 +167,12 @@ public class VintageBlockRenderer {
         var quads = model.getQuads(state, null, rand);
 
         if (!quads.isEmpty()) {
-            this.currentQuadRenderingFlags = this.analyzer.getFlagsForRendering(ModelQuadFacing.UNASSIGNED, BakedQuadView.ofList(quads));
-            renderQuadList(buffer, buffers, material, pos, null, lighter, colorProvider, offset, quads);
+            quads = BlockQuadTransformerHolder.transform(
+                    state, pos, blockAccess, layer, null, quads);
+            if (!quads.isEmpty()) {
+                this.currentQuadRenderingFlags = this.analyzer.getFlagsForRendering(ModelQuadFacing.UNASSIGNED, BakedQuadView.ofList(quads));
+                renderQuadList(buffer, buffers, material, pos, null, lighter, colorProvider, offset, quads);
+            }
         }
 
         this.usedContextEncoders.forEach(ContextAwareChunkVertexEncoder::finishRenderingBlock);
