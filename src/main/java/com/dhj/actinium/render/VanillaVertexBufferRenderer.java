@@ -3,6 +3,7 @@ package com.dhj.actinium.render;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.QuadConverter;
+import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import net.minecraft.client.renderer.vertex.VertexFormat;
@@ -10,6 +11,7 @@ import net.minecraft.client.renderer.vertex.VertexFormatElement;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL30C;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -18,6 +20,7 @@ import java.util.Map;
 import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACKEND;
 
 public final class VanillaVertexBufferRenderer {
+    private static final boolean DRAW_STATE_DEBUG = Boolean.getBoolean("actinium.streamingDrawStateDebug");
     private static final Map<Integer, Integer> VAOS_BY_VBO = new HashMap<>();
     private static final Map<Integer, Integer> FLAGS_BY_VBO = new HashMap<>();
 
@@ -48,6 +51,7 @@ public final class VanillaVertexBufferRenderer {
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
 
+        GLStateManager.glBindVertexArray(0);
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         GLStateManager.prepareWideLineEmulation(mode);
@@ -87,10 +91,20 @@ public final class VanillaVertexBufferRenderer {
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
         int vao = GLStateManager.glGenVertexArrays();
+        GLStateManager.glBindVertexArray(0);
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         setupVertexFormatAttributes(format);
         QuadConverter.attachSharedEboToCurrentVao();
+        if (DRAW_STATE_DEBUG) {
+            int actualVao = BackendManager.RENDER_BACKEND.getInteger(GL30C.GL_VERTEX_ARRAY_BINDING);
+            int actualVbo = BackendManager.RENDER_BACKEND.getInteger(GL15.GL_ARRAY_BUFFER_BINDING);
+            System.out.println("create-streaming-vao vao=" + vao
+                + " vbo=" + vbo
+                + " actualVao=" + actualVao
+                + " actualVbo=" + actualVbo
+                + " format=" + format);
+        }
         GLStateManager.glBindVertexArray(savedVao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVbo);
         return vao;
