@@ -50,7 +50,8 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
         }
         // Recheck while absent: the splash FontRenderer can run before NFR finishes loading.
         if (actinium$neoFontRenderLoaded == null || !actinium$neoFontRenderLoaded) {
-            actinium$neoFontRenderLoaded = Loader.isModLoaded("neofontrender");
+            var indexedMods = Loader.instance().getIndexedModList();
+            actinium$neoFontRenderLoaded = indexedMods != null && indexedMods.containsKey("neofontrender");
         }
         return actinium$neoFontRenderLoaded;
     }
