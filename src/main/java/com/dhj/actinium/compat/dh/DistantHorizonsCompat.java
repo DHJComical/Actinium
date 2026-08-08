@@ -1,5 +1,6 @@
 package com.dhj.actinium.compat.dh;
 
+import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.common.wrappers.world.ClientLevelWrapper;
@@ -101,10 +102,10 @@ public final class DistantHorizonsCompat {
                 LOGGER.info("Distant Horizons shader LOD bridge called renderDeferredLodsForShaders for the first frame");
             }
 
-            GL32.glBindVertexArray(0);
-            GL32.glBindBuffer(GL32.GL_ARRAY_BUFFER, 0);
-            GL32.glBindBuffer(GL32.GL_ELEMENT_ARRAY_BUFFER, 0);
-            GL32.glUseProgram(0);
+            GLStateManager.glBindVertexArray(0);
+            GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
+            GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
+            GLStateManager.glUseProgram(0);
         } catch (Throwable t) {
             logRenderFailure("render Distant Horizons deferred LODs", t);
         }

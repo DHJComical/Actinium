@@ -81,7 +81,7 @@ public class ShaderManager {
         enabled = false;
     }
 
-    public void activate() {
+    public synchronized void activate() {
         if (active) return;
         active = true;
         updateVariant(
@@ -93,7 +93,7 @@ public class ShaderManager {
         uploadUniforms();
     }
 
-    public void deactivate() {
+    public synchronized void deactivate() {
         active = false;
     }
 
@@ -136,7 +136,7 @@ public class ShaderManager {
         }
     }
 
-    public void preDraw(int vertexFlags) {
+    public synchronized void preDraw(int vertexFlags) {
         currentVertexFlags = vertexFlags;
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logFfpPreDraw(vertexFlags);
