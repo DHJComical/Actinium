@@ -2,9 +2,11 @@ package com.dhj.actinium.mixin.vintage.core.startup;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.recording.ImmediateModeRecorder;
+import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL15;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -39,6 +41,10 @@ public class MixinSplashProgress {
     @Inject(method = "finish", at = @At("RETURN"))
     private static void celeritas$finishSplash(CallbackInfo ci) {
         ImmediateModeRecorder.destroySplashTessellator();
+        TessellatorStreamingDrawer.destroy();
+        GLStateManager.glBindVertexArray(0);
+        GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
+        GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
         GLStateManager.markSplashComplete();
     }
 }
