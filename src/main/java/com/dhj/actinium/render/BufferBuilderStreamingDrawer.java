@@ -3,6 +3,7 @@ package com.dhj.actinium.render;
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
+import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
@@ -14,6 +15,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL15C;
+import org.lwjgl.opengl.GL20C;
+import org.lwjgl.opengl.GL30C;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -22,6 +26,7 @@ import java.util.Map;
 public final class BufferBuilderStreamingDrawer {
     private static final Logger LOGGER = LogManager.getLogger("BufferBuilderStreamingDrawer");
     private static final boolean ENABLED = Boolean.parseBoolean(System.getProperty("actinium.bufferBuilderStreaming", "true"));
+    private static final boolean DRAW_STATE_DEBUG = Boolean.getBoolean("actinium.streamingDrawStateDebug");
 
     private static final Map<VertexFormat, DrawState> DRAW_STATES = new HashMap<>();
     private static PersistentStreamingBuffer persistentBuffer;
@@ -122,8 +127,15 @@ public final class BufferBuilderStreamingDrawer {
                 GLSMDebug.logBufferBuilderUpload(formatDescription, drawMode, state.vertexFlags, stride, vertexCount, byteCount, vao, vbo);
             }
 
+            if (DRAW_STATE_DEBUG) {
+                logDrawState(debugSource, drawMode, stride, vertexCount, firstVertex, drawPath, vao, vbo);
+            }
+
             GLStateManager.prepareWideLineEmulation(drawMode);
             ShaderManager.getInstance().preDraw(state.vertexFlags);
+            if (DRAW_STATE_DEBUG) {
+                logDrawState("after-predraw:" + debugSource, drawMode, stride, vertexCount, firstVertex, drawPath, vao, vbo);
+            }
             if (checkDrawErrors) {
                 RenderDebugHooksHolder.checkDrawError("bufferbuilder-stream:after-predraw", debugSource, drawMode, state.vertexFlags, stride, vertexCount, formatDescription, vao, vbo);
             }
@@ -209,6 +221,54 @@ public final class BufferBuilderStreamingDrawer {
 
         DRAW_STATES.put(format, state);
         return state;
+    }
+
+    private static void logDrawState(String source, int drawMode, int stride, int vertexCount, int firstVertex, DrawPath drawPath, int vao, int vbo) {
+        try {
+            int actualVao = BackendManager.RENDER_BACKEND.getInteger(GL30C.GL_VERTEX_ARRAY_BINDING);
+            int actualVbo = BackendManager.RENDER_BACKEND.getInteger(GL15C.GL_ARRAY_BUFFER_BINDING);
+            int actualEbo = BackendManager.RENDER_BACKEND.getInteger(GL15C.GL_ELEMENT_ARRAY_BUFFER_BINDING);
+
+            StringBuilder attribs = new StringBuilder();
+            for (int i = 0; i < 5; i++) {
+                int enabled = GL20C.glGetVertexAttribi(i, GL20C.GL_VERTEX_ATTRIB_ARRAY_ENABLED);
+                if (enabled == 0) {
+                    continue;
+                }
+                if (attribs.length() > 0) {
+                    attribs.append(' ');
+                }
+                int attribVbo = GL20C.glGetVertexAttribi(i, GL15C.GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);
+                int size = GL20C.glGetVertexAttribi(i, GL20C.GL_VERTEX_ATTRIB_ARRAY_SIZE);
+                int attribStride = GL20C.glGetVertexAttribi(i, GL20C.GL_VERTEX_ATTRIB_ARRAY_STRIDE);
+                long pointer = GL20C.glGetVertexAttribPointer(i, GL20C.GL_VERTEX_ATTRIB_ARRAY_POINTER);
+                attribs.append(i)
+                    .append(":size=").append(size)
+                    .append(",stride=").append(attribStride)
+                    .append(",vbo=").append(attribVbo)
+                    .append(",ptr=0x").append(Long.toHexString(pointer));
+            }
+
+            String message = "bufferbuilder-stream-state source=" + source
+                + " mode=" + drawMode
+                + " stride=" + stride
+                + " vertices=" + vertexCount
+                + " firstVertex=" + firstVertex
+                + " path=" + drawPath
+                + " vao=" + vao
+                + " vbo=" + vbo
+                + " actualVao=" + actualVao
+                + " actualVbo=" + actualVbo
+                + " actualEbo=" + actualEbo
+                + " cachedVao=" + GLStateManager.getBoundVAO()
+                + " cachedVbo=" + GLStateManager.getBoundVBO()
+                + " cachedEbo=" + GLStateManager.getBoundEBO()
+                + " attribs=[" + attribs + "]";
+            LOGGER.info(message);
+            System.out.println(message);
+        } catch (Throwable t) {
+            LOGGER.warn("Failed to log bufferbuilder-stream draw state", t);
+        }
     }
 
     private static final class DrawState {
