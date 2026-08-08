@@ -35,6 +35,7 @@ import net.minecraft.util.BlockRenderLayer;
 import org.joml.Vector3d;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -152,8 +153,16 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
     @Inject(
         method = "updateCameraAndRender(FJ)V",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderWorld(FJ)V", shift = At.Shift.AFTER)
+        at = @At(
+            value = "FIELD",
+            target = "Lnet/minecraft/client/renderer/EntityRenderer;renderEndNanoTime:J",
+            opcode = Opcodes.PUTFIELD,
+            ordinal = 0,
+            shift = At.Shift.AFTER
+        )
     )
+    // Somnia rewrites the renderWorld call in updateCameraAndRender to SomniaUtil.renderWorld,
+    // so anchor this stage to the first field write that follows the world render instead.
     private void actinium$checkAfterRenderWorld(float partialTicks, long nanoTime, CallbackInfo ci) {
         IrisGlDebug.markStage("entity-renderer:after-render-world");
     }
