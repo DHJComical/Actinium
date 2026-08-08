@@ -71,7 +71,9 @@ public final class QuadConverter {
             ptr += 24;
         }
 
-        RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
+        // EBO binds must update GLStateManager too; otherwise drawElements can treat a non-zero
+        // index offset as a client pointer when the real EBO binding is stale.
+        GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
         RENDER_BACKEND.bufferData(GL15.GL_ELEMENT_ARRAY_BUFFER, indexData, GL15.GL_STATIC_DRAW);
 
         memFree(indexData);
@@ -84,9 +86,7 @@ public final class QuadConverter {
      */
     public static synchronized void attachSharedEboToCurrentVao() {
         ensureCapacity(1);
-        if (GLStateManager.getBoundEBO() != eboId) {
-            GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
-        }
+        GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
     }
 
     static boolean needsSharedEboBind(int currentEbo, int sharedEbo) {
@@ -108,18 +108,17 @@ public final class QuadConverter {
         final int quadCount = vertexCount / 4;
         final int prevEbo = GLStateManager.getBoundEBO();
         ensureCapacity(first / 4 + quadCount);
-        final boolean needsEboBind = needsSharedEboBind(prevEbo, eboId);
-        if (needsEboBind) {
-            RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
-        }
+        // External native GL code can detach the shared EBO without updating GLStateManager,
+        // so rebind unconditionally before every indexed draw.
+        GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
         // Index offset: first vertex / 4 quads * 6 indices * 4 bytes per int
         final long indexOffset = (long) (first / 4) * 6 * 4;
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logQuadConversion(first, vertexCount, eboId, prevEbo, indexOffset);
         }
         RENDER_BACKEND.drawElements(GL11.GL_TRIANGLES, quadCount * 6, INDEX_TYPE, indexOffset);
-        if (needsEboBind) {
-            RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
+        if (prevEbo != eboId) {
+            GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
         }
         if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.QUAD_ARRAYS, perfStart);
@@ -137,14 +136,11 @@ public final class QuadConverter {
         final int quadCount = vertexCount / 4;
         final int prevEbo = GLStateManager.getBoundEBO();
         ensureCapacity(first / 4 + quadCount);
-        final boolean needsEboBind = needsSharedEboBind(prevEbo, eboId);
-        if (needsEboBind) {
-            RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
-        }
+        GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
         final long indexOffset = (long) (first / 4) * 6 * 4;
         RENDER_BACKEND.drawElementsInstanced(GL11.GL_TRIANGLES, quadCount * 6, INDEX_TYPE, indexOffset, primcount);
-        if (needsEboBind) {
-            RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
+        if (prevEbo != eboId) {
+            GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
         }
         if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.QUAD_ARRAYS, perfStart);
@@ -171,7 +167,7 @@ public final class QuadConverter {
             scratchEboId = RENDER_BACKEND.genBuffers();
         }
 
-        RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, scratchEboId);
+        GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, scratchEboId);
 
         if (needed > scratchEboCapacity) {
             // Power-of-2 growth — allocate full capacity, upload actual data
@@ -184,7 +180,7 @@ public final class QuadConverter {
 
         RENDER_BACKEND.drawElements(GL11.GL_TRIANGLES, triIndexCount, indexType, 0L);
 
-        RENDER_BACKEND.bindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
+        GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, prevEbo);
         memFree(dst);
         if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.QUAD_SCRATCH_UPLOAD_DRAW, perfStart);
@@ -353,12 +349,12 @@ public final class QuadConverter {
      */
     public static synchronized void destroy() {
         if (eboId != 0) {
-            RENDER_BACKEND.deleteBuffers(eboId);
+            GLStateManager.glDeleteBuffers(eboId);
             eboId = 0;
             maxQuads = 0;
         }
         if (scratchEboId != 0) {
-            RENDER_BACKEND.deleteBuffers(scratchEboId);
+            GLStateManager.glDeleteBuffers(scratchEboId);
             scratchEboId = 0;
             scratchEboCapacity = 0;
         }
