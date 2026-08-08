@@ -82,7 +82,7 @@ public final class QuadConverter {
      * Attach the shared quad index buffer to the currently bound Actinium-owned VAO.
      * The caller must have selected the VAO before invoking this method.
      */
-    public static void attachSharedEboToCurrentVao() {
+    public static synchronized void attachSharedEboToCurrentVao() {
         ensureCapacity(1);
         if (GLStateManager.getBoundEBO() != eboId) {
             GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, eboId);
@@ -100,7 +100,7 @@ public final class QuadConverter {
      * @param first       first vertex index (must be aligned to quad boundary, i.e. multiple of 4)
      * @param vertexCount number of vertices (must be multiple of 4)
      */
-    public static void drawQuadsAsTriangles(int first, int vertexCount) {
+    public static synchronized void drawQuadsAsTriangles(int first, int vertexCount) {
         final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
         final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.QUAD_ARRAYS) : 0L;
         assert first % 4 == 0 : "QuadConverter: first (" + first + ") must be a multiple of 4";
@@ -129,7 +129,7 @@ public final class QuadConverter {
     /**
      * Convert an instanced GL_QUADS glDrawArrays call to indexed GL_TRIANGLES.
      */
-    public static void drawQuadsAsTrianglesInstanced(int first, int vertexCount, int primcount) {
+    public static synchronized void drawQuadsAsTrianglesInstanced(int first, int vertexCount, int primcount) {
         final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
         final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.QUAD_ARRAYS) : 0L;
         assert first % 4 == 0 : "QuadConverter: first (" + first + ") must be a multiple of 4";
@@ -199,7 +199,7 @@ public final class QuadConverter {
      * @param type       GL_UNSIGNED_INT, GL_UNSIGNED_SHORT, or GL_UNSIGNED_BYTE
      * @param offset     byte offset into the currently bound EBO
      */
-    public static void drawQuadElementsAsTriangles(int indexCount, int type, long offset) {
+    public static synchronized void drawQuadElementsAsTriangles(int indexCount, int type, long offset) {
         final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
         final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.QUAD_ELEMENTS) : 0L;
         if (indexCount == 0) {
@@ -261,7 +261,7 @@ public final class QuadConverter {
     /**
      * Convert a client-side IntBuffer of quad indices to triangles.
      */
-    public static void drawQuadElementsAsTriangles(IntBuffer indices) {
+    public static synchronized void drawQuadElementsAsTriangles(IntBuffer indices) {
         final int indexCount = indices.remaining();
         if (indexCount == 0) return;
         assert indexCount % 4 == 0;
@@ -286,7 +286,7 @@ public final class QuadConverter {
     /**
      * Convert a client-side ShortBuffer of quad indices to triangles.
      */
-    public static void drawQuadElementsAsTriangles(ShortBuffer indices) {
+    public static synchronized void drawQuadElementsAsTriangles(ShortBuffer indices) {
         final int indexCount = indices.remaining();
         if (indexCount == 0) return;
         assert indexCount % 4 == 0;
@@ -311,7 +311,7 @@ public final class QuadConverter {
     /**
      * Convert a client-side ByteBuffer of quad indices (type-agnostic) to triangles.
      */
-    public static void drawQuadElementsAsTriangles(int count, int type, ByteBuffer indices) {
+    public static synchronized void drawQuadElementsAsTriangles(int count, int type, ByteBuffer indices) {
         if (count == 0) return;
         assert count % 4 == 0;
         final int quadCount = count / 4;
@@ -351,7 +351,7 @@ public final class QuadConverter {
     /**
      * Clean up the shared EBO.
      */
-    public static void destroy() {
+    public static synchronized void destroy() {
         if (eboId != 0) {
             RENDER_BACKEND.deleteBuffers(eboId);
             eboId = 0;
