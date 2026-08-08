@@ -51,7 +51,6 @@ public final class VanillaVertexBufferRenderer {
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
 
-        GLStateManager.glBindVertexArray(0);
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         GLStateManager.prepareWideLineEmulation(mode);
@@ -91,7 +90,6 @@ public final class VanillaVertexBufferRenderer {
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
         int vao = GLStateManager.glGenVertexArrays();
-        GLStateManager.glBindVertexArray(0);
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         setupVertexFormatAttributes(format);

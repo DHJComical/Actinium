@@ -5217,11 +5217,11 @@ public class GLStateManager {
         if (array == 0) {
             array = defaultVAO;
         }
+        RENDER_BACKEND.bindVertexArray(array);
         if (boundVAO != array) {
             boundVAO = array;
             boundEBO = vaoEboMap.get(array);
             VertexAttribState.onBindVertexArray(array);
-            RENDER_BACKEND.bindVertexArray(array);
             if (ShaderManager.getInstance().isEnabled()) {
                 ShaderManager.getInstance().onBindVertexArray(array);
             }

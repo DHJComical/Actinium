@@ -110,7 +110,6 @@ public final class BufferBuilderStreamingDrawer {
             final int vbo = drawPath.select(persistentVbo, state.orphanBuffer.getBufferId());
             // Force the real VAO binding even when the GLStateManager cache already matches.
             // Native code outside this drawer can change the actual binding without updating the cache.
-            GLStateManager.glBindVertexArray(0);
             GLStateManager.glBindVertexArray(vao);
             if (drawPath.changesArrayBufferBinding()) {
                 restoreArrayBuffer = true;
