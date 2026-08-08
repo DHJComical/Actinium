@@ -29,7 +29,6 @@ public final class MacDisplayForwardCompatTransformer implements IClassTransform
         "org.lwjglx.opengl.Display"
     );
     private static final int GLFW_OPENGL_FORWARD_COMPAT = 139270;
-    private static final int GLFW_TRUE = 1;
     private static final int LWJGL_PLATFORM_MACOSX = 2;
 
     @Override
@@ -38,8 +37,9 @@ public final class MacDisplayForwardCompatTransformer implements IClassTransform
             return basicClass;
         }
 
+        ClassReader classReader = new ClassReader(basicClass);
         ClassNode classNode = new ClassNode();
-        new ClassReader(basicClass).accept(classNode, 0);
+        classReader.accept(classNode, 0);
         boolean transformed = false;
 
         for (MethodNode method : classNode.methods) {
@@ -57,7 +57,7 @@ public final class MacDisplayForwardCompatTransformer implements IClassTransform
                     continue;
                 }
 
-                method.instructions.insert(methodCall, forwardCompatibleHint());
+                method.instructions.insert(methodCall, forwardCompatibleHint(methodCall.owner));
                 transformed = true;
                 break;
             }
@@ -68,7 +68,8 @@ public final class MacDisplayForwardCompatTransformer implements IClassTransform
             return basicClass;
         }
 
-        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        // Recompute stack map frames after inserting a branch target; stale tables fail on modern JVMs.
+        ClassWriter writer = new ClassWriter(classReader, ClassWriter.COMPUTE_FRAMES);
         classNode.accept(writer);
         return writer.toByteArray();
     }
@@ -81,7 +82,7 @@ public final class MacDisplayForwardCompatTransformer implements IClassTransform
         return "org/lwjgl/glfw/GLFW".equals(owner) || "org/lwjgl3/glfw/GLFW".equals(owner);
     }
 
-    private static InsnList forwardCompatibleHint() {
+    private static InsnList forwardCompatibleHint(String glfwOwner) {
         LabelNode skip = new LabelNode();
         InsnList instructions = new InsnList();
         instructions.add(new MethodInsnNode(
@@ -97,7 +98,7 @@ public final class MacDisplayForwardCompatTransformer implements IClassTransform
         instructions.add(new InsnNode(Opcodes.ICONST_1));
         instructions.add(new MethodInsnNode(
             Opcodes.INVOKESTATIC,
-            "org/lwjgl/glfw/GLFW",
+            glfwOwner,
             "glfwWindowHint",
             "(II)V",
             false
