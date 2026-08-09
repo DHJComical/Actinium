@@ -39,6 +39,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Shadow protected abstract void bindTexture(ResourceLocation location);
 
     @Unique private BatchingFontRenderer actinium$batcher;
+    @Unique private TextureManager actinium$textureManager;
     @Unique private static final boolean actinium$disableBatcher = Boolean.getBoolean("actinium.disableFontBatcher");
     @Unique private static Boolean actinium$neoFontRenderLoaded;
     @Unique private static final Logger actinium$LOGGER = LogManager.getLogger("Actinium");
@@ -52,6 +53,10 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
         if (actinium$neoFontRenderLoaded == null || !actinium$neoFontRenderLoaded) {
             var indexedMods = Loader.instance().getIndexedModList();
             actinium$neoFontRenderLoaded = indexedMods != null && indexedMods.containsKey("neofontrender");
+            if (Boolean.getBoolean("actinium.fontDebug")) {
+                actinium$LOGGER.info("font-batcher-check neofontrender={} renderer={}",
+                    actinium$neoFontRenderLoaded, FontRenderer.class.getName());
+            }
         }
         return actinium$neoFontRenderLoaded;
     }
@@ -59,7 +64,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Inject(method = "<init>", at = @At("TAIL"))
     private void actinium$injectBatcher(GameSettings settings, ResourceLocation fontLocation, TextureManager texManager,
         boolean unicodeMode, CallbackInfo ci) {
-        actinium$batcher = new BatchingFontRenderer((FontRenderer) (Object) this, this.charWidth, this.colorCode, this.locationFontTexture, texManager);
+        actinium$textureManager = texManager;
         if (Boolean.getBoolean("actinium.fontDebug")) {
             Logger log = LogManager.getLogger("ActiniumFontDebug");
             log.info("charWidth-probe renderer={} unicode={} space={} A={} a={} m={} M={} W={}",
@@ -73,20 +78,6 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
                     Integer.toHexString(img.getRGB(8, 8)), Integer.toHexString(img.getRGB(40, 40)));
             } catch (Exception e) {
                 log.info("fontimg-probe renderer={} loc={} FAILED {}", getClass().getName(), this.locationFontTexture, e);
-            }
-        }
-        // Third-party renderers (e.g. StellarCore's CachedRGBFontRenderer) may replace
-        // Minecraft.fontRenderer without registering a resource reload listener, leaving charWidth
-        // permanently zeroed (vanilla only fills it in onResourceManagerReload -> readFontTexture),
-        // which collapses all non-Unicode text. A zeroed slot means "never initialized" since
-        // readFontTexture guarantees every slot >= 1. Backfill the array in place so the batcher's
-        // captured reference sees it automatically; for vanilla instances this merely moves the
-        // first fill earlier, and the startup reload overwrites it idempotently.
-        if (this.charWidth[65] == 0) {
-            try {
-                ((FontRenderer) (Object) this).onResourceManagerReload(Minecraft.getMinecraft().getResourceManager());
-            } catch (Exception e) {
-                actinium$LOGGER.warn("Failed to backfill charWidth for font renderer {}", getClass().getName(), e);
             }
         }
     }
@@ -126,7 +117,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
         GLStateManager.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
         this.posX = x;
         this.posY = y;
-        final float ret = actinium$batcher.drawString(x, y, argb, dropShadow, unicodeFlag, text, 0, text.length());
+        final float ret = angelica$getBatcher().drawString(x, y, argb, dropShadow, unicodeFlag, text, 0, text.length());
         // Honor the vanilla renderString contract: posX advances to the end of the text.
         // Segmented renderers such as CachedRGBFontRenderer chain super.drawString calls
         // and rely on this to stitch segments together.
@@ -136,6 +127,30 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
 
     @Override
     public BatchingFontRenderer angelica$getBatcher() {
+        // Third-party renderers (e.g. StellarCore's CachedRGBFontRenderer) may replace
+        // Minecraft.fontRenderer without registering a resource reload listener, leaving charWidth
+        // permanently zeroed. Backfill only when Actinium's batcher is actually going to be used;
+        // NFR owns rendering when it is loaded and must not have its font state touched here.
+        if (this.charWidth[65] == 0) {
+            try {
+                ((FontRenderer) (Object) this).onResourceManagerReload(Minecraft.getMinecraft().getResourceManager());
+            } catch (Exception e) {
+                actinium$LOGGER.warn("Failed to backfill charWidth for font renderer {}", getClass().getName(), e);
+            }
+        }
+        if (actinium$batcher == null) {
+            if (Boolean.getBoolean("actinium.fontDebug")) {
+                actinium$LOGGER.info("font-batcher-lazy-create renderer={} textureManager={}",
+                    ((Object) this).getClass().getName(), this.actinium$textureManager);
+            }
+            actinium$batcher = new BatchingFontRenderer(
+                (FontRenderer) (Object) this,
+                this.charWidth,
+                this.colorCode,
+                this.locationFontTexture,
+                this.actinium$textureManager
+            );
+        }
         return actinium$batcher;
     }
 
