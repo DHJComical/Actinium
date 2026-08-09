@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixins;
 
+import com.dhj.actinium.loading.fml.transformers.MacDisplayForwardCompatTransformer;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 import org.jetbrains.annotations.Nullable;
@@ -27,6 +28,7 @@ public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
     @Override
     public @Nullable String[] getASMTransformerClass() {
         return new String[] {
+            MacDisplayForwardCompatTransformer.class.getName(),
             "com.gtnewhorizons.angelica.loading.fml.transformers.EarlyRedirectorTransformer"
         };
     }

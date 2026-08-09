@@ -35,7 +35,8 @@ public abstract class MixinMinecraftCoreProfileDisplay {
 
         PixelFormat format = new PixelFormat().withDepthBits(24).withStencilBits(8);
         int maxMajor = 4;
-        int maxMinor = LWJGLUtil.getPlatform() == LWJGLUtil.PLATFORM_MACOSX ? 1 : 6;
+        boolean macos = LWJGLUtil.getPlatform() == LWJGLUtil.PLATFORM_MACOSX;
+        int maxMinor = macos ? 1 : 6;
         boolean lwjglDebug = ActiniumStartupDebugConfig.enableLwjglDebug();
         Exception lastException = null;
 
@@ -44,9 +45,8 @@ public abstract class MixinMinecraftCoreProfileDisplay {
             int endMinor = major == 3 ? 3 : 0;
 
             for (int minor = startMinor; minor >= endMinor; --minor) {
-                if (LWJGLUtil.getPlatform() == LWJGLUtil.PLATFORM_MACOSX) {
-                    CoreProfileContextAttributes.applyForgeEarlyCoreProfile(major, minor, lwjglDebug);
-                }
+                // LWJGLXX ignores ContextAttribs and reads these fields instead, so keep them in sync on every platform.
+                CoreProfileContextAttributes.applyForgeEarlyCoreProfile(major, minor, lwjglDebug);
                 ContextAttribs attribs = CoreProfileContextAttributes.create(major, minor, lwjglDebug);
                 try {
                     celeritas$createDisplay(format, attribs);
