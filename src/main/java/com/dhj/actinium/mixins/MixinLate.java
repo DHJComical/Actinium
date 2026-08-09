@@ -20,6 +20,8 @@ public class MixinLate implements ILateMixinLoader {
     private static final String ICHUN_UTIL_MIXIN_CONFIG = "mixins.actinium.ichunutil.json";
     private static final String LUMENIZED_MOD_ID = "lumenized";
     private static final String LUMENIZED_MIXIN_CONFIG = "mixins.actinium.lumenized.json";
+    private static final String REVO_UI_MOD_ID = "neofontrender_ui_enhancements";
+    private static final String REVO_UI_MIXIN_CONFIG = "mixins.actinium.revoui.json";
 
     @Override
     public List<String> getMixinConfigs() {
@@ -59,6 +61,10 @@ public class MixinLate implements ILateMixinLoader {
 
         if (loadedMods.test(LUMENIZED_MOD_ID)) {
             mixins.add(LUMENIZED_MIXIN_CONFIG);
+        }
+
+        if (loadedMods.test(REVO_UI_MOD_ID)) {
+            mixins.add(REVO_UI_MIXIN_CONFIG);
         }
 
         return mixins;

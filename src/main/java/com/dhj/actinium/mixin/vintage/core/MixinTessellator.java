@@ -26,6 +26,10 @@ public class MixinTessellator implements ITessellatorInstance {
 
     @Inject(method = "draw", at = @At("HEAD"), cancellable = true)
     private void celeritas$coreProfileDraw(CallbackInfo ci) {
+        if (VanillaBufferBuilderRenderer.shouldUseVanillaPositionDraw(this.buffer)) {
+            return;
+        }
+
         if (DeferredDrawBatcher.capture(this.buffer)) {
             ci.cancel();
             return;

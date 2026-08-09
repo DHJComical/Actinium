@@ -14,6 +14,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MixinWorldVertexBufferUploader {
     @Inject(method = "draw", at = @At("HEAD"), cancellable = true)
     private void celeritas$coreProfileDraw(BufferBuilder bufferBuilder, CallbackInfo ci) {
+        if (VanillaBufferBuilderRenderer.shouldUseVanillaPositionDraw(bufferBuilder)) {
+            return;
+        }
+
         if (DeferredDrawBatcher.capture(bufferBuilder)) {
             ci.cancel();
             return;

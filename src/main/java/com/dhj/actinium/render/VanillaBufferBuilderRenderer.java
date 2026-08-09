@@ -5,6 +5,7 @@ import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.vertex.VertexFormat;
+import net.minecraft.client.renderer.vertex.VertexFormatElement;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.lwjgl.opengl.GL15;
 
@@ -18,6 +19,18 @@ public final class VanillaBufferBuilderRenderer {
     private static final Map<VertexFormat, Integer> VERTEX_FLAGS = new HashMap<>();
 
     private VanillaBufferBuilderRenderer() {
+    }
+
+    public static boolean shouldUseVanillaPositionDraw(BufferBuilder bufferBuilder) {
+        VertexFormat format = bufferBuilder.getVertexFormat();
+        if (format == null || format.getElementCount() != 1) {
+            return false;
+        }
+
+        VertexFormatElement element = format.getElement(0);
+        return element.getUsage() == VertexFormatElement.EnumUsage.POSITION
+            && element.getElementCount() == 3
+            && element.getType() == VertexFormatElement.EnumType.FLOAT;
     }
 
     public static void draw(BufferBuilder bufferBuilder, String debugSource) {

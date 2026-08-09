@@ -1,5 +1,7 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.dhj.actinium.render.GuiGlStateBoundary;
+import com.dhj.actinium.render.RevoScreenEffectsGradient;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
@@ -22,7 +24,6 @@ import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.ItemRenderer;
-import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.debug.DebugRenderer;
@@ -34,7 +35,6 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.BlockRenderLayer;
 import org.joml.Vector3d;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL13;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -193,10 +193,33 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
     @Inject(
         method = "updateCameraAndRender(FJ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiIngame;renderGameOverlay(F)V")
+    )
+    private void actinium$restoreBeforeGameOverlay(float partialTicks, long nanoTime, CallbackInfo ci) {
+        // renderItemActivation runs after the first GUI setup and may change state before the HUD starts.
+        GuiGlStateBoundary.restoreHudBaseline();
+    }
+
+    @Inject(
+        method = "updateCameraAndRender(FJ)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;setupOverlayRendering()V")
     )
     private void actinium$restoreBeforeGui(float partialTicks, long nanoTime, CallbackInfo ci) {
         MinecraftFramebufferHelper.restoreMainFramebuffer(true);
+    }
+
+    @Inject(
+        method = "updateCameraAndRender(FJ)V",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/EntityRenderer;setupOverlayRendering()V",
+            ordinal = 0,
+            shift = At.Shift.AFTER
+        )
+    )
+    private void actinium$restoreAfterFirstSetupOverlay(float partialTicks, long nanoTime, CallbackInfo ci) {
+        GuiGlStateBoundary.restoreHudBaseline();
+        RevoScreenEffectsGradient.drawIfPending(this.mc);
     }
 
     @Inject(
@@ -212,22 +235,7 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;drawScreen(Lnet/minecraft/client/gui/GuiScreen;IIF)V", remap = false)
     )
     private void actinium$restoreGuiScreenState(float partialTicks, long nanoTime, CallbackInfo ci) {
-        GLStateManager.disableLighting();
-        GLStateManager.disableFog();
-        GLStateManager.enableAlphaTest();
-        GLStateManager.glAlphaFunc(GL11.GL_GREATER, 0.1F);
-        GLStateManager.disableBlend();
-
-        GLStateManager.glActiveTexture(GL13.GL_TEXTURE3);
-        GLStateManager.disableTexture();
-        GLStateManager.glActiveTexture(GL13.GL_TEXTURE2);
-        GLStateManager.disableTexture();
-        GLStateManager.glActiveTexture(OpenGlHelper.lightmapTexUnit);
-        GLStateManager.disableTexture();
-        GLStateManager.glActiveTexture(OpenGlHelper.defaultTexUnit);
-        GLStateManager.enableTexture();
-        GLStateManager.glTexEnvi(GL11.GL_TEXTURE_ENV, GL11.GL_TEXTURE_ENV_MODE, GL11.GL_MODULATE);
-        GLStateManager.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GuiGlStateBoundary.restoreHudBaseline();
     }
 
     private void actinium$prepareRenderManagerForShadowPass(float partialTicks) {

@@ -86,6 +86,7 @@ dependencies {
 
 
     modImplementation 'curse.maven:revo-font-1617673:8586768'
+    modCompileOnly 'curse.maven:revo-ui-1620532:8593682'
     modRuntimeOnly('com.cleanroommc:modularui:3.1.6') { transitive = false }
 
     modCompileOnly "curse.maven:somnia-refreshed-1062151:5544381"
