@@ -91,4 +91,8 @@ dependencies {
 
     modCompileOnly "curse.maven:somnia-refreshed-1062151:5544381"
 //    modImplementation "curse.maven:conquest-reforged-250077:2565963"
+
+    modImplementation "curse.maven:rebooter-1625784:8518809"
+    modImplementation "curse.maven:forgelin-continuous-456403:8248535"
+    modImplementation "curse.maven:rlfoliage-970462:7645701"
 }
