@@ -26,8 +26,8 @@ public class CompatibilityTransformer {
         "isSky\\s*\\?\\s*skyhole\\s*\\*\\s*caveDetection\\s*\\*\\s*caveFactor\\s*:\\s*0\\.0"
     );
     private static final Pattern VLC_REFERENCE_DISTANCE = Pattern.compile(
-        "float\\s+lViewPosM\\s*=\\s*length\\s*\\(\\s*viewPos\\s*\\)\\s*<\\s*maxdist"
-            + "\\s*\\?\\s*length\\s*\\(\\s*viewPos\\s*\\)\\s*-\\s*1\\.0\\s*:\\s*100000000\\.0\\s*;"
+        "float\\s+lViewPosM\\s*=\\s*length\\s*\\(\\s*(viewPos|FragPosition)\\s*\\)\\s*<\\s*maxdist"
+            + "\\s*\\?\\s*length\\s*\\(\\s*(?:viewPos|FragPosition)\\s*\\)\\s*-\\s*1\\.0\\s*:\\s*100000000\\.0\\s*;"
     );
     private static final Pattern DEPTHTEX0_DECLARATION = Pattern.compile(
         "uniform\\s+sampler2D\\s+depthtex0"
@@ -58,6 +58,12 @@ public class CompatibilityTransformer {
     }
 
     static String patchVolumetricCloudReferenceDistance(String fragment) {
+        Matcher referenceMatcher = VLC_REFERENCE_DISTANCE.matcher(fragment);
+        if (!referenceMatcher.find()) {
+            return fragment;
+        }
+
+        String position = referenceMatcher.group(1);
         String replacement;
         if (DEPTHTEX0_DECLARATION.matcher(fragment).find()) {
             final StringBuilder depthSamples = new StringBuilder();
@@ -70,24 +76,25 @@ public class CompatibilityTransformer {
             if (DH_DEPTHTEX1_DECLARATION.matcher(fragment).find() && DH_DEPTHTEX1_USAGE.matcher(fragment).find()) {
                 depthSamples.append("_irisCloudDepth = min(_irisCloudDepth, texelFetch(dhDepthTex1, _irisCloudTexel, 0).x);\n");
             }
-            replacement = """
-                float lViewPosM = length(viewPos) < maxdist ? length(viewPos) - 1.0 : 100000000.0;
+            String depthReplacement = """
+                float lViewPosM = length(%s) < maxdist ? length(%s) - 1.0 : 100000000.0;
                 ivec2 _irisCloudTexel = ivec2(floor(gl_FragCoord.xy) * 2.0 + 0.5);
                 float _irisCloudDepth = texelFetch(depthtex0, _irisCloudTexel, 0).x;
                 """ + depthSamples + """
                 if (_irisCloudDepth < 1.0 - 1e-5) {
-                    lViewPosM = length(viewPos) - 1.0;
-                } else if (length(viewPos) >= far - 1.0) {
+                    lViewPosM = length(%s) - 1.0;
+                } else if (length(%s) >= far - 1.0) {
                     lViewPosM = 100000000.0;
                 }
                 """;
+            replacement = depthReplacement.formatted(position, position, position, position);
         } else {
             replacement = """
-                float lViewPosM = length(viewPos) >= far - 1.0 ? 100000000.0
-                    : length(viewPos) < maxdist ? length(viewPos) - 1.0 : 100000000.0;
-                """;
+                float lViewPosM = length(%s) >= far - 1.0 ? 100000000.0
+                    : length(%s) < maxdist ? length(%s) - 1.0 : 100000000.0;
+                """.formatted(position, position, position);
         }
-        return VLC_REFERENCE_DISTANCE.matcher(fragment).replaceAll(Matcher.quoteReplacement(replacement));
+        return referenceMatcher.replaceAll(matchResult -> replacement);
     }
 
     public static void transformEach(Transformer transformer, Parameters parameters) {

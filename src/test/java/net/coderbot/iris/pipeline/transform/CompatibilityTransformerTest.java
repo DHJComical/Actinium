@@ -36,6 +36,25 @@ class CompatibilityTransformerTest {
     }
 
     @Test
+    void volumetricCloudReferenceDistanceAllowsBlissFarPlaneRays() {
+        String source = """
+            #version 330 core
+            uniform vec3 FragPosition;
+            uniform float far;
+            uniform float maxdist;
+            void main() {
+                float lViewPosM = length(FragPosition) < maxdist ? length(FragPosition) - 1.0 : 100000000.0;
+            }
+            """;
+
+        String patched = CompatibilityTransformer.patchVolumetricCloudReferenceDistance(source);
+        ShaderParser.ParsedShader parsed = ShaderParser.parseShader(patched);
+
+        assertEquals(0, parsed.parser().getNumberOfSyntaxErrors(), patched);
+        assertEquals(1, occurrences(patched, "length(FragPosition) >= far - 1.0"), patched);
+    }
+
+    @Test
     void volumetricCloudReferenceDistanceClampsLodDepth() {
         String source = """
             #version 330 core
