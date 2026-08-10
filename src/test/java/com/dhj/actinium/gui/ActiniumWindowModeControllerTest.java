@@ -82,4 +82,24 @@ class ActiniumWindowModeControllerTest {
 
         assertEquals(FullscreenMode.BORDERLESS, ActiniumWindowModeController.resolveLastFullscreenMode(options));
     }
+
+    @Test
+    void degradesBorderlessToExclusiveWhenUnsupported() {
+        assertEquals(
+            FullscreenMode.EXCLUSIVE,
+            ActiniumWindowModeController.effectiveMode(FullscreenMode.BORDERLESS, false)
+        );
+        assertEquals(
+            FullscreenMode.BORDERLESS,
+            ActiniumWindowModeController.effectiveMode(FullscreenMode.BORDERLESS, true)
+        );
+        assertEquals(
+            FullscreenMode.EXCLUSIVE,
+            ActiniumWindowModeController.effectiveMode(FullscreenMode.EXCLUSIVE, false)
+        );
+        assertEquals(
+            FullscreenMode.OFF,
+            ActiniumWindowModeController.effectiveMode(FullscreenMode.OFF, false)
+        );
+    }
 }

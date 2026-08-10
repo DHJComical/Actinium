@@ -11,6 +11,26 @@ public final class ActiniumWindowModeController {
     private static final Logger LOGGER = ActiniumRuntime.logger();
     private static boolean synchronizing;
     private static String loggedInvalidFullscreenMode;
+    private static final boolean borderlessSupported;
+    private static boolean borderlessActive;
+    private static boolean loggedBorderlessUnsupported;
+
+    static {
+        // FCL's Android runtime ships a stripped GLFW whose glfwGetWindowPos lacks the IntBuffer
+        // overload, so Display.isBorderless() throws NoSuchMethodError there. Probe once and degrade
+        // borderless to exclusive instead of crashing on every tick.
+        boolean supported = false;
+        try {
+            borderlessActive = Display.isBorderless();
+            supported = true;
+        } catch (Throwable t) {
+            LOGGER.warn(
+                "Borderless fullscreen is not supported on this runtime, treating it as exclusive fullscreen: {}",
+                t
+            );
+        }
+        borderlessSupported = supported;
+    }
 
     private ActiniumWindowModeController() {
     }
@@ -40,11 +60,15 @@ public final class ActiniumWindowModeController {
     }
 
     public static void applyMode(Minecraft client, SodiumGameOptions options, FullscreenMode mode) {
-        options.window.fullscreenMode = mode.name();
-        if (mode != FullscreenMode.OFF) {
-            options.window.lastFullscreenMode = mode.name();
+        FullscreenMode modeToApply = effectiveMode(mode, borderlessSupported);
+        if (modeToApply != mode) {
+            warnBorderlessUnsupported();
         }
-        client.gameSettings.fullScreen = mode != FullscreenMode.OFF;
+        options.window.fullscreenMode = modeToApply.name();
+        if (modeToApply != FullscreenMode.OFF) {
+            options.window.lastFullscreenMode = modeToApply.name();
+        }
+        client.gameSettings.fullScreen = modeToApply != FullscreenMode.OFF;
         synchronize(client);
     }
 
@@ -90,6 +114,17 @@ public final class ActiniumWindowModeController {
         return FullscreenMode.EXCLUSIVE;
     }
 
+    static FullscreenMode effectiveMode(FullscreenMode mode, boolean borderlessSupported) {
+        return mode == FullscreenMode.BORDERLESS && !borderlessSupported ? FullscreenMode.EXCLUSIVE : mode;
+    }
+
+    private static void warnBorderlessUnsupported() {
+        if (!loggedBorderlessUnsupported) {
+            loggedBorderlessUnsupported = true;
+            LOGGER.warn("Borderless fullscreen is not supported on this runtime, using exclusive fullscreen instead");
+        }
+    }
+
     public static void synchronize(Minecraft client) {
         if (synchronizing) {
             return;
@@ -101,14 +136,19 @@ public final class ActiniumWindowModeController {
             desiredMode = FullscreenMode.EXCLUSIVE;
             options.window.fullscreenMode = desiredMode.name();
         }
-        if (isWindowStateCompatible(client, desiredMode)) {
+        FullscreenMode modeToApply = effectiveMode(desiredMode, borderlessSupported);
+        if (modeToApply != desiredMode) {
+            options.window.fullscreenMode = modeToApply.name();
+            warnBorderlessUnsupported();
+        }
+        if (isWindowStateCompatible(client, modeToApply)) {
             return;
         }
 
         synchronizing = true;
 
         try {
-            switch (desiredMode) {
+            switch (modeToApply) {
                 case OFF -> applyWindowed(client);
                 case EXCLUSIVE -> applyExclusiveFullscreen(client);
                 case BORDERLESS -> applyBorderlessFullscreen(client);
@@ -120,15 +160,16 @@ public final class ActiniumWindowModeController {
 
     private static boolean isWindowStateCompatible(Minecraft client, FullscreenMode desiredMode) {
         return switch (desiredMode) {
-            case OFF -> !client.isFullScreen() && !Display.isFullscreen() && !Display.isBorderless();
-            case EXCLUSIVE -> client.isFullScreen() && Display.isFullscreen() && !Display.isBorderless();
-            case BORDERLESS -> client.isFullScreen() && Display.isBorderless();
+            case OFF -> !client.isFullScreen() && !Display.isFullscreen() && !borderlessActive;
+            case EXCLUSIVE -> client.isFullScreen() && Display.isFullscreen() && !borderlessActive;
+            case BORDERLESS -> client.isFullScreen() && borderlessActive;
         };
     }
 
     private static void applyWindowed(Minecraft client) {
-        if (Display.isBorderless()) {
+        if (borderlessActive) {
             Display.setBorderless(false);
+            borderlessActive = false;
         }
         if (Display.isFullscreen()) {
             Display.setFullscreen(false);
@@ -138,8 +179,9 @@ public final class ActiniumWindowModeController {
     }
 
     private static void applyExclusiveFullscreen(Minecraft client) {
-        if (Display.isBorderless()) {
+        if (borderlessActive) {
             Display.setBorderless(false);
+            borderlessActive = false;
         }
         Display.setFullscreen(true);
         setFullscreenState(client, true);
@@ -151,6 +193,7 @@ public final class ActiniumWindowModeController {
             Display.setFullscreen(false);
         }
         Display.setBorderless(true);
+        borderlessActive = true;
         setFullscreenState(client, true);
         updateClientDisplaySize(client);
     }
