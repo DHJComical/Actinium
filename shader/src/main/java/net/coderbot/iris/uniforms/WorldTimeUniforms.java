@@ -32,7 +32,7 @@ public final class WorldTimeUniforms {
 	}
 
 	private static int getWorldDay() {
-        return (int) (getWorld().getTotalWorldTime() / 24000L);
+        return (int) ((ActiniumConfig.useTotalWorldTime ? getWorld().getTotalWorldTime() : getWorld().getWorldTime()) / 24000L);
 	}
 
 	private static WorldClient getWorld() {
