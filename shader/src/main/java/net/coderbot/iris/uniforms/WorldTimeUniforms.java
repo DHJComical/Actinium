@@ -9,6 +9,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 
 public final class WorldTimeUniforms {
+	private static long cachedWorldClock;
+	private static boolean hasWorldClockSnapshot;
+
 	private WorldTimeUniforms() {
 	}
 
@@ -24,15 +27,48 @@ public final class WorldTimeUniforms {
 			.uniform1i(PER_TICK, "moonPhase", () -> getWorld().getMoonPhase());
 	}
 
-	static int getWorldDayTime() {
-        final WorldClient world = getWorld();
-        return (int) ((ActiniumConfig.useTotalWorldTime ? world.getTotalWorldTime() : world.getWorldTime()) % 24000L);
-
-    //  long dayTime = ((DimensionTypeAccessor) getWorld().dimensionType()).getFixedTime().orElse(timeOfDay % 24000L);
+	/**
+	 * Captures one world clock value for the current frame, so uniforms that need
+	 * the daytime and day count stay consistent even when a tick or time packet
+	 * lands between two supplier calls.
+	 */
+	public static void snapshot() {
+		final WorldClient world = getWorld();
+		cachedWorldClock = ActiniumConfig.useTotalWorldTime
+			? world.getTotalWorldTime()
+			: world.getWorldTime();
+		hasWorldClockSnapshot = true;
 	}
 
-	private static int getWorldDay() {
-        return (int) ((ActiniumConfig.useTotalWorldTime ? getWorld().getTotalWorldTime() : getWorld().getWorldTime()) / 24000L);
+	public static long getWorldClock() {
+		if (!hasWorldClockSnapshot) {
+			snapshot();
+		}
+		return cachedWorldClock;
+	}
+
+	static int getWorldDayTime() {
+		return getWorldDayTime(getWorldClock());
+	}
+
+	static int getWorldDay() {
+		return getWorldDay(getWorldClock());
+	}
+
+	static int getWorldDayTime(long worldClock) {
+		return (int) (worldClock % 24000L);
+	}
+
+	static int getWorldDay(long worldClock) {
+		return (int) (worldClock / 24000L);
+	}
+
+	static float getContinuousWorldTime() {
+		return getContinuousWorldTime(getWorldClock());
+	}
+
+	static float getContinuousWorldTime(long worldClock) {
+		return getWorldDayTime(worldClock) + (getWorldDay(worldClock) % 100) * 24000.0F;
 	}
 
 	private static WorldClient getWorld() {

@@ -82,6 +82,48 @@ class CompatibilityTransformerTest {
     }
 
     @Test
+    void cloudMovementTimeUsesSmoothedWorldTimeForBliss() {
+        String source = """
+            #version 330 core
+            uniform int worldTime;
+            uniform int worldDay;
+            uniform float Cloud_Speed;
+            void main() {
+                float cloud_movement = (worldTime + mod(worldDay,100)*24000.0) / 24.0 * Cloud_Speed;
+            }
+            """;
+
+        String patched = CompatibilityTransformer.patchCloudMovementTime(source);
+        ShaderParser.ParsedShader parsed = ShaderParser.parseShader(patched);
+
+        assertEquals(0, parsed.parser().getNumberOfSyntaxErrors(), patched);
+        assertEquals(1, occurrences(patched, "uniform float iris_worldTimeSmooth;"), patched);
+        assertEquals(1, occurrences(patched, "(iris_worldTimeSmooth + mod(worldDay,100)*24000.0)"), patched);
+        assertEquals(0, occurrences(patched, "worldTime + mod(worldDay,100)*24000.0"), patched);
+    }
+
+    @Test
+    void cloudMovementTimeUsesSmoothedWorldTimeForEclipse() {
+        String source = """
+            #version 330 core
+            uniform int worldDay;
+            uniform float worldTimeSmooth;
+            uniform float Cloud_Speed;
+            void main() {
+                float cloud_movement = (worldTimeSmooth + mod(worldDay,100)*24000.0) / 24.0 * Cloud_Speed;
+            }
+            """;
+
+        String patched = CompatibilityTransformer.patchCloudMovementTime(source);
+        ShaderParser.ParsedShader parsed = ShaderParser.parseShader(patched);
+
+        assertEquals(0, parsed.parser().getNumberOfSyntaxErrors(), patched);
+        assertEquals(1, occurrences(patched, "uniform float iris_worldTimeSmooth;"), patched);
+        assertEquals(1, occurrences(patched, "(iris_worldTimeSmooth + mod(worldDay,100)*24000.0)"), patched);
+        assertEquals(0, occurrences(patched, "= (worldTimeSmooth + mod(worldDay,100)*24000.0)"), patched);
+    }
+
+    @Test
     void groupedTransformAddsParseableOutputsForMissingFragmentInputs() {
         String vertex = """
             #version 330 core

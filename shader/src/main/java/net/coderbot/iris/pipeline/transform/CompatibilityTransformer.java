@@ -50,6 +50,16 @@ public class CompatibilityTransformer {
     private static final Pattern DH_DEPTHTEX1_USAGE = Pattern.compile(
         "texelFetch(?:2D)?\\s*\\(\\s*(?:dhVoxyDepthTex1|dhDepthTex1)"
     );
+    private static final Pattern VERSION_DIRECTIVE = Pattern.compile(
+        "(?m)^\\s*#version\\s+\\d+(?:\\s+\\w+)?"
+    );
+    private static final Pattern CLOUD_MOVEMENT_TIME = Pattern.compile(
+        "float\\s+cloud_movement\\s*=\\s*\\(\\s*(?:worldTime|worldTimeSmooth)"
+            + "\\s*\\+\\s*mod\\s*\\(\\s*worldDay\\s*,\\s*100\\s*\\)\\s*\\*\\s*24000(?:\\.0)?"
+            + "\\s*\\)\\s*/\\s*24(?:\\.0)?\\s*\\*\\s*Cloud_Speed\\s*;"
+    );
+    private static final String CLOUD_MOVEMENT_TIME_REPLACEMENT =
+        "float cloud_movement = (iris_worldTimeSmooth + mod(worldDay,100)*24000.0) / 24.0 * Cloud_Speed;";
 
     static String patchCaveSkyholeClouds(String fragment) {
         String patched = CLOUD_RGB_SKYHOLE.matcher(fragment).replaceAll("VolumetricClouds.rgb *= 1.0;");
@@ -95,6 +105,28 @@ public class CompatibilityTransformer {
                 """.formatted(position, position, position);
         }
         return referenceMatcher.replaceAll(matchResult -> replacement);
+    }
+
+    static String patchCloudMovementTime(String fragment) {
+        Matcher cloudMatcher = CLOUD_MOVEMENT_TIME.matcher(fragment);
+        if (!cloudMatcher.find()) {
+            return fragment;
+        }
+
+        String patched = cloudMatcher.replaceAll(CLOUD_MOVEMENT_TIME_REPLACEMENT);
+        if (patched.contains("uniform float iris_worldTimeSmooth;")) {
+            return patched;
+        }
+
+        Matcher versionMatcher = VERSION_DIRECTIVE.matcher(patched);
+        if (versionMatcher.find()) {
+            int versionEnd = versionMatcher.end();
+            return patched.substring(0, versionEnd)
+                + "\nuniform float iris_worldTimeSmooth;"
+                + patched.substring(versionEnd);
+        }
+
+        return "uniform float iris_worldTimeSmooth;\n" + patched;
     }
 
     public static void transformEach(Transformer transformer, Parameters parameters) {

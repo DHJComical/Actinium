@@ -80,6 +80,7 @@ import net.coderbot.iris.texture.pbr.PBRType;
 import net.coderbot.iris.uniforms.CommonUniforms;
 import net.coderbot.iris.uniforms.FrameUpdateNotifier;
 import net.coderbot.iris.uniforms.ItemMaterialHelper;
+import net.coderbot.iris.uniforms.WorldTimeUniforms;
 import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
@@ -1724,6 +1725,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 //		HandRenderer.INSTANCE.getBufferSource().resetDrawCalls();
 
 		checkWorld();
+
+		WorldTimeUniforms.snapshot();
 
 		if (!isRenderingWorld) {
 			Iris.logger.warn("beginWorldRender was called but we are not currently rendering a world?");

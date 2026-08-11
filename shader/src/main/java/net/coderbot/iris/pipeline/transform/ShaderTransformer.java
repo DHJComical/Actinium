@@ -301,6 +301,9 @@ public class ShaderTransformer {
                 input = CompatibilityTransformer.patchCaveSkyholeClouds(input);
                 input = CompatibilityTransformer.patchVolumetricCloudReferenceDistance(input);
             }
+            if (parameters.type == ShaderType.FRAGMENT) {
+                input = CompatibilityTransformer.patchCloudMovementTime(input);
+            }
 
             final var parsedShader = ShaderParser.parseShader(input);
             final var transformer = new Transformer(parsedShader.full());

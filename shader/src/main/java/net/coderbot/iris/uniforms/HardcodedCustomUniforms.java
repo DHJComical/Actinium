@@ -1,13 +1,11 @@
 package net.coderbot.iris.uniforms;
 
-import com.dhj.actinium.config.ActiniumConfig;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import net.coderbot.iris.gl.uniform.UniformHolder;
 import net.coderbot.iris.gl.uniform.UniformUpdateFrequency;
 import net.coderbot.iris.parsing.BiomeCategories;
 import net.coderbot.iris.uniforms.transforms.SmoothedFloat;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.player.EntityPlayer;
 import org.joml.Math;
 import org.joml.Vector3d;
@@ -137,8 +135,7 @@ public class HardcodedCustomUniforms {
 	}
 
 	private static int getWorldDayTime() {
-        final WorldClient world = Minecraft.getMinecraft().world;
-        return (int) ((ActiniumConfig.useTotalWorldTime ? world.getTotalWorldTime() : world.getWorldTime()) % 24000L);
+		return WorldTimeUniforms.getWorldDayTime();
 //		Level level = Minecraft.getMinecraft().theWorld;
 //		long  timeOfDay = level.getDayTime();
 //		long dayTime = ((DimensionTypeAccessor) level.dimensionType()).getFixedTime().orElse(timeOfDay % 24000L);

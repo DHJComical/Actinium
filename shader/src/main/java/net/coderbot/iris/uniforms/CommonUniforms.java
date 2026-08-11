@@ -7,7 +7,9 @@ import com.gtnewhorizons.angelica.glsm.states.BlendState;
 import com.gtnewhorizons.angelica.glsm.texture.TextureInfo;
 import com.gtnewhorizons.angelica.glsm.texture.TextureInfoCache;
 import com.gtnewhorizons.angelica.client.rendering.TextureTracker;
+import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompat;
+import net.coderbot.iris.debug.IrisGlDebug;
 import net.coderbot.iris.gl.state.FogMode;
 import net.coderbot.iris.gl.state.StateUpdateNotifiers;
 import net.coderbot.iris.gl.uniform.DynamicUniformHolder;
@@ -43,6 +45,7 @@ public final class CommonUniforms {
 	private static final Minecraft client = Minecraft.getMinecraft();
 	private static final Vector2i ZERO_VECTOR_2i = new Vector2i();
 	private static final Vector3d ZERO_VECTOR_3d = new Vector3d();
+	private static float lastLoggedCloudTime = Float.NaN;
 
 	// Scratch vectors for push-notified suppliers -- GL thread only, never escapes
 	private static final Vector2i scratch2i = new Vector2i();
@@ -117,6 +120,8 @@ public final class CommonUniforms {
 		ExternallyManagedUniforms.addExternallyManagedUniforms116(uniforms);
 
 		final SmoothedVec2f eyeBrightnessSmooth = new SmoothedVec2f(directives.getEyeBrightnessHalfLife(), directives.getEyeBrightnessHalfLife(), CommonUniforms::getEyeBrightness, updateNotifier);
+		// Keep volumetric cloud offsets stable across sleep/time-set jumps without changing raw worldTime.
+		final SmoothedFloat worldTimeSmooth = new SmoothedFloat(20, 20, WorldTimeUniforms::getContinuousWorldTime, updateNotifier);
 
         uniforms
             .uniform1f(ONCE, "darknessFactor", () -> 0.0F) // This is PER_FRAME in modern, it is an effect added by The Warden. We're just setting to 0 because 1.7.10 doesn't have it.
@@ -125,6 +130,21 @@ public final class CommonUniforms {
 			.uniform1i(PER_FRAME, "isEyeInWater", CommonUniforms::isEyeInWater)
 			.uniform1f(PER_FRAME, "blindness", CommonUniforms::getBlindness)
 			.uniform1f(PER_FRAME, "nightVision", CommonUniforms::getNightVision)
+			.uniform1f(PER_FRAME, "iris_worldTimeSmooth", () -> {
+				final float rawContinuous = WorldTimeUniforms.getContinuousWorldTime();
+				final float smoothContinuous = worldTimeSmooth.getAsFloat();
+				final float cloudTime = smoothContinuous - (WorldTimeUniforms.getWorldDay() % 100) * 24000.0F;
+				if (IrisGlDebug.isCloudControlDebugEnabled()
+					&& (Float.isNaN(lastLoggedCloudTime) || Math.abs(rawContinuous - lastLoggedCloudTime) > 100.0F)) {
+					Iris.logger.info(
+						"[CloudTime] worldTime={} worldDay={} rawContinuous={} smoothContinuous={} cloudTime={}",
+						WorldTimeUniforms.getWorldDayTime(), WorldTimeUniforms.getWorldDay(),
+						rawContinuous, smoothContinuous, cloudTime
+					);
+					lastLoggedCloudTime = rawContinuous;
+				}
+				return cloudTime;
+			})
             .uniform1b(PER_FRAME, "is_sneaking", CommonUniforms::isSneaking)
             .uniform1b(PER_FRAME, "is_sprinting", CommonUniforms::isSprinting)
             .uniform1b(PER_FRAME, "is_hurt", CommonUniforms::isHurt)
