@@ -1,5 +1,6 @@
 package com.dhj.actinium.render.terrain;
 
+import net.coderbot.iris.celeritas.WorldRendererCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.DestroyBlockProgress;
@@ -37,7 +38,8 @@ import java.util.*;
 /**
  * Provides an extension to vanilla's {@link net.minecraft.client.renderer.RenderGlobal}.
  */
-public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, VintageRenderSectionManager, BlockRenderLayer, TileEntity, ActiniumWorldRenderer.TileEntityRenderContext>  {
+public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, VintageRenderSectionManager, BlockRenderLayer, TileEntity, ActiniumWorldRenderer.TileEntityRenderContext>
+    implements WorldRendererCompat {
     private static final double MAX_ENTITY_CHECK_VOLUME = 16 * 16 * 16 * 15;
     private boolean portalCamera;
     private ChunkRenderMatrices portalMatrices;
@@ -143,7 +145,12 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
 
     /**
      * Captures the iChun recursive terrain matrices while leaving ordinary and shadow rendering unchanged.
-     */
+     */
+
+    @Override
+    public void markSectionGraphDirty() {
+        getRenderSectionManager().markGraphDirty();
+    }
     public void setPortalCamera(boolean portalCamera) {
         this.portalCamera = portalCamera;
         this.portalMatrices = portalCamera ? PortalChunkRenderMatrices.capture() : null;

@@ -1,7 +1,7 @@
 package net.coderbot.iris.client;
 
 import net.coderbot.iris.debug.IrisDebugOptions;
-import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
+import net.coderbot.iris.celeritas.WorldRendererCompatBridge;
 import net.coderbot.iris.Iris;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
@@ -21,7 +21,7 @@ public class IrisDebugScreenHandler {
                 event.getRight().add("[" + Iris.MODNAME + "] Shaderpack: " + Iris.getCurrentPackName() + (Iris.isFallback() ? " (fallback)" : ""));
                 Iris.getCurrentPack().ifPresent(pack -> event.getRight().add("[" + Iris.MODNAME + "] " + pack.getProfileInfo()));
                 if (mc.world != null) {
-                    event.getRight().add("[" + Iris.MODNAME + "] Shadows: " + ActiniumWorldRenderer.instance().getChunksDebugString());
+                    event.getRight().add("[" + Iris.MODNAME + "] Shadows: " + WorldRendererCompatBridge.instance().getChunksDebugString());
                 }
             } else {
                 event.getRight().add("[" + Iris.MODNAME + "] Shaders are disabled");

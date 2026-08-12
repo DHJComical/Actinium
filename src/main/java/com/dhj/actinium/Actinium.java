@@ -11,6 +11,8 @@ import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 import com.dhj.actinium.render.FastLitItemDisplayListCache;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
+import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
+import net.coderbot.iris.celeritas.WorldRendererCompatBridge;
 import net.coderbot.iris.debug.IrisDebugOptions;
 import com.gtnewhorizon.gtnhlib.client.renderer.RuntimeOptionsBridge;
 import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
@@ -61,6 +63,8 @@ public class Actinium {
         PostProcessingBridge.setNightVisionBrightnessInvoker(
             (entity, partialTicks) -> ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer)
                 .invokeGetNightVisionBrightness(entity, partialTicks));
+        net.coderbot.iris.celeritas.WorldRendererCompatBridge.setProvider(
+            com.dhj.actinium.render.terrain.ActiniumWorldRenderer::instanceNullable);
         IrisDebugOptions.setBridge(new IrisDebugOptions.Bridge() {
             @Override
             public boolean pbrDebugEnabled() {

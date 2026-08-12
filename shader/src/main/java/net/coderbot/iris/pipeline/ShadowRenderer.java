@@ -6,7 +6,8 @@ import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
 import net.coderbot.iris.compat.rfp2.Rfp2Compat;
-import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
+import net.coderbot.iris.celeritas.WorldRendererCompat;
+import net.coderbot.iris.celeritas.WorldRendererCompatBridge;
 import com.gtnewhorizons.angelica.glsm.shadow.InternalShadowRenderingState;
 import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
@@ -822,9 +823,9 @@ public class ShadowRenderer {
 		if (IrisDebugOptions.enableCeleritas()) {
 			RenderDevice.enterManagedCode();
 			celeritasManaged = true;
-			ActiniumWorldRenderer renderer = ActiniumWorldRenderer.instance();
+			WorldRendererCompat renderer = WorldRendererCompatBridge.instance();
 			var terrainViewport = ((ViewportProvider)terrainFrustumHolder.getFrustum()).sodium$createViewport();
-			renderer.getRenderSectionManager().markGraphDirty();
+			renderer.markSectionGraphDirty();
 			renderer.setupTerrain(
 				terrainViewport,
 				new org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer.CameraState(
@@ -858,7 +859,7 @@ public class ShadowRenderer {
 		if (shouldRenderTerrain) {
             mc.renderEngine.bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
 			TerrainPhaseScope.runOpaque(renderingPipeline,
-				() -> ActiniumWorldRenderer.instance().drawChunkLayersDeduplicated(
+				() -> WorldRendererCompatBridge.instance().drawChunkLayersDeduplicated(
 					OPAQUE_SHADOW_TERRAIN_LAYERS, terrainX, terrainY, terrainZ));
 		}
 
@@ -885,7 +886,7 @@ public class ShadowRenderer {
 
 		// Set viewport for entity visibility checks during shadow pass (matches modern Celeritas)
 		if (IrisDebugOptions.enableCeleritas()) {
-			ActiniumWorldRenderer.instance().setCurrentViewport(((ViewportProvider)entityShadowFrustum).sodium$createViewport());
+			WorldRendererCompatBridge.instance().setCurrentViewport(((ViewportProvider)entityShadowFrustum).sodium$createViewport());
 		}
 
 		// Render nearby entities
@@ -915,7 +916,7 @@ public class ShadowRenderer {
 		// Just something to watch out for, however...
 		if (shouldRenderTranslucent) {
 			TerrainPhaseScope.runTranslucent(renderingPipeline,
-				() -> ActiniumWorldRenderer.instance().drawChunkLayer(
+				() -> WorldRendererCompatBridge.instance().drawChunkLayer(
 					BlockRenderLayer.TRANSLUCENT, terrainX, terrainY, terrainZ));
 		}
 
@@ -950,7 +951,7 @@ public class ShadowRenderer {
 			shouldRenderEntities,
 			shouldRenderPlayer,
 			shouldRenderBlockEntities,
-			IrisDebugOptions.enableCeleritas() ? ActiniumWorldRenderer.instance().getVisibleChunkCount() : -1,
+			IrisDebugOptions.enableCeleritas() ? WorldRendererCompatBridge.instance().getVisibleChunkCount() : -1,
 			renderedShadowEntities,
 			renderedShadowTileEntities
 		);
@@ -1002,7 +1003,7 @@ public class ShadowRenderer {
 			return;
 		}
 
-		String shadowTerrain = ActiniumWorldRenderer.instance().getChunksDebugString();
+		String shadowTerrain = WorldRendererCompatBridge.instance().getChunksDebugString();
 		if (Iris.getIrisConfig().areDebugOptionsEnabled()) {
 			messages.add("[" + Iris.MODNAME + "] Shadow Maps: " + debugStringOverall);
 			messages.add("[" + Iris.MODNAME + "] Shadow Distance Terrain: " + terrainFrustumHolder.getDistanceInfo() + " Entity: " + entityFrustumHolder.getDistanceInfo());
