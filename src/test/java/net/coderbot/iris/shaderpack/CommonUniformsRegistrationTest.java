@@ -156,11 +156,6 @@ class CommonUniformsRegistrationTest {
         }
 
         @Override
-        public UniformHolder uniformMatrixFromArray(UniformUpdateFrequency frequency, String name, Supplier<float[]> value) {
-            return record(name);
-        }
-
-        @Override
         public UniformHolder externallyManagedUniform(String name, UniformType type) {
             return record(name);
         }
