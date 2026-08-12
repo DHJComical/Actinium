@@ -124,11 +124,15 @@
    - 配置开关经 **`IrisDebugOptions` 桥**（shader 定义 Bridge 接口 + 根项目注册实现，热更新保持；`Iris.enabled` 等静态求值点以「桥未注册返回配置默认值」保证时序无回归）
    - `AccessorEntityRenderer` 能力经 **`PostProcessingBridge`**（GTNHLib）桥接：lightmap texture / night vision brightness，根项目 onConstruct 注册
    - 剩余 2 文件（`IrisDebugScreenHandler`/`ShadowRenderer`）对 `ActiniumWorldRenderer` 的引用属**渲染核心集群**（ShadowRenderer 用它绘制阴影地形），归入步骤 B
-3. **步骤 B（待做）——ActiniumWorldRenderer 集群**：`ActiniumWorldRenderer` 与 ShadowRenderer 双向依赖（根项目 → shader 反向引用），且其依赖 `PortalChunkRenderMatrices`/`ActiniumRuntime` 等根项目类。收敛路径：整个集群下沉到 shader 侧 + 根项目依赖经桥，或抽 `WorldRenderer` 接口（shader 定义 + 根项目注册实现）；完成后 shader 对根项目引用清零
+3. **步骤 B（✅ 2026-08-12，`11aaf8b`）——ActiniumWorldRenderer 集群**：
+   - `WorldRendererCompat` 接口（shader 定义，含阴影 pass 所需的绘制/查询方法）+ `WorldRendererCompatBridge` 注册桥
+   - `ActiniumWorldRenderer implements WorldRendererCompat`（根项目 → shader，组装方合法）；onConstruct 注册
+   - `ShadowRenderer`/`IrisDebugScreenHandler` 全部经桥调用；`getRenderSectionManager()` 返回根项目类型，接口压平为 `markSectionGraphDirty()`
+   - **完成标准达成：`shader/` 对 `com.dhj.actinium.*` 引用清零**
 4. **步骤 C（待做）——Gradle 子项目化**：`shader` 独立为子项目（settings.gradle 注册 + 依赖声明 `shader -> glsm/GTNHLib/celeritas-common` + 构建脚本迁移）
 5. 决策：**必须子项目化**（多人维护约束下无备选；「接口化」只是过渡手段而非终点）
 6. 参照 celeritas 的 `common` 模式：渲染核心与平台/生命周期分离
-7. 完成标准：`shader/` 不再出现 `com.dhj.actinium.*` 引用；构建/remap/运行无回归
+7. 完成标准：`shader/` 不再出现 `com.dhj.actinium.*` 引用（✅）；构建/remap/运行无回归（dev 回归待做）
 
 ### Phase 3：兼容层统一 seam
 
