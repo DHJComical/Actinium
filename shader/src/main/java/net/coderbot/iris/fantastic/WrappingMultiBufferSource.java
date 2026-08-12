@@ -1,6 +1,6 @@
 package net.coderbot.iris.fantastic;
 
-import com.gtnewhorizons.angelica.compat.toremove.RenderLayer;
+import net.coderbot.iris.layer.RenderLayer;
 import java.util.function.Function;
 
 public interface WrappingMultiBufferSource {

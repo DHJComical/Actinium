@@ -1,4 +1,4 @@
-package com.gtnewhorizons.angelica.compat.toremove;
+package net.coderbot.iris.gl;
 
 import com.google.common.collect.Queues;
 import org.joml.Matrix3f;

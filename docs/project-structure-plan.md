@@ -305,8 +305,10 @@ Actinium
 - 只服务 GTNHLib 内部（QuadExtractor/PrimitiveExtractor/ModelQuad），无任何外部接线；与活跃的 `DirectTessellator` 双轨并存（int[] 缓冲 vs ByteBuffer 直写两套状态机）
 - 裁定后：保留 → 平移栈方法下沉 `LegacyTessellator`、抽打包工具；废弃 → 整套删除
 
-**`compat/toremove/MatrixStack.java`**（136 行）
-- 位于 `toremove` 目录但**仍被 `ShadowMatrices`/`ShadowRenderer`/1 个测试活跃引用**——「标记待删未清理」；需先迁移引用再删除
+**✅ `compat/toremove` 清理（2026-08-12）**
+- `MatrixStack` → `net.coderbot.iris.gl.MatrixStack`（ShadowRenderer/ShadowMatrices 活跃使用，随 Iris 移植归位）
+- `RenderLayer` → `net.coderbot.iris.layer.RenderLayer`（WrappingMultiBufferSource 使用）
+- `VertexConsumer` 零引用 → 删除；`compat/toremove` 包清空移除
 
 ### 9.4 不建议动（架构事实）
 

@@ -1,6 +1,6 @@
 package net.coderbot.iris.shadows;
 
-import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
+import net.coderbot.iris.gl.MatrixStack;
 import net.coderbot.iris.shadow.ShadowMatrices;
 import net.coderbot.iris.shadows.frustum.BoxCuller;
 import net.coderbot.iris.shadows.frustum.advanced.AdvancedShadowCullingFrustum;

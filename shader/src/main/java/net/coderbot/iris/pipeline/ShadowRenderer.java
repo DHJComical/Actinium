@@ -4,7 +4,7 @@ import net.coderbot.iris.debug.IrisDebugOptions;
 import com.google.common.collect.ImmutableList;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
-import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
+import net.coderbot.iris.gl.MatrixStack;
 import net.coderbot.iris.compat.rfp2.Rfp2Compat;
 import net.coderbot.iris.celeritas.WorldRendererCompat;
 import net.coderbot.iris.celeritas.WorldRendererCompatBridge;

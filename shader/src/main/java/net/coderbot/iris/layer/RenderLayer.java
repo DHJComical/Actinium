@@ -1,4 +1,4 @@
-package com.gtnewhorizons.angelica.compat.toremove;
+package net.coderbot.iris.layer;
 
 public final class RenderLayer {
     private final String name;

@@ -1,6 +1,6 @@
 package net.coderbot.iris.shadow;
 
-import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
+import net.coderbot.iris.gl.MatrixStack;
 import org.joml.Matrix4f;
 
 import static com.gtnewhorizons.angelica.compat.mojang.Constants.DEGREES_TO_RADIANS;
