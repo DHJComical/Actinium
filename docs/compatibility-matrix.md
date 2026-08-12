@@ -31,7 +31,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | GTNHLib          | 内嵌   | Gradle 子项目、bridge API              | 提供底层渲染与内存工具      |
 | Distant Horizons | 部分   | API、late Mixin、Iris LOD programs   | 版本变化敏感，必须按指定版本验证 |
 | Lumenized        | 部分   | 条件 Mixin、自动 safe mode           | 默认有效值为 `bloomStyle=0`、`hookDepthTexture=false`；Bloom 仍不可用，详见 [docs/compat/lumenized.md](compat/lumenized.md) |
-| StellarCore      | 部分   | HUDCaching / HUDFramebuffer 配置规避 | StellarCore 1.5.22 下当前已验证的规避方式是同时关闭两个选项，可避免 GUI 闪烁和 Esc 菜单消失；尚未完成单项恢复矩阵，详见 [docs/compat/stellarcore.md](compat/stellarcore.md) |
+| StellarCore      | 已验证  | 无（不再需要配置规避） | HUD 缓存相关 GUI/HUD 症状实为 Draconic Evolution 引起（2026-08-12 实测归因修正）；DE 兼容桥修复后 HUD 正常，`HudCaching`/`HUDFramebuffer` 可恢复开启，详见 [docs/compat/stellarcore.md](compat/stellarcore.md) |
 | Draconic Evolution | 已验证 | 条件 Mixin（CCL GlStateTracker 兼容桥） | DE 2.3.28.354 在场时云异常/草方块侧面偏绿/主菜单消失；根因为 DE 每帧 HUD 经 CCL GlStateTracker 基于冻结的原版 GlStateManager 字段重置 GL 状态，已由 `mixins.actinium.ccl.json` 兼容桥修复（dev 回归通过，生产整合包全量回归待做），详见 [docs/compat/draconic-evolution.md](compat/draconic-evolution.md) |
 | Fluidlogged API  | 代码支持 | compile-only API、条件调用              | 尚缺当前运行时验证记录      |
 | Gibbed           | 代码支持 | late Mixin、模型批处理路径                 | 尚缺当前运行时验证记录      |
