@@ -116,7 +116,7 @@ public class ProgramUniforms {
 
 	private void updateMatrixUniforms(ImmutableList<Uniform> uniforms) {
 		for (Uniform uniform : uniforms) {
-			if (uniform instanceof net.coderbot.iris.gl.uniform.MatrixUniform || uniform instanceof net.coderbot.iris.gl.uniform.MatrixFromFloatArrayUniform) {
+			if (uniform instanceof net.coderbot.iris.gl.uniform.MatrixUniform) {
 				uniform.update();
 			}
 		}

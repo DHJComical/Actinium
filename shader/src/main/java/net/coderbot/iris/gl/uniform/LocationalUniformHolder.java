@@ -128,10 +128,5 @@ public interface LocationalUniformHolder extends UniformHolder {
 		return this;
 	}
 
-	@Override
-	default LocationalUniformHolder uniformMatrixFromArray(UniformUpdateFrequency updateFrequency, String name, Supplier<float[]> value) {
-		location(name, UniformType.MAT4).ifPresent(id -> addUniform(updateFrequency, new MatrixFromFloatArrayUniform(id, value)));
 
-		return this;
-	}
 }

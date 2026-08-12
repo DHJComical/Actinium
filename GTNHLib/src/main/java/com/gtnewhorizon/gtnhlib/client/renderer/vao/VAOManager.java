@@ -30,7 +30,7 @@ public final class VAOManager {
 
     private static IVertexBuffer createStorageVBO(VertexFormat format, int drawMode, int flags) {
         if (GLCaps.bufferStorageSupported()) {
-            return new VertexBufferStorage(format, drawMode, flags);
+            return new VertexBuffer(format, drawMode, flags);
         }
 
         return new VertexBuffer(format, drawMode);
@@ -39,7 +39,7 @@ public final class VAOManager {
     private static IVertexBuffer allocateStorageVBO(VertexFormat format, int drawMode, ByteBuffer data, int vertexCount,
             int flags) {
         if (GLCaps.bufferStorageSupported()) {
-            return new VertexBufferStorage(format, drawMode, data, vertexCount, flags);
+            return new VertexBuffer(format, drawMode, data, vertexCount, flags);
         }
 
         return new VertexBuffer(format, drawMode, data, vertexCount);

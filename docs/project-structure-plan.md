@@ -283,21 +283,19 @@ Actinium
 
 删除前用 `git grep` 复核零引用；删除后同步修正相关注释（如 `UniversalVAO` 声称支持 Apple fallback 的 javadoc）。
 
-### 9.2 高重叠——合并收益最大
+### 9.2 高重叠——合并（✅ 2026-08-12 完成 A-C，结论修正见下）
 
-**A. 双份「FFP 状态 → GLSL uniform 上传器」（两套各 ~470 行）**
-- `glsm/.../ffp/Uniforms.java`（474 行）vs `glsm/.../CompatUniformManager.java`（470 行）：矩阵/法线矩阵/光照/雾/clip plane 计算逐行对应，后者注释自证 `Same computation as Uniforms.uploadLightingPreComputed()`
-- 配套：`ffp/ProgramUniformState`（168 行）vs `CompatProgramUniformState`（119 行）——generation 标记模式双份实现（注意位布局不同，合并时需重新分配）
-- 建议：抽共享「派生计算层」（状态 → uniform 值），两个上传器只保留各自的 location 绑定差异
+**A. 双份「FFP 状态 → GLSL uniform 上传器」（两套各 ~470 行）——修正结论**
+- `ffp/Uniforms` vs `CompatUniformManager`：逐行细读后确认**定位机制完全不同**（Uniforms 面向自有 `Program` 的 loc 字段；Compat 按 `angelica_*`/`iris_*` 名字查 location 数组），真正逐字重复仅 scene color 计算与 clip plane 循环。强行合并需引入「上传目标抽象」，接口复杂度 ≈ 实现复杂度，**合并收益为负，维持双轨**（与 8.4 协作边界的「不得重建双轨」红线不冲突——此为既有设计事实）
+- ✅ 配套 State 合并：`ffp/ProgramUniformState` + `CompatProgramUniformState` → 公共基类 `glsm/states/GenerationTrackedState`（bitmask + generation 表，~100 行样板消除；值比较类别 lightmap/lineWidth/viewport 保留子类实现）
 
-**B. `VertexBuffer` vs `VertexBufferStorage`（约 90% 相同）**
-- 差异仅 `glBufferData`（可变）vs `glBufferStorage`（不可变），其余 `bind/unbind/delete/setupState/cleanupState/draw` 逐行相同
-- 建议：以 `VertexBuffer` 为主体加 storage 模式（构造传 flags，`allocate` 分支选择）
+**B. ✅ `VertexBuffer` vs `VertexBufferStorage`（已合并，`VertexBufferStorage` 删除）**
+- `VertexBuffer` 增加 storage 模式：`storageFlags` 字段（-1 = 可变 `glBufferData`；≥0 = 不可变 `glBufferStorage`），`allocate`/`update` 按模式分支；`VAOManager` 工厂改用带 flags 构造
 
-**C. `MatrixUniform` vs `MatrixFromFloatArrayUniform`（38 vs 35 行，shader）**
-- 仅缓存类型不同（`Matrix4fc` vs `float[]`）；合并后同时消除 `ProgramUniforms.updateMatrixUniforms` 的 `instanceof` 双判断
+**C. ✅ `MatrixUniform` vs `MatrixFromFloatArrayUniform`（已删除后者，优于合并）**
+- `uniformMatrixFromArray` 接口方法无任何调用方——死代码入口；删除 `MatrixFromFloatArrayUniform` 类 + 接口方法 + 3 处实现/桩，`ProgramUniforms` 的 `instanceof` 双判断简化为单判断
 
-**D. GLSL 变换双轨（shader 最大重复面）**
+**D. GLSL 变换双轨（shader 最大重复面，未做）**
 - `glsm/.../CompatShaderTransformer`（708 行）vs `shader/.../pipeline/transform/*`（TransformPatcher/CommonTransformer/CompatibilityTransformer 等 8 个类）：固定管线 builtin 与光影包的同源变换两套手写规则
 - 已出现交叉引用（shader `ShaderTransformer` 调 `CompatShaderTransformer.fixupQualifiers`），合并方向已开始；建议统一 builtin 变换规则，两入口只保留目标语义差异
 

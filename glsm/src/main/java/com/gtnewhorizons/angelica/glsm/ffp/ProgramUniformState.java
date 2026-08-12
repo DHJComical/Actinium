@@ -1,132 +1,117 @@
 package com.gtnewhorizons.angelica.glsm.ffp;
 
+import com.gtnewhorizons.angelica.glsm.states.GenerationTrackedState;
+
 /**
  * Records the FFP uniform state successfully uploaded to one linked program.
  *
  * <p>Uniform values belong to a program object in OpenGL. Keeping these markers beside the program allows a previously
  * used variant to retain its uploaded values while another variant is active.</p>
  */
-final class ProgramUniformState {
+final class ProgramUniformState extends GenerationTrackedState {
 
-    private static final int MODEL_VIEW = 1 << 0;
-    private static final int PROJECTION = 1 << 1;
-    private static final int TEXTURE_MATRIX = 1 << 2;
-    private static final int LIGHTING = 1 << 3;
-    private static final int FRAGMENT = 1 << 4;
-    private static final int COLOR = 1 << 5;
-    private static final int NORMAL = 1 << 6;
-    private static final int TEX_COORD = 1 << 7;
-    private static final int TEX_GEN = 1 << 8;
-    private static final int CLIP_PLANE = 1 << 9;
-    private static final int LIGHTMAP = 1 << 10;
-    private static final int LINE_WIDTH = 1 << 11;
-    private static final int VIEWPORT = 1 << 12;
+    private static final int MODEL_VIEW = 0;
+    private static final int PROJECTION = 1;
+    private static final int TEXTURE_MATRIX = 2;
+    private static final int LIGHTING = 3;
+    private static final int FRAGMENT = 4;
+    private static final int COLOR = 5;
+    private static final int NORMAL = 6;
+    private static final int TEX_COORD = 7;
+    private static final int TEX_GEN = 8;
+    private static final int CLIP_PLANE = 9;
+    private static final int LIGHTMAP = 10;
+    private static final int LINE_WIDTH = 11;
+    private static final int VIEWPORT = 12;
 
-    private int initialized;
-    private int modelViewGeneration;
-    private int projectionGeneration;
-    private int textureMatrixGeneration;
-    private int lightingGeneration;
-    private int fragmentGeneration;
-    private int colorGeneration;
-    private int normalGeneration;
-    private int texCoordGeneration;
-    private int texGenGeneration;
-    private int clipPlaneGeneration;
     private float lightmapX;
     private float lightmapY;
     private float lineWidth;
     private int viewportWidth;
     private int viewportHeight;
 
+    ProgramUniformState() {
+        super(13);
+    }
+
     boolean needsModelViewUpload(int generation) {
-        return needsUpload(MODEL_VIEW, generation, modelViewGeneration);
+        return needsUpload(MODEL_VIEW, generation);
     }
 
     void markModelViewUploaded(int generation) {
-        modelViewGeneration = generation;
-        initialized |= MODEL_VIEW;
+        markUploaded(MODEL_VIEW, generation);
     }
 
     boolean needsProjectionUpload(int generation) {
-        return needsUpload(PROJECTION, generation, projectionGeneration);
+        return needsUpload(PROJECTION, generation);
     }
 
     void markProjectionUploaded(int generation) {
-        projectionGeneration = generation;
-        initialized |= PROJECTION;
+        markUploaded(PROJECTION, generation);
     }
 
     boolean needsTextureMatrixUpload(int generation) {
-        return needsUpload(TEXTURE_MATRIX, generation, textureMatrixGeneration);
+        return needsUpload(TEXTURE_MATRIX, generation);
     }
 
     void markTextureMatrixUploaded(int generation) {
-        textureMatrixGeneration = generation;
-        initialized |= TEXTURE_MATRIX;
+        markUploaded(TEXTURE_MATRIX, generation);
     }
 
     boolean needsLightingUpload(int generation) {
-        return needsUpload(LIGHTING, generation, lightingGeneration);
+        return needsUpload(LIGHTING, generation);
     }
 
     void markLightingUploaded(int generation) {
-        lightingGeneration = generation;
-        initialized |= LIGHTING;
+        markUploaded(LIGHTING, generation);
     }
 
     boolean needsFragmentUpload(int generation) {
-        return needsUpload(FRAGMENT, generation, fragmentGeneration);
+        return needsUpload(FRAGMENT, generation);
     }
 
     void markFragmentUploaded(int generation) {
-        fragmentGeneration = generation;
-        initialized |= FRAGMENT;
+        markUploaded(FRAGMENT, generation);
     }
 
     boolean needsColorUpload(int generation) {
-        return needsUpload(COLOR, generation, colorGeneration);
+        return needsUpload(COLOR, generation);
     }
 
     void markColorUploaded(int generation) {
-        colorGeneration = generation;
-        initialized |= COLOR;
+        markUploaded(COLOR, generation);
     }
 
     boolean needsNormalUpload(int generation) {
-        return needsUpload(NORMAL, generation, normalGeneration);
+        return needsUpload(NORMAL, generation);
     }
 
     void markNormalUploaded(int generation) {
-        normalGeneration = generation;
-        initialized |= NORMAL;
+        markUploaded(NORMAL, generation);
     }
 
     boolean needsTexCoordUpload(int generation) {
-        return needsUpload(TEX_COORD, generation, texCoordGeneration);
+        return needsUpload(TEX_COORD, generation);
     }
 
     void markTexCoordUploaded(int generation) {
-        texCoordGeneration = generation;
-        initialized |= TEX_COORD;
+        markUploaded(TEX_COORD, generation);
     }
 
     boolean needsTexGenUpload(int generation) {
-        return needsUpload(TEX_GEN, generation, texGenGeneration);
+        return needsUpload(TEX_GEN, generation);
     }
 
     void markTexGenUploaded(int generation) {
-        texGenGeneration = generation;
-        initialized |= TEX_GEN;
+        markUploaded(TEX_GEN, generation);
     }
 
     boolean needsClipPlaneUpload(int generation) {
-        return needsUpload(CLIP_PLANE, generation, clipPlaneGeneration);
+        return needsUpload(CLIP_PLANE, generation);
     }
 
     void markClipPlaneUploaded(int generation) {
-        clipPlaneGeneration = generation;
-        initialized |= CLIP_PLANE;
+        markUploaded(CLIP_PLANE, generation);
     }
 
     boolean needsLightmapUpload(float x, float y) {
@@ -136,7 +121,7 @@ final class ProgramUniformState {
     void markLightmapUploaded(float x, float y) {
         lightmapX = x;
         lightmapY = y;
-        initialized |= LIGHTMAP;
+        markUploaded(LIGHTMAP, 0);
     }
 
     boolean needsLineWidthUpload(float width) {
@@ -145,7 +130,7 @@ final class ProgramUniformState {
 
     void markLineWidthUploaded(float width) {
         lineWidth = width;
-        initialized |= LINE_WIDTH;
+        markUploaded(LINE_WIDTH, 0);
     }
 
     boolean needsViewportUpload(int width, int height) {
@@ -155,14 +140,6 @@ final class ProgramUniformState {
     void markViewportUploaded(int width, int height) {
         viewportWidth = width;
         viewportHeight = height;
-        initialized |= VIEWPORT;
-    }
-
-    private boolean needsUpload(int category, int generation, int uploadedGeneration) {
-        return !isInitialized(category) || uploadedGeneration != generation;
-    }
-
-    private boolean isInitialized(int category) {
-        return (initialized & category) != 0;
+        markUploaded(VIEWPORT, 0);
     }
 }

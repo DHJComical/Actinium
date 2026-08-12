@@ -1,33 +1,28 @@
 package com.gtnewhorizons.angelica.glsm;
 
+import com.gtnewhorizons.angelica.glsm.states.GenerationTrackedState;
+
 /**
  * Records compat uniform locations and successful uploads for one linked OpenGL program.
  *
  * <p>Uniform values belong to a program object. Keeping the uploaded generations beside that program preserves valid
  * uploads when rendering returns to a program after another program was active.</p>
  */
-final class CompatProgramUniformState {
+final class CompatProgramUniformState extends GenerationTrackedState {
 
-    private static final int MODEL_VIEW = 1 << 0;
-    private static final int PROJECTION = 1 << 1;
-    private static final int TEXTURE_MATRIX = 1 << 2;
-    private static final int FRAGMENT = 1 << 3;
-    private static final int COLOR = 1 << 4;
-    private static final int LIGHTING = 1 << 5;
-    private static final int CLIP_PLANE = 1 << 6;
+    private static final int MODEL_VIEW = 0;
+    private static final int PROJECTION = 1;
+    private static final int TEXTURE_MATRIX = 2;
+    private static final int FRAGMENT = 3;
+    private static final int COLOR = 4;
+    private static final int LIGHTING = 5;
+    private static final int CLIP_PLANE = 6;
 
     private final int[] locations;
     private volatile boolean valid = true;
-    private int initialized;
-    private int modelViewGeneration;
-    private int projectionGeneration;
-    private int textureMatrixGeneration;
-    private int fragmentGeneration;
-    private int colorGeneration;
-    private int lightingGeneration;
-    private int clipPlaneGeneration;
 
     CompatProgramUniformState(int[] locations) {
+        super(7);
         this.locations = locations;
     }
 
@@ -44,76 +39,65 @@ final class CompatProgramUniformState {
     }
 
     boolean needsModelViewUpload(int generation) {
-        return needsUpload(MODEL_VIEW, generation, modelViewGeneration);
+        return needsUpload(MODEL_VIEW, generation);
     }
 
     void markModelViewUploaded(int generation) {
         if (!valid) return;
-        modelViewGeneration = generation;
-        initialized |= MODEL_VIEW;
+        markUploaded(MODEL_VIEW, generation);
     }
 
     boolean needsProjectionUpload(int generation) {
-        return needsUpload(PROJECTION, generation, projectionGeneration);
+        return needsUpload(PROJECTION, generation);
     }
 
     void markProjectionUploaded(int generation) {
         if (!valid) return;
-        projectionGeneration = generation;
-        initialized |= PROJECTION;
+        markUploaded(PROJECTION, generation);
     }
 
     boolean needsTextureMatrixUpload(int generation) {
-        return needsUpload(TEXTURE_MATRIX, generation, textureMatrixGeneration);
+        return needsUpload(TEXTURE_MATRIX, generation);
     }
 
     void markTextureMatrixUploaded(int generation) {
         if (!valid) return;
-        textureMatrixGeneration = generation;
-        initialized |= TEXTURE_MATRIX;
+        markUploaded(TEXTURE_MATRIX, generation);
     }
 
     boolean needsFragmentUpload(int generation) {
-        return needsUpload(FRAGMENT, generation, fragmentGeneration);
+        return needsUpload(FRAGMENT, generation);
     }
 
     void markFragmentUploaded(int generation) {
         if (!valid) return;
-        fragmentGeneration = generation;
-        initialized |= FRAGMENT;
+        markUploaded(FRAGMENT, generation);
     }
 
     boolean needsColorUpload(int generation) {
-        return needsUpload(COLOR, generation, colorGeneration);
+        return needsUpload(COLOR, generation);
     }
 
     void markColorUploaded(int generation) {
         if (!valid) return;
-        colorGeneration = generation;
-        initialized |= COLOR;
+        markUploaded(COLOR, generation);
     }
 
     boolean needsLightingUpload(int generation) {
-        return needsUpload(LIGHTING, generation, lightingGeneration);
+        return needsUpload(LIGHTING, generation);
     }
 
     void markLightingUploaded(int generation) {
         if (!valid) return;
-        lightingGeneration = generation;
-        initialized |= LIGHTING;
+        markUploaded(LIGHTING, generation);
     }
 
     boolean needsClipPlaneUpload(int generation) {
-        return needsUpload(CLIP_PLANE, generation, clipPlaneGeneration);
+        return needsUpload(CLIP_PLANE, generation);
     }
 
     void markClipPlaneUploaded(int generation) {
         if (!valid) return;
-        clipPlaneGeneration = generation;
-        initialized |= CLIP_PLANE;
-    }
-
-    private boolean needsUpload(int category, int generation, int uploadedGeneration) {
-        return (initialized & category) == 0 || uploadedGeneration != generation;
+        markUploaded(CLIP_PLANE, generation);
     }
 }

@@ -46,7 +46,6 @@ public interface UniformHolder {
 
 	UniformHolder uniformMatrix(UniformUpdateFrequency updateFrequency, String name, Supplier<Matrix4fc> value);
 
-	UniformHolder uniformMatrixFromArray(UniformUpdateFrequency updateFrequency, String name, Supplier<float[]> value);
 
 	UniformHolder externallyManagedUniform(String name, UniformType type);
 }

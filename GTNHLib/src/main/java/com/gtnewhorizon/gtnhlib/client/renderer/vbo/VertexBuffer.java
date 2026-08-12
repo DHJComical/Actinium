@@ -4,24 +4,41 @@ import java.nio.ByteBuffer;
 
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL44;
 
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormat;
 
+/**
+ * A vertex buffer backed by either mutable {@code glBufferData} storage (default) or
+ * immutable {@code glBufferStorage} storage (when constructed with storage flags).
+ */
 public class VertexBuffer implements IVertexBuffer, AutoCloseable {
 
     protected int id;
     protected int vertexCount;
     protected final VertexFormat format;
     protected final int drawMode;
+    /** Storage flags for glBufferStorage, or -1 when using mutable glBufferData storage. */
+    protected final int storageFlags;
 
     public VertexBuffer(VertexFormat format, int drawMode) {
+        this(format, drawMode, -1);
+    }
+
+    public VertexBuffer(VertexFormat format, int drawMode, int storageFlags) {
         this.id = GL15.glGenBuffers();
         this.format = format;
         this.drawMode = drawMode;
+        this.storageFlags = storageFlags;
     }
 
     public VertexBuffer(VertexFormat format, int drawMode, ByteBuffer buffer, int vertexCount) {
         this(format, drawMode);
+        allocate(buffer, vertexCount);
+    }
+
+    public VertexBuffer(VertexFormat format, int drawMode, ByteBuffer buffer, int vertexCount, int storageFlags) {
+        this(format, drawMode, storageFlags);
         allocate(buffer, vertexCount);
     }
 
@@ -53,11 +70,21 @@ public class VertexBuffer implements IVertexBuffer, AutoCloseable {
 
     @Override
     public void allocate(ByteBuffer buffer, int vertexCount) {
-        upload(buffer, vertexCount, GL15.GL_STATIC_DRAW);
+        if (storageFlags >= 0) {
+            this.vertexCount = vertexCount;
+            this.bindVBO();
+            GL44.glBufferStorage(GL15.GL_ARRAY_BUFFER, buffer, this.storageFlags);
+            this.unbindVBO();
+        } else {
+            upload(buffer, vertexCount, GL15.GL_STATIC_DRAW);
+        }
     }
 
     @Override
     public void update(ByteBuffer buffer, long offset) {
+        if (storageFlags >= 0 && (this.storageFlags & GL44.GL_DYNAMIC_STORAGE_BIT) == 0) {
+            throw new UnsupportedOperationException("Cannot call update() on an immutable buffer!");
+        }
         this.bindVBO();
         GL15.glBufferSubData(GL15.GL_ARRAY_BUFFER, offset, buffer);
         this.unbindVBO();
