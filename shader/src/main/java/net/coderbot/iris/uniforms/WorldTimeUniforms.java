@@ -1,8 +1,8 @@
 package net.coderbot.iris.uniforms;
 
+import net.coderbot.iris.debug.IrisDebugOptions;
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_TICK;
 
-import com.dhj.actinium.config.ActiniumConfig;
 import java.util.Objects;
 import net.coderbot.iris.gl.uniform.UniformHolder;
 import net.minecraft.client.Minecraft;
@@ -34,7 +34,7 @@ public final class WorldTimeUniforms {
 	 */
 	public static void snapshot() {
 		final WorldClient world = getWorld();
-		cachedWorldClock = ActiniumConfig.useTotalWorldTime
+		cachedWorldClock = IrisDebugOptions.useTotalWorldTime()
 			? world.getTotalWorldTime()
 			: world.getWorldTime();
 		hasWorldClockSnapshot = true;

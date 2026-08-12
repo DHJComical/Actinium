@@ -29,7 +29,7 @@ import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
+import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
@@ -247,7 +247,7 @@ public class IrisGenericRenderProgram implements IDhApiGenericObjectShaderProgra
         setUniform(projectionInverseUniform, tempProj);
         setUniform(normalMatrix3fUniform, tempModel.transpose3x3(tempMat3));
         GLStateManager.glActiveTexture(GL13.GL_TEXTURE0 + IrisSamplers.LIGHTMAP_TEXTURE_UNIT);
-        DynamicTexture lightmapTexture = ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer).getLightmapTexture();
+        DynamicTexture lightmapTexture = PostProcessingBridge.getLightmapTexture(Minecraft.getMinecraft().entityRenderer);
         GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, lightmapTexture.getGlTextureId());
 
         samplers.update();

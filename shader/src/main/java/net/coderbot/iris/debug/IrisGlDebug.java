@@ -1,6 +1,6 @@
 package net.coderbot.iris.debug;
 
-import com.dhj.actinium.debug.flight.GlFlightRecording;
+import net.coderbot.iris.debug.flight.GlFlightRecording;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandType;
 import net.coderbot.iris.Iris;
@@ -10,7 +10,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.shader.Framebuffer;
 import net.coderbot.iris.rendertarget.RenderTarget;
 import net.coderbot.iris.rendertarget.RenderTargets;
-import com.dhj.actinium.runtime.ActiniumRuntime;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttribute;
@@ -107,7 +106,7 @@ public final class IrisGlDebug {
 		}
 
         try {
-            return ActiniumRuntime.options().debug.enableActiniumGlDebug;
+            return IrisDebugOptions.enableActiniumGlDebug();
         } catch (RuntimeException ignored) {
             return false;
         }
@@ -120,7 +119,7 @@ public final class IrisGlDebug {
         }
 
         try {
-            return ActiniumRuntime.options().debug.enableCloudControlDebug;
+            return IrisDebugOptions.enableCloudControlDebug();
         } catch (RuntimeException ignored) {
             return false;
         }
@@ -720,7 +719,7 @@ public final class IrisGlDebug {
 		}
 
 		try {
-			return ActiniumRuntime.options().debug.enableFrameGlErrorCheck;
+			return IrisDebugOptions.enableFrameGlErrorCheck();
 		} catch (RuntimeException ignored) {
 			return false;
 		}
@@ -733,7 +732,7 @@ public final class IrisGlDebug {
 		}
 
 		try {
-			return ActiniumRuntime.options().debug.enablePostRenderGlErrorCheck;
+			return IrisDebugOptions.enablePostRenderGlErrorCheck();
 		} catch (RuntimeException ignored) {
 			return false;
 		}
@@ -746,7 +745,7 @@ public final class IrisGlDebug {
 		}
 
 		try {
-			return ActiniumRuntime.options().debug.enableActiniumPerfDebug;
+			return IrisDebugOptions.enableActiniumPerfDebug();
 		} catch (RuntimeException ignored) {
 			return false;
 		}
@@ -759,7 +758,7 @@ public final class IrisGlDebug {
 		}
 
 		try {
-			return ActiniumRuntime.options().debug.enableActiniumGpuPerfDebug;
+			return IrisDebugOptions.enableActiniumGpuPerfDebug();
 		} catch (RuntimeException ignored) {
 			return false;
 		}

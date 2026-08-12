@@ -1,8 +1,8 @@
 package net.coderbot.iris.texture.pbr;
 
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.gtnewhorizons.angelica.compat.mojang.AutoClosableAbstractTexture;
-import com.dhj.actinium.config.ActiniumRuntimeOptions;
-import com.dhj.actinium.debug.PBRDebug;
+import net.coderbot.iris.debug.PBRDebug;
 import lombok.Getter;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.texture.util.TextureExporter;
@@ -90,7 +90,7 @@ public class PBRAtlasTexture extends AutoClosableAbstractTexture {
 		}
 
 		PBRDebug.atlasUploaded(this, atlasWidth, atlasHeight, mipLevel, sprites.size(), animatedSprites.size());
-		if (ActiniumRuntimeOptions.pbrDebugEnabled()) {
+		if (IrisDebugOptions.pbrDebugEnabled()) {
 			TextureExporter.exportTextures("pbr_debug/atlas", id.getNamespace() + "_" + id.getPath().replaceAll("/", "_"), glId, mipLevel, atlasWidth, atlasHeight);
 		}
 	}

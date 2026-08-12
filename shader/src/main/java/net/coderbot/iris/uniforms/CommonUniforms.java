@@ -1,6 +1,6 @@
 package net.coderbot.iris.uniforms;
 
-import com.dhj.actinium.config.ActiniumConfig;
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.states.BlendState;
@@ -34,7 +34,7 @@ import org.joml.Vector2f;
 import org.joml.Vector2i;
 import org.joml.Vector3d;
 import org.joml.Vector4i;
-import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
+import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
 
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_FRAME;
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_TICK;
@@ -66,7 +66,7 @@ public final class CommonUniforms {
         IdMapUniforms.addIdMapUniforms(updateNotifier, uniforms, idMap, directives.isOldHandLight());
         MatrixUniforms.addMatrixUniforms(uniforms, directives);
 
-        if (ActiniumConfig.enableHardcodedCustomUniforms) {
+        if (IrisDebugOptions.enableHardcodedCustomUniforms()) {
             HardcodedCustomUniforms.addHardcodedCustomUniforms(uniforms, updateNotifier);
         }
 
@@ -269,7 +269,7 @@ public final class CommonUniforms {
             if (!entityPlayer.isPotionActive(MobEffects.NIGHT_VISION)) {
                 return 0.0F;
             }
-            float nightVisionStrength = ((AccessorEntityRenderer)client.entityRenderer).invokeGetNightVisionBrightness(entityPlayer, CapturedRenderingState.INSTANCE.getTickDelta());
+            float nightVisionStrength = PostProcessingBridge.getNightVisionBrightness(entityPlayer, CapturedRenderingState.INSTANCE.getTickDelta());
 
 			try {
 				if (nightVisionStrength > 0) {

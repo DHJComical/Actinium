@@ -1,4 +1,4 @@
-package com.dhj.actinium.compat.rfp2;
+package net.coderbot.iris.compat.rfp2;
 
 import net.minecraft.entity.Entity;
 import net.minecraftforge.fml.common.Loader;

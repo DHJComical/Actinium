@@ -1,6 +1,6 @@
 package net.coderbot.iris.pipeline;
 
-import com.dhj.actinium.debug.ShaderRegressionDebug;
+import net.coderbot.iris.debug.ShaderRegressionDebug;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.Ints;

@@ -1,8 +1,8 @@
 package net.coderbot.iris;
 
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.google.common.base.Throwables;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
-import com.dhj.actinium.config.ActiniumConfig;
 import com.gtnewhorizons.angelica.proxy.ClientProxy;
 import com.gtnewhorizons.angelica.Tags;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
@@ -92,7 +92,7 @@ public class Iris {
     public static final IrisLogging logger = new IrisLogging(MODNAME);
 
     // Cached at class load - config must be loaded before Iris. Do not change at runtime.
-    public static final boolean enabled = ActiniumConfig.enableIris;
+    public static final boolean enabled = IrisDebugOptions.enableIris();
 
     private static Path shaderpacksDirectory;
     private static ShaderpackDirectoryManager shaderpacksDirectoryManager;
@@ -638,7 +638,7 @@ public class Iris {
             throw new IllegalStateException("Iris runtime GL initialization was requested before RenderSystem initialization completed");
         }
 
-        if (ActiniumConfig.enableCeleritas) {
+        if (IrisDebugOptions.enableCeleritas()) {
             ShaderProviderHolder.setProvider(new IrisCeleritasShaderProvider());
         }
 

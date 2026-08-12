@@ -1,7 +1,7 @@
 package net.coderbot.iris.gl.program;
 
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.google.common.collect.ImmutableList;
-import com.dhj.actinium.config.ActiniumConfig;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import java.nio.IntBuffer;
@@ -211,7 +211,7 @@ public class ProgramUniforms {
 				final UniformType provided = uniformNames.get(name);
                 final UniformType expected = getExpectedType(type);
 
-				if(ActiniumConfig.enableHardcodedCustomUniforms) {
+				if(IrisDebugOptions.enableHardcodedCustomUniforms()) {
 					// Legacy Checks from hardcoded custom uniforms
 					if (provided == null && !name.startsWith("gl_")) {
 						final String typeName = getTypeName(type);

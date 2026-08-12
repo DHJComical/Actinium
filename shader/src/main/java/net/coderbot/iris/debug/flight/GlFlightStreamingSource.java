@@ -1,4 +1,4 @@
-package com.dhj.actinium.debug.flight;
+package net.coderbot.iris.debug.flight;
 
 /**
  * Identifies the persistent streaming source synchronized at the end of a rendered frame.

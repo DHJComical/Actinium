@@ -1,6 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
-import com.dhj.actinium.debug.ShaderRegressionDebug;
+import net.coderbot.iris.debug.ShaderRegressionDebug;
 import com.gtnewhorizons.angelica.compat.mojang.InteractionHand;
 import net.coderbot.iris.pipeline.HandRenderer;
 import net.coderbot.iris.uniforms.ItemIdManager;

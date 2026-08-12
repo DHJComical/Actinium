@@ -1,7 +1,7 @@
 package com.dhj.actinium.mixin.vintage.core;
 
-import com.dhj.actinium.debug.flight.GlFlightRecording;
-import com.dhj.actinium.debug.flight.GlFlightStreamingSource;
+import net.coderbot.iris.debug.flight.GlFlightRecording;
+import net.coderbot.iris.debug.flight.GlFlightStreamingSource;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.gui.ActiniumWindowModeController;
 import com.dhj.actinium.render.BufferBuilderStreamingDrawer;

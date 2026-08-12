@@ -1,4 +1,4 @@
-package com.dhj.actinium.debug.flight;
+package net.coderbot.iris.debug.flight;
 
 final class GlFlightFormat {
     static final long MAGIC = 0x31474F4C46544341L;

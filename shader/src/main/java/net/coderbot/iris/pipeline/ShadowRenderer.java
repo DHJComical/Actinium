@@ -1,13 +1,13 @@
 package net.coderbot.iris.pipeline;
 
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.google.common.collect.ImmutableList;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.compat.mojang.GameModeUtil;
 import com.gtnewhorizons.angelica.compat.toremove.MatrixStack;
-import com.dhj.actinium.config.ActiniumConfig;
-import com.dhj.actinium.compat.rfp2.Rfp2Compat;
+import net.coderbot.iris.compat.rfp2.Rfp2Compat;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
-import com.dhj.actinium.shadows.InternalShadowRenderingState;
+import com.gtnewhorizons.angelica.glsm.shadow.InternalShadowRenderingState;
 import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
@@ -819,7 +819,7 @@ public class ShadowRenderer {
 		// Mark the shadow graph as needing update before terrain setup
 		// Modern Celeritas does this to ensure the shadow render lists get populated
 		boolean celeritasManaged = false;
-		if (ActiniumConfig.enableCeleritas) {
+		if (IrisDebugOptions.enableCeleritas()) {
 			RenderDevice.enterManagedCode();
 			celeritasManaged = true;
 			ActiniumWorldRenderer renderer = ActiniumWorldRenderer.instance();
@@ -884,7 +884,7 @@ public class ShadowRenderer {
 		entityShadowFrustum.setPosition(entityX, entityY, entityZ);
 
 		// Set viewport for entity visibility checks during shadow pass (matches modern Celeritas)
-		if (ActiniumConfig.enableCeleritas) {
+		if (IrisDebugOptions.enableCeleritas()) {
 			ActiniumWorldRenderer.instance().setCurrentViewport(((ViewportProvider)entityShadowFrustum).sodium$createViewport());
 		}
 
@@ -950,7 +950,7 @@ public class ShadowRenderer {
 			shouldRenderEntities,
 			shouldRenderPlayer,
 			shouldRenderBlockEntities,
-			ActiniumConfig.enableCeleritas ? ActiniumWorldRenderer.instance().getVisibleChunkCount() : -1,
+			IrisDebugOptions.enableCeleritas() ? ActiniumWorldRenderer.instance().getVisibleChunkCount() : -1,
 			renderedShadowEntities,
 			renderedShadowTileEntities
 		);

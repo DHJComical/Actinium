@@ -24,7 +24,7 @@ import net.coderbot.iris.uniforms.builtin.BuiltinReplacementUniforms;
 import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
+import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -235,7 +235,7 @@ public class IrisLodRenderProgram {
         GLStateManager.glUseProgram(id);
 
         GLStateManager.glActiveTexture(GL13.GL_TEXTURE0 + IrisSamplers.LIGHTMAP_TEXTURE_UNIT);
-        DynamicTexture lightmapTexture = ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer).getLightmapTexture();
+        DynamicTexture lightmapTexture = PostProcessingBridge.getLightmapTexture(Minecraft.getMinecraft().entityRenderer);
         GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, lightmapTexture.getGlTextureId());
         setUniform(modelViewUniform, modelView);
         setUniform(modelViewInverseUniform, modelView.invert(tempMat4a));

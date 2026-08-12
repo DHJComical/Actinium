@@ -1,6 +1,6 @@
 package net.coderbot.iris.rendertarget;
 
-import com.dhj.actinium.runtime.ActiniumRuntime;
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.google.common.collect.ImmutableSet;
 import com.gtnewhorizons.angelica.glsm.GLDebug;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
@@ -438,7 +438,7 @@ public class RenderTargets {
 		}
 
 		try {
-			return ActiniumRuntime.options().debug.ignoreFramebufferErrors;
+			return IrisDebugOptions.ignoreFramebufferErrors();
 		} catch (RuntimeException ignored) {
 			return false;
 		}

@@ -1,6 +1,6 @@
 package net.coderbot.iris.texture.pbr.loader;
 
-import com.dhj.actinium.debug.PBRDebug;
+import net.coderbot.iris.debug.PBRDebug;
 import net.coderbot.iris.texture.pbr.PBRType;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.SimpleTexture;

@@ -1,6 +1,6 @@
 package net.coderbot.iris.client;
 
-import com.dhj.actinium.config.ActiniumConfig;
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import net.coderbot.iris.Iris;
 import net.minecraft.client.Minecraft;
@@ -14,7 +14,7 @@ public class IrisDebugScreenHandler {
     @SubscribeEvent(priority = EventPriority.LOW)
     public void onRenderGameOverlayTextEvent(RenderGameOverlayEvent.Text event) {
         final Minecraft mc = Minecraft.getMinecraft();
-        if (mc.gameSettings.showDebugInfo && !ActiniumConfig.disableF3Additions) {
+        if (mc.gameSettings.showDebugInfo && !IrisDebugOptions.disableF3Additions()) {
             event.getRight().add(Math.min(event.getRight().size(), 2), "[" + Iris.MODNAME + "] Version: " + Iris.getFormattedVersion());
 
             if (Iris.getIrisConfig().areShadersEnabled()) {

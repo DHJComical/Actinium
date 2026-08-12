@@ -1,6 +1,6 @@
 package net.coderbot.iris.pipeline;
 
-import com.dhj.actinium.debug.flight.GlFlightRecording;
+import net.coderbot.iris.debug.flight.GlFlightRecording;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import lombok.Getter;
 import net.coderbot.iris.Iris;

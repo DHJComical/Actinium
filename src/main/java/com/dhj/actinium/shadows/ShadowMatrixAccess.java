@@ -1,5 +1,6 @@
 package com.dhj.actinium.shadows;
 
+import com.gtnewhorizons.angelica.glsm.shadow.InternalShadowRenderingState;
 import org.joml.Matrix4f;
 import org.jetbrains.annotations.Nullable;
 

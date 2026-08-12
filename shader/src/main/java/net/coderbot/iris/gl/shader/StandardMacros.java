@@ -1,8 +1,8 @@
 package net.coderbot.iris.gl.shader;
 
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.google.common.collect.ImmutableList;
 import com.gtnewhorizons.angelica.Tags;
-import com.dhj.actinium.config.ActiniumConfig;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.parsing.BiomeCategories;
 import net.coderbot.iris.pipeline.HandRenderer;
@@ -80,7 +80,7 @@ public class StandardMacros {
 		define(standardDefines, "MC_RENDER_QUALITY", "1.0");
 		define(standardDefines, "MC_SHADOW_QUALITY", "1.0");
 		define(standardDefines, "IS_ANGELICA");
-		if (ActiniumConfig.defineIsIris) {
+		if (IrisDebugOptions.defineIsIris()) {
 			define(standardDefines, "IS_IRIS");
 		}
 		define(standardDefines, "IRIS_TAG_SUPPORT", "2");

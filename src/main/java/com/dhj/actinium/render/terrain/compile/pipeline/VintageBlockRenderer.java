@@ -1,7 +1,7 @@
 package com.dhj.actinium.render.terrain.compile.pipeline;
 
 import com.dhj.actinium.api.render.terrain.BlockQuadTransformerHolder;
-import com.dhj.actinium.debug.ShaderRegressionDebug;
+import net.coderbot.iris.debug.ShaderRegressionDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;

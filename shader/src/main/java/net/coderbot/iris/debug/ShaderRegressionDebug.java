@@ -1,6 +1,5 @@
-package com.dhj.actinium.debug;
+package net.coderbot.iris.debug;
 
-import com.dhj.actinium.runtime.ActiniumRuntime;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import net.coderbot.iris.block_rendering.BlockMaterialMapping;
@@ -39,7 +38,7 @@ public final class ShaderRegressionDebug {
         }
 
         try {
-            return ActiniumRuntime.options().debug.enableActiniumGlDebug;
+            return IrisDebugOptions.enableActiniumGlDebug();
         } catch (RuntimeException ignored) {
             return false;
         }

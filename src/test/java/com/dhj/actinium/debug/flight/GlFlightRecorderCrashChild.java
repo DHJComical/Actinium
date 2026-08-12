@@ -1,4 +1,4 @@
-package com.dhj.actinium.debug.flight;
+package net.coderbot.iris.debug.flight;
 
 import java.nio.file.Path;
 

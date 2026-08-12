@@ -1,8 +1,8 @@
 package com.dhj.actinium.mixin.vintage.core.startup;
 
 import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
-import com.dhj.actinium.debug.flight.GlFlightRecording;
-import com.dhj.actinium.debug.flight.GlFlightGpuCommandRecorder;
+import net.coderbot.iris.debug.flight.GlFlightRecording;
+import net.coderbot.iris.debug.flight.GlFlightGpuCommandRecorder;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;

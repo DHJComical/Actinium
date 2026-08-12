@@ -3,7 +3,7 @@ package net.coderbot.iris.texture.pbr.loader;
 import com.gtnewhorizons.angelica.compat.mojang.NativeImage;
 import com.gtnewhorizons.angelica.glsm.texture.TextureInfo;
 import com.gtnewhorizons.angelica.glsm.texture.TextureInfoCache;
-import com.dhj.actinium.debug.PBRDebug;
+import net.coderbot.iris.debug.PBRDebug;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.texture.format.TextureFormat;
 import net.coderbot.iris.texture.format.TextureFormatLoader;

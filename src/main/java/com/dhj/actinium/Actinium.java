@@ -4,12 +4,14 @@ import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
 import com.dhj.actinium.command.TogglePassCommand;
+import com.dhj.actinium.config.ActiniumConfig;
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 import com.dhj.actinium.render.FastLitItemDisplayListCache;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
+import net.coderbot.iris.debug.IrisDebugOptions;
 import com.gtnewhorizon.gtnhlib.client.renderer.RuntimeOptionsBridge;
 import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
@@ -55,6 +57,81 @@ public class Actinium {
         EmbeddiumRuntimeOptions.setChunkMultiDrawMode(() -> ActiniumRuntime.options().advanced.multiDrawMode);
         PostProcessingBridge.setDepthTextureProvider(framebuffer -> ((IRenderTargetExt) framebuffer).iris$getDepthTextureId());
         PostProcessingBridge.setLightmapColorAccessor(renderer -> ((AccessorEntityRenderer) renderer).getLightmapColors());
+        PostProcessingBridge.setLightmapTextureAccessor(renderer -> ((AccessorEntityRenderer) renderer).getLightmapTexture());
+        PostProcessingBridge.setNightVisionBrightnessInvoker(
+            (entity, partialTicks) -> ((AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer)
+                .invokeGetNightVisionBrightness(entity, partialTicks));
+        IrisDebugOptions.setBridge(new IrisDebugOptions.Bridge() {
+            @Override
+            public boolean pbrDebugEnabled() {
+                return ActiniumRuntimeOptions.pbrDebugEnabled();
+            }
+
+            @Override
+            public boolean enableActiniumGlDebug() {
+                return ActiniumRuntime.options().debug.enableActiniumGlDebug;
+            }
+
+            @Override
+            public boolean enableCloudControlDebug() {
+                return ActiniumRuntime.options().debug.enableCloudControlDebug;
+            }
+
+            @Override
+            public boolean enableFrameGlErrorCheck() {
+                return ActiniumRuntime.options().debug.enableFrameGlErrorCheck;
+            }
+
+            @Override
+            public boolean enablePostRenderGlErrorCheck() {
+                return ActiniumRuntime.options().debug.enablePostRenderGlErrorCheck;
+            }
+
+            @Override
+            public boolean enableActiniumPerfDebug() {
+                return ActiniumRuntime.options().debug.enableActiniumPerfDebug;
+            }
+
+            @Override
+            public boolean enableActiniumGpuPerfDebug() {
+                return ActiniumRuntime.options().debug.enableActiniumGpuPerfDebug;
+            }
+
+            @Override
+            public boolean ignoreFramebufferErrors() {
+                return ActiniumRuntime.options().debug.ignoreFramebufferErrors;
+            }
+
+            @Override
+            public boolean enableIris() {
+                return ActiniumConfig.enableIris;
+            }
+
+            @Override
+            public boolean enableCeleritas() {
+                return ActiniumConfig.enableCeleritas;
+            }
+
+            @Override
+            public boolean defineIsIris() {
+                return ActiniumConfig.defineIsIris;
+            }
+
+            @Override
+            public boolean enableHardcodedCustomUniforms() {
+                return ActiniumConfig.enableHardcodedCustomUniforms;
+            }
+
+            @Override
+            public boolean disableF3Additions() {
+                return ActiniumConfig.disableF3Additions;
+            }
+
+            @Override
+            public boolean useTotalWorldTime() {
+                return ActiniumConfig.useTotalWorldTime;
+            }
+        });
         GLSMPerfDebugHooks.setExtraStatsSupplier(Actinium::dumpExtraPerfStats);
         GLSMPerfDebugHooks.setConfiguredEnabled(
             ActiniumRuntimeOptions.resolvePerfDebugEnabled(ActiniumRuntime.options().debug.enableActiniumPerfDebug)

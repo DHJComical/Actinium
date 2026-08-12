@@ -1,6 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
-import com.dhj.actinium.debug.ShaderRegressionDebug;
+import net.coderbot.iris.debug.ShaderRegressionDebug;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.coderbot.iris.uniforms.CapturedRenderingState;

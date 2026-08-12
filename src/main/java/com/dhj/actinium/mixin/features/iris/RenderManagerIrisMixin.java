@@ -1,6 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
-import com.dhj.actinium.debug.ShaderRegressionDebug;
+import net.coderbot.iris.debug.ShaderRegressionDebug;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;

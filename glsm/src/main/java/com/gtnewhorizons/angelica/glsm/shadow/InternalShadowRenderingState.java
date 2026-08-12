@@ -1,4 +1,4 @@
-package com.dhj.actinium.shadows;
+package com.gtnewhorizons.angelica.glsm.shadow;
 
 import org.joml.Matrix4f;
 

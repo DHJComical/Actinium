@@ -1,5 +1,6 @@
 package com.dhj.actinium.shadows;
 
+import com.gtnewhorizons.angelica.glsm.shadow.InternalShadowRenderingState;
 import org.jetbrains.annotations.Nullable;
 
 import java.lang.reflect.Method;

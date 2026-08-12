@@ -1,6 +1,5 @@
-package com.dhj.actinium.debug;
+package net.coderbot.iris.debug;
 
-import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import net.coderbot.iris.texture.pbr.PBRAtlasTexture;
 import net.coderbot.iris.texture.pbr.PBRType;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -93,7 +92,7 @@ public final class PBRDebug {
     }
 
     private static boolean enabled() {
-        return ActiniumRuntimeOptions.pbrDebugEnabled();
+        return IrisDebugOptions.pbrDebugEnabled();
     }
 
     private static boolean record(String event) {

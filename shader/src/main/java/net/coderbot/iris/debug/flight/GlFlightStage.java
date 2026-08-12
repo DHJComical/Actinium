@@ -1,4 +1,4 @@
-package com.dhj.actinium.debug.flight;
+package net.coderbot.iris.debug.flight;
 
 /**
  * Names stable rendering stages that remain meaningful when Java and game logs are unavailable.
