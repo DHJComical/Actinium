@@ -24,6 +24,8 @@ public class MixinLate implements ILateMixinLoader {
     private static final String REVO_UI_MIXIN_CONFIG = "mixins.actinium.revoui.json";
     private static final String BETTER_FOLIAGE_MOD_ID = "betterfoliage";
     private static final String BETTER_FOLIAGE_MIXIN_CONFIG = "mixins.actinium.betterfoliage.json";
+    private static final String CCL_MOD_ID = "codechickenlib";
+    private static final String CCL_MIXIN_CONFIG = "mixins.actinium.ccl.json";
 
     @Override
     public List<String> getMixinConfigs() {
@@ -71,6 +73,10 @@ public class MixinLate implements ILateMixinLoader {
 
         if (loadedMods.test(BETTER_FOLIAGE_MOD_ID)) {
             mixins.add(BETTER_FOLIAGE_MIXIN_CONFIG);
+        }
+
+        if (loadedMods.test(CCL_MOD_ID)) {
+            mixins.add(CCL_MIXIN_CONFIG);
         }
 
         return mixins;

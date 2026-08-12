@@ -77,6 +77,12 @@ dependencies {
     modImplementation 'curse.maven:stellarcore-1064321:8406201'
     modCompileOnly 'curse.maven:lumenized-1234162:6734060'
 
+    // Draconic Evolution
+    modCompileOnly 'maven.modrinth:draconic-evolution:2.3.28.354'
+    modCompileOnly 'maven.modrinth:brandons-core:2.4.20.162'
+    modCompileOnly 'codechicken:CodeChickenLib:3.3.8'
+    modCompileOnly "curse.maven:redstoneflux-270789:2920436"
+
     modRuntimeOnly "curse.maven:celeritas-dynamic-lights-1313831:8387313"
     modRuntimeOnly "curse.maven:celeritas-extra-1451214:8362538"
     modRuntimeOnly "curse.maven:celeritasleafculling-1449111:7550650"
@@ -85,14 +91,14 @@ dependencies {
     modCompileOnly "curse.maven:mobdismemberment-229067:2487081"
 
 
-    modImplementation 'curse.maven:revo-font-1617673:8586768'
+    modCompileOnly 'curse.maven:revo-font-1617673:8586768'
     modCompileOnly 'curse.maven:revo-ui-1620532:8593682'
-    modRuntimeOnly('com.cleanroommc:modularui:3.1.6') { transitive = false }
+    modCompileOnly('com.cleanroommc:modularui:3.1.6') { transitive = false }
 
     modCompileOnly "curse.maven:somnia-refreshed-1062151:5544381"
 //    modImplementation "curse.maven:conquest-reforged-250077:2565963"
 
-    modImplementation "curse.maven:rebooter-1625784:8518809"
-    modImplementation "curse.maven:forgelin-continuous-456403:8248535"
-    modImplementation "curse.maven:rlfoliage-970462:7645701"
+    modCompileOnly "curse.maven:rebooter-1625784:8518809"
+    modCompileOnly "curse.maven:forgelin-continuous-456403:8248535"
+    modCompileOnly "curse.maven:rlfoliage-970462:7645701"
 }

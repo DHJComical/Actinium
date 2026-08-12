@@ -20,6 +20,11 @@ public final class AngelicaClassDump {
     }
 
     private static void dumpBytes(byte[] bytes, String className, Object transformer) {
+        // minecraftHome is unset during early startup (class transformation before the game directory is known);
+        // skip the dump instead of failing the class load chain with an NPE.
+        if (Launch.minecraftHome == null) {
+            return;
+        }
         String transformerName = transformer.getClass().getSimpleName().toUpperCase();
         String relativeName = className.replace('.', '/').replace('$', '.');
         Path output = Launch.minecraftHome.toPath()

@@ -22,13 +22,19 @@ class MixinLateTest {
         );
 
         assertEquals(
+            List.of("mixins.actinium.ccl.json"),
+            MixinLate.configsFor("codechickenlib"::equals)
+        );
+
+        assertEquals(
             List.of(
                 "mixins.actinium.dh.json",
                 "mixins.actinium.gibbed.json",
                 "mixins.actinium.ichunutil.json",
                 "mixins.actinium.lumenized.json",
                 "mixins.actinium.revoui.json",
-                "mixins.actinium.betterfoliage.json"
+                "mixins.actinium.betterfoliage.json",
+                "mixins.actinium.ccl.json"
             ),
             MixinLate.configsFor(modId -> true)
         );

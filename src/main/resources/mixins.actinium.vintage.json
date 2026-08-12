@@ -21,6 +21,7 @@
     "core.crash.MixinSplashProgressCallable",
     "core.frustum.MixinClippingHelperImpl",
     "core.frustum.MixinFrustum",
+    "core.startup.MixinEntityRendererFovFallback",
     "core.startup.MixinGameSettingsIrisInit",
     "core.startup.MixinMinecraftCoreProfileDisplay",
     "core.startup.MixinMinecraftIrisLoadingComplete",
