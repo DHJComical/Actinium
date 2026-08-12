@@ -37,31 +37,33 @@ def cliProjectProperties = gradle.startParameter.projectProperties
  * Derives the build version from git: an exact tag on HEAD wins, otherwise the short commit sha.
  * Returns null when git is unavailable (e.g. building from a source snapshot).
  */
-def gitVersion = {
+def gitRun = { List<String> cmd ->
     // ProcessBuilder instead of Gradle exec: exec is forbidden during the configuration phase.
-    def run = { List<String> cmd ->
-        try {
-            def process = new ProcessBuilder(cmd)
-                .directory(rootProject.projectDir)
-                .redirectErrorStream(true)
-                .start()
-            def output = process.inputStream.text.trim()
-            process.waitFor()
-            return process.exitValue() == 0 && !output.isEmpty() ? output : null
-        } catch (Exception ignored) {
-            return null
-        }
+    try {
+        def process = new ProcessBuilder(cmd)
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .start()
+        def output = process.inputStream.text.trim()
+        process.waitFor()
+        return process.exitValue() == 0 && !output.isEmpty() ? output : null
+    } catch (Exception ignored) {
+        return null
     }
-    def tag = run(['git', 'describe', '--tags', '--exact-match', 'HEAD'])
-    if (tag != null) return tag
-    def sha = run(['git', 'rev-parse', '--short', 'HEAD'])
-    return sha != null ? sha : null
 }
 
-// Precedence: explicit -Pversion > git (tag or sha) > gradle.properties mod_version
+def gitExactTag = { gitRun(['git', 'describe', '--tags', '--exact-match', 'HEAD']) }
+
+def gitShortSha = { gitRun(['git', 'rev-parse', '--short', 'HEAD']) }
+
+def baseVersion = propertyString('mod_version')
+
+// Precedence: explicit -Pversion > git tag > "baseVersion-gitSha" > gradle.properties mod_version.
+// Appending the sha to the manual base version keeps FML version parsing (required-after
+// comparisons, update checks) working: a bare sha is not a valid version for those consumers.
 def finalVersion = cliProjectProperties.containsKey('version')
     ? cliProjectProperties['version']
-    : (gitVersion() ?: propertyString('mod_version'))
+    : (gitExactTag() ?: (gitShortSha() ? baseVersion + "-" + gitShortSha() : baseVersion))
 version = finalVersion
 group = cliProjectProperties.containsKey('group') ? cliProjectProperties['group'] : propertyString('root_package')
 
