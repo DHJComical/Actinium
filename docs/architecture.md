@@ -47,6 +47,18 @@ Actinium 是一个客户端模组和 coremod。`com.dhj.actinium.Actinium` 处�
 - 新增 Mixin 必须加入 `MixinConfigurationTest` 覆盖的配置文件。
 - 发布前运行 `build`；`check` 会验证自动化测试及 remap Jar 结构。
 
+Mixin 组织约定：
+
+- **mixin 类只做注入**，业务逻辑放在 mixin 包之外的实现类（`compat/`、功能包或
+  工具类），mixin 类保持薄。
+- **注入接口与注入类分离**：访问器/调用器（Accessor/Invoker）按
+  `core.terrain.AccessorEntityRenderer` 模式组织；需要跨类暴露的注入能力，接口
+  定义放对应 `mixinterface/` 子包，实现留在 mixin 类。
+- **mixin 包隔离规则**：mixin 包内的辅助类（含内部类/静态嵌套类）不得被 mixin
+  目标类或其调用方直接引用——会触发 `IllegalClassLoadError`。该检查**仅在非
+  dev 环境强制，dev 验证无法覆盖**（2026-08-12 生产崩溃实例：
+  `MixinGlStateTracker$Saved`）。辅助实现一律放 mixin 包外。
+
 ## 兼容层
 
 - Distant Horizons：API event、framebuffer、depth texture、LOD shader 和条件 Mixin。

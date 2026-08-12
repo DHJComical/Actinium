@@ -82,19 +82,24 @@
 
 ### Phase 1：低风险收编（不动依赖拓扑）
 
-**1a. mixin/mixinterface 分层**（参照 Iris）
-- 新增 `mixin/vintage/mixinterface/` 等子包，注入接口从 mixin 类中迁出
-- 纯增量，可分批进行；完成标准：`MixinConfigurationTest` 全绿 + dev 无回归
+**1a. mixin/mixinterface 分层**（✅ 2026-08-12 完成）
+- 摸底结论：94 个 `@Unique` 方法无任何外部跨类调用，13 个 Accessor/Invoker 已是
+  注入接口先例形态——无需大规模迁移，降级为**约定文档化**
+- 产出：`AGENTS.md` 新增「Mixin 组织约定」（mixin 只做注入、接口与注入类分离、
+  mixin 包隔离规则——含 `IllegalClassLoadError` 仅在非 dev 环境强制的事实）
 
-**1b. mixin 配置声明 modid 条件，加载器扫描注册**
-- 配置 json 增加 `"mods": ["codechickenlib"]` 声明；`MixinLate.configsFor` 改为扫描配置而非手写分支；测试改为「配置声明 vs 加载器输出」一致性断言
-- 收益：新增兼容 = 1 个 json + 1 个 mixin，不再每次改 `MixinLate` 与测试
-- 风险：低-中（涉及所有条件配置），需全量回归
+**1b. mixin 配置声明 modid 条件，加载器扫描注册**（✅ 2026-08-12 完成）
+- ~~配置 json 增加 `"mods"` 声明~~（mixin 加载器不接受自定义字段，已否决）
+- 改为独立声明文件 `mixins.actinium.conditions.properties`（`配置名=modid[,modid]`）；
+  `MixinLate.configsFor` 扫描该文件，测试验证声明与加载器输出一致
+- 收益：新增兼容 = 1 个 json + 1 个 mixin + properties 一行，不再改 `MixinLate`
 
-**1c. GLSM 状态查询补全**
-- `depthMask`/`cullMode` 增加 tracked 状态；`glGetInteger` 全覆盖真实状态查询
-- 把「状态快照」做成正式 interface，兼容桥不再绕行 `RENDER_BACKEND`
-- 风险：低（GLSM 内部增量），需验证 FFP 渲染无回归
+**1c. GLSM 状态查询补全**（✅ 2026-08-12 完成）
+- `DepthState` 新增 `maskEnabled`（depthMask 独立 tracked，修复与 depth test 共用
+  字段的状态混用）；`glGetInteger` 补全 `GL_DEPTH_WRITEMASK`/`GL_CULL_FACE_MODE`/
+  `GL_FRONT_FACE`
+- 兼容桥 `GlStateTrackerSnapshot` 改用正式查询，不再绕行 `RENDER_BACKEND`；
+  顺带修复其 `depthTest` 误读 mask 值的潜在 bug 及 3 处同类读取方
 
 **1d. debug 门面统一**
 - 单一 debug 门面 + 统一开关；新诊断只加一行，业务代码不再出现诊断输出
