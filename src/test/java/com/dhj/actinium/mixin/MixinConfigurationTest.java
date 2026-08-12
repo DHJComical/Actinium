@@ -13,6 +13,7 @@ import org.objectweb.asm.tree.MethodNode;
 import org.spongepowered.asm.mixin.Mixin;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.URISyntaxException;
@@ -25,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -81,9 +83,10 @@ class MixinConfigurationTest {
         ClassLoader classLoader = MixinConfigurationTest.class.getClassLoader();
         Set<String> earlyConfigs = compiledMixinConfigs(
             classLoader, "com/dhj/actinium/mixins/MixinEarly.class", "<clinit>");
-        // MixinLate keeps its config names in a field constant (CONDITIONAL_CONFIGS), so scan the whole class.
-        Set<String> lateConfigs = compiledMixinConfigsInClass(
-            classLoader, "com/dhj/actinium/mixins/MixinLate.class");
+        // MixinLate loads its configs from mixins.actinium.conditions.properties.
+        Set<String> lateConfigs = readConditions(classLoader).keySet().stream()
+            .map(String::valueOf)
+            .collect(java.util.stream.Collectors.toSet());
         Set<String> allLoadedConfigs = new HashSet<>(earlyConfigs);
 
         assertTrue(earlyConfigs.stream().noneMatch(lateConfigs::contains),
@@ -130,22 +133,34 @@ class MixinConfigurationTest {
         ClassLoader classLoader = MixinConfigurationTest.class.getClassLoader();
         final Set<String> earlyConfigs = compiledMixinConfigs(
             classLoader, "com/dhj/actinium/mixins/MixinEarly.class", "<clinit>");
-        final Set<String> lateConfigs = compiledMixinConfigsInClass(
-            classLoader, "com/dhj/actinium/mixins/MixinLate.class");
+        final Set<String> lateConfigs = readConditions(classLoader).keySet().stream()
+            .map(String::valueOf)
+            .collect(java.util.stream.Collectors.toSet());
+        final Properties conditions = readConditions(classLoader);
 
         for (String configName : MAIN_CONFIGS) {
-            JsonObject config = readConfig(classLoader, configName);
             boolean isLate = lateConfigs.contains(configName);
             boolean isEarly = earlyConfigs.contains(configName);
             if (isLate) {
-                JsonArray mods = config.getAsJsonArray("mods");
-                assertTrue(mods != null && !mods.isEmpty(),
-                    configName + " is loaded by MixinLate and must declare a non-empty \"mods\" array");
+                String mods = conditions.getProperty(configName);
+                assertTrue(mods != null && !mods.isBlank(),
+                    configName + " is loaded by MixinLate and must declare mod ids in mixins.actinium.conditions.properties");
                 assertFalse(isEarly, configName + " cannot be both early and late");
             } else if (isEarly) {
-                assertFalse(config.has("mods"),
-                    configName + " is loaded by MixinEarly (unconditional) and must not declare \"mods\"");
+                assertFalse(conditions.containsKey(configName),
+                    configName + " is loaded by MixinEarly (unconditional) and must not appear in the conditions file");
             }
+        }
+        assertEquals(lateConfigs, conditions.keySet(),
+            "Every config in the conditions file must be one of the main mixin configs");
+    }
+
+    private static Properties readConditions(ClassLoader classLoader) throws IOException {
+        try (InputStream stream = classLoader.getResourceAsStream("mixins.actinium.conditions.properties")) {
+            assertNotNull(stream, "Missing mixins.actinium.conditions.properties");
+            final Properties properties = new Properties();
+            properties.load(stream);
+            return properties;
         }
     }
 
@@ -167,27 +182,6 @@ class MixinConfigurationTest {
                 && ldc.cst instanceof String value
                 && value.endsWith(".json")) {
                 configs.add(value);
-            }
-        }
-        return configs;
-    }
-
-    /** Scans every method (and field initializer) of a class for ".json" string constants. */
-    private static Set<String> compiledMixinConfigsInClass(
-        ClassLoader classLoader,
-        String resourceName
-    ) throws IOException {
-        ClassNode node = readClass(classLoader, resourceName);
-        Set<String> configs = new HashSet<>();
-
-        for (MethodNode method : node.methods) {
-            for (var instruction = method.instructions.getFirst(); instruction != null;
-                 instruction = instruction.getNext()) {
-                if (instruction instanceof LdcInsnNode ldc
-                    && ldc.cst instanceof String value
-                    && value.endsWith(".json")) {
-                    configs.add(value);
-                }
             }
         }
         return configs;

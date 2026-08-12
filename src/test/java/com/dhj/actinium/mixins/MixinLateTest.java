@@ -2,32 +2,32 @@ package com.dhj.actinium.mixins;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class MixinLateTest {
     @Test
     void selectsExactConfigsForLoadedMods() {
-        assertEquals(List.of(), MixinLate.configsFor(modId -> false));
+        assertEquals(Set.of(), Set.copyOf(MixinLate.configsFor(modId -> false)));
 
         assertEquals(
-            List.of("mixins.actinium.lumenized.json"),
-            MixinLate.configsFor("lumenized"::equals)
+            Set.of("mixins.actinium.lumenized.json"),
+            Set.copyOf(MixinLate.configsFor("lumenized"::equals))
         );
 
         assertEquals(
-            List.of("mixins.actinium.betterfoliage.json"),
-            MixinLate.configsFor("betterfoliage"::equals)
+            Set.of("mixins.actinium.betterfoliage.json"),
+            Set.copyOf(MixinLate.configsFor("betterfoliage"::equals))
         );
 
         assertEquals(
-            List.of("mixins.actinium.ccl.json"),
-            MixinLate.configsFor("codechickenlib"::equals)
+            Set.of("mixins.actinium.ccl.json"),
+            Set.copyOf(MixinLate.configsFor("codechickenlib"::equals))
         );
 
         assertEquals(
-            List.of(
+            Set.of(
                 "mixins.actinium.dh.json",
                 "mixins.actinium.gibbed.json",
                 "mixins.actinium.ichunutil.json",
@@ -36,7 +36,7 @@ class MixinLateTest {
                 "mixins.actinium.betterfoliage.json",
                 "mixins.actinium.ccl.json"
             ),
-            MixinLate.configsFor(modId -> true)
+            Set.copyOf(MixinLate.configsFor(modId -> true))
         );
     }
 }

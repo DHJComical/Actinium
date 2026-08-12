@@ -1,9 +1,6 @@
 package com.dhj.actinium.mixins;
 
 import com.dhj.actinium.compat.MixinReEntranceLockFix;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraftforge.fml.common.Loader;
 import zone.rong.mixinbooter.Context;
@@ -11,26 +8,22 @@ import zone.rong.mixinbooter.ILateMixinLoader;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.function.Predicate;
 
 @SuppressWarnings("unused")
 public class MixinLate implements ILateMixinLoader {
 
-    /** Late/conditional configs. Each config declares its required mod ids in its "mods" field. */
-    private static final List<String> CONDITIONAL_CONFIGS = List.of(
-        "mixins.actinium.dh.json",
-        "mixins.actinium.gibbed.json",
-        "mixins.actinium.ichunutil.json",
-        "mixins.actinium.lumenized.json",
-        "mixins.actinium.revoui.json",
-        "mixins.actinium.betterfoliage.json",
-        "mixins.actinium.ccl.json"
-    );
+    /**
+     * Maps each late/conditional mixin config to the mod ids that gate it.
+     * Declared in mixins.actinium.conditions.properties (the mixin loader does
+     * not accept custom fields inside the config jsons).
+     */
+    private static final String CONDITIONS_RESOURCE = "mixins.actinium.conditions.properties";
+
+    private static final Properties CONDITIONAL_CONFIGS = loadConditions();
 
     @Override
     public List<String> getMixinConfigs() {
@@ -56,34 +49,31 @@ public class MixinLate implements ILateMixinLoader {
     /** Returns the conditional configs whose declared mod ids are all loaded. */
     static List<String> configsFor(Predicate<String> loadedMods) {
         List<String> mixins = new ArrayList<>();
-        for (String config : CONDITIONAL_CONFIGS) {
-            if (modsLoaded(config, loadedMods)) {
-                mixins.add(config);
+        CONDITIONAL_CONFIGS.forEach((config, modList) -> {
+            boolean allLoaded = true;
+            for (String modId : ((String) modList).split(",")) {
+                if (!loadedMods.test(modId.trim())) {
+                    allLoaded = false;
+                    break;
+                }
             }
-        }
+            if (allLoaded) {
+                mixins.add((String) config);
+            }
+        });
         return mixins;
     }
 
-    private static boolean modsLoaded(String configName, Predicate<String> loadedMods) {
-        try (InputStream stream = MixinLate.class.getClassLoader().getResourceAsStream(configName)) {
+    private static Properties loadConditions() {
+        final Properties properties = new Properties();
+        try (InputStream stream = MixinLate.class.getClassLoader().getResourceAsStream(CONDITIONS_RESOURCE)) {
             if (stream == null) {
-                throw new IllegalStateException("Missing mixin config: " + configName);
+                throw new IllegalStateException("Missing mixin condition declarations: " + CONDITIONS_RESOURCE);
             }
-            try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-                final JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();
-                final JsonArray mods = config.getAsJsonArray("mods");
-                if (mods == null) {
-                    return true; // No mod requirement - unconditional
-                }
-                for (var element : mods) {
-                    if (!loadedMods.test(element.getAsString())) {
-                        return false;
-                    }
-                }
-                return true;
-            }
+            properties.load(stream);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to read mixin config: " + configName, e);
+            throw new IllegalStateException("Failed to read mixin condition declarations: " + CONDITIONS_RESOURCE, e);
         }
+        return properties;
     }
 }
