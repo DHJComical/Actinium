@@ -13,6 +13,7 @@ import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import net.coderbot.iris.celeritas.WorldRendererCompatBridge;
+import com.gtnewhorizons.angelica.proxy.ClientProxy;
 import net.coderbot.iris.debug.IrisDebugOptions;
 import com.gtnewhorizon.gtnhlib.client.renderer.RuntimeOptionsBridge;
 import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
@@ -134,6 +135,11 @@ public class Actinium {
             @Override
             public boolean useTotalWorldTime() {
                 return ActiniumConfig.useTotalWorldTime;
+            }
+
+            @Override
+            public void cycleAnimationsMode() {
+                ClientProxy.animationsMode.next();
             }
         });
         GLSMPerfDebugHooks.setExtraStatsSupplier(Actinium::dumpExtraPerfStats);

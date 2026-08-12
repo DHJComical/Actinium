@@ -1,0 +1,9 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':glsm')
+    api project(':GTNHLib')
+    api project(':celeritas-common')
+}

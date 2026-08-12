@@ -65,7 +65,8 @@ configurations {
 def embeddedLibraryProjects = [
     project(':GTNHLib'),
     project(':glsm'),
-    project(':celeritas-common')
+    project(':celeritas-common'),
+    project(':shader')
 ]
 
 def mergedEmbeddedLibraryClassesDir = layout.buildDirectory.dir('embedded-library-classes/main')
@@ -102,7 +103,6 @@ sourceSets {
     }
     main {
         java {
-            srcDir 'shader/src/main/java'
         }
     }
 }
@@ -229,6 +229,7 @@ repositories {
 
 dependencies {
     compileOnly project(':celeritas-common')
+    compileOnly project(':shader')
 
     contain('org.taumc:glsl-transformation-lib:0.2.0-32.g7dd88a4-GTNH') {
         transitive = false

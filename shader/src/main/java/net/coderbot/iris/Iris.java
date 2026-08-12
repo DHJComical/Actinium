@@ -3,7 +3,6 @@ package net.coderbot.iris;
 import net.coderbot.iris.debug.IrisDebugOptions;
 import com.google.common.base.Throwables;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
-import com.gtnewhorizons.angelica.proxy.ClientProxy;
 import com.gtnewhorizons.angelica.Tags;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
@@ -375,7 +374,7 @@ public class Iris {
         final boolean released = !Keyboard.getEventKeyState();
         if (Minecraft.getMinecraft().gameSettings.showDebugInfo && GuiScreen.isShiftKeyDown() && GuiScreen.isCtrlKeyDown() && released) {
             if (key == Keyboard.KEY_N) {
-                ClientProxy.animationsMode.next();
+                IrisDebugOptions.cycleAnimationsMode();
             }
         }
     }

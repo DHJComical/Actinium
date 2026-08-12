@@ -25,6 +25,7 @@ public final class IrisDebugOptions {
         boolean enableHardcodedCustomUniforms();
         boolean disableF3Additions();
         boolean useTotalWorldTime();
+        void cycleAnimationsMode();
     }
 
     private static volatile Bridge bridge;
@@ -105,5 +106,12 @@ public final class IrisDebugOptions {
     public static boolean useTotalWorldTime() {
         Bridge b = bridge;
         return b != null && b.useTotalWorldTime();
+    }
+
+    public static void cycleAnimationsMode() {
+        Bridge b = bridge;
+        if (b != null) {
+            b.cycleAnimationsMode();
+        }
     }
 }
