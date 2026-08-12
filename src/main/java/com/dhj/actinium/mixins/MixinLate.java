@@ -12,20 +12,6 @@ import java.util.function.Predicate;
 
 @SuppressWarnings("unused")
 public class MixinLate implements ILateMixinLoader {
-    private static final String DISTANT_HORIZONS_MOD_ID = "distanthorizons";
-    private static final String DISTANT_HORIZONS_MIXIN_CONFIG = "mixins.actinium.dh.json";
-    private static final String GIBBED_MOD_ID = "gibbed";
-    private static final String GIBBED_MIXIN_CONFIG = "mixins.actinium.gibbed.json";
-    private static final String ICHUN_UTIL_MOD_ID = "ichunutil";
-    private static final String ICHUN_UTIL_MIXIN_CONFIG = "mixins.actinium.ichunutil.json";
-    private static final String LUMENIZED_MOD_ID = "lumenized";
-    private static final String LUMENIZED_MIXIN_CONFIG = "mixins.actinium.lumenized.json";
-    private static final String REVO_UI_MOD_ID = "neofontrender_ui_enhancements";
-    private static final String REVO_UI_MIXIN_CONFIG = "mixins.actinium.revoui.json";
-    private static final String BETTER_FOLIAGE_MOD_ID = "betterfoliage";
-    private static final String BETTER_FOLIAGE_MIXIN_CONFIG = "mixins.actinium.betterfoliage.json";
-    private static final String CCL_MOD_ID = "codechickenlib";
-    private static final String CCL_MIXIN_CONFIG = "mixins.actinium.ccl.json";
 
     @Override
     public List<String> getMixinConfigs() {
@@ -34,7 +20,7 @@ public class MixinLate implements ILateMixinLoader {
 
     @Override
     public void onMixinConfigQueued(Context context) {
-        if (!DISTANT_HORIZONS_MIXIN_CONFIG.equals(context.mixinConfig())) {
+        if (!"mixins.actinium.dh.json".equals(context.mixinConfig())) {
             return;
         }
 
@@ -51,32 +37,32 @@ public class MixinLate implements ILateMixinLoader {
     static List<String> configsFor(Predicate<String> loadedMods) {
         List<String> mixins = new ArrayList<>();
 
-        if (loadedMods.test(DISTANT_HORIZONS_MOD_ID)) {
-            mixins.add(DISTANT_HORIZONS_MIXIN_CONFIG);
+        if (loadedMods.test("distanthorizons")) {
+            mixins.add("mixins.actinium.dh.json");
         }
 
-        if (loadedMods.test(GIBBED_MOD_ID)) {
-            mixins.add(GIBBED_MIXIN_CONFIG);
+        if (loadedMods.test("gibbed")) {
+            mixins.add("mixins.actinium.gibbed.json");
         }
 
-        if (loadedMods.test(ICHUN_UTIL_MOD_ID)) {
-            mixins.add(ICHUN_UTIL_MIXIN_CONFIG);
+        if (loadedMods.test("ichunutil")) {
+            mixins.add("mixins.actinium.ichunutil.json");
         }
 
-        if (loadedMods.test(LUMENIZED_MOD_ID)) {
-            mixins.add(LUMENIZED_MIXIN_CONFIG);
+        if (loadedMods.test("lumenized")) {
+            mixins.add("mixins.actinium.lumenized.json");
         }
 
-        if (loadedMods.test(REVO_UI_MOD_ID)) {
-            mixins.add(REVO_UI_MIXIN_CONFIG);
+        if (loadedMods.test("neofontrender_ui_enhancements")) {
+            mixins.add("mixins.actinium.revoui.json");
         }
 
-        if (loadedMods.test(BETTER_FOLIAGE_MOD_ID)) {
-            mixins.add(BETTER_FOLIAGE_MIXIN_CONFIG);
+        if (loadedMods.test("betterfoliage")) {
+            mixins.add("mixins.actinium.betterfoliage.json");
         }
 
-        if (loadedMods.test(CCL_MOD_ID)) {
-            mixins.add(CCL_MIXIN_CONFIG);
+        if (loadedMods.test("codechickenlib")) {
+            mixins.add("mixins.actinium.ccl.json");
         }
 
         return mixins;
