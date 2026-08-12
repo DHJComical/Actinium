@@ -10,6 +10,7 @@
   "client": [
     "BasicGibMixin"
   ],
+  "mods": ["gibbed"],
   "injectors": {
     "defaultRequire": 1
   }

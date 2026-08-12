@@ -4,7 +4,6 @@ import com.google.common.base.Throwables;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import com.dhj.actinium.config.ActiniumConfig;
 import com.gtnewhorizons.angelica.proxy.ClientProxy;
-import com.gtnewhorizons.angelica.rendering.StateAwareTessellator;
 import com.gtnewhorizons.angelica.Tags;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
@@ -966,15 +965,11 @@ public class Iris {
 
         ShaderMaterialOverrideState.setBlockId(blockId);
 
-        if (Tessellator.getInstance() instanceof StateAwareTessellator tess)
-            tess.angelica$setShaderOverrideBlockId((short) blockId);
     }
 
     public static void resetShaderMaterialOverride() {
         if (!enabled)
             return;
         ShaderMaterialOverrideState.clear();
-        if (Tessellator.getInstance() instanceof StateAwareTessellator tess)
-            tess.angelica$setShaderOverrideBlockId((short) -1);
     }
 }

@@ -81,8 +81,9 @@ class MixinConfigurationTest {
         ClassLoader classLoader = MixinConfigurationTest.class.getClassLoader();
         Set<String> earlyConfigs = compiledMixinConfigs(
             classLoader, "com/dhj/actinium/mixins/MixinEarly.class", "<clinit>");
-        Set<String> lateConfigs = compiledMixinConfigs(
-            classLoader, "com/dhj/actinium/mixins/MixinLate.class", "configsFor");
+        // MixinLate keeps its config names in a field constant (CONDITIONAL_CONFIGS), so scan the whole class.
+        Set<String> lateConfigs = compiledMixinConfigsInClass(
+            classLoader, "com/dhj/actinium/mixins/MixinLate.class");
         Set<String> allLoadedConfigs = new HashSet<>(earlyConfigs);
 
         assertTrue(earlyConfigs.stream().noneMatch(lateConfigs::contains),
@@ -124,6 +125,30 @@ class MixinConfigurationTest {
             "The compatibility bridge is loaded through the Forge manifest and must not share Actinium's refmap");
     }
 
+    @Test
+    void conditionalConfigsDeclareModRequirements() throws IOException {
+        ClassLoader classLoader = MixinConfigurationTest.class.getClassLoader();
+        final Set<String> earlyConfigs = compiledMixinConfigs(
+            classLoader, "com/dhj/actinium/mixins/MixinEarly.class", "<clinit>");
+        final Set<String> lateConfigs = compiledMixinConfigsInClass(
+            classLoader, "com/dhj/actinium/mixins/MixinLate.class");
+
+        for (String configName : MAIN_CONFIGS) {
+            JsonObject config = readConfig(classLoader, configName);
+            boolean isLate = lateConfigs.contains(configName);
+            boolean isEarly = earlyConfigs.contains(configName);
+            if (isLate) {
+                JsonArray mods = config.getAsJsonArray("mods");
+                assertTrue(mods != null && !mods.isEmpty(),
+                    configName + " is loaded by MixinLate and must declare a non-empty \"mods\" array");
+                assertFalse(isEarly, configName + " cannot be both early and late");
+            } else if (isEarly) {
+                assertFalse(config.has("mods"),
+                    configName + " is loaded by MixinEarly (unconditional) and must not declare \"mods\"");
+            }
+        }
+    }
+
     private static Set<String> compiledMixinConfigs(
         ClassLoader classLoader,
         String resourceName,
@@ -142,6 +167,27 @@ class MixinConfigurationTest {
                 && ldc.cst instanceof String value
                 && value.endsWith(".json")) {
                 configs.add(value);
+            }
+        }
+        return configs;
+    }
+
+    /** Scans every method (and field initializer) of a class for ".json" string constants. */
+    private static Set<String> compiledMixinConfigsInClass(
+        ClassLoader classLoader,
+        String resourceName
+    ) throws IOException {
+        ClassNode node = readClass(classLoader, resourceName);
+        Set<String> configs = new HashSet<>();
+
+        for (MethodNode method : node.methods) {
+            for (var instruction = method.instructions.getFirst(); instruction != null;
+                 instruction = instruction.getNext()) {
+                if (instruction instanceof LdcInsnNode ldc
+                    && ldc.cst instanceof String value
+                    && value.endsWith(".json")) {
+                    configs.add(value);
+                }
             }
         }
         return configs;

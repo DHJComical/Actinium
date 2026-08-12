@@ -1,17 +1,36 @@
 package com.dhj.actinium.mixins;
 
 import com.dhj.actinium.compat.MixinReEntranceLockFix;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraftforge.fml.common.Loader;
 import zone.rong.mixinbooter.Context;
 import zone.rong.mixinbooter.ILateMixinLoader;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
 @SuppressWarnings("unused")
 public class MixinLate implements ILateMixinLoader {
+
+    /** Late/conditional configs. Each config declares its required mod ids in its "mods" field. */
+    private static final List<String> CONDITIONAL_CONFIGS = List.of(
+        "mixins.actinium.dh.json",
+        "mixins.actinium.gibbed.json",
+        "mixins.actinium.ichunutil.json",
+        "mixins.actinium.lumenized.json",
+        "mixins.actinium.revoui.json",
+        "mixins.actinium.betterfoliage.json",
+        "mixins.actinium.ccl.json"
+    );
 
     @Override
     public List<String> getMixinConfigs() {
@@ -34,37 +53,37 @@ public class MixinLate implements ILateMixinLoader {
         }
     }
 
+    /** Returns the conditional configs whose declared mod ids are all loaded. */
     static List<String> configsFor(Predicate<String> loadedMods) {
         List<String> mixins = new ArrayList<>();
-
-        if (loadedMods.test("distanthorizons")) {
-            mixins.add("mixins.actinium.dh.json");
+        for (String config : CONDITIONAL_CONFIGS) {
+            if (modsLoaded(config, loadedMods)) {
+                mixins.add(config);
+            }
         }
-
-        if (loadedMods.test("gibbed")) {
-            mixins.add("mixins.actinium.gibbed.json");
-        }
-
-        if (loadedMods.test("ichunutil")) {
-            mixins.add("mixins.actinium.ichunutil.json");
-        }
-
-        if (loadedMods.test("lumenized")) {
-            mixins.add("mixins.actinium.lumenized.json");
-        }
-
-        if (loadedMods.test("neofontrender_ui_enhancements")) {
-            mixins.add("mixins.actinium.revoui.json");
-        }
-
-        if (loadedMods.test("betterfoliage")) {
-            mixins.add("mixins.actinium.betterfoliage.json");
-        }
-
-        if (loadedMods.test("codechickenlib")) {
-            mixins.add("mixins.actinium.ccl.json");
-        }
-
         return mixins;
+    }
+
+    private static boolean modsLoaded(String configName, Predicate<String> loadedMods) {
+        try (InputStream stream = MixinLate.class.getClassLoader().getResourceAsStream(configName)) {
+            if (stream == null) {
+                throw new IllegalStateException("Missing mixin config: " + configName);
+            }
+            try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+                final JsonObject config = JsonParser.parseReader(reader).getAsJsonObject();
+                final JsonArray mods = config.getAsJsonArray("mods");
+                if (mods == null) {
+                    return true; // No mod requirement - unconditional
+                }
+                for (var element : mods) {
+                    if (!loadedMods.test(element.getAsString())) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read mixin config: " + configName, e);
+        }
     }
 }

@@ -10,6 +10,7 @@
   "client": [
     "MixinGlStateTracker"
   ],
+  "mods": ["codechickenlib"],
   "injectors": {
     "defaultRequire": 1
   }

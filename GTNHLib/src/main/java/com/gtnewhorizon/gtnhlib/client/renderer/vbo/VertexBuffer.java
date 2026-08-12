@@ -35,7 +35,7 @@ public class VertexBuffer implements IVertexBuffer, AutoCloseable {
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
     }
 
-    // Same as the methods above, but these are safer to use internally (due to VertexArrayBuffer override)
+    // Same as the methods above, but these are safer to use internally (no override indirection)
     protected final void bindVBO() {
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, this.id);
     }

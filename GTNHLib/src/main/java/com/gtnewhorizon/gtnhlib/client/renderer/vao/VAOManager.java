@@ -28,12 +28,6 @@ public final class VAOManager {
     private static final boolean vaoUnsupported;
     public static final VaoFunctions VAO;
 
-    // Old API
-    @Deprecated
-    public static VertexBuffer createVAO(VertexFormat format, int drawMode) {
-        return vaoEnabled ? new VertexArrayBuffer(format, drawMode) : new VertexBuffer(format, drawMode);
-    }
-
     private static IVertexBuffer createStorageVBO(VertexFormat format, int drawMode, int flags) {
         if (GLCaps.bufferStorageSupported()) {
             return new VertexBufferStorage(format, drawMode, flags);

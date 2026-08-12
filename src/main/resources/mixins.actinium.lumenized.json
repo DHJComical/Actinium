@@ -12,6 +12,7 @@
     "MixinDepthTextureUtil",
     "MixinLumenizedConfig"
   ],
+  "mods": ["lumenized"],
   "injectors": {
     "defaultRequire": 1
   }

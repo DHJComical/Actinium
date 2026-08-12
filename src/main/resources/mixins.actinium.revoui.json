@@ -12,6 +12,7 @@
     "MixinScreenEffectsGradientRelocation",
     "ScreenEffectsRendererInvoker"
   ],
+  "mods": ["neofontrender_ui_enhancements"],
   "injectors": {
     "defaultRequire": 1
   }
