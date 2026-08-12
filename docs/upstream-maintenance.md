@@ -45,3 +45,16 @@ Actinium 以源码形式内嵌了多个大型上游项目。当前仓库能确�
 - mitchej123 service 层的上游仓库 URL、SHA 和许可证文件。
 
 追溯完成后，应补充到 Notice，并将完整许可证文本放入 `third-party/licenses/`。
+
+## glsm 内第三方/自研命名空间边界（2026-08-12 补充）
+
+`glsm/` 内的非 `com.gtnewhorizons.angelica` 命名空间代码分两类，改动前必须区分：
+
+| 命名空间 | 来源 | 维护边界 |
+| --- | --- | --- |
+| `com.mitchej123.glsm`（8 个文件） | 上游移植（mitchej123 GL/LWJGL service 层，导入 commit `4826cf8`） | 同步走上方「更新流程」；**不做本地功能扩展**，适配放 `impl/` 之外的 bridge |
+| `net.minecraftforge.eventbus.api`（2 个文件） | **自研**迷你事件总线（借 Forge 1.16 命名空间；实现为 `CopyOnWriteArrayList` + `Consumer`，非上游代码） | 仅服务 GLSMHooks 事件（`hooks/events/*`）；**不要**把它当成通用事件系统扩展 |
+
+1.12.2 Forge 的事件总线在 `net.minecraftforge.fml.common.eventhandler` 命名空间，
+与本 stub 不冲突；若未来引入真正的事件总线库，先评估替换本 stub。
+

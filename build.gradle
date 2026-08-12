@@ -518,6 +518,7 @@ def prepareTestRunDirectory = tasks.register('prepareTestRunDirectory') {
 }
 
 test {
+    systemProperty 'actinium.projectRoot', rootProject.projectDir.absolutePath
     dependsOn prepareTestRunDirectory
     dependsOn remapCompatBridgeJar
     useJUnitPlatform()
