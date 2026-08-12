@@ -43,7 +43,7 @@ public class StandardMacros {
 		defines.add(new StringPair(key, value));
 	}
 
-    private static String makeAngelicaVersion()
+    private static String makeActiniumVersion()
     {
         String[] parts = Tags.VERSION.split("[.-]");
         int major = Integer.parseInt(parts[0]);
@@ -79,7 +79,7 @@ public class StandardMacros {
 		define(standardDefines, "MC_SPECULAR_MAP");
 		define(standardDefines, "MC_RENDER_QUALITY", "1.0");
 		define(standardDefines, "MC_SHADOW_QUALITY", "1.0");
-		define(standardDefines, "IS_ANGELICA");
+		define(standardDefines, "IS_ACTINIUM");
 		if (IrisDebugOptions.defineIsIris()) {
 			define(standardDefines, "IS_IRIS");
 		}
@@ -106,7 +106,7 @@ public class StandardMacros {
 		define(standardDefines, "DH_BLOCK_AIR", String.valueOf(14));
 		define(standardDefines, "DH_BLOCK_ILLUMINATED", String.valueOf(15));
 
-        define(standardDefines, "ANGELICA_VERSION", makeAngelicaVersion());
+        define(standardDefines, "ACTINIUM_VERSION", makeActiniumVersion());
 		define(standardDefines, "MC_HAND_DEPTH", Float.toString(HandRenderer.DEPTH));
 
 		TextureFormat textureFormat = TextureFormatLoader.getFormat();

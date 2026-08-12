@@ -74,11 +74,11 @@ public class CompatShaderTransformer {
     );
 
     private static final Map<String, String> MATRIX_RENAMES = Map.of(
-        "gl_ModelViewMatrix", "angelica_ModelViewMatrix",
-        "gl_ModelViewMatrixInverse", "angelica_ModelViewMatrixInverse",
-        "gl_ProjectionMatrix", "angelica_ProjectionMatrix",
-        "gl_ProjectionMatrixInverse", "angelica_ProjectionMatrixInverse",
-        "gl_NormalMatrix", "angelica_NormalMatrix"
+        "gl_ModelViewMatrix", "actinium_ModelViewMatrix",
+        "gl_ModelViewMatrixInverse", "actinium_ModelViewMatrixInverse",
+        "gl_ProjectionMatrix", "actinium_ProjectionMatrix",
+        "gl_ProjectionMatrixInverse", "actinium_ProjectionMatrixInverse",
+        "gl_NormalMatrix", "actinium_NormalMatrix"
     );
 
     private static final Path DUMP_DIR;
@@ -165,55 +165,55 @@ public class CompatShaderTransformer {
 
         transformFog(transformer, isFragment, source);
 
-        // gl_FrontLightModelProduct.sceneColor → angelica_SceneColor uniform
+        // gl_FrontLightModelProduct.sceneColor → actinium_SceneColor uniform
         if (source.contains("gl_FrontLightModelProduct")) {
-            transformer.injectVariable("uniform vec4 angelica_SceneColor;");
-            transformer.replaceExpression("gl_FrontLightModelProduct.sceneColor", "angelica_SceneColor");
+            transformer.injectVariable("uniform vec4 actinium_SceneColor;");
+            transformer.replaceExpression("gl_FrontLightModelProduct.sceneColor", "actinium_SceneColor");
         }
 
         // gl_LightSource[i] → struct + uniform array (both via injectFunction to keep struct before uniform)
         if (source.contains("gl_LightSource")) {
-            transformer.injectFunction("struct angelica_LightSourceParameters {"
+            transformer.injectFunction("struct actinium_LightSourceParameters {"
                     + "vec4 ambient;vec4 diffuse;vec4 specular;vec4 position;vec4 halfVector;"
                     + "vec3 spotDirection;float spotExponent;float spotCutoff;float spotCosCutoff;"
                     + "float constantAttenuation;float linearAttenuation;float quadraticAttenuation;"
                     + "};");
-            transformer.injectFunction("uniform angelica_LightSourceParameters angelica_LightSource[2];");
-            transformer.rename("gl_LightSource", "angelica_LightSource");
+            transformer.injectFunction("uniform actinium_LightSourceParameters actinium_LightSource[2];");
+            transformer.rename("gl_LightSource", "actinium_LightSource");
         }
 
         // gl_FrontMaterial → struct + uniform (both via injectFunction to keep struct before uniform)
         if (source.contains("gl_FrontMaterial")) {
-            transformer.injectFunction("struct angelica_MaterialParameters {"
+            transformer.injectFunction("struct actinium_MaterialParameters {"
                     + "vec4 emission;vec4 ambient;vec4 diffuse;vec4 specular;float shininess;"
                     + "};");
-            transformer.injectFunction("uniform angelica_MaterialParameters angelica_FrontMaterial;");
-            transformer.rename("gl_FrontMaterial", "angelica_FrontMaterial");
+            transformer.injectFunction("uniform actinium_MaterialParameters actinium_FrontMaterial;");
+            transformer.rename("gl_FrontMaterial", "actinium_FrontMaterial");
         }
 
         // gl_FrontColor (vertex) → gl_Color (fragment) varying chain
         // Vertex side is unconditional: fragment may read gl_Color without vertex writing gl_FrontColor.
-        // Uses angelica_ prefix to avoid colliding with user-declared varyings (e.g. "v_Color").
+        // Uses actinium_ prefix to avoid colliding with user-declared varyings (e.g. "v_Color").
         if (!isFragment) {
-            transformer.injectVariable("out vec4 angelica_FrontColor;");
-            transformer.rename("gl_FrontColor", "angelica_FrontColor");
-            transformer.prependMain("angelica_FrontColor = vec4(1.0);");
+            transformer.injectVariable("out vec4 actinium_FrontColor;");
+            transformer.rename("gl_FrontColor", "actinium_FrontColor");
+            transformer.prependMain("actinium_FrontColor = vec4(1.0);");
 
             // Vertex attributes — replaces removed FFP vertex inputs with explicit in declarations
             transformVertexAttributes(transformer, source);
         } else {
             if (source.contains("gl_Color")) {
-                transformer.injectVariable("in vec4 angelica_FrontColor;");
-                transformer.rename("gl_Color", "angelica_FrontColor");
+                transformer.injectVariable("in vec4 actinium_FrontColor;");
+                transformer.rename("gl_Color", "actinium_FrontColor");
             }
         }
 
         // gl_TexCoord[N] varying array → per-index in/out declarations
         final Set<Integer> texCoordIndices = new HashSet<>();
-        transformer.renameArray("gl_TexCoord", "angelica_TexCoord", texCoordIndices);
+        transformer.renameArray("gl_TexCoord", "actinium_TexCoord", texCoordIndices);
         for (Integer i : texCoordIndices) {
             final String qualifier = isFragment ? "in" : "out";
-            transformer.injectVariable(qualifier + " vec4 angelica_TexCoord" + i + ";");
+            transformer.injectVariable(qualifier + " vec4 actinium_TexCoord" + i + ";");
         }
 
         // Fragment output handling + alpha test discard
@@ -225,8 +225,8 @@ public class CompatShaderTransformer {
         if (transformer.containsCall("texture") && transformer.hasVariable("texture")) {
             transformer.rename("texture", "gtexture");
         }
-        if (transformer.hasVariable("angelica_renamed_texture")) {
-            transformer.rename("angelica_renamed_texture", "gtexture");
+        if (transformer.hasVariable("actinium_renamed_texture")) {
+            transformer.rename("actinium_renamed_texture", "gtexture");
         }
 
         transformer.renameFunctionCall(GlslTransformUtils.TEXTURE_RENAMES);
@@ -497,22 +497,22 @@ public class CompatShaderTransformer {
      * Inject matrix uniforms and rename compat builtins.
      */
     private static void injectMatrixUniforms(Transformer transformer) {
-        transformer.injectVariable("uniform mat4 angelica_ModelViewMatrix;");
-        transformer.injectVariable("uniform mat4 angelica_ModelViewMatrixInverse;");
-        transformer.injectVariable("uniform mat4 angelica_ProjectionMatrix;");
-        transformer.injectVariable("uniform mat4 angelica_ProjectionMatrixInverse;");
-        transformer.injectVariable("uniform mat3 angelica_NormalMatrix;");
-        transformer.injectVariable("uniform mat4 angelica_LightmapTextureMatrix;");
+        transformer.injectVariable("uniform mat4 actinium_ModelViewMatrix;");
+        transformer.injectVariable("uniform mat4 actinium_ModelViewMatrixInverse;");
+        transformer.injectVariable("uniform mat4 actinium_ProjectionMatrix;");
+        transformer.injectVariable("uniform mat4 actinium_ProjectionMatrixInverse;");
+        transformer.injectVariable("uniform mat3 actinium_NormalMatrix;");
+        transformer.injectVariable("uniform mat4 actinium_LightmapTextureMatrix;");
 
         transformer.rename(MATRIX_RENAMES);
 
         // Expression replacements
-        transformer.replaceExpression("gl_ModelViewProjectionMatrix", "(angelica_ProjectionMatrix * angelica_ModelViewMatrix)");
+        transformer.replaceExpression("gl_ModelViewProjectionMatrix", "(actinium_ProjectionMatrix * actinium_ModelViewMatrix)");
         transformer.replaceExpression("gl_TextureMatrix[0]", "mat4(1.0)");
-        transformer.replaceExpression("gl_TextureMatrix[1]", "angelica_LightmapTextureMatrix");
+        transformer.replaceExpression("gl_TextureMatrix[1]", "actinium_LightmapTextureMatrix");
         transformer.replaceExpression(
                 "gl_TextureMatrix",
-                "mat4[8](mat4(1.0), angelica_LightmapTextureMatrix, mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0))");
+                "mat4[8](mat4(1.0), actinium_LightmapTextureMatrix, mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0))");
     }
 
     /**
@@ -524,40 +524,40 @@ public class CompatShaderTransformer {
         }
 
         final Set<Integer> found = new HashSet<>();
-        transformer.renameArray("gl_FragData", "angelica_FragData", found);
+        transformer.renameArray("gl_FragData", "actinium_FragData", found);
 
         for (Integer i : found) {
-            transformer.injectVariable("layout (location = " + i + ") out vec4 angelica_FragData" + i + ";");
+            transformer.injectVariable("layout (location = " + i + ") out vec4 actinium_FragData" + i + ";");
         }
 
         // Core profile: GL_ALPHA_TEST is removed - inject runtime discard using GLSM-tracked alpha reference (uploaded by CompatUniformManager).
         if (found.contains(0)) {
-            transformer.injectVariable("uniform float angelica_currentAlphaTest;");
-            transformer.appendMain("if (angelica_FragData0.a <= angelica_currentAlphaTest) discard;");
+            transformer.injectVariable("uniform float actinium_currentAlphaTest;");
+            transformer.appendMain("if (actinium_FragData0.a <= actinium_currentAlphaTest) discard;");
         }
     }
 
     private static void transformFog(Transformer transformer, boolean isFragment, String source) {
         // Vertex side is unconditional: fragment may read gl_FogFragCoord without vertex writing it
-        transformer.rename("gl_FogFragCoord", "angelica_FogFragCoord");
+        transformer.rename("gl_FogFragCoord", "actinium_FogFragCoord");
         if (!isFragment) {
-            transformer.injectVariable("out float angelica_FogFragCoord;");
-            transformer.prependMain("angelica_FogFragCoord = 0.0;");
+            transformer.injectVariable("out float actinium_FogFragCoord;");
+            transformer.prependMain("actinium_FogFragCoord = 0.0;");
         } else {
             if (source.contains("gl_FogFragCoord")) {
-                transformer.injectVariable("in float angelica_FogFragCoord;");
+                transformer.injectVariable("in float actinium_FogFragCoord;");
             }
         }
 
-        transformer.rename("gl_Fog", "angelica_Fog");
-        transformer.injectVariable("uniform float angelica_FogDensity;");
-        transformer.injectVariable("uniform float angelica_FogStart;");
-        transformer.injectVariable("uniform float angelica_FogEnd;");
-        transformer.injectVariable("uniform vec4 angelica_FogColor;");
-        transformer.injectFunction("struct angelica_FogParameters {vec4 color;float density;float start;float end;float scale;};");
-        transformer.injectFunction("angelica_FogParameters angelica_Fog = angelica_FogParameters("
-                + "angelica_FogColor, angelica_FogDensity, angelica_FogStart, angelica_FogEnd, "
-                + "1.0 / (angelica_FogEnd - angelica_FogStart));");
+        transformer.rename("gl_Fog", "actinium_Fog");
+        transformer.injectVariable("uniform float actinium_FogDensity;");
+        transformer.injectVariable("uniform float actinium_FogStart;");
+        transformer.injectVariable("uniform float actinium_FogEnd;");
+        transformer.injectVariable("uniform vec4 actinium_FogColor;");
+        transformer.injectFunction("struct actinium_FogParameters {vec4 color;float density;float start;float end;float scale;};");
+        transformer.injectFunction("actinium_FogParameters actinium_Fog = actinium_FogParameters("
+                + "actinium_FogColor, actinium_FogDensity, actinium_FogStart, actinium_FogEnd, "
+                + "1.0 / (actinium_FogEnd - actinium_FogStart));");
     }
 
     /**
@@ -565,28 +565,28 @@ public class CompatShaderTransformer {
      */
     private static void transformVertexAttributes(Transformer transformer, String source) {
         if (source.contains("gl_Vertex") || source.contains("ftransform")) {
-            transformer.injectVariable("layout(location = 0) in vec4 angelica_Vertex;");
-            transformer.rename("gl_Vertex", "angelica_Vertex");
+            transformer.injectVariable("layout(location = 0) in vec4 actinium_Vertex;");
+            transformer.rename("gl_Vertex", "actinium_Vertex");
         }
         // gl_Color in vertex shaders is the per-vertex color attribute, distinct from the fragment gl_Color (interpolated gl_FrontColor) handled above
         if (source.contains("gl_Color")) {
-            transformer.injectVariable("layout(location = 1) in vec4 angelica_Color;");
-            transformer.rename("gl_Color", "angelica_Color");
+            transformer.injectVariable("layout(location = 1) in vec4 actinium_Color;");
+            transformer.rename("gl_Color", "actinium_Color");
         }
         if (source.contains("gl_MultiTexCoord0")) {
-            transformer.injectVariable("layout(location = 2) in vec4 angelica_MultiTexCoord0;");
-            transformer.rename("gl_MultiTexCoord0", "angelica_MultiTexCoord0");
+            transformer.injectVariable("layout(location = 2) in vec4 actinium_MultiTexCoord0;");
+            transformer.rename("gl_MultiTexCoord0", "actinium_MultiTexCoord0");
         }
         if (source.contains("gl_MultiTexCoord1")) {
-            transformer.injectVariable("layout(location = 3) in vec4 angelica_MultiTexCoord1;");
-            transformer.rename("gl_MultiTexCoord1", "angelica_MultiTexCoord1");
+            transformer.injectVariable("layout(location = 3) in vec4 actinium_MultiTexCoord1;");
+            transformer.rename("gl_MultiTexCoord1", "actinium_MultiTexCoord1");
         }
         if (source.contains("gl_Normal")) {
-            transformer.injectVariable("layout(location = 4) in vec3 angelica_Normal;");
-            transformer.rename("gl_Normal", "angelica_Normal");
+            transformer.injectVariable("layout(location = 4) in vec3 actinium_Normal;");
+            transformer.rename("gl_Normal", "actinium_Normal");
         }
         if (source.contains("ftransform")) {
-            transformer.replaceExpression("ftransform()", "(angelica_ProjectionMatrix * angelica_ModelViewMatrix * angelica_Vertex)");
+            transformer.replaceExpression("ftransform()", "(actinium_ProjectionMatrix * actinium_ModelViewMatrix * actinium_Vertex)");
         }
     }
 
@@ -631,9 +631,9 @@ public class CompatShaderTransformer {
     }
 
     // Patterns for parsing fragment shader in declarations to generate passthrough vertex shaders
-    private static final Pattern FRAG_IN_COLOR = Pattern.compile("\\bin\\s+vec4\\s+angelica_FrontColor\\b");
-    private static final Pattern FRAG_IN_TEXCOORD = Pattern.compile("\\bin\\s+vec4\\s+angelica_TexCoord(\\d+)\\b");
-    private static final Pattern FRAG_IN_FOGCOORD = Pattern.compile("\\bin\\s+float\\s+angelica_FogFragCoord\\b");
+    private static final Pattern FRAG_IN_COLOR = Pattern.compile("\\bin\\s+vec4\\s+actinium_FrontColor\\b");
+    private static final Pattern FRAG_IN_TEXCOORD = Pattern.compile("\\bin\\s+vec4\\s+actinium_TexCoord(\\d+)\\b");
+    private static final Pattern FRAG_IN_FOGCOORD = Pattern.compile("\\bin\\s+float\\s+actinium_FogFragCoord\\b");
 
     /**
      * Generate a passthrough vertex shader for a fragment-only program.
@@ -649,15 +649,15 @@ public class CompatShaderTransformer {
         sb.append("layout(location = 0) in vec4 a_Position;\n");
 
         // Matrix uniforms for position transform
-        sb.append("uniform mat4 angelica_ModelViewMatrix;\n");
-        sb.append("uniform mat4 angelica_ProjectionMatrix;\n");
+        sb.append("uniform mat4 actinium_ModelViewMatrix;\n");
+        sb.append("uniform mat4 actinium_ProjectionMatrix;\n");
 
         final StringBuilder varyings = new StringBuilder();
         final StringBuilder assignments = new StringBuilder();
         if (FRAG_IN_COLOR.matcher(fragmentSource).find()) {
             sb.append("layout(location = 1) in vec4 a_Color;\n");
-            varyings.append("out vec4 angelica_FrontColor;\n");
-            assignments.append("  angelica_FrontColor = a_Color;\n");
+            varyings.append("out vec4 actinium_FrontColor;\n");
+            assignments.append("  actinium_FrontColor = a_Color;\n");
         }
 
         final Matcher texCoordMatcher = FRAG_IN_TEXCOORD.matcher(fragmentSource);
@@ -669,18 +669,18 @@ public class CompatShaderTransformer {
             // PRIMARY_UV=2, SECONDARY_UV=3. Only indices 0 and 1 are supported; higher indices collide at location 3.
             final int location = i == 0 ? 2 : 3;
             sb.append("layout(location = ").append(location).append(") in vec4 a_TexCoord").append(i).append(";\n");
-            varyings.append("out vec4 angelica_TexCoord").append(i).append(";\n");
-            assignments.append("  angelica_TexCoord").append(i).append(" = a_TexCoord").append(i).append(";\n");
+            varyings.append("out vec4 actinium_TexCoord").append(i).append(";\n");
+            assignments.append("  actinium_TexCoord").append(i).append(" = a_TexCoord").append(i).append(";\n");
         }
 
         if (FRAG_IN_FOGCOORD.matcher(fragmentSource).find()) {
-            varyings.append("out float angelica_FogFragCoord;\n");
-            assignments.append("  angelica_FogFragCoord = abs((angelica_ModelViewMatrix * a_Position).z);\n");
+            varyings.append("out float actinium_FogFragCoord;\n");
+            assignments.append("  actinium_FogFragCoord = abs((actinium_ModelViewMatrix * a_Position).z);\n");
         }
 
         sb.append(varyings);
         sb.append("\nvoid main() {\n");
-        sb.append("  gl_Position = angelica_ProjectionMatrix * angelica_ModelViewMatrix * a_Position;\n");
+        sb.append("  gl_Position = actinium_ProjectionMatrix * actinium_ModelViewMatrix * a_Position;\n");
         sb.append(assignments);
         sb.append("}\n");
 

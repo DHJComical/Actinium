@@ -18,8 +18,8 @@ public class ExternallyManagedUniforms {
 		addMat4(uniformHolder, "u_ModelViewProjectionMatrix");
 		addMat3(uniformHolder, "iris_NormalMatrix");
 		uniformHolder.externallyManagedUniform("heavyFog", UniformType.BOOL);
-		uniformHolder.externallyManagedUniform("angelica_ClipPlanesEnabled", UniformType.BOOL);
-		uniformHolder.externallyManagedUniform("angelica_ClipPlane[0]", UniformType.VEC4);
+		uniformHolder.externallyManagedUniform("actinium_ClipPlanesEnabled", UniformType.BOOL);
+		uniformHolder.externallyManagedUniform("actinium_ClipPlane[0]", UniformType.VEC4);
 	}
 
 	public static void addExternallyManagedUniforms116(UniformHolder uniformHolder) {

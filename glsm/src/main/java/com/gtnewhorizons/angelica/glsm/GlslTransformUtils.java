@@ -9,7 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class GlslTransformUtils {
-    private static final String RENAMED_PREFIX = "angelica_renamed_";
+    private static final String RENAMED_PREFIX = "actinium_renamed_";
 
     public static final Map<String, String> TEXTURE_RENAMES = Map.ofEntries(
         Map.entry("texture2D", "texture"),

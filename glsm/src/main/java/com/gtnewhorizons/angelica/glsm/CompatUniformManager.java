@@ -19,7 +19,7 @@ import java.nio.FloatBuffer;
 /**
  * Per-program compat uniform location cache and upload manager.
  *
- * <p>Manages {@code angelica_*} uniforms injected by {@link CompatShaderTransformer} and {@code iris_*} matrix uniforms used by Iris/celeritas shader
+ * <p>Manages {@code actinium_*} uniforms injected by {@link CompatShaderTransformer} and {@code iris_*} matrix uniforms used by Iris/celeritas shader
  * programs.
  */
 public class CompatUniformManager {
@@ -74,33 +74,33 @@ public class CompatUniformManager {
 
     static {
         UNIFORM_NAMES = new String[LOC_COUNT];
-        UNIFORM_NAMES[LOC_MODELVIEW] = "angelica_ModelViewMatrix";
-        UNIFORM_NAMES[LOC_MODELVIEW_INVERSE] = "angelica_ModelViewMatrixInverse";
-        UNIFORM_NAMES[LOC_PROJECTION] = "angelica_ProjectionMatrix";
-        UNIFORM_NAMES[LOC_PROJECTION_INVERSE] = "angelica_ProjectionMatrixInverse";
-        UNIFORM_NAMES[LOC_NORMAL] = "angelica_NormalMatrix";
-        UNIFORM_NAMES[LOC_LIGHTMAP_TEXTURE_MATRIX] = "angelica_LightmapTextureMatrix";
-        UNIFORM_NAMES[LOC_FOG_DENSITY] = "angelica_FogDensity";
-        UNIFORM_NAMES[LOC_FOG_START] = "angelica_FogStart";
-        UNIFORM_NAMES[LOC_FOG_END] = "angelica_FogEnd";
-        UNIFORM_NAMES[LOC_FOG_COLOR] = "angelica_FogColor";
+        UNIFORM_NAMES[LOC_MODELVIEW] = "actinium_ModelViewMatrix";
+        UNIFORM_NAMES[LOC_MODELVIEW_INVERSE] = "actinium_ModelViewMatrixInverse";
+        UNIFORM_NAMES[LOC_PROJECTION] = "actinium_ProjectionMatrix";
+        UNIFORM_NAMES[LOC_PROJECTION_INVERSE] = "actinium_ProjectionMatrixInverse";
+        UNIFORM_NAMES[LOC_NORMAL] = "actinium_NormalMatrix";
+        UNIFORM_NAMES[LOC_LIGHTMAP_TEXTURE_MATRIX] = "actinium_LightmapTextureMatrix";
+        UNIFORM_NAMES[LOC_FOG_DENSITY] = "actinium_FogDensity";
+        UNIFORM_NAMES[LOC_FOG_START] = "actinium_FogStart";
+        UNIFORM_NAMES[LOC_FOG_END] = "actinium_FogEnd";
+        UNIFORM_NAMES[LOC_FOG_COLOR] = "actinium_FogColor";
         UNIFORM_NAMES[LOC_IRIS_MODELVIEW] = "iris_ModelViewMatrix";
         UNIFORM_NAMES[LOC_IRIS_PROJECTION] = "iris_ProjectionMatrix";
         UNIFORM_NAMES[LOC_IRIS_NORMAL] = "iris_NormalMatrix";
         UNIFORM_NAMES[LOC_IRIS_LIGHTMAP_TEXTURE_MATRIX] = "iris_LightmapTextureMatrix";
         UNIFORM_NAMES[LOC_IRIS_TEXTURE_MATRIX] = "iris_TextureMatrix";
-        UNIFORM_NAMES[LOC_ALPHA_TEST_REF] = "angelica_currentAlphaTest";
-        UNIFORM_NAMES[LOC_SCENE_COLOR] = "angelica_SceneColor";
-        UNIFORM_NAMES[LOC_CLIP_PLANES] = "angelica_ClipPlane[0]";
-        UNIFORM_NAMES[LOC_CLIP_PLANES_ENABLED] = "angelica_ClipPlanesEnabled";
+        UNIFORM_NAMES[LOC_ALPHA_TEST_REF] = "actinium_currentAlphaTest";
+        UNIFORM_NAMES[LOC_SCENE_COLOR] = "actinium_SceneColor";
+        UNIFORM_NAMES[LOC_CLIP_PLANES] = "actinium_ClipPlane[0]";
+        UNIFORM_NAMES[LOC_CLIP_PLANES_ENABLED] = "actinium_ClipPlanesEnabled";
         UNIFORM_NAMES[LOC_IRIS_COLOR_MODULATOR] = "iris_ColorModulator";
         for (int li = 0; li < 2; li++) {
             for (int fi = 0; fi < LIGHT_FIELDS; fi++) {
-                UNIFORM_NAMES[LOC_LIGHT_BASE + li * LIGHT_FIELDS + fi] = "angelica_LightSource[" + li + "]." + LIGHT_FIELD_NAMES[fi];
+                UNIFORM_NAMES[LOC_LIGHT_BASE + li * LIGHT_FIELDS + fi] = "actinium_LightSource[" + li + "]." + LIGHT_FIELD_NAMES[fi];
             }
         }
         for (int fi = 0; fi < MAT_FIELDS; fi++) {
-            UNIFORM_NAMES[LOC_MAT_BASE + fi] = "angelica_FrontMaterial." + MAT_FIELD_NAMES[fi];
+            UNIFORM_NAMES[LOC_MAT_BASE + fi] = "actinium_FrontMaterial." + MAT_FIELD_NAMES[fi];
         }
     }
 
@@ -286,7 +286,7 @@ public class CompatUniformManager {
                 RENDER_BACKEND.uniformMatrix4(locs[LOC_IRIS_LIGHTMAP_TEXTURE_MATRIX], false, buffers.lightmapMatrixBuf);
             }
 
-            // angelica_LightmapTextureMatrix — actual GLSM texture unit 1 matrix (set by enableLightmap())
+            // actinium_LightmapTextureMatrix — actual GLSM texture unit 1 matrix (set by enableLightmap())
             if (locs[LOC_LIGHTMAP_TEXTURE_MATRIX] != -1) {
                 GLStateManager.getTextures().getTextureUnitMatrix(1).get(buffers.mat4Buf);
                 RENDER_BACKEND.uniformMatrix4(locs[LOC_LIGHTMAP_TEXTURE_MATRIX], false, buffers.mat4Buf);

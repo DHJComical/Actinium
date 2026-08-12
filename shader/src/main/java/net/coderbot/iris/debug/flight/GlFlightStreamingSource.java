@@ -4,7 +4,7 @@ package net.coderbot.iris.debug.flight;
  * Identifies the persistent streaming source synchronized at the end of a rendered frame.
  */
 public enum GlFlightStreamingSource {
-    /** Angelica's persistent tessellator streaming buffers. */
+    /** Actinium's persistent tessellator streaming buffers. */
     TESSELLATOR(1),
     /** Actinium's persistent BufferBuilder streaming buffers. */
     BUFFER_BUILDER(2);

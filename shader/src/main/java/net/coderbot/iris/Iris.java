@@ -86,7 +86,7 @@ public class Iris {
      * The user-facing name of the mod. Moved into a constant to facilitate easy branding changes (for forks). You'll still need to change this separately in
      * mixin plugin classes & the language files.
      */
-    public static final String MODNAME = "AngelicaShaders";
+    public static final String MODNAME = "ActiniumShaders";
 
     public static final IrisLogging logger = new IrisLogging(MODNAME);
 
@@ -405,7 +405,7 @@ public class Iris {
         try {
             irisConfig.initialize();
         } catch (IOException e) {
-            logger.error("Failed to initialize Angelica configuration, default values will be used instead");
+            logger.error("Failed to initialize Actinium configuration, default values will be used instead");
             logger.error("", e);
         }
 
