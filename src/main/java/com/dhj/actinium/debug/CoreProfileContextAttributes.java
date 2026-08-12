@@ -56,6 +56,26 @@ public final class CoreProfileContextAttributes {
     }
 
     /**
+     * Restores the Forge early OpenGL config after the core-profile context was created.
+     *
+     * <p>LWJGLXX reads these fields when creating the context and Cleanroom persists them back to
+     * forge_early.cfg. Leaving the core-profile request in place breaks startup without Actinium
+     * (Cleanroom's own default path expects the compatibility profile), so restore the requested
+     * version/debug state and force the compatibility profile back on. The compatibility flag is
+     * restored unconditionally: Actinium is the only writer that sets it to false.
+     *
+     * @param originalMajor OpenGL major version before Actinium's request
+     * @param originalMinor OpenGL minor version before Actinium's request
+     * @param originalDebug debug-context flag before Actinium's request
+     */
+    public static void restoreForgeEarlyCompatProfile(int originalMajor, int originalMinor, boolean originalDebug) {
+        ForgeEarlyConfig.OPENGL_VERSION_MAJOR = originalMajor;
+        ForgeEarlyConfig.OPENGL_VERSION_MINOR = originalMinor;
+        ForgeEarlyConfig.OPENGL_COMPAT_PROFILE = true;
+        ForgeEarlyConfig.OPENGL_DEBUG_CONTEXT = originalDebug;
+    }
+
+    /**
      * Applies context mutations without retaining compatibility-layer return values.
      *
      * @param attributes context object mutated by every operation

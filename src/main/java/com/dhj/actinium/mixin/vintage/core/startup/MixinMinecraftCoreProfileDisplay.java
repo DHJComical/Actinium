@@ -5,6 +5,7 @@ import com.dhj.actinium.debug.CoreProfileContextAttributes;
 import com.dhj.actinium.debug.OpenGlVersion;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.ForgeHooksClient;
+import net.minecraftforge.common.ForgeEarlyConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.LWJGLException;
@@ -30,6 +31,20 @@ public abstract class MixinMinecraftCoreProfileDisplay {
 
     @Inject(method = "createDisplay", at = @At("HEAD"), cancellable = true)
     private void celeritas$createCoreProfileDisplay(CallbackInfo ci) throws LWJGLException {
+        final int originalMajor = ForgeEarlyConfig.OPENGL_VERSION_MAJOR;
+        final int originalMinor = ForgeEarlyConfig.OPENGL_VERSION_MINOR;
+        final boolean originalDebug = ForgeEarlyConfig.OPENGL_DEBUG_CONTEXT;
+        try {
+            celeritas$createCoreProfileDisplayInner(ci);
+        } finally {
+            // Don't leave the core-profile request persisted in forge_early.cfg: without Actinium,
+            // Cleanroom's default path expects the compatibility profile and fails to create a context.
+            CoreProfileContextAttributes.restoreForgeEarlyCompatProfile(originalMajor, originalMinor, originalDebug);
+        }
+    }
+
+    @Unique
+    private void celeritas$createCoreProfileDisplayInner(CallbackInfo ci) throws LWJGLException {
         Display.setResizable(true);
         Display.setTitle("Cleanroom");
 
