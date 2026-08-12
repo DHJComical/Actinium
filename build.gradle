@@ -32,7 +32,37 @@ setDefaultProperty 'bridge_mod_update_json', false, ''
 setDefaultProperty 'bridge_mod_logo_path', true, 'assets/celeritas/textures/gui/icon.png'
 
 def cliProjectProperties = gradle.startParameter.projectProperties
-version = cliProjectProperties.containsKey('version') ? cliProjectProperties['version'] : propertyString('mod_version')
+
+/**
+ * Derives the build version from git: an exact tag on HEAD wins, otherwise the short commit sha.
+ * Returns null when git is unavailable (e.g. building from a source snapshot).
+ */
+def gitVersion = {
+    // ProcessBuilder instead of Gradle exec: exec is forbidden during the configuration phase.
+    def run = { List<String> cmd ->
+        try {
+            def process = new ProcessBuilder(cmd)
+                .directory(rootProject.projectDir)
+                .redirectErrorStream(true)
+                .start()
+            def output = process.inputStream.text.trim()
+            process.waitFor()
+            return process.exitValue() == 0 && !output.isEmpty() ? output : null
+        } catch (Exception ignored) {
+            return null
+        }
+    }
+    def tag = run(['git', 'describe', '--tags', '--exact-match', 'HEAD'])
+    if (tag != null) return tag
+    def sha = run(['git', 'rev-parse', '--short', 'HEAD'])
+    return sha != null ? sha : null
+}
+
+// Precedence: explicit -Pversion > git (tag or sha) > gradle.properties mod_version
+def finalVersion = cliProjectProperties.containsKey('version')
+    ? cliProjectProperties['version']
+    : (gitVersion() ?: propertyString('mod_version'))
+version = finalVersion
 group = cliProjectProperties.containsKey('group') ? cliProjectProperties['group'] : propertyString('root_package')
 
 base {
@@ -116,7 +146,7 @@ tasks.named('compileCompatBridgeJava', JavaCompile).configure {
 tasks.named('processCompatBridgeResources').configure {
     def bridgeResourceProperties = [
         minecraft_version       : '1.12.2',
-        mod_version             : propertyString('mod_version'),
+        mod_version             : finalVersion,
         bridge_mod_name         : propertyString('bridge_mod_name'),
         bridge_mod_description  : propertyString('bridge_mod_description'),
         bridge_mod_authors_json : groovy.json.JsonOutput.toJson(
@@ -368,7 +398,7 @@ processResources {
     def resourceProperties = [
         mod_id         : propertyString('mod_id'),
         mod_name       : propertyString('mod_name'),
-        mod_version    : propertyString('mod_version'),
+        mod_version             : finalVersion,
         mod_description: propertyString('mod_description'),
         mod_authors    : propertyString('mod_authors'),
         mod_authors_json: groovy.json.JsonOutput.toJson(
@@ -461,7 +491,8 @@ jar {
     doFirst {
         manifest {
             def attributeMap = [
-                ModType: 'CRL'
+                ModType: 'CRL',
+                'Implementation-Version': finalVersion,
             ]
             if (configurations.contain.size() > 0) {
                 attributeMap['ContainedDeps'] = configurations.contain.collect { it.name }.join(' ')
@@ -533,7 +564,7 @@ test {
     }
     doFirst {
         systemProperty 'actinium.compatBridgeJar', compatBridgeRemapOutput.get().asFile.absolutePath
-        systemProperty 'actinium.modVersion', propertyString('mod_version')
+        systemProperty 'actinium.modVersion', finalVersion
     }
 }
 
