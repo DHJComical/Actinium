@@ -92,11 +92,15 @@ NovaEngineering-World 整合包（265 mods）。
 ### F1：CCL GlStateTracker 兼容桥（正式修复）
 
 `com.dhj.actinium.mixin.mod.ccl.MixinGlStateTracker`（`mixins.actinium.ccl.json`，
-late/conditional，CCL 存在性保护）：`@Overwrite` CCL 的
-`GlStateTracker.pushState()/popState()`，改为读写 **GLSM 真实 tracked 状态**
-（blend/alpha/depth/cull/lighting/rescaleNormal 的 enabled + 参数；
-depthMask/cullMode 从真实 GPU 查询），恢复时调用 GLSM 更新 tracked 与真实
-GPU——帧末状态回到「GUI 渲染后的合理状态」，不再被重置为初始默认值。
+late/conditional，CCL 存在性保护）`@Overwrite` CCL 的
+`GlStateTracker.pushState()/popState()`，实现委托给
+`com.dhj.actinium.compat.ccl.GlStateTrackerSnapshot`（**放在 mixin 包之外**——
+mixin 包内类被外部直接引用会触发 `IllegalClassLoadError`，且该检查只在
+非 dev 环境强制，dev 验证无法覆盖）：读写 **GLSM 真实 tracked 状态**
+（blend/alpha/depth/cull/lighting/rescaleNormal 的 enabled + 参数），
+depthMask/cullMode 经 `RENDER_BACKEND` 从真实 GPU 查询（GLSM 无跟踪，
+且 GL11 查询会被重定向回 tracked 近似值）；恢复时调用 GLSM 更新 tracked
+与真实 GPU——帧末状态回到「GUI 渲染后的合理状态」，不再被重置为初始默认值。
 
 覆盖 DE 全部 GlStateTracker 使用点：`HudHandler.drawHUD`（每帧）、能量水晶/
 反应堆/物品渲染器（TESR/物品阶段）。
