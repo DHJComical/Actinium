@@ -140,8 +140,16 @@
 
 ### Phase 3：兼容层统一 seam
 
-- 每个外部模组兼容收敛为：配置 json + mixin + 实现 + `docs/compat/` 文档 + 测试
-- 平台差异点整理为接口清单（sodium `services` 模式），bridge 机制系统化
+- **每个外部模组兼容收敛为：配置 json + mixin + 实现 + `docs/compat/` 文档 + 测试**（✅ 2026-08-12）：
+  - 配置 json + conditions.properties 声明（Phase 1b ✅）；7 个条件模组的
+    `docs/compat/*.md` 补齐（betterfoliage/ccl/dh/gibbed/ichunutil/revoui，
+    dh/ichunutil/lumenized 已有测试）
+- **bridge 机制系统化（✅ 2026-08-12）**：`docs/bridges.md` 登记全部桥（跨模块桥
+  6 项 + ServiceLoader 3 项 + 模块内桥若干），并定义「新增桥的约定」5 条：
+  接口放调用方模块、注册集中在 `Actinium.onConstruct`、门面未注册时返回确定默认值、
+  不暴露被注入方具体类型、必须有单元测试
+- **测试缺口（待补）**：betterfoliage/ccl/gibbed/revoui 尚无模组逻辑测试；
+  建议随各模组实际验证一并补（避免为凑测试写低价值用例）
 
 ## 5. 验证方式
 
