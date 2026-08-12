@@ -51,7 +51,10 @@ public final class DistantHorizonsCompat {
             var bindings = SingletonInjector.INSTANCE.getAll(IMinecraftSharedWrapper.class);
             return !bindings.isEmpty() && bindings.get(0) != null;
         } catch (RuntimeException e) {
-            return true;
+            // An exception here means the DI system is not ready, not that bindings exist;
+            // returning true would silently skip binding creation and leave mcShared unset.
+            LOGGER.warn("Failed to query Distant Horizons client bindings", e);
+            return false;
         }
     }
 
@@ -59,10 +62,24 @@ public final class DistantHorizonsCompat {
      * Binds the DH client wrappers before another mod can load DH config classes that require
      * {@code IMinecraftSharedWrapper}. Safe to call repeatedly; DH's own later binding call is
      * skipped by {@code MixinDependencySetup}.
+     *
+     * <p>Does not use {@code Loader}: FML's mod list (namedMods) is not populated yet during
+     * Minecraft.init's early hooks, so isModLoaded-based guards would silently skip binding
+     * creation exactly when DH's Config classes get loaded. DH presence is probed via
+     * class-loading instead.</p>
      */
     public static void ensureClientBindings() {
-        var indexedMods = Loader.instance().getIndexedModList();
-        if (indexedMods == null || !indexedMods.containsKey(MODID) || hasClientBindings()) {
+        try {
+            Class.forName(
+                "com.seibel.distanthorizons.core.dependencyInjection.SingletonInjector",
+                false,
+                DistantHorizonsCompat.class.getClassLoader()
+            );
+        } catch (ClassNotFoundException e) {
+            return; // DH absent - keep DH classes off the classpath
+        }
+
+        if (hasClientBindings()) {
             return;
         }
 
