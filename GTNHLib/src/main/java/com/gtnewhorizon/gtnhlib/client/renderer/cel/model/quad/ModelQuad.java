@@ -15,7 +15,6 @@ import static com.gtnewhorizon.gtnhlib.client.renderer.cel.util.ModelQuadUtil.ve
 import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
 import static org.lwjgl.opengl.GL11.GL_QUADS;
 
-import com.gtnewhorizon.gtnhlib.client.renderer.CapturingTessellator;
 import com.gtnewhorizon.gtnhlib.client.renderer.cel.model.quad.properties.ModelQuadFacing;
 import com.gtnewhorizon.gtnhlib.client.renderer.cel.util.ModelQuadUtil;
 
@@ -329,38 +328,4 @@ public class ModelQuad implements ModelQuadViewMutable {
         return this;
     }
 
-    public void setState(int[] rawBuffer, int srcOffset, CapturingTessellator.Flags flags, int drawMode, int offsetX,
-            int offsetY, int offsetZ) {
-        if (drawMode == GL_TRIANGLES) {
-            System.arraycopy(rawBuffer, srcOffset, this.data, 0, VERTEX_SIZE * 3);
-            System.arraycopy(rawBuffer, srcOffset + vertexOffset(2), this.data, vertexOffset(3), VERTEX_SIZE);
-        } else if (drawMode == GL_QUADS) {
-            System.arraycopy(rawBuffer, srcOffset, this.data, 0, VERTEX_SIZE * 4);
-        } else {
-            throw new IllegalArgumentException("Unsupported draw mode for ModelQuad: " + drawMode);
-        }
-
-        if (!flags.hasColor) {
-            clearColors();
-        }
-        if (!flags.hasNormals) {
-            clearNormals();
-        }
-        if (!flags.hasBrightness) {
-            clearLightmap();
-        }
-
-        if (offsetX != 0) {
-            offsetPos(0, offsetX);
-        }
-        if (offsetY != 0) {
-            offsetPos(1, offsetY);
-        }
-        if (offsetZ != 0) {
-            offsetPos(2, offsetZ);
-        }
-
-        this.flags = 0;
-        this.normal = 0;
-    }
 }

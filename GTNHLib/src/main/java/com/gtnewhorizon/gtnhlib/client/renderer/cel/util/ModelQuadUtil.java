@@ -145,8 +145,8 @@ public class ModelQuadUtil {
     }
 
     /**
-     * Deep copies a list of quads. Useful when quads need to persist beyond their pool lifecycle (e.g., from
-     * CapturingTessellator's object pool).
+     * Deep copies a list of quads.
+
      *
      * @param sourceQuads The quads to copy
      * @return A new list containing deep copies of all quads

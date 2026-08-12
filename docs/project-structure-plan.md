@@ -301,9 +301,11 @@ Actinium
 
 ### 9.3 待裁定去留
 
-**`CapturingTessellator` 整条捕获管线**（372 行；连带 `LegacyTessellator` 105 行、`GTNHLib NormalHelper` 40 行、`ITessellatorInstance` deprecated 方法）
-- 只服务 GTNHLib 内部（QuadExtractor/PrimitiveExtractor/ModelQuad），无任何外部接线；与活跃的 `DirectTessellator` 双轨并存（int[] 缓冲 vs ByteBuffer 直写两套状态机）
-- 裁定后：保留 → 平移栈方法下沉 `LegacyTessellator`、抽打包工具；废弃 → 整套删除
+**✅ `CapturingTessellator` 整条捕获管线裁定：废弃删除（2026-08-12）**
+- 核实：`new CapturingTessellator` 零实例化点；`TessellatorManager.startCapturingDirect(DirectDrawCallback)` 无外部调用；`DirectDrawCallback` 无实现方——整条 capture 管线（int[] 缓冲 + 对象池提取）是死代码
+- 删除 6 个文件：`CapturingTessellator`/`LegacyTessellator`/`QuadExtractor`/`PrimitiveExtractor`/`DrawCallback`/GTNHLib `NormalHelper`（~700 行）
+- 连带：`ModelQuad.setState`/`ModelTriangle.setState` 方法删除（仅 extractor 使用）；`ITessellatorInstance` 保留（`MixinTessellator` 活跃实现，`gtnhlib$isCompiling` 被 `TessellatorManager.shouldInterceptDraw` 使用）
+- `TessellatorManager` 的 `CallbackTessellator`/`DirectDrawCallback` 路径保留（仍为活跃 API）
 
 **✅ `compat/toremove` 清理（2026-08-12）**
 - `MatrixStack` → `net.coderbot.iris.gl.MatrixStack`（ShadowRenderer/ShadowMatrices 活跃使用，随 Iris 移植归位）

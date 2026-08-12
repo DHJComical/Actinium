@@ -11,7 +11,6 @@ import static com.gtnewhorizon.gtnhlib.client.renderer.cel.util.ModelQuadUtil.VE
 import static com.gtnewhorizon.gtnhlib.client.renderer.cel.util.ModelQuadUtil.vertexOffset;
 
 import com.gtnewhorizon.gtnhlib.client.renderer.cel.api.util.NormI8;
-import com.gtnewhorizon.gtnhlib.client.renderer.CapturingTessellator;
 import com.gtnewhorizon.gtnhlib.client.renderer.cel.model.primitive.ModelPrimitiveView;
 
 /**
@@ -208,17 +207,4 @@ public class ModelTriangle implements ModelPrimitiveView {
         return this;
     }
 
-    public void setState(int[] rawBuffer, int srcOffset, CapturingTessellator.Flags flags) {
-        System.arraycopy(rawBuffer, srcOffset, this.data, 0, VERTEX_SIZE * 3);
-
-        if (!flags.hasColor) {
-            clearColors();
-        }
-        if (!flags.hasNormals) {
-            clearNormals();
-        }
-        if (!flags.hasBrightness) {
-            clearLightmap();
-        }
-    }
 }
