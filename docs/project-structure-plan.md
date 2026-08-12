@@ -129,7 +129,11 @@
    - `ActiniumWorldRenderer implements WorldRendererCompat`（根项目 → shader，组装方合法）；onConstruct 注册
    - `ShadowRenderer`/`IrisDebugScreenHandler` 全部经桥调用；`getRenderSectionManager()` 返回根项目类型，接口压平为 `markSectionGraphDirty()`
    - **完成标准达成：`shader/` 对 `com.dhj.actinium.*` 引用清零**
-4. **步骤 C（待做）——Gradle 子项目化**：`shader` 独立为子项目（settings.gradle 注册 + 依赖声明 `shader -> glsm/GTNHLib/celeritas-common` + 构建脚本迁移）
+4. **步骤 C（✅ 2026-08-12，`08f1907`）——Gradle 子项目化**：
+   - `settings.gradle` 注册 `shader` 子项目；`shader/build.gradle` 依赖 `glsm`/`GTNHLib`/`celeritas-common`（只读）
+   - 根项目：`embeddedLibraryProjects` 加入 shader（合并进 jar）、main sourceSet 移除附加源码目录、`compileOnly project(':shader')`
+   - 前置整理：`Desugar` 注解定义随 Iris 移植代码进入 shader；零依赖的 angelica 栈类（`Tags`/`AngelicaMod`/`ModStatus`/`compat.mojang`/`compat.toremove`/`rendering`）下沉 glsm；依赖 shader 的 `TextureTracker`/`ModdedBiomeDetector`/`BiomeCategoryCache`/`NativeImage` 随迁 shader；`ClientProxy.animationsMode` 经 `IrisDebugOptions` 桥
+   - **完成标准达成：`shader/` 对根项目引用清零 + 独立子项目 + `:check`（含 remap）通过**
 5. 决策：**必须子项目化**（多人维护约束下无备选；「接口化」只是过渡手段而非终点）
 6. 参照 celeritas 的 `common` 模式：渲染核心与平台/生命周期分离
 7. 完成标准：`shader/` 不再出现 `com.dhj.actinium.*` 引用（✅）；构建/remap/运行无回归（dev 回归待做）
