@@ -409,7 +409,7 @@ public final class DeferredDrawBatcher {
         int srcRgb = GLStateManager.getBlendState().getSrcRgb();
         int dstRgb = GLStateManager.getBlendState().getDstRgb();
         boolean blendEnabled = GLStateManager.getBlendMode().isEnabled();
-        boolean depthMask = GLStateManager.getDepthState().isEnabled();
+        boolean depthMask = GLStateManager.getDepthState().isMaskEnabled();
         boolean tex0Enabled = GLStateManager.getTextures().getTextureUnitStates(0).isEnabled();
         boolean tex1Enabled = GLStateManager.getTextures().getTextureUnitStates(1).isEnabled();
 

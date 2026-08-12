@@ -325,7 +325,7 @@ public final class EndPortalCompositeRenderer {
                 GLStateManager.getBoundTextureForServerState(0),
                 GLStateManager.getBoundTextureForServerState(1),
                 GLStateManager.getColorMask().copy(),
-                GLStateManager.getDepthState().isEnabled(),
+                GLStateManager.getDepthState().isMaskEnabled(),
                 GLStateManager.glIsEnabled(GL11.GL_DEPTH_TEST),
                 GLStateManager.glIsEnabled(GL11.GL_SCISSOR_TEST),
                 GLStateManager.glIsEnabled(GL11.GL_CULL_FACE),

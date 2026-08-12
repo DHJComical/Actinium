@@ -7,8 +7,6 @@ import org.lwjgl.opengl.GL11;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACKEND;
-
 /**
  * Replacement save/restore logic for CodeChickenLib's {@code GlStateTracker}.
  *
@@ -42,13 +40,11 @@ public final class GlStateTrackerSnapshot {
         state.blendDstRgb = blend.getDstRgb();
         state.blendSrcAlpha = blend.getSrcAlpha();
         state.blendDstAlpha = blend.getDstAlpha();
-        state.depthTest = GLStateManager.getDepthState().isEnabled();
+        state.depthTest = GLStateManager.getDepthTest().isEnabled();
         state.depthFunc = GLStateManager.getDepthState().getFunc();
-        // Real-GPU queries: GLSM tracks neither depthMask nor cull mode, and the
-        // redirector would route GL11.glGetInteger back to tracked approximations.
-        state.depthMask = RENDER_BACKEND.getInteger(GL11.GL_DEPTH_WRITEMASK) != 0;
+        state.depthMask = GLStateManager.getDepthState().isMaskEnabled();
         state.cull = GLStateManager.getCullState().isEnabled();
-        state.cullMode = RENDER_BACKEND.getInteger(GL11.GL_CULL_FACE_MODE);
+        state.cullMode = GLStateManager.glGetInteger(GL11.GL_CULL_FACE_MODE);
         state.rescaleNormal = GLStateManager.getRescaleNormalState().isEnabled();
         STATE_STACK.push(state);
     }

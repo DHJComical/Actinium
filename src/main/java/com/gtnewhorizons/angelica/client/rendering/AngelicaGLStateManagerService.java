@@ -327,7 +327,7 @@ public class AngelicaGLStateManagerService implements GLStateManagerService {
 
     @Override
     public boolean getDepthStateMask() {
-        return GLStateManager.getDepthState().isEnabled();
+        return GLStateManager.getDepthState().isMaskEnabled();
     }
 
     @Override

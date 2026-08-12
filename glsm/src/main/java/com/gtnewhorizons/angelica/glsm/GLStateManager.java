@@ -935,7 +935,7 @@ public class GLStateManager {
             case GL11.GL_COLOR_LOGIC_OP -> colorLogicOpState.isEnabled();
             case GL11.GL_CULL_FACE -> cullState.isEnabled();
             case GL11.GL_DEPTH_TEST -> depthTest.isEnabled();
-            case GL11.GL_DEPTH_WRITEMASK -> depthState.isEnabled();
+            case GL11.GL_DEPTH_WRITEMASK -> depthState.isMaskEnabled();
             case GL11.GL_DITHER -> ditherState.isEnabled();
             case GL11.GL_FOG -> fogMode.isEnabled();
             case GL11.GL_INDEX_LOGIC_OP -> indexLogicOpState.isEnabled();
@@ -1033,6 +1033,7 @@ public class GLStateManager {
         return switch (pname) {
             case GL11.GL_ALPHA_TEST_FUNC -> alphaState.getFunction();
             case GL11.GL_DEPTH_FUNC -> depthState.getFunc();
+            case GL11.GL_DEPTH_WRITEMASK -> depthState.isMaskEnabled() ? 1 : 0;
             case GL11.GL_LIST_BASE -> listBase;
             case GL11.GL_LIST_MODE -> DisplayListManager.getListMode();
             case GL11.GL_MATRIX_MODE -> matrixMode.getMode();
@@ -1042,6 +1043,8 @@ public class GLStateManager {
             case GL11.GL_COLOR_MATERIAL_PARAMETER -> colorMaterialParameter.getValue();
             case GL11.GL_MODELVIEW_STACK_DEPTH -> getMatrixStackDepth(modelViewMatrix);
             case GL11.GL_PROJECTION_STACK_DEPTH -> getMatrixStackDepth(projectionMatrix);
+            case GL11.GL_CULL_FACE_MODE -> polygonState.getCullFaceMode();
+            case GL11.GL_FRONT_FACE -> polygonState.getFrontFace();
 
             case GL12.GL_LIGHT_MODEL_COLOR_CONTROL -> lightModel.colorControl;
 
@@ -1484,8 +1487,8 @@ public class GLStateManager {
             return;
         }
         final boolean caching = isCachingEnabled();
-        if (BYPASS_CACHE || !caching || mask != depthState.isEnabled()) {
-            if (caching) depthState.setEnabled(mask);
+        if (BYPASS_CACHE || !caching || mask != depthState.isMaskEnabled()) {
+            if (caching) depthState.setMaskEnabled(mask);
             RENDER_BACKEND.depthMask(mask);
         }
     }
@@ -3379,7 +3382,7 @@ public class GLStateManager {
     private static void applyRestoredState(int mask) {
         if ((mask & GL11.GL_DEPTH_BUFFER_BIT) != 0) {
             RENDER_BACKEND.depthFunc(depthState.getFunc());
-            RENDER_BACKEND.depthMask(depthState.isEnabled());
+            RENDER_BACKEND.depthMask(depthState.isMaskEnabled());
             RENDER_BACKEND.clearDepth(depthState.getClearValue());
         }
         if ((mask & GL11.GL_COLOR_BUFFER_BIT) != 0) {
