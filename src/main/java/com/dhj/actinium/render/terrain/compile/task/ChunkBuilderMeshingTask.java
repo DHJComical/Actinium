@@ -10,7 +10,6 @@ import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.crash.CrashReport;
 import net.minecraft.crash.CrashReportCategory;
 import net.minecraft.init.Blocks;
-import net.minecraft.launchwrapper.Launch;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumBlockRenderType;
 import net.minecraft.util.EnumFacing;
@@ -35,6 +34,7 @@ import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
+import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.WorldSlice;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
 import com.dhj.actinium.world.cloned.ChunkRenderContext;
@@ -43,7 +43,6 @@ import com.dhj.actinium.render.terrain.compile.VintageChunkBuildContext;
 import java.util.*;
 
 public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> {
-    public static boolean USE_NEW_BLOCK_RENDERER = (Boolean)Launch.blackboard.get("fml.deobfuscatedEnvironment") || Boolean.getBoolean("celeritas.useVintageFastBlockRenderer");
     private static final ProxyClassGenerator<WorldSlice, ActiniumBlockAccess> WORLD_SLICE_LOCAL_GENERATOR = new ProxyClassGenerator<>(WorldSlice.class, "WorldSliceLocal", ActiniumBlockAccess.class);
     private final RenderSection render;
     private final int buildTime;
@@ -124,7 +123,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                             net.minecraft.util.BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
                             ForgeHooksClient.setRenderLayer(layer);
                             block.canRenderInLayer(blockState, layer);
-                            if (blockState.getRenderType() == EnumBlockRenderType.MODEL && USE_NEW_BLOCK_RENDERER) {
+                            if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer) {
                                 buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer, false);
                             } else {
                                 var buffer = buildContext.getBufferForLayer(layer);
@@ -139,7 +138,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                             for (net.minecraft.util.BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
                                 if (block.canRenderInLayer(blockState, layer)) {
                                     ForgeHooksClient.setRenderLayer(layer);
-                                    if (blockState.getRenderType() == EnumBlockRenderType.MODEL && USE_NEW_BLOCK_RENDERER) {
+                                    if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer) {
                                         buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer);
                                     } else {
                                         var buffer = buildContext.getBufferForLayer(layer);
