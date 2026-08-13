@@ -45,18 +45,36 @@ public class StandardMacros {
 
     private static String makeActiniumVersion()
     {
+        // The version may carry a non-numeric prefix (e.g. "alpha-0.0.1-2dc019e") and the
+        // build appends a git sha, so locate the first dotted numeric triplet instead of
+        // assuming the string starts with digits.
         String[] parts = Tags.VERSION.split("[.-]");
-        int major = Integer.parseInt(parts[0]);
-        int minor = Integer.parseInt(parts[1]);
-        int patch = Integer.parseInt(parts[2]);
+        int numericStart = -1;
+        for (int i = 0; i < parts.length; i++) {
+            if (!parts[i].isEmpty() && parts[i].chars().allMatch(Character::isDigit)) {
+                numericStart = i;
+                break;
+            }
+        }
+        if (numericStart < 0 || numericStart + 2 >= parts.length) {
+            // Keep the define numeric so shader packs can still compare against it.
+            return "0";
+        }
+        int major = Integer.parseInt(parts[numericStart]);
+        int minor = Integer.parseInt(parts[numericStart + 1]);
+        int patch = Integer.parseInt(parts[numericStart + 2]);
         int sub = 0;
 
-        // Handle optional prerelease (like beta62)
-        if (parts.length > 3) {
-            String pre = parts[3];
-            String num = pre.replaceAll("\\D+", ""); // remove all non-digits
-            if (!num.isEmpty())
-                sub = Integer.parseInt(num);
+        // Handle optional prerelease (like beta62). The segment must start with a
+        // letter so a trailing git sha (e.g. "00e287f") is not mistaken for a
+        // prerelease number.
+        if (numericStart + 3 < parts.length) {
+            String pre = parts[numericStart + 3];
+            if (!pre.isEmpty() && Character.isLetter(pre.charAt(0))) {
+                String num = pre.replaceAll("\\D+", ""); // remove all non-digits
+                if (!num.isEmpty())
+                    sub = Integer.parseInt(num);
+            }
         }
         return String.format("%d%02d%02d%03d", major, minor, patch, sub);
     }

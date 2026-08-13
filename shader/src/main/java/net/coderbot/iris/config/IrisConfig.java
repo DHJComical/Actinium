@@ -55,6 +55,11 @@ public class IrisConfig {
 	 */
 	public void initialize() throws IOException {
 		load();
+		// With no shader pack selected there is nothing to render, so keep the
+		// enable switch off instead of inheriting the "enabled by default" state.
+		if (shaderPackName == null) {
+			enableShaders = false;
+		}
 		if (!Files.exists(propertiesPath)) {
 			save();
 		}
