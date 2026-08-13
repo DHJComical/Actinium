@@ -25,7 +25,6 @@ import org.embeddedt.embeddium.api.options.structure.OptionStorage;
 import org.embeddedt.embeddium.api.options.structure.StandardOptions;
 import com.dhj.actinium.compat.modernui.MuiGuiScaleHook;
 import com.dhj.actinium.render.FastLitItemDisplayListCache;
-import com.dhj.actinium.render.terrain.compile.task.ChunkBuilderMeshingTask;
 import com.mitchej123.lwjgl.GLExtension;
 
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
@@ -347,7 +346,7 @@ public class ActiniumGameOptionPages {
                         .setTooltip(TextComponent.translatable("celeritas.options.fast_block_renderer.tooltip"))
                         .setControl(TickBoxControl::new)
                         .setImpact(OptionImpact.MEDIUM)
-                        .setBinding((opts, value) -> ChunkBuilderMeshingTask.USE_NEW_BLOCK_RENDERER = value, opts -> ChunkBuilderMeshingTask.USE_NEW_BLOCK_RENDERER)
+                        .setBinding((opts, value) -> opts.performance.useFastBlockRenderer = value, opts -> opts.performance.useFastBlockRenderer)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build())
                 .build());
