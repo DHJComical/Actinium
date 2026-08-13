@@ -75,7 +75,6 @@ dependencies {
 //    modRuntimeOnly 'curse.maven:unseens-nether-backport-1109447:7694245'
     modCompileOnly 'curse.maven:gibbed-1480667:7737413'
     modImplementation 'curse.maven:stellarcore-1064321:8406201'
-    modCompileOnly 'curse.maven:lumenized-1234162:6734060'
 
     // Draconic Evolution
     modCompileOnly 'maven.modrinth:draconic-evolution:2.3.28.354'
