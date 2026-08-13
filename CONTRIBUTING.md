@@ -72,6 +72,16 @@ Actinium 是一个面向 Minecraft 1.12.2 / Cleanroom Loader 的渲染与光影�
 - 子项目依赖方向固定为 `celeritas-common -> glsm -> GTNHLib`；子项目不得引用 `com.dhj.actinium` 实现类，跨边界行为通过 bridge、provider 或小接口注入。
 - 改动会影响光影包表现时，请在 dev 环境用目标光影包（如 MakeUp、BSL、Complementary）做一次手动验证，并更新 `docs/compatibility-matrix.md`。
 
+## AI 辅助开发
+
+本项目代码几乎全部由 AI 编码代理生成，审阅、验证与收口由人工与 AI 共同完成
+。贡献者同样可以使用 AI 工具辅助开发，但请注意：
+
+- AI 生成的改动与人工改动遵循完全相同的标准：通过 `:check`、符合本指南与 `AGENTS.md`
+  的规范、完成 dev 回归验证；
+- 提交者（人工）对合入代码的质量与正确性负最终责任；AI 审核结果同样需要核对，不要
+  盲目信任工具输出。
+
 ## 文档
 
 - 渲染管线相关的结构性改动，同步更新 `docs/architecture.md`、`docs/roadmap.md` 或 `docs/compatibility-matrix.md`。

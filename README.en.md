@@ -79,6 +79,10 @@ See [the architecture guide](docs/architecture.md), [current roadmap](docs/roadm
 
 Contributions of any kind are welcome: reporting issues, verifying shader pack compatibility, or submitting code and documentation. Please read the [contributing guide](CONTRIBUTING.md) first, and use the appropriate [issue template](.github/ISSUE_TEMPLATE/) when reporting problems.
 
+## AI-Generated Code
+
+Nearly all code in this project is produced with AI coding agents, and changes may also be reviewed by AI: every change is reviewed, tested, and regression-verified by humans and AI before it is merged. If you do not want to use AI-generated code, feel free to look for alternative projects; if you have any concerns, reach out via issues.
+
 ## Related Projects
 
 Actinium builds on ideas, code, and compatibility research from several projects. The items below are listed to make those roots visible; each upstream project remains governed by its own license and authorship.
