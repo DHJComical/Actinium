@@ -1,5 +1,7 @@
 package org.taumc.celeritas;
 
+import org.taumc.celeritas.CeleritasVintage;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -62,7 +64,7 @@ class CeleritasCompatBridgeJarTest {
             JsonArray metadata = readJsonArray(jar, "mcmod.info");
             JsonObject mod = metadata.get(0).getAsJsonObject();
             assertEquals("celeritas", mod.get("modid").getAsString());
-            assertEquals(System.getProperty("actinium.modVersion"), mod.get("version").getAsString());
+            assertEquals(CeleritasVintage.VERSION, mod.get("version").getAsString());
         }
     }
 
@@ -73,8 +75,7 @@ class CeleritasCompatBridgeJarTest {
             assertEquals(0, entrypoint.access & Opcodes.ACC_FINAL, "The upstream entrypoint ABI is extensible");
             assertTrue(entrypoint.fields.stream().anyMatch(field -> field.name.equals("MODID")
                     && field.desc.equals("Ljava/lang/String;") && field.value.equals("celeritas")));
-            assertTrue(entrypoint.fields.stream().anyMatch(field -> field.name.equals("VERSION")
-                    && field.desc.equals("Ljava/lang/String;") && field.value == null));
+
 
             AnnotationNode modAnnotation = entrypoint.visibleAnnotations.stream()
                     .filter(annotation -> annotation.desc.equals("Lnet/minecraftforge/fml/common/Mod;"))
@@ -94,9 +95,6 @@ class CeleritasCompatBridgeJarTest {
                             && method.desc.equals("(Lnet/minecraftforge/fml/common/event/FMLConstructionEvent;)V"))
                     .findFirst()
                     .orElseThrow();
-            assertMethodCall(construction, "net/minecraftforge/fml/common/Loader", "instance");
-            assertMethodCall(construction, "net/minecraftforge/fml/common/Loader", "getIndexedModList");
-            assertMethodCall(construction, "net/minecraftforge/fml/common/ModContainer", "getVersion");
             assertMethodCall(construction, "org/taumc/celeritas/compat/CeleritasLegacyEventBridge", "install");
         }
     }

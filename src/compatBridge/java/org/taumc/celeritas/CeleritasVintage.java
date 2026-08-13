@@ -24,11 +24,11 @@ import org.taumc.celeritas.compat.CeleritasLegacyEventBridge;
 )
 public class CeleritasVintage {
     public static final String MODID = "celeritas";
-    public static String VERSION;
+    /** Manually-managed bridge version, independent of the main mod's git-derived version. */
+    public static String VERSION = "2.4.0-dev";
 
     @Mod.EventHandler
     public void construction(FMLConstructionEvent event) {
-        VERSION = Loader.instance().getIndexedModList().get(MODID).getVersion();
         CeleritasLegacyEventBridge.install();
         logger().info("Loaded Celeritas Compatibility Bridge {} for Actinium", VERSION);
     }

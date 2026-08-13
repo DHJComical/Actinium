@@ -2,7 +2,7 @@
   {
     "modid": "celeritas",
     "name": "{{ bridge_mod_name }}",
-    "version": "${mod_version}",
+    "version": "2.4.0-dev",
     "mcversion": "${minecraft_version}",
     "description": "{{ bridge_mod_description }}",
     "authorList": "{{ bridge_mod_authors_json }}",
