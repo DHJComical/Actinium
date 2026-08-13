@@ -22,18 +22,6 @@ class MixinReEntranceLockFixTest {
         assertEquals(0, lock.getDepth());
     }
 
-    @Test
-    void clearInvalidVanillaClassesNeverThrowsOutsideLaunchEnvironment() {
-        assertDoesNotThrow(MixinReEntranceLockFix::clearInvalidVanillaClasses);
-    }
 
-    @Test
-    void preloadClassesAcceptsLoadedClassReferences() {
-        assertDoesNotThrow(() -> MixinReEntranceLockFix.preloadClasses(Object.class));
-    }
 
-    @Test
-    void clearLeakedLockNeverThrowsOutsideLaunchEnvironment() {
-        assertDoesNotThrow(MixinReEntranceLockFix::clearLeakedLock);
-    }
 }

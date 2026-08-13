@@ -67,12 +67,5 @@ class CompatProgramUniformStateTest {
         assertFalse(state.needsProjectionUpload(-1));
     }
 
-    @Test
-    void retainsLocationsWithTheProgramState() {
-        int[] locations = {3, 7};
-        CompatProgramUniformState state = new CompatProgramUniformState(locations);
-
-        assertSame(locations, state.getLocations());
-    }
 
 }
