@@ -1,6 +1,7 @@
 package com.dhj.actinium.mixins;
 
 import com.dhj.actinium.loading.fml.transformers.MacDisplayForwardCompatTransformer;
+import com.dhj.actinium.loading.fml.transformers.StellarCoreHudCachingCompatTransformer;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
 import org.jetbrains.annotations.Nullable;
@@ -8,14 +9,13 @@ import org.spongepowered.asm.mixin.MixinEnvironment;
 import zone.rong.mixinbooter.IEarlyMixinLoader;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 @IFMLLoadingPlugin.Name("Actinium")
 @IFMLLoadingPlugin.MCVersion("1.12.2")
 public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
-    private static final List<String> MIXIN_CONFIGS = Arrays.asList(
+    private static final List<String> MIXIN_CONFIGS = List.of(
         "mixins.actinium.vintage.json",
         "mixins.actinium.iris.json"
     );
@@ -29,6 +29,7 @@ public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
     public @Nullable String[] getASMTransformerClass() {
         return new String[] {
             MacDisplayForwardCompatTransformer.class.getName(),
+            StellarCoreHudCachingCompatTransformer.class.getName(),
             "com.gtnewhorizons.angelica.loading.fml.transformers.EarlyRedirectorTransformer"
         };
     }

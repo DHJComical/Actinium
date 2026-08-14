@@ -82,7 +82,7 @@ class MixinConfigurationTest {
     void earlyAndLateLoadersCoverEveryMainMixinConfig() throws IOException {
         ClassLoader classLoader = MixinConfigurationTest.class.getClassLoader();
         Set<String> earlyConfigs = compiledMixinConfigs(
-            classLoader, "com/dhj/actinium/mixins/MixinEarly.class", "<clinit>");
+            classLoader, "com/dhj/actinium/mixins/MixinEarly.class");
         // MixinLate loads its configs from mixins.actinium.conditions.properties.
         Set<String> lateConfigs = readConditions(classLoader).keySet().stream()
             .map(String::valueOf)
@@ -132,7 +132,7 @@ class MixinConfigurationTest {
     void conditionalConfigsDeclareModRequirements() throws IOException {
         ClassLoader classLoader = MixinConfigurationTest.class.getClassLoader();
         final Set<String> earlyConfigs = compiledMixinConfigs(
-            classLoader, "com/dhj/actinium/mixins/MixinEarly.class", "<clinit>");
+            classLoader, "com/dhj/actinium/mixins/MixinEarly.class");
         final Set<String> lateConfigs = readConditions(classLoader).keySet().stream()
             .map(String::valueOf)
             .collect(java.util.stream.Collectors.toSet());
@@ -164,19 +164,21 @@ class MixinConfigurationTest {
         }
     }
 
-    private static Set<String> compiledMixinConfigs(
-        ClassLoader classLoader,
-        String resourceName,
-        String methodName
-    ) throws IOException {
+    private static Set<String> compiledMixinConfigs(ClassLoader classLoader, String resourceName)
+        throws IOException {
+        // The loader collects its config strings in <clinit> and any helper
+        // methods it calls; scan every method body so refactors that move the
+        // literals into a builder method keep the test meaningful.
         ClassNode node = readClass(classLoader, resourceName);
-        MethodNode configMethod = node.methods.stream()
-            .filter(method -> methodName.equals(method.name))
-            .findFirst()
-            .orElseThrow(() -> new AssertionError(resourceName + " has no " + methodName + " method"));
         Set<String> configs = new HashSet<>();
+        for (MethodNode method : node.methods) {
+            collectConfigLiterals(method, configs);
+        }
+        return configs;
+    }
 
-        for (var instruction = configMethod.instructions.getFirst(); instruction != null;
+    private static void collectConfigLiterals(MethodNode method, Set<String> configs) {
+        for (var instruction = method.instructions.getFirst(); instruction != null;
              instruction = instruction.getNext()) {
             if (instruction instanceof LdcInsnNode ldc
                 && ldc.cst instanceof String value
@@ -184,7 +186,6 @@ class MixinConfigurationTest {
                 configs.add(value);
             }
         }
-        return configs;
     }
 
     private static JsonObject readConfig(ClassLoader classLoader, String configName) throws IOException {

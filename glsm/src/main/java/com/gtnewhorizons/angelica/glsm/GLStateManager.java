@@ -1253,6 +1253,9 @@ public class GLStateManager {
             bh.deferBlendModeToggle(true);
             return;
         }
+        if (GLSMConfig.hudCacheOverride) {
+            GLSMConfig.hudCacheBlendEnabled = true;
+        }
         blendMode.enable();
     }
 
@@ -1268,6 +1271,9 @@ public class GLStateManager {
         if (bh != null && bh.isBlendLocked()) {
             bh.deferBlendModeToggle(false);
             return;
+        }
+        if (GLSMConfig.hudCacheOverride) {
+            GLSMConfig.hudCacheBlendEnabled = false;
         }
         blendMode.disable();
     }
@@ -1597,6 +1603,15 @@ public class GLStateManager {
 
     private static boolean changeColor(float red, float green, float blue, float alpha) {
         // Helper function for glColor*
+        // Mirrors StellarCore's HudCaching color interceptor: while rendering into the
+        // HUD cache framebuffer with blending disabled, translucent colors would write
+        // their own alpha into the cache buffer; the cached-HUD blit blends RGB by alpha,
+        // so those areas would show through as fully transparent. StellarCore forces
+        // alpha to 1 in that window; GLSM's redirect path must apply the same override
+        // because StellarCore's own mixin can no longer intercept the call.
+        if (GLSMConfig.hudCacheOverride && !GLSMConfig.hudCacheBlendEnabled && alpha < 1.0F) {
+            alpha = 1.0F;
+        }
         final boolean caching = isCachingEnabled();
         if (BYPASS_CACHE || !caching || red != color.getRed() || green != color.getGreen() || blue != color.getBlue() || alpha != color.getAlpha()) {
             if (caching) {
@@ -1618,8 +1633,13 @@ public class GLStateManager {
     private static final Color4 DirtyColor = new Color4(-1.0F, -1.0F, -1.0F, -1.0F);
 
     public static void clearCurrentColor() {
-        // Marks the cache dirty, doesn't actually reset the color
+        // Marks the cache dirty, doesn't actually reset the color.
+        // The -1 sentinel forces the next real glColor call to bypass the cache,
+        // and bumps the generation so FFP emulation re-uploads the default color
+        // (GL current color semantics: resetColor restores opaque white).
+        // FFP uniform uploads must normalize the sentinel (see Uniforms.sanitizeUniformColor).
         color.set(DirtyColor);
+        colorGeneration++;
     }
 
     public static void glColorMask(boolean red, boolean green, boolean blue, boolean alpha) {

@@ -2,6 +2,7 @@ package com.gtnewhorizons.angelica.glsm.ffp;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.states.ClipPlaneState;
+import com.gtnewhorizons.angelica.glsm.states.Color4;
 import com.gtnewhorizons.angelica.glsm.states.FogState;
 import com.gtnewhorizons.angelica.glsm.states.LightState;
 import com.gtnewhorizons.angelica.glsm.states.MaterialState;
@@ -294,7 +295,7 @@ public class Uniforms {
     private void uploadCurrentColor(Program program) {
         if (program.locCurrentColor == -1) return;
         // Upload the current color from GLSM
-        final var color = GLStateManager.getColor();
+        final Color4 color = sanitizeUniformColor(GLStateManager.getColor());
         vec4Buf.clear();
         vec4Buf.put(color.getRed());
         vec4Buf.put(color.getGreen());
@@ -302,6 +303,23 @@ public class Uniforms {
         vec4Buf.put(color.getAlpha());
         vec4Buf.flip();
         RENDER_BACKEND.uniform4(program.locCurrentColor, vec4Buf);
+    }
+
+    /**
+     * Normalizes the GLSM current color for FFP uniform upload.
+     *
+     * <p>{@link GLStateManager#clearCurrentColor()} marks the cached color with a
+     * (-1,-1,-1,-1) sentinel so the next real {@code glColor*} call bypasses the cache.
+     * That sentinel must never reach a shader uniform: a negative alpha clamps to 0 in
+     * GLSL, making every vertex-color-less draw (e.g. JourneyMap map tiles/grids)
+     * fully transparent. Per GL semantics the current color defaults to opaque white,
+     * so the sentinel is normalized back to (1,1,1,1) here.</p>
+     */
+    static Color4 sanitizeUniformColor(Color4 color) {
+        if (color.getRed() < 0.0F || color.getGreen() < 0.0F || color.getBlue() < 0.0F || color.getAlpha() < 0.0F) {
+            return new Color4(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+        return color;
     }
 
     private void uploadCurrentTexCoord(Program program) {
