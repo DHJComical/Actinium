@@ -493,6 +493,9 @@ idea {
                 '3. Run Server'(Gradle) {
                     taskNames = ['runServer']
                 }
+                '4. Run Client (SDL)'(Gradle) {
+                    taskNames = ['runClientSdl']
+                }
             }
             compiler.javac {
                 afterEvaluate {
@@ -506,6 +509,28 @@ idea {
                 afterSync tasks.named('genSources')
             }
         }
+    }
+}
+
+// Unimined only applies the full run template (mainClass, classpath, env, args, workingDir and the
+// ${...} placeholder properties) to the fixed "client"/"server" names; custom runs like clientSdl
+// start empty. Inherit the client run's launch configuration after evaluation so runClientSdl (and
+// the IDEA run config generated from it) is complete, then re-apply the SDL flag that runs.all
+// added before the copy. The property map must be copied too: applyAll() resolves ${mcp_to_srg}
+// etc. from it, and without it FML fails to load the deobfuscation map at startup.
+afterEvaluate {
+    def runClient = tasks.findByName('runClient')
+    def runClientSdl = tasks.findByName('runClientSdl')
+    if (runClient instanceof JavaExec && runClientSdl instanceof JavaExec) {
+        runClientSdl.setMainClass(runClient.getMainClass())
+        runClientSdl.setClasspath(runClient.getClasspath())
+        runClientSdl.setWorkingDir(runClient.getWorkingDir())
+        runClientSdl.setArgs(runClient.getArgs())
+        runClientSdl.setJvmArgs(runClient.getJvmArgs() + ['-Dangelica.sdlgpu.enable=true'])
+        runClientSdl.setEnvironment(runClient.getEnvironment())
+        runClientSdl.setJavaVersion(runClient.getJavaVersion())
+        runClientSdl.getProperties().putAll(runClient.getProperties())
+        logger.lifecycle('[Actinium] runClientSdl inherited client launch configuration ({} classpath entries, {} properties)', runClientSdl.getClasspath().files.size(), runClientSdl.getProperties().size())
     }
 }
 
