@@ -56,14 +56,21 @@ def gitExactTag = { gitRun(['git', 'describe', '--tags', '--exact-match', 'HEAD'
 
 def gitShortSha = { gitRun(['git', 'rev-parse', '--short', 'HEAD']) }
 
+// The most recent tag reachable from HEAD (git describe --tags --abbrev=0), used to keep the
+// version prefix in sync with the latest release tag when HEAD is not exactly on a tag.
+def gitClosestTag = { gitRun(['git', 'describe', '--tags', '--abbrev=0', 'HEAD']) }
+
 def baseVersion = propertyString('mod_version')
 
-// Precedence: explicit -Pversion > git tag > "baseVersion-gitSha" > gradle.properties mod_version.
+// Precedence: explicit -Pversion > exact git tag on HEAD > "<closest tag>-<git sha>"
+// > "baseVersion-gitSha" > gradle.properties mod_version.
 // Appending the sha to the manual base version keeps FML version parsing (required-after
 // comparisons, update checks) working: a bare sha is not a valid version for those consumers.
 def finalVersion = cliProjectProperties.containsKey('version')
     ? cliProjectProperties['version']
-    : (gitExactTag() ?: (gitShortSha() ? baseVersion + "-" + gitShortSha() : baseVersion))
+    : (gitExactTag()
+        ?: (gitShortSha() && gitClosestTag() ? gitClosestTag() + "-" + gitShortSha() : null)
+        ?: (gitShortSha() ? baseVersion + "-" + gitShortSha() : baseVersion))
 version = finalVersion
 group = cliProjectProperties.containsKey('group') ? cliProjectProperties['group'] : propertyString('root_package')
 
