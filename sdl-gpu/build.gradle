@@ -1,0 +1,57 @@
+plugins {
+    id 'java-library'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.cleanroommc.com' }
+    maven { url = 'https://nexus.gtnewhorizons.com/repository/public/' }
+    mavenLocal()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+dependencies {
+    api project(':glsm')
+
+    compileOnly project(':celeritas-common')
+    compileOnly project(':GTNHLib')
+
+    // GL enum constants (compileOnly -- no runtime GL dependency)
+    compileOnly 'org.lwjgl:lwjgl-opengl:3.4.1'
+
+    // LWJGL3 core + SDL3 GPU + SPIRV-Cross + shaderc
+    implementation 'org.lwjgl:lwjgl-sdl:3.4.1'
+    implementation 'org.lwjgl:lwjgl-spvc:3.4.1'
+    implementation 'org.lwjgl:lwjgl-shaderc:3.4.1'
+    ['windows', 'linux', 'macos'].each { platform ->
+        runtimeOnly "org.lwjgl:lwjgl-sdl:3.4.1:natives-$platform"
+        runtimeOnly "org.lwjgl:lwjgl-spvc:3.4.1:natives-$platform"
+        runtimeOnly "org.lwjgl:lwjgl-shaderc:3.4.1:natives-$platform"
+    }
+
+    compileOnly 'org.apache.logging.log4j:log4j-api:2.24.3'
+    compileOnly 'org.jetbrains:annotations:24.0.0'
+    compileOnly 'it.unimi.dsi:fastutil:8.5.15'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'org.apache.logging.log4j:log4j-core:2.24.3'
+    testImplementation 'it.unimi.dsi:fastutil:8.5.15'
+    testImplementation 'com.google.guava:guava:21.0'
+    testImplementation 'org.lwjgl:lwjgl-opengl:3.4.1'
+    testImplementation(testFixtures(project(':glsm')))
+    ['windows', 'linux', 'macos'].each { platform ->
+        testRuntimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-$platform"
+    }
+}
+
+tasks.test {
+    useJUnitPlatform()
+}

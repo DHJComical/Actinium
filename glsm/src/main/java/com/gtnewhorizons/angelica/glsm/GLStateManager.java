@@ -7,6 +7,7 @@ import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
 import com.gtnewhorizons.angelica.glsm.DisplayListManager.RecordMode;
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
+import com.gtnewhorizons.angelica.glsm.backend.GLDebugMessageListener;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import com.gtnewhorizons.angelica.glsm.debug.GpuCheckpointTracker;
@@ -44,6 +45,7 @@ import com.gtnewhorizons.angelica.glsm.stacks.StencilStateStack;
 import com.gtnewhorizons.angelica.glsm.stacks.ViewPortStateStack;
 import com.gtnewhorizons.angelica.glsm.states.ClipPlaneState;
 import com.gtnewhorizons.angelica.glsm.states.Color4;
+import com.gtnewhorizons.angelica.glsm.states.ImageUnitBinding;
 import com.gtnewhorizons.angelica.glsm.states.TextureBinding;
 import com.gtnewhorizons.angelica.glsm.states.TextureUnitArray;
 import com.gtnewhorizons.angelica.glsm.states.VertexAttribState;
@@ -3492,6 +3494,21 @@ public class GLStateManager {
     private static volatile boolean stateSeedPending = false;
 
     private static final Set<String> WARN_ONCE = ConcurrentHashMap.newKeySet();
+
+    /** Registers a debug message listener on the active render backend. */
+    public static void registerDebugMessageListener(GLDebugMessageListener listener, long userParam) {
+        RENDER_BACKEND.debugMessageCallback(listener, userParam);
+    }
+
+    /**
+     * Returns the cached image-unit binding for the given unit, or {@code null} when Actinium
+     * does not track image units (the SDL GPU resource code handles the null case by rebinding
+     * the unit explicitly).
+     */
+    @org.jetbrains.annotations.Nullable
+    public static ImageUnitBinding getImageUnitBinding(int unit) {
+        return null;
+    }
 
     /** Logs a warning at most once per key. */
     public static void warnOnce(String key, String fmt, Object... args) {

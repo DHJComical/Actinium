@@ -18,5 +18,9 @@ public final class GLSMConfig {
     // disabled so the cache buffer alpha stays intact).
     public static boolean hudCacheBlendEnabled;
 
+    // SDL GPU backend: expands vertex formats to the width the backend's attribute
+    // pipeline expects; set during backend init.
+    public static volatile boolean expandVertexFormats;
+
     private GLSMConfig() {}
 }

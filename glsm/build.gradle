@@ -1,5 +1,13 @@
 plugins {
     id 'java-library'
+    id 'java-test-fixtures'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.cleanroommc.com' }
+    maven { url = 'https://nexus.gtnewhorizons.com/repository/public/' }
+    mavenLocal()
 }
 
 sourceSets {
@@ -14,4 +22,11 @@ sourceSets {
 
 dependencies {
     api project(':GTNHLib')
+    // shaderc/spvc are used at compile time by the GLSL->SPIRV pipeline; the runtime
+    // natives are provided by the sdl-gpu module.
+    compileOnly 'org.lwjgl:lwjgl-shaderc:3.4.1'
+    compileOnly 'org.lwjgl:lwjgl-spvc:3.4.1'
+
+    testFixturesImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+    testFixturesImplementation 'org.lwjgl:lwjgl-opengl:3.4.1'
 }
