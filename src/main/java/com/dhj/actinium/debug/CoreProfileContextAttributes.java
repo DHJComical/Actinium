@@ -1,6 +1,9 @@
 package com.dhj.actinium.debug;
 
 import net.minecraftforge.common.ForgeEarlyConfig;
+import net.minecraftforge.common.config.ConfigManager;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.ContextAttribs;
 
 import java.util.function.Consumer;
@@ -10,6 +13,8 @@ import java.util.function.Consumer;
  * Keeping this logic outside every Mixin configuration package allows transformed classes to load it normally.
  */
 public final class CoreProfileContextAttributes {
+    private static final Logger LOGGER = LogManager.getLogger("Celeritas");
+
     /**
      * Prevents instantiation because context attribute construction is stateless.
      */
@@ -73,6 +78,28 @@ public final class CoreProfileContextAttributes {
         ForgeEarlyConfig.OPENGL_VERSION_MINOR = originalMinor;
         ForgeEarlyConfig.OPENGL_COMPAT_PROFILE = true;
         ForgeEarlyConfig.OPENGL_DEBUG_CONTEXT = originalDebug;
+    }
+
+    /**
+     * Persists the restored compatibility profile back to {@code forge_early.cfg}.
+     *
+     * <p>LWJGLXX calls {@code ConfigManager.sync(ForgeEarlyConfig.class)} while creating the
+     * core-profile context, which writes the in-memory core-profile request (compatibility profile
+     * disabled) to the file before {@link #restoreForgeEarlyCompatProfile} can undo it in memory.
+     * Without this follow-up sync the file stays on the core profile and a later launch without
+     * Actinium creates a core context whose fixed-pipeline startup code (SplashProgress texture
+     * setup) fails with {@code GL_INVALID_ENUM}, kills the splash thread, and aborts the JVM on the
+     * first {@code glAlphaFunc}. Sync again now that the fields are restored so the file always
+     * matches the compatibility profile.</p>
+     */
+    public static void persistForgeEarlyCompatProfile() {
+        try {
+            ConfigManager.sync(ForgeEarlyConfig.class);
+        } catch (RuntimeException syncFailure) {
+            // The in-memory state is already restored and this run is unaffected; only the file
+            // would keep the core-profile request and break the next launch without Actinium.
+            LOGGER.error("Failed to persist the restored compatibility profile to forge_early.cfg", syncFailure);
+        }
     }
 
     /**
