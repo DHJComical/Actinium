@@ -477,7 +477,11 @@ public class SDLGPURenderBackend extends RenderBackend {
     }
 
     @Override public boolean isAvailable() {
-        return SystemProperties.USE_SDL_GPU && SDLGPUGate.isSDLGPUAvailable() && SDLGPUGate.isEngaged();
+        // isEngaged() is not checked here: backend selection runs before the window is created
+        // (BackendManager loads during GLStateManager class initialization), so the gate is the
+        // SDL GPU availability probe + the USE_SDL_GPU flag. Window claiming happens later in
+        // MixinMinecraftCoreProfileDisplay via SDLGPUGate.createSDLGPUDisplay.
+        return SystemProperties.USE_SDL_GPU && SDLGPUGate.isSDLGPUAvailable();
     }
 
     @Override public String getName() {

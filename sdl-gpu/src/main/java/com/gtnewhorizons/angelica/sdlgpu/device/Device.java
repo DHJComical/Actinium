@@ -7,6 +7,7 @@ import com.gtnewhorizons.angelica.sdlgpu.util.DebugMessageRelay;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.sdl.SDLError;
+import org.lwjgl.sdl.SDLInit;
 import org.lwjgl.sdl.SDLLog;
 import org.lwjgl.sdl.SDLProperties;
 import org.lwjgl.sdl.SDLStdinc;
@@ -42,6 +43,7 @@ public final class Device {
     private static final int REQUESTED_SHADER_FORMATS = SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_DXIL;
 
     private long device;
+    private long sdlWindowHandle;
     private boolean claimed;
     private int supportedShaderFormats;
     private String driverName;
@@ -93,6 +95,13 @@ public final class Device {
         if (device != 0) return true;
 
         installLogCallback();
+
+        // The upstream environment has SDL's video subsystem initialized by lwjgl3ify's window
+        // backend; the Cleanroom/lwjglxx bridge uses GLFW for the window, so initialize SDL here.
+        if (!SDLInit.SDL_InitSubSystem(SDLInit.SDL_INIT_VIDEO)) {
+            LOG.error("Failed to initialize SDL video subsystem: {}", SDLError.SDL_GetError());
+            return false;
+        }
 
         final int ver = SDLVersion.SDL_GetVersion();
         LOG.info("SDL runtime version {}.{}.{} (raw {})", SDLVersion.SDL_VERSIONNUM_MAJOR(ver), SDLVersion.SDL_VERSIONNUM_MINOR(ver), SDLVersion.SDL_VERSIONNUM_MICRO(ver), ver);
@@ -172,6 +181,7 @@ public final class Device {
                 throw new RuntimeException("Failed to create SDL window from platform handle: " + SDLError.SDL_GetError());
             }
             claimWindow(sdlWindow);
+            this.sdlWindowHandle = sdlWindow;
             return sdlWindow;
         } finally {
             SDL_DestroyProperties(props);
@@ -237,7 +247,7 @@ public final class Device {
     public void destroyDevice() {
         if (device == 0) return;
         if (claimed) {
-            final long window = Display.getWindow();
+            final long window = getSdlWindowHandle();
             if (window != 0) SDL_ReleaseWindowFromGPUDevice(device, window);
             claimed = false;
         }
@@ -358,7 +368,7 @@ public final class Device {
 
     public VSyncMode applyVSync(VSyncMode preferred) {
         if (device == 0 || !claimed) return vsyncMode;
-        final long window = Display.getWindow();
+        final long window = getSdlWindowHandle();
         final List<VSyncMode> order = presentModeOrder(preferred);
         for (VSyncMode candidate : order) {
             final int sdlMode = toSdl(candidate);
@@ -383,11 +393,11 @@ public final class Device {
     }
 
     public boolean supportsVSyncMode(VSyncMode mode) {
-        return device != 0 && claimed && SDL_WindowSupportsGPUPresentMode(device, Display.getWindow(), toSdl(mode));
+        return device != 0 && claimed && SDL_WindowSupportsGPUPresentMode(device, getSdlWindowHandle(), toSdl(mode));
     }
 
     public long getClaimedWindow() {
-        return device != 0 && claimed ? Display.getWindow() : 0L;
+        return device != 0 && claimed ? getSdlWindowHandle() : 0L;
     }
 
     public boolean wasWindowResized() {
@@ -414,7 +424,7 @@ public final class Device {
     }
 
     public int getDisplayRefreshRateHz() {
-        final long window = Display.getWindow();
+        final long window = getSdlWindowHandle();
         final int displayId = window == 0 ? SDL_GetPrimaryDisplay() : SDL_GetDisplayForWindow(window);
         if (displayId == 0) return 0;
         final SDL_DisplayMode mode = SDL_GetCurrentDisplayMode(displayId);
@@ -422,8 +432,12 @@ public final class Device {
         return RenderBackend.refreshHzFrom(mode.refresh_rate_numerator(), mode.refresh_rate_denominator(), mode.refresh_rate());
     }
 
+    public long getSdlWindowHandle() {
+        return sdlWindowHandle;
+    }
+
     public int getSwapchainTextureFormat() {
-        final long window = Display.getWindow();
+        final long window = getSdlWindowHandle();
         return SDL_GetGPUSwapchainTextureFormat(device, window);
     }
 

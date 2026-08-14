@@ -8,10 +8,13 @@ import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
 import com.dhj.actinium.render.EndPortalCompositeRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
+import com.gtnewhorizons.angelica.sdlgpu.SDLGPUDisplayBridge;
+import com.gtnewhorizons.angelica.sdlgpu.SDLGPUGate;
 import com.mitchej123.lwjgl.LWJGLServiceProvider;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.common.Loader;
 import org.embeddedt.embeddium.impl.render.frame.RenderAheadManager;
+import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -97,6 +100,19 @@ public class MixinMinecraft {
     @Inject(method = "runGameLoop", at = @At("RETURN"))
     private void actinium$finishFlightRecorderFrame(CallbackInfo ci) {
         GlFlightRecording.endFrame();
+    }
+
+    /**
+     * The SDL GPU backend presents through SDL, so the vanilla Display.update swap path (which
+     * would swap a GL context on a GLFW_NO_API window) is replaced by event polling + SDL present.
+     */
+    @Inject(method = "updateDisplay", at = @At("HEAD"), cancellable = true)
+    private void actinium$sdlUpdateDisplay(CallbackInfo ci) {
+        if (SDLGPUGate.isActive()) {
+            GLFW.glfwPollEvents();
+            SDLGPUDisplayBridge.present();
+            ci.cancel();
+        }
     }
 
     @Inject(method = "shutdownMinecraftApplet", at = @At("RETURN"))

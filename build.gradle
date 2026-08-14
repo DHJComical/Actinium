@@ -270,6 +270,18 @@ repositories {
 dependencies {
     compileOnly project(':celeritas-common')
     compileOnly project(':shader')
+    compileOnly project(':sdl-gpu')
+    // The SDL GPU libraries must be on the runtime classpath for the SDL GPU backend to load in
+    // dev. The sdl-gpu classes themselves are embedded into the mod jar (LaunchClassLoader); the
+    // libraries (lwjgl-sdl/spvc/shaderc) load through the app loader like LWJGL itself.
+    runtimeOnly 'org.lwjgl:lwjgl-sdl:3.4.1'
+    runtimeOnly 'org.lwjgl:lwjgl-spvc:3.4.1'
+    runtimeOnly 'org.lwjgl:lwjgl-shaderc:3.4.1'
+    ['windows', 'linux', 'macos'].each { platform ->
+        runtimeOnly "org.lwjgl:lwjgl-sdl:3.4.1:natives-$platform"
+        runtimeOnly "org.lwjgl:lwjgl-spvc:3.4.1:natives-$platform"
+        runtimeOnly "org.lwjgl:lwjgl-shaderc:3.4.1:natives-$platform"
+    }
 
     contain('org.taumc:glsl-transformation-lib:0.2.0-32.g7dd88a4-GTNH') {
         transitive = false

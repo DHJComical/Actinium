@@ -57,6 +57,8 @@ public final class SDLDrawable extends DrawableGL {
     }
 
     public long getSdlWindowId() {
-        return Display.getWindow();
+        // The upstream lwjgl3ify environment returns the SDL window handle here; the lwjglxx
+        // bridge claims an SDL-wrapped external window, so return that handle.
+        return SDLGPUGate.device().getSdlWindowHandle();
     }
 }

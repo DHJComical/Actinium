@@ -7,8 +7,10 @@ import com.gtnewhorizons.angelica.sdlgpu.device.Device;
 import com.gtnewhorizons.angelica.sdlgpu.shader.ShaderManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWNativeWin32;
 import org.lwjgl.glfw.GLFWNativeX11;
+import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.sdl.SDLLog;
 import org.lwjgl.system.Platform;
 import org.lwjglx.Sys;
@@ -129,12 +131,19 @@ public final class SDLGPUGate {
         disarmed = false;
 
         try {
-            // lwjglxx creates the GLFW window (and a GL context that the SDL backend will not use).
-            Display.create((PixelFormat) format, (ContextAttribs) attribs);
-            final long glfwWindow = Display.getWindow();
+            // A GL context on the window would prevent Vulkan/D3D12 from claiming it
+            // (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR), so create the window ourselves without one and
+            // mirror the state into lwjglxx's Display for Minecraft's Display.* queries.
+            final long monitor = GLFW.glfwGetPrimaryMonitor();
+            final GLFWVidMode vidMode = monitor == 0 ? null : GLFW.glfwGetVideoMode(monitor);
+            final int width = vidMode == null ? 1280 : vidMode.width();
+            final int height = vidMode == null ? 720 : vidMode.height();
+            final long glfwWindow = SDLGPUDisplayBridge.createWindowNoGlContext(width, height, "Cleanroom");
             if (glfwWindow == 0) {
-                throw new IllegalStateException("Display.create did not create a window");
+                throw new IllegalStateException("glfwCreateWindow failed");
             }
+            SDLGPUDisplayBridge.adoptWindow(glfwWindow, width, height, "Cleanroom");
+
             final long platformHandle;
             switch (Platform.get()) {
                 case WINDOWS -> platformHandle = GLFWNativeWin32.glfwGetWin32Window(glfwWindow);
@@ -147,6 +156,9 @@ public final class SDLGPUGate {
             }
             device().claimPlatformWindow(platformHandle);
             engaged = true;
+            // SplashProgress creates a SharedDrawable from Display.getDrawable() right after
+            // window creation; install the SDL drawable so that path does not see null.
+            SDLGPUDisplayBridge.ensureDrawableInstalled();
             BackendManager.RENDER_BACKEND.onPostWindowCreate(glfwWindow);
         } catch (Throwable t) {
             initFailure = t;
