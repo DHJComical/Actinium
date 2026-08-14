@@ -121,6 +121,11 @@ public final class ShaderManager {
         if (!raw.isEmpty() && raw.charAt(raw.length() - 1) == '\0') {
             raw = raw.substring(0, raw.length() - 1);
         }
+        // Identifiers that became reserved words in GLSL 4.60 (e.g. 'sample' in vanilla #version 120
+        // shaders like blur.fsh) must be renamed before the GLSL->SPIRV pipeline runs. Some callers
+        // reach the backend without going through GLStateManager.glShaderSource, so normalize here
+        // (idempotent: the renaming prefix is never re-matched).
+        raw = GlslTransformUtils.renameReservedWords(raw, 460);
 
         final PrewarmHit hit = lookupPrewarm(raw, obj.type);
         if (hit != null) {
