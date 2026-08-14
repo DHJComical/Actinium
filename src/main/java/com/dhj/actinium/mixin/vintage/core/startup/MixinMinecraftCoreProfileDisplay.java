@@ -39,7 +39,10 @@ public abstract class MixinMinecraftCoreProfileDisplay {
         } finally {
             // Don't leave the core-profile request persisted in forge_early.cfg: without Actinium,
             // Cleanroom's default path expects the compatibility profile and fails to create a context.
+            // LWJGLXX syncs the request to the file while creating the context, so restore the fields
+            // and sync them back (see CoreProfileContextAttributes.persistForgeEarlyCompatProfile).
             CoreProfileContextAttributes.restoreForgeEarlyCompatProfile(originalMajor, originalMinor, originalDebug);
+            CoreProfileContextAttributes.persistForgeEarlyCompatProfile();
         }
     }
 
