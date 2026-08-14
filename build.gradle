@@ -310,8 +310,16 @@ unimined.minecraft {
 
         loader '0.6.7-alpha'
 
+        // SDL GPU backend client run (task: runClientSdl): same client setup plus the SDL
+        // enable flag, so the backend can be tested without passing extra_jvm_args manually.
+        runs.config('clientSdl') {
+        }
+
         runs.all {
             args += ['--username', propertyString('minecraft_username')]
+            if (name == 'clientSdl') {
+                jvmArgs += '-Dangelica.sdlgpu.enable=true'
+            }
             def extraArgs = propertyString('extra_jvm_args')
             if (extraArgs != null && !extraArgs.trim().isEmpty()) {
                 jvmArgs += extraArgs.split('\\s+').toList()
