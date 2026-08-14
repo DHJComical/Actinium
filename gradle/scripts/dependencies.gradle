@@ -66,6 +66,9 @@ dependencies {
     compileOnly 'curse.maven:xaeros-minimap-263420:6310964'
     compileOnly 'curse.maven:better-hud-286066:3327633'
     compileOnly 'curse.maven:voxelmap-225179:3029445'
+
+    modImplementation 'curse.maven:journeymap-32274:5172461'  // JourneyMap 1.12.2-5.7.1p3 (StellarCore 1.6.0 references common.feature.PlayerRadarManager; 6.0.3 moved it to common.util and crashes)
+
     compileOnly 'curse.maven:scalingguis-319656:5150678'
     compileOnly 'curse.maven:quark-243121:2924091'
     compileOnly 'curse.maven:valkyrie-874067:5235356'
