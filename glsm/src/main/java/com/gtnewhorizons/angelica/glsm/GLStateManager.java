@@ -98,6 +98,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntSupplier;
 
 import static com.gtnewhorizons.angelica.glsm.Vendor.AMD;
@@ -389,6 +390,23 @@ public class GLStateManager {
     @Getter protected static final BooleanStateStack[] lightStates = new BooleanStateStack[8];
     @Getter protected static final LightStateStack[] lightDataStates = new LightStateStack[8];
     @Getter protected static final BooleanStateStack colorMaterial = new BooleanStateStack(GL11.GL_COLOR_MATERIAL, false, true);
+
+    /**
+     * Every scalar boolean capability stack, aggregated for state replay. FFP-only stacks
+     * (alpha test, lighting, evaluator maps, ...) are skipped by {@link BooleanState#applyToBackend}.
+     */
+    private static final BooleanStateStack[] ALL_BOOLEAN_STATES = {
+        blendMode, scissorTest, depthTest, fogMode, cullState, alphaTest, lightingState,
+        rescaleNormalState, normalizeState, ditherState, stencilTest, lineSmoothState,
+        lineStippleState, pointSmoothState, polygonSmoothState, polygonStippleState,
+        multisampleState, sampleAlphaToCoverageState, sampleAlphaToOneState, sampleCoverageState,
+        colorLogicOpState, indexLogicOpState, polygonOffsetPointState, polygonOffsetLineState,
+        polygonOffsetFillState, autoNormalState, map1Color4State, map1IndexState, map1NormalState,
+        map1TextureCoord1State, map1TextureCoord2State, map1TextureCoord3State, map1TextureCoord4State,
+        map1Vertex3State, map1Vertex4State, map2Color4State, map2IndexState, map2NormalState,
+        map2TextureCoord1State, map2TextureCoord2State, map2TextureCoord3State, map2TextureCoord4State,
+        map2Vertex3State, map2Vertex4State, colorMaterial
+    };
     @Getter protected static final IntegerStateStack colorMaterialFace = new IntegerStateStack(GL11.GL_FRONT_AND_BACK);
     @Getter protected static final IntegerStateStack colorMaterialParameter = new IntegerStateStack(GL11.GL_AMBIENT_AND_DIFFUSE);
     @Getter protected static final LightModelStateStack lightModel = new LightModelStateStack();
@@ -3469,6 +3487,78 @@ public class GLStateManager {
             if (ShaderManager.getNormalGeneration() != savedNormalGen[depth]) ShaderManager.bumpNormalGeneration();
             if (ShaderManager.getTexCoordGeneration() != savedTexCoordGen[depth]) ShaderManager.bumpTexCoordGeneration();
         }
+    }
+
+    private static volatile boolean stateSeedPending = false;
+
+    private static final Set<String> WARN_ONCE = ConcurrentHashMap.newKeySet();
+
+    /** Logs a warning at most once per key. */
+    public static void warnOnce(String key, String fmt, Object... args) {
+        if (WARN_ONCE.add(key)) LOGGER.warn(fmt, args);
+    }
+
+    public static boolean takeStateSeedPending() {
+        if (!stateSeedPending) return false;
+        stateSeedPending = false;
+        return true;
+    }
+
+    /**
+     * Seeds a freshly claimed render backend with the full cached GL state.
+     *
+     * <p>Used when a backend takes over an already-initialized state cache (e.g. the SDL GPU
+     * backend claiming a window): the backend's own state starts empty, so every cached
+     * capability and value must be pushed once before the first draw.</p>
+     */
+    public static void replayStateToBackend() {
+        if (RENDER_BACKEND == null) return;
+        for (BooleanStateStack stack : ALL_BOOLEAN_STATES) {
+            stack.applyToBackend();
+        }
+        for (BooleanStateStack plane : clipPlaneStates) {
+            if (plane != null) plane.applyToBackend();
+        }
+        for (BooleanStateStack light : lightStates) {
+            if (light != null) light.applyToBackend();
+        }
+
+        RENDER_BACKEND.depthFunc(depthState.getFunc());
+        RENDER_BACKEND.depthMask(depthState.isMaskEnabled());
+        RENDER_BACKEND.clearDepth(depthState.getClearValue());
+
+        RENDER_BACKEND.blendFuncSeparate(blendState.getSrcRgb(), blendState.getDstRgb(), blendState.getSrcAlpha(), blendState.getDstAlpha());
+        RENDER_BACKEND.blendEquationSeparate(blendState.getEquationRgb(), blendState.getEquationAlpha());
+        RENDER_BACKEND.blendColor(blendState.getBlendColorR(), blendState.getBlendColorG(), blendState.getBlendColorB(), blendState.getBlendColorA());
+        RENDER_BACKEND.colorMask(colorMask.red, colorMask.green, colorMask.blue, colorMask.alpha);
+        RENDER_BACKEND.clearColor(clearColor.getRed(), clearColor.getGreen(), clearColor.getBlue(), clearColor.getAlpha());
+        if (drawFramebuffer == 0) {
+            RENDER_BACKEND.drawBuffer(drawBuffer.getValue());
+        }
+        RENDER_BACKEND.logicOp(logicOpMode.getValue());
+
+        RENDER_BACKEND.stencilFuncSeparate(GL11.GL_FRONT, stencilState.getFuncFront(), stencilState.getRefFront(), stencilState.getValueMaskFront());
+        RENDER_BACKEND.stencilFuncSeparate(GL11.GL_BACK, stencilState.getFuncBack(), stencilState.getRefBack(), stencilState.getValueMaskBack());
+        RENDER_BACKEND.stencilOpSeparate(GL11.GL_FRONT, stencilState.getFailOpFront(), stencilState.getZFailOpFront(), stencilState.getZPassOpFront());
+        RENDER_BACKEND.stencilOpSeparate(GL11.GL_BACK, stencilState.getFailOpBack(), stencilState.getZFailOpBack(), stencilState.getZPassOpBack());
+        RENDER_BACKEND.stencilMaskSeparate(GL11.GL_FRONT, stencilState.getWriteMaskFront());
+        RENDER_BACKEND.stencilMaskSeparate(GL11.GL_BACK, stencilState.getWriteMaskBack());
+        RENDER_BACKEND.clearStencil(stencilState.getClearValue());
+
+        RENDER_BACKEND.viewport(viewportState.x, viewportState.y, viewportState.width, viewportState.height);
+        RENDER_BACKEND.depthRange(viewportState.depthRangeNear, viewportState.depthRangeFar);
+        RENDER_BACKEND.lineWidth(Math.max(lineWidthMin, Math.min(lineWidthMax, lineState.getWidth())));
+        RENDER_BACKEND.pointSize(pointState.getSize());
+        RENDER_BACKEND.polygonMode(GL11.GL_FRONT_AND_BACK, polygonState.getFrontMode());
+        RENDER_BACKEND.polygonOffset(polygonState.getOffsetFactor(), polygonState.getOffsetUnits());
+        RENDER_BACKEND.cullFace(polygonState.getCullFaceMode());
+        RENDER_BACKEND.frontFace(polygonState.getFrontFace());
+
+        for (int i = 0; i < MAX_TEXTURE_UNITS; i++) {
+            RENDER_BACKEND.activeTexture(GL13.GL_TEXTURE0 + i);
+            RENDER_BACKEND.bindTexture(GL11.GL_TEXTURE_2D, textures.getTextureUnitBindings(i).getBinding());
+        }
+        RENDER_BACKEND.activeTexture(GL13.GL_TEXTURE0 + activeTextureUnit.getValue());
     }
 
     public static void glClear(int mask) {

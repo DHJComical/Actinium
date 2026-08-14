@@ -26,6 +26,20 @@ public class BooleanState implements ISettableState<BooleanState> {
         stateUnknown = true;
     }
 
+    /**
+     * Replays the current enabled state onto the active render backend, bypassing the
+     * change-detection short-circuit in {@link #setEnabled}. Used when a backend takes over
+     * an already-initialized state cache (e.g. the SDL GPU backend claiming a new context).
+     */
+    public void applyToBackend() {
+        if (ffpStateOnly) return;
+        if (enabled) {
+            RENDER_BACKEND.enable(glCap);
+        } else {
+            RENDER_BACKEND.disable(glCap);
+        }
+    }
+
     public void disable() {
         this.setEnabled(false);
     }
