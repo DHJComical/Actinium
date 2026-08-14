@@ -105,7 +105,8 @@ def embeddedLibraryProjects = [
     project(':GTNHLib'),
     project(':glsm'),
     project(':celeritas-common'),
-    project(':shader')
+    project(':shader'),
+    project(':sdl-gpu')
 ]
 
 def mergedEmbeddedLibraryClassesDir = layout.buildDirectory.dir('embedded-library-classes/main')

@@ -46,7 +46,6 @@ dependencies {
     testImplementation 'it.unimi.dsi:fastutil:8.5.15'
     testImplementation 'com.google.guava:guava:21.0'
     testImplementation 'org.lwjgl:lwjgl-opengl:3.4.1'
-    testImplementation(testFixtures(project(':glsm')))
     ['windows', 'linux', 'macos'].each { platform ->
         testRuntimeOnly "org.lwjgl:lwjgl-opengl:3.4.1:natives-$platform"
     }

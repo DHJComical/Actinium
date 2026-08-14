@@ -1,6 +1,5 @@
 plugins {
     id 'java-library'
-    id 'java-test-fixtures'
 }
 
 repositories {
@@ -26,7 +25,4 @@ dependencies {
     // natives are provided by the sdl-gpu module.
     compileOnly 'org.lwjgl:lwjgl-shaderc:3.4.1'
     compileOnly 'org.lwjgl:lwjgl-spvc:3.4.1'
-
-    testFixturesImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
-    testFixturesImplementation 'org.lwjgl:lwjgl-opengl:3.4.1'
 }
