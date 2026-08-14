@@ -12,6 +12,11 @@ class MixinLateTest {
         assertEquals(Set.of(), Set.copyOf(MixinLate.configsFor(modId -> false)));
 
         assertEquals(
+            Set.of("mixins.actinium.lumenized.json"),
+            Set.copyOf(MixinLate.configsFor("lumenized"::equals))
+        );
+
+        assertEquals(
             Set.of("mixins.actinium.betterfoliage.json"),
             Set.copyOf(MixinLate.configsFor("betterfoliage"::equals))
         );
@@ -26,6 +31,7 @@ class MixinLateTest {
                 "mixins.actinium.dh.json",
                 "mixins.actinium.gibbed.json",
                 "mixins.actinium.ichunutil.json",
+                "mixins.actinium.lumenized.json",
                 "mixins.actinium.revoui.json",
                 "mixins.actinium.betterfoliage.json",
                 "mixins.actinium.ccl.json"
