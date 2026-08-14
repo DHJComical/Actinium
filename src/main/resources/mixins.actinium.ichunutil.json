@@ -12,7 +12,6 @@
     "MixinRenderGlobalProxy",
     "MixinWorldPortalRenderer"
   ],
-  "mods": ["ichunutil"],
   "injectors": {
     "defaultRequire": 1
   }

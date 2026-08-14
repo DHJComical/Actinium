@@ -10,7 +10,6 @@
   "client": [
     "MixinChunkBuilderMeshingTaskBetterFoliage"
   ],
-  "mods": ["betterfoliage"],
   "injectors": {
     "defaultRequire": 1
   }

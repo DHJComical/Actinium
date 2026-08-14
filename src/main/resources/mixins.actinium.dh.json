@@ -16,7 +16,6 @@
     "MixinLodRenderer",
     "MixinRenderUtil"
   ],
-  "mods": ["distanthorizons"],
   "injectors": {
     "defaultRequire": 1
   }
