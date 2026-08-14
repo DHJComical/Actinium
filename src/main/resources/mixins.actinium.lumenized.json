@@ -8,9 +8,10 @@
   "mixins": [],
   "server": [],
   "client": [
-    "MixinBloomEffectUtil",
-    "MixinDepthTextureUtil",
-    "MixinLumenizedConfig"
+    "MixinRenderUtilDepth",
+    "MixinBloomEffectUtilClear",
+    "MixinShadersDepthTest",
+    "MixinDepthTextureUtil"
   ],
   "mods": ["lumenized"],
   "injectors": {

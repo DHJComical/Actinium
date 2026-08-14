@@ -75,12 +75,12 @@ dependencies {
 //    modRuntimeOnly 'curse.maven:unseens-nether-backport-1109447:7694245'
     modCompileOnly 'curse.maven:gibbed-1480667:7737413'
     modImplementation 'curse.maven:stellarcore-1064321:8406201'
-    modCompileOnly 'curse.maven:lumenized-1234162:6734060'
 
     // Draconic Evolution
     modCompileOnly 'maven.modrinth:draconic-evolution:2.3.28.354'
     modCompileOnly 'maven.modrinth:brandons-core:2.4.20.162'
     modCompileOnly 'codechicken:CodeChickenLib:3.3.8'
+    modCompileOnly 'curse.maven:lumenized-1234162:6734060'
     modCompileOnly "curse.maven:redstoneflux-270789:2920436"
 
     modRuntimeOnly "curse.maven:celeritas-dynamic-lights-1313831:8387313"
