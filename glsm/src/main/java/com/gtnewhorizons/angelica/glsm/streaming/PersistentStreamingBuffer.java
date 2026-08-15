@@ -104,6 +104,9 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
 
     private int writeAt(int offset, ByteBuffer data, int dataSize, int waste, int vertexStride) {
         memCopy(memAddress0(data) + data.position(), mappedAddress + offset, dataSize);
+        // The SDL GPU backend emulates persistent-mapped buffers with CPU staging memory; it only
+        // uploads the region to the GPU when notified. The OpenGL backend ignores this call.
+        RENDER_BACKEND.onPersistentBufferWrite(bufferId, offset, dataSize);
 
         final int totalCost = waste + dataSize;
         writePos = offset + dataSize;
@@ -114,6 +117,7 @@ public class PersistentStreamingBuffer implements StreamingBuffer {
 
     private int writeAtStart(ByteBuffer data, int dataSize, int wrapWaste) {
         memCopy(memAddress0(data) + data.position(), mappedAddress, dataSize);
+        RENDER_BACKEND.onPersistentBufferWrite(bufferId, 0, dataSize);
 
         final int totalCost = wrapWaste + dataSize;
         writePos = dataSize;

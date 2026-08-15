@@ -7,6 +7,7 @@ import com.dhj.actinium.gui.ActiniumWindowModeController;
 import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
 import com.dhj.actinium.render.EndPortalCompositeRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
+import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import com.gtnewhorizons.angelica.sdlgpu.SDLGPUDisplayBridge;
 import com.gtnewhorizons.angelica.sdlgpu.SDLGPUGate;
@@ -26,6 +27,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class MixinMinecraft {
     @Unique
     private final RenderAheadManager celeritas$renderAheadManager = new RenderAheadManager();
+
+    @Unique
+    private static boolean actinium$gameLoopStarted;
 
     @Inject(method = "init", at = @At("RETURN"))
     private void actinium$prepareDistantHorizonsBindingsLate(CallbackInfo ci) {
@@ -58,6 +62,12 @@ public class MixinMinecraft {
     private void beginRenderFrame(CallbackInfo ci) {
         GlFlightRecording.beginFrame();
         EndPortalCompositeRenderer.beginFrame();
+        // Bootstrap the first frame: notify the active render backend (SDL GPU) that a frame
+        // group starts, mirroring Angelica's MixinMinecraft_FrameHook.
+        if (!actinium$gameLoopStarted) {
+            actinium$gameLoopStarted = true;
+            BackendManager.RENDER_BACKEND.onFrameBegin();
+        }
         final int limit = supportsCpuRenderAhead() ? ActiniumRuntime.options().advanced.cpuRenderAheadLimit : 0;
         if (limit > 0) {
             celeritas$renderAheadManager.startFrame(limit);
@@ -83,6 +93,8 @@ public class MixinMinecraft {
         BufferBuilderStreamingDrawer.endFrame();
         GlFlightRecording.endStreamingSync(GlFlightStreamingSource.BUFFER_BUILDER);
         GlFlightRecording.beginSwap();
+        // Frame boundary: notify the active render backend that the frame's draws are complete.
+        BackendManager.RENDER_BACKEND.onFrameEnd();
     }
 
     @Inject(
@@ -95,6 +107,10 @@ public class MixinMinecraft {
     )
     private void actinium$finishDisplaySwap(CallbackInfo ci) {
         GlFlightRecording.endSwap();
+        // Frame boundary: the swap (or SDL present) is done; a new frame's draws may begin.
+        if (actinium$gameLoopStarted) {
+            BackendManager.RENDER_BACKEND.onFrameBegin();
+        }
     }
 
     @Inject(method = "runGameLoop", at = @At("RETURN"))
@@ -104,13 +120,15 @@ public class MixinMinecraft {
 
     /**
      * The SDL GPU backend presents through SDL, so the vanilla Display.update swap path (which
-     * would swap a GL context on a GLFW_NO_API window) is replaced by event polling + SDL present.
+     * would swap a GL context on a GLFW_NO_API window) is replaced by event polling. Presentation
+     * itself is driven by the frame hook: onFrameEnd (before this method) submits the final
+     * target, and onFrameBegin (after this method) starts the next frame.
      */
     @Inject(method = "updateDisplay", at = @At("HEAD"), cancellable = true)
     private void actinium$sdlUpdateDisplay(CallbackInfo ci) {
         if (SDLGPUGate.isActive()) {
             GLFW.glfwPollEvents();
-            SDLGPUDisplayBridge.present();
+            SDLGPUDisplayBridge.pumpEvents();
             ci.cancel();
         }
     }

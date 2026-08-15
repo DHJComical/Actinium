@@ -23,6 +23,9 @@ import org.lwjgl.sdl.SDL_GPUColorTargetInfo;
 import org.lwjgl.sdl.SDL_GPUDepthStencilTargetInfo;
 
 import java.nio.ByteBuffer;
+
+import static org.lwjgl.system.MemoryUtil.memAlloc;
+import static org.lwjgl.system.MemoryUtil.memFree;
 import java.nio.IntBuffer;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,6 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.lwjgl.sdl.SDLGPU.*;
 import static org.lwjgl.sdl.SDLSurface.SDL_FLIP_NONE;
+import static org.lwjgl.sdl.SDLVideo.SDL_GetWindowFlags;
 import static org.lwjgl.system.MemoryStack.*;
 
 /**
@@ -86,6 +90,8 @@ public final class FrameManager {
         public volatile long lastFrameGateNanos;
         public volatile long lastFrameGateEndNanos;
         public int midFrameSubmitsThisFrame;
+        public boolean acquireLogged;
+        public boolean readbackLogged;
         public int mipGensThisFrame;
         public int mipGenSubmitsThisFrame;
         public int uploadFlushSubmitsThisFrame;
@@ -93,6 +99,13 @@ public final class FrameManager {
         public int presentSkipsThisFrame;
         public int emptyFramesThisFrame;
         public int droppedDrawsThisFrame;
+        public int droppedFrameInactive;
+        public int droppedUnsignedByte;
+        public int droppedRpInactive;
+        public int droppedPipeline;
+        public int droppedEboMissing;
+        public int droppedFan;
+        public int droppedOther;
         public int computeBatchJoinsThisFrame;
         public int clearPassesThisFrame;
         public int swapchainPassesThisFrame;
@@ -592,6 +605,13 @@ public final class FrameManager {
         f.presentSkipsThisFrame = 0;
         f.emptyFramesThisFrame = 0;
         f.droppedDrawsThisFrame = 0;
+        f.droppedFrameInactive = 0;
+        f.droppedUnsignedByte = 0;
+        f.droppedRpInactive = 0;
+        f.droppedPipeline = 0;
+        f.droppedEboMissing = 0;
+        f.droppedFan = 0;
+        f.droppedOther = 0;
         f.computeBatchJoinsThisFrame = 0;
 
         f.frameActive = false;
@@ -940,7 +960,10 @@ public final class FrameManager {
         if (window == 0) return false;
 
         final long cb = SDL_AcquireGPUCommandBuffer(device.getDevice());
-        if (cb == 0) return false;
+        if (cb == 0) {
+            LOG.error("presentBlit: SDL_AcquireGPUCommandBuffer failed: {}", SDLError.SDL_GetError());
+            return false;
+        }
 
         final long t0 = System.nanoTime();
         final long tex;
@@ -954,6 +977,9 @@ public final class FrameManager {
             Tracy.beginZone(Z_SDL_ACQUIRE_WAIT);
             try {
                 callOk = SDL_WaitAndAcquireGPUSwapchainTexture(cb, window, pTexture, pWidth, pHeight);
+                if (!callOk || pTexture.get(0) == 0) {
+                    LOG.warn("presentBlit: swapchain acquire failed: callOk={} tex={} size={}x{} err={}", callOk, pTexture.get(0), pWidth.get(0), pHeight.get(0), SDLError.SDL_GetError());
+                }
             } finally {
                 Tracy.endZone();
             }
@@ -977,6 +1003,7 @@ public final class FrameManager {
             return false;
         }
 
+        LOG.debug("presentBlit: blitting src={}x{} -> swapchain tex={} {}x{} (window {}x{})", srcW, srcH, tex, w, h, window, srcTexture);
         try (MemoryStack stack = stackPush()) {
             final long info = stack.ncalloc(SDL_GPUBlitInfo.ALIGNOF, 1, SDL_GPUBlitInfo.SIZEOF);
             writeBlitRegion(info + SDL_GPUBlitInfo.SOURCE, srcTexture, srcW, srcH);
@@ -987,6 +1014,7 @@ public final class FrameManager {
         }
 
         if (!SDL_SubmitGPUCommandBuffer(cb)) {
+            LOG.error("presentBlit: SDL_SubmitGPUCommandBuffer failed: {}", SDLError.SDL_GetError());
             device.reportGpuFailure("submit present blit");
             return false;
         }

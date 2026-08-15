@@ -39,7 +39,10 @@ public final class DrawDispatch {
     private boolean unsignedByteIndicesWarned;
     private boolean prepareFrameInactiveWarned;
     private boolean prepareRpInactiveWarned;
+    private boolean preparePipelineWarned;
     private boolean drawArraysRpInactiveWarned;
+    private boolean fanRpInactiveWarned;
+    private boolean fanPipelineWarned;
 
     public DrawDispatch(Device device, FrameManager frameManager, ResourceManager resourceManager, PipelineApplier pipelineApplier, FanUploadSink fanUploadSink) {
         this.device = device;
@@ -77,6 +80,7 @@ public final class DrawDispatch {
         final FrameState f = frameManager.frame();
         if (type == GL11.GL_UNSIGNED_BYTE) {
             f.droppedDrawsThisFrame++;
+            f.droppedUnsignedByte++;
             if (!unsignedByteIndicesWarned) {
                 LOG.error("SDL backend: drawElements with GL_UNSIGNED_BYTE indices is unsupported; skipping draw. Use SHORT or INT indices.");
                 unsignedByteIndicesWarned = true;
@@ -85,6 +89,7 @@ public final class DrawDispatch {
         }
         if (!frameManager.isFrameActive(f)) {
             f.droppedDrawsThisFrame++;
+            f.droppedFrameInactive++;
             if (!prepareFrameInactiveWarned) {
                 prepareFrameInactiveWarned = true;
                 LOG.warn("prepareIndexedDraw: frame not active; draw skipped (mode=0x{} type=0x{})", Integer.toHexString(mode), Integer.toHexString(type));
@@ -95,6 +100,7 @@ public final class DrawDispatch {
         pipelineApplier.ensureRenderPass(st, f);
         if (!frameManager.isRenderPassActive(f)) {
             f.droppedDrawsThisFrame++;
+            f.droppedRpInactive++;
             if (!prepareRpInactiveWarned) {
                 prepareRpInactiveWarned = true;
                 LOG.warn("prepareIndexedDraw: render pass not active after ensureRenderPass; draw skipped (mode=0x{} type=0x{} boundFbo={})", Integer.toHexString(mode), Integer.toHexString(type), st.boundFboId);
@@ -103,6 +109,11 @@ public final class DrawDispatch {
         }
         if (!pipelineApplier.applyPipelineAndState(st, f)) {
             f.droppedDrawsThisFrame++;
+            f.droppedPipeline++;
+            if (!preparePipelineWarned) {
+                preparePipelineWarned = true;
+                LOG.warn("prepareIndexedDraw: applyPipelineAndState failed; draw skipped (mode=0x{} type=0x{} boundFbo={} renderPass=0x{})", Integer.toHexString(mode), Integer.toHexString(type), st.boundFboId, Long.toHexString(frameManager.getRenderPass()));
+            }
             return false;
         }
         return true;
@@ -180,8 +191,26 @@ public final class DrawDispatch {
 
         setPrimitiveTypeForDraw(st, SDL_GPU_PRIMITIVETYPE_TRIANGLELIST);
         pipelineApplier.ensureRenderPass(st);
-        if (!frameManager.isRenderPassActive()) return;
-        if (!pipelineApplier.applyPipelineAndState(st)) return;
+        if (!frameManager.isRenderPassActive()) {
+            final FrameState f = frameManager.frame();
+            f.droppedDrawsThisFrame++;
+            f.droppedFan++;
+            if (!fanRpInactiveWarned) {
+                fanRpInactiveWarned = true;
+                LOG.warn("drawTriangleFanAsTriangleList: render pass not active after ensureRenderPass; draw skipped (first={} count={} boundFbo={} frameActive={})", first, count, st.boundFboId, f.frameActive);
+            }
+            return;
+        }
+        if (!pipelineApplier.applyPipelineAndState(st)) {
+            final FrameState f = frameManager.frame();
+            f.droppedDrawsThisFrame++;
+            f.droppedFan++;
+            if (!fanPipelineWarned) {
+                fanPipelineWarned = true;
+                LOG.warn("drawTriangleFanAsTriangleList: applyPipelineAndState failed; draw skipped (first={} count={} boundFbo={})", first, count, st.boundFboId);
+            }
+            return;
+        }
 
         final int elementSize = use32bit ? SDL_GPU_INDEXELEMENTSIZE_32BIT : SDL_GPU_INDEXELEMENTSIZE_16BIT;
         final long rp = frameManager.getRenderPass();

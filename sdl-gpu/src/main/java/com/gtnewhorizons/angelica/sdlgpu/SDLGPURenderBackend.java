@@ -41,6 +41,7 @@ import com.gtnewhorizons.angelica.sdlgpu.sampler.SamplerBinder;
 import com.gtnewhorizons.angelica.sdlgpu.sampler.StorageBufferBinder;
 import com.gtnewhorizons.angelica.sdlgpu.sampler.StorageTextureBinder;
 import com.gtnewhorizons.angelica.sdlgpu.shader.ShaderManager;
+import com.gtnewhorizons.angelica.sdlgpu.shader.UniformStaging;
 import com.gtnewhorizons.angelica.sdlgpu.splash.SplashDispatcher;
 import com.gtnewhorizons.angelica.sdlgpu.frame.OffscreenTarget;
 import com.gtnewhorizons.angelica.sdlgpu.util.DebugLabels;
@@ -647,6 +648,20 @@ public class SDLGPURenderBackend extends RenderBackend {
     }
 
     private static boolean emptyFrameWarned;
+    private static boolean firstDrawLogged;
+    private static boolean firstIndexedDrawLogged;
+    private static boolean firstFboBindLogged;
+    private static boolean frameStatsLogged;
+    private static boolean dropRpWarned;
+    private static boolean dropPipelineWarned;
+    private static boolean dropEboMissingWarned;
+    private static boolean drawArrayFrameInactiveWarned;
+
+    private static void logFirstDraw(String kind, int mode, int count, int boundFbo, long colorTarget) {
+        if (firstDrawLogged) return;
+        firstDrawLogged = true;
+        LOG.info("SDL backend: first {} draw: mode=0x{} count={} boundFbo={} colorTarget=0x{}", kind, Integer.toHexString(mode), count, boundFbo, Long.toHexString(colorTarget));
+    }
 
     @Override public void onFrameEnd() {
         if (shutdown) return;
@@ -678,7 +693,6 @@ public class SDLGPURenderBackend extends RenderBackend {
         }
         SDL_WaitForGPUIdle(device.getDevice());
     }
-
 
     private void enqueueUpload(TransferThread.DeferredUpload upload) {
         if (shutdown) return;
@@ -990,7 +1004,15 @@ public class SDLGPURenderBackend extends RenderBackend {
 
     @Override public void drawArrays(int mode, int first, int count) {
         final FrameState f = frameManager.frame();
-        if (!f.frameActive) { f.droppedDrawsThisFrame++; return; }
+        if (!f.frameActive) {
+            f.droppedDrawsThisFrame++;
+            f.droppedFrameInactive++;
+            if (!drawArrayFrameInactiveWarned) {
+                drawArrayFrameInactiveWarned = true;
+                LOG.warn("SDL backend drawArrays DROPPED: frame not active (mode=0x{} count={} boundFbo={})", Integer.toHexString(mode), count, s().boundFboId);
+            }
+            return;
+        }
         final ContextState st = s();
         if (mode == GL11.GL_TRIANGLE_FAN && count >= 3) {
             drawDispatch.drawTriangleFanAsTriangleList(st, first, count);
@@ -998,8 +1020,25 @@ public class SDLGPURenderBackend extends RenderBackend {
         }
         drawDispatch.setPrimitiveTypeForDraw(st, FormatMap.mapPrimitiveType(mode));
         pipelineApplier.ensureRenderPass(st, f);
-        if (f.renderPass == 0) { f.droppedDrawsThisFrame++; drawDispatch.warnDrawArraysNoRenderPass(mode, st.boundFboId); return; }
-        if (!pipelineApplier.applyPipelineAndState(st, f)) { f.droppedDrawsThisFrame++; return; }
+        if (f.renderPass == 0) {
+            f.droppedDrawsThisFrame++;
+            f.droppedRpInactive++;
+            if (!dropRpWarned) {
+                dropRpWarned = true;
+                LOG.warn("SDL backend drawArrays DROPPED: no render pass after ensureRenderPass (mode=0x{} boundFbo={} frameActive={} fbo0Used={} finalTargetHasContent={})", Integer.toHexString(mode), st.boundFboId, f.frameActive, f.fbo0UsedThisFrame, frameManager.finalTarget().hasContent());
+            }
+            return;
+        }
+        if (!pipelineApplier.applyPipelineAndState(st, f)) {
+            f.droppedDrawsThisFrame++;
+            f.droppedPipeline++;
+            if (!dropPipelineWarned) {
+                dropPipelineWarned = true;
+                LOG.warn("SDL backend drawArrays DROPPED: applyPipelineAndState failed (mode=0x{} boundFbo={} renderPass=0x{})", Integer.toHexString(mode), st.boundFboId, Long.toHexString(f.renderPass));
+            }
+            return;
+        }
+        logFirstDraw("drawArrays", mode, count, st.boundFboId, frameManager.getCurrentColorTarget());
         SDL_DrawGPUPrimitives(f.renderPass, count, 1, first, 0);
     }
 
@@ -1033,10 +1072,20 @@ public class SDLGPURenderBackend extends RenderBackend {
         final int ebo = st.currentVao.elementBuffer;
         final long eboHandle = resourceManager.getBufferHandle(ebo);
         if (eboHandle == 0) {
-            LOG.warn("{}: EBO {} has no GPU handle, skipping draw", opName, ebo);
+            final FrameState f = frameManager.frame();
+            f.droppedDrawsThisFrame++;
+            f.droppedEboMissing++;
+            if (!dropEboMissingWarned) {
+                dropEboMissingWarned = true;
+                LOG.warn("{}: EBO {} has no GPU handle, skipping draw (mode=0x{} type=0x{} boundFbo={})", opName, ebo, Integer.toHexString(mode), Integer.toHexString(type), st.boundFboId);
+            }
             return 0;
         }
         final long rp = frameManager.getRenderPass();
+        if (!firstIndexedDrawLogged) {
+            firstIndexedDrawLogged = true;
+            LOG.info("SDL backend: first {} draw: mode=0x{} ebo={} eboHandle=0x{} colorTarget=0x{}", opName, Integer.toHexString(mode), ebo, Long.toHexString(eboHandle), Long.toHexString(frameManager.getCurrentColorTarget()));
+        }
         drawDispatch.bindIndexBufferIfChanged(st, rp, eboHandle, FormatMap.mapIndexElementSize(type), 0);
         return rp;
     }
@@ -1501,6 +1550,11 @@ public class SDLGPURenderBackend extends RenderBackend {
 
         if (isBoth) {
             cs.boundReadFboId = framebuffer;
+        }
+
+        if (!firstFboBindLogged) {
+            firstFboBindLogged = true;
+            LOG.info("SDL backend: first bindFramebuffer target=0x{} fbo={}", Integer.toHexString(target), framebuffer);
         }
 
         if (cs.boundFboId == framebuffer) return;
@@ -3156,20 +3210,24 @@ public class SDLGPURenderBackend extends RenderBackend {
     }
     @Override public void blitNamedFramebuffer(int readFramebuffer, int drawFramebuffer, int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1, int mask, int filter) {
         final FboState srcFbo = resourceManager.getFbo(readFramebuffer);
-        final FboState dstFbo = resourceManager.getFbo(drawFramebuffer);
-        if (srcFbo == null || dstFbo == null) return;
+        // GL_FRAMEBUFFER 0 is the default (window) framebuffer; the SDL backend renders it as the
+        // final target texture.
+        final FboState dstFbo = drawFramebuffer == 0 ? null : resourceManager.getFbo(drawFramebuffer);
+        if (srcFbo == null) return;
+        if (dstFbo == null && drawFramebuffer != 0) return;
 
         final boolean isDepth = (mask & GL11.GL_DEPTH_BUFFER_BIT) != 0;
         long srcTex = 0, dstTex = 0;
         int dstGlId = 0;
         if (isDepth) {
+            if (dstFbo == null) return; // no depth blit to the default framebuffer target
             srcTex = srcFbo.depthTexture;
             dstTex = dstFbo.depthTexture;
             dstGlId = dstFbo.depthGlId;
         } else if ((mask & GL11.GL_COLOR_BUFFER_BIT) != 0) {
             srcTex = srcFbo.colorTextures[srcFbo.readBufferIndex];
-            dstTex = dstFbo.colorTextures[0];
-            dstGlId = dstFbo.colorGlIds[0];
+            dstTex = dstFbo != null ? dstFbo.colorTextures[0] : frameManager.finalTarget().colorTexture();
+            dstGlId = dstFbo != null ? dstFbo.colorGlIds[0] : 0;
         }
         if (srcTex == 0 || dstTex == 0) return;
 
@@ -3183,7 +3241,7 @@ public class SDLGPURenderBackend extends RenderBackend {
             textureOps.copyTexture(srcTex, srcX0, srcY0, dstTex, dstX0, dstY0, srcX1 - srcX0, srcY1 - srcY0);
         } else {
             final ResourceManager.TextureMeta srcMeta = resourceManager.getTextureMeta(srcFbo.colorGlIds[srcFbo.readBufferIndex]);
-            final ResourceManager.TextureMeta dstMeta = resourceManager.getTextureMeta(dstFbo.colorGlIds[0]);
+            final ResourceManager.TextureMeta dstMeta = resourceManager.getTextureMeta(dstGlId);
             if (TextureOps.canCopyInsteadOfBlit(srcMeta, dstMeta, srcX1 - srcX0, srcY1 - srcY0, dstX1 - dstX0, dstY1 - dstY0)) {
                 textureOps.copyTexture(srcTex, srcX0, srcY0, dstTex, dstX0, dstY0, srcX1 - srcX0, srcY1 - srcY0);
             } else {

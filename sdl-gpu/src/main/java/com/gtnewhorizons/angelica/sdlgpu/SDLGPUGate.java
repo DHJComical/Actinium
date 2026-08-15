@@ -134,10 +134,17 @@ public final class SDLGPUGate {
             // A GL context on the window would prevent Vulkan/D3D12 from claiming it
             // (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR), so create the window ourselves without one and
             // mirror the state into lwjglxx's Display for Minecraft's Display.* queries.
+            // Create the window at the size Minecraft already believes it is (displayWidth/Height),
+            // so the framebuffer, viewport and final blit all match the window. Falling back to the
+            // primary monitor's video mode only when Minecraft has no size of its own yet.
+            final net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+            final int mcWidth = mc != null ? mc.displayWidth : 0;
+            final int mcHeight = mc != null ? mc.displayHeight : 0;
             final long monitor = GLFW.glfwGetPrimaryMonitor();
             final GLFWVidMode vidMode = monitor == 0 ? null : GLFW.glfwGetVideoMode(monitor);
-            final int width = vidMode == null ? 1280 : vidMode.width();
-            final int height = vidMode == null ? 720 : vidMode.height();
+            final int width = mcWidth > 0 ? mcWidth : (vidMode == null ? 1280 : vidMode.width());
+            final int height = mcHeight > 0 ? mcHeight : (vidMode == null ? 720 : vidMode.height());
+            LOG.info("[SDL] Creating SDL GPU window at Minecraft's expected size {}x{} (Minecraft.displayWidth/Height={}x{}, vidMode={}x{})", width, height, mcWidth, mcHeight, vidMode == null ? -1 : vidMode.width(), vidMode == null ? -1 : vidMode.height());
             final long glfwWindow = SDLGPUDisplayBridge.createWindowNoGlContext(width, height, "Cleanroom");
             if (glfwWindow == 0) {
                 throw new IllegalStateException("glfwCreateWindow failed");

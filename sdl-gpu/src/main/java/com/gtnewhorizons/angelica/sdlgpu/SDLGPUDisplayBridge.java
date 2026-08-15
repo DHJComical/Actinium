@@ -3,6 +3,7 @@ package com.gtnewhorizons.angelica.sdlgpu;
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.sdlgpu.device.SDLDrawable;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLEvents;
 import org.lwjglx.opengl.Display;
 import org.lwjglx.opengl.Drawable;
 import org.lwjglx.opengl.DrawableGL;
@@ -136,6 +137,17 @@ public final class SDLGPUDisplayBridge {
     public static void present() {
         if (SDLGPUGate.isActive()) {
             BackendManager.RENDER_BACKEND.handleSwapBuffers();
+        }
+    }
+
+    /**
+     * Pumps SDL's event queue. The SDL window wraps an external GLFW-created window; SDL needs
+     * its own event processing to track visibility/resize, otherwise the Vulkan swapchain acquire
+     * blocks waiting for the window to be shown.
+     */
+    public static void pumpEvents() {
+        if (SDLGPUGate.isActive()) {
+            SDLEvents.SDL_PumpEvents();
         }
     }
 

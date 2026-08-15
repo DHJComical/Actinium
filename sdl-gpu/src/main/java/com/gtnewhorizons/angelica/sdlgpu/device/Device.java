@@ -209,6 +209,12 @@ public final class Device {
             LOG.info("SDL frames-in-flight set to {}", FRAMES_IN_FLIGHT);
         }
 
+        // The SDL window wraps an external (GLFW-created) window; SDL does not know it is shown,
+        // and the Vulkan backend's swapchain acquire waits while the window is not marked visible.
+        if (!SDL_ShowWindow(window)) {
+            LOG.warn("SDL_ShowWindow failed: {}", SDLError.SDL_GetError());
+        }
+
         logWindowDiagnostics(window);
         LOG.info("SDL GPU device claimed window successfully");
     }
