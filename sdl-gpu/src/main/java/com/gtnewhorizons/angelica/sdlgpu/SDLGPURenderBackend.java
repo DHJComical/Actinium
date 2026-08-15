@@ -2589,13 +2589,12 @@ public class SDLGPURenderBackend extends RenderBackend {
 
     @Override public boolean unmapBuffer(int target) {
         final ContextState cs = s();
-        final int glId = getBoundBuffer(target);
-
-        final PersistentMapping pm = resourceManager.removePersistentMapping(glId);
-        if (pm != null) {
-            resourceManager.releasePersistentStaging(pm);
-            return true;
-        }
+        // A persistent mapping outlives glUnmapBuffer: it stays valid until the buffer is deleted
+        // or remapped (mapBufferRange with GL_MAP_PERSISTENT_BIT swaps it). Removing it here would
+        // free the staging while PersistentStreamingBuffer / Embeddium's MappedStagingBuffer keep
+        // writing into their mapped address (their upload paths memCopy after unrelated unmap
+        // calls), causing use-after-free crashes. Handle only the transient mapped-staging path.
+        if (cs.mappedStagingBuffer == null) return false;
 
         final ContextState st = cs;
         if (st.mappedStagingBuffer == null) return false;
@@ -2613,7 +2612,7 @@ public class SDLGPURenderBackend extends RenderBackend {
                 }
                 resourceManager.markBufferContentsDefined(st.mappedBufferGlId);
             }
-            final ByteBuffer old = resourceManager.putPboStaging(glId, st.mappedStagingBuffer);
+            final ByteBuffer old = resourceManager.putPboStaging(st.mappedBufferGlId, st.mappedStagingBuffer);
             if (old != null) MemoryUtil.memFree(old);
             clearMappedState(st);
             return true;

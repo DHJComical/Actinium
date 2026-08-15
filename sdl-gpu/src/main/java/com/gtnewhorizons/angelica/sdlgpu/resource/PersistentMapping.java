@@ -9,6 +9,7 @@ public final class PersistentMapping {
     public final long length;
     public final int accessFlags;
     private final AtomicLong dirtyRange = new AtomicLong(CLEAN);
+    private volatile boolean released;
     public static final long CLEAN = -1L;
 
     public volatile long lastEnqueuedSeq = 0L;
@@ -17,6 +18,17 @@ public final class PersistentMapping {
         this.offset = offset;
         this.length = length;
         this.accessFlags = accessFlags;
+    }
+
+    /**
+     * Marks this mapping's staging as released, exactly once. Every release path
+     * ({@code glUnmapBuffer} fallback, persistent remap, buffer deletion) calls through here so
+     * the backing {@link #staging} cannot be freed twice even if several paths race or overlap.
+     */
+    public boolean markReleased() {
+        if (released) return false;
+        released = true;
+        return true;
     }
 
     public static boolean isClean(long packed) { return packed == CLEAN; }

@@ -33,6 +33,25 @@ public class MixinMinecraft {
     @Unique
     private static boolean actinium$gameLoopStarted;
 
+    @Unique
+    private static boolean actinium$vsyncPushed;
+
+    @Unique
+    private static boolean actinium$debugPanelOpenedForWorld;
+
+    @Inject(method = "runTick", at = @At("HEAD"))
+    private void actinium$autoOpenDebugPanel(CallbackInfo ci) {
+        final net.minecraft.client.Minecraft mc = (net.minecraft.client.Minecraft) (Object) this;
+        // The SDL GPU path cannot deliver in-game keyboard/mouse input yet, so the player cannot
+        // press F3 manually; open the debug panel once after each world finishes loading so the
+        // render state (fps, chunk stats) stays observable while diagnosing the backend.
+        final boolean worldLoaded = mc.world != null && mc.player != null;
+        if (worldLoaded && !actinium$debugPanelOpenedForWorld) {
+            mc.gameSettings.showDebugInfo = true;
+        }
+        actinium$debugPanelOpenedForWorld = worldLoaded;
+    }
+
     @Inject(method = "init", at = @At("RETURN"))
     private void actinium$prepareDistantHorizonsBindingsLate(CallbackInfo ci) {
         // DistantHorizonsCompat loads DH classes; keep it out of the classpath when DH is absent.
@@ -55,7 +74,13 @@ public class MixinMinecraft {
     @Inject(method = "getLimitFramerate", at = @At("HEAD"), cancellable = true)
     private void actinium$useLoadingScreenFramerateLimit(CallbackInfoReturnable<Integer> cir) {
         Minecraft minecraft = (Minecraft) (Object) this;
-        if (minecraft.world == null && minecraft.currentScreen != null) {
+        // Cap the frame rate while no world is loaded (menu, world join, dimension load). During
+        // the join handshake of the integrated server the client thread must not outrun the FML
+        // NetworkDispatcher registration: handling SPacketJoinGame before the handshake completes
+        // NPEs in NetHandlerPlayClient and the world never loads. The vanilla check additionally
+        // requires currentScreen != null, but the instant between displayGuiScreen(null) and world
+        // assignment has currentScreen == null and is exactly where the race fires.
+        if (minecraft.world == null) {
             cir.setReturnValue(ActiniumRuntime.options().performance.loadingScreenFramerateLimit);
         }
     }
@@ -69,6 +94,16 @@ public class MixinMinecraft {
         if (!actinium$gameLoopStarted) {
             actinium$gameLoopStarted = true;
             BackendManager.RENDER_BACKEND.onFrameBegin();
+        }
+        // The SDL GPU backend cannot rely on lwjglxx's Display.setVSyncEnabled (it only calls
+        // glfwSwapInterval, which is a no-op on a GLFW_NO_API window): push the preference into
+        // the backend once, so SDL's swapchain present mode is configured and the frame rate is
+        // bounded like the GL path. Without it the client thread can outrun the FML handshake
+        // (NetworkDispatcher registration) and crash on SPacketJoinGame during world join.
+        final Minecraft mc = (Minecraft) (Object) this;
+        if (SDLGPUGate.isActive() && !actinium$vsyncPushed && mc.gameSettings != null) {
+            actinium$vsyncPushed = true;
+            BackendManager.RENDER_BACKEND.setVSyncEnabled(mc.gameSettings.enableVsync);
         }
         final int limit = supportsCpuRenderAhead() ? ActiniumRuntime.options().advanced.cpuRenderAheadLimit : 0;
         if (limit > 0) {

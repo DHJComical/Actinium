@@ -932,7 +932,7 @@ public final class ResourceManager {
     }
 
     public void releasePersistentStaging(PersistentMapping pm) {
-        if (pm == null || pm.staging == null) return;
+        if (pm == null || !pm.markReleased()) return;
         final TransferThread tt = transferThread;
         final long seq = pm.lastEnqueuedSeq;
         if (tt != null && seq > tt.getSubmittedSeq()) tt.freeAfterSeq(pm.staging, seq);

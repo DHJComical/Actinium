@@ -54,6 +54,19 @@ public final class SDLGPUDisplayBridge {
     private static final VarHandle DISPLAY_FB_HEIGHT_FIELD;
     private static final VarHandle DISPLAY_TITLE_FIELD;
     private static final VarHandle DISPLAY_RESIZABLE_FIELD;
+    private static final VarHandle DISPLAY_FOCUSED_FIELD;
+    /**
+     * LWJGL2 compatibility shim {@code org.lwjgl.opengl.Display} (com.cleanroommc:lwjglx), a
+     * separate class from lwjglxx's {@link Display}; Minecraft's {@code EntityRenderer} reads
+     * {@code Display.isActive()} from this shim, so its focus state must be mirrored too.
+     */
+    private static final java.lang.reflect.Field DISPLAY2_FOCUSED_FIELD;
+    /**
+     * The shim's own {@code org.lwjgl.opengl.Display$Window.handle}, used by shim
+     * {@code Display.getWindow()} (DWM styling / taskbar integrations). The mixin universe
+     * cannot see the shim classes, so mirror the handle here instead of a mixin.
+     */
+    private static final java.lang.reflect.Field DISPLAY2_WINDOW_HANDLE_FIELD;
     static {
         final VarHandle displayDrawableField;
         final VarHandle sharedDrawableWrappedField;
@@ -65,6 +78,9 @@ public final class SDLGPUDisplayBridge {
         final VarHandle displayFbHeightField;
         final VarHandle displayTitleField;
         final VarHandle displayResizableField;
+        final VarHandle displayFocusedField;
+        java.lang.reflect.Field display2FocusedField = null;
+        java.lang.reflect.Field display2WindowHandleField = null;
         try {
             final MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(Display.class, MethodHandles.lookup());
             displayDrawableField = lookup.findStaticVarHandle(Display.class, "drawable", DrawableGL.class);
@@ -75,11 +91,22 @@ public final class SDLGPUDisplayBridge {
             displayFbHeightField = lookup.findStaticVarHandle(Display.class, "displayFramebufferHeight", int.class);
             displayTitleField = lookup.findStaticVarHandle(Display.class, "windowTitle", String.class);
             displayResizableField = lookup.findStaticVarHandle(Display.class, "displayResizable", boolean.class);
+            displayFocusedField = lookup.findStaticVarHandle(Display.class, "displayFocused", boolean.class);
             final Class<?> windowClass = Class.forName("org.lwjglx.opengl.Display$Window");
             windowHandleField = MethodHandles.privateLookupIn(windowClass, MethodHandles.lookup())
                 .findStaticVarHandle(windowClass, "handle", long.class);
             // SharedDrawable.drawable is a lwjgl3ify-only field; absent in the Cleanroom lwjglxx.
             sharedDrawableWrappedField = lookupSharedDrawableField();
+            try {
+                final Class<?> lwjgl2Display = Class.forName("org.lwjgl.opengl.Display");
+                display2FocusedField = lwjgl2Display.getDeclaredField("displayFocused");
+                display2FocusedField.setAccessible(true);
+                final Class<?> lwjgl2Window = Class.forName("org.lwjgl.opengl.Display$Window");
+                display2WindowHandleField = lwjgl2Window.getDeclaredField("handle");
+                display2WindowHandleField.setAccessible(true);
+            } catch (ReflectiveOperationException e) {
+                LOG.warn("LWJGL2 compat Display fields unavailable; focus/window handle will not be mirrored", e);
+            }
         } catch (IllegalAccessException | NoSuchFieldException | ClassNotFoundException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -93,6 +120,30 @@ public final class SDLGPUDisplayBridge {
         DISPLAY_FB_HEIGHT_FIELD = displayFbHeightField;
         DISPLAY_TITLE_FIELD = displayTitleField;
         DISPLAY_RESIZABLE_FIELD = displayResizableField;
+        DISPLAY_FOCUSED_FIELD = displayFocusedField;
+        DISPLAY2_FOCUSED_FIELD = display2FocusedField;
+        DISPLAY2_WINDOW_HANDLE_FIELD = display2WindowHandleField;
+    }
+
+    private static void setFocused(boolean focused) {
+        DISPLAY_FOCUSED_FIELD.set(focused);
+        if (DISPLAY2_FOCUSED_FIELD != null) {
+            try {
+                DISPLAY2_FOCUSED_FIELD.setBoolean(null, focused);
+            } catch (IllegalAccessException e) {
+                LOG.warn("Failed to mirror window focus into LWJGL2 compat Display", e);
+            }
+        }
+    }
+
+    private static void mirrorLwjgl2WindowHandle(long window) {
+        if (DISPLAY2_WINDOW_HANDLE_FIELD != null) {
+            try {
+                DISPLAY2_WINDOW_HANDLE_FIELD.setLong(null, window);
+            } catch (IllegalAccessException e) {
+                LOG.warn("Failed to mirror window handle into LWJGL2 compat Display$Window", e);
+            }
+        }
     }
 
     private static VarHandle lookupSharedDrawableField() {
@@ -131,6 +182,7 @@ public final class SDLGPUDisplayBridge {
      */
     public static void adoptWindow(long window, int width, int height, String title) {
         WINDOW_HANDLE_FIELD.set(window);
+        mirrorLwjgl2WindowHandle(window);
         DISPLAY_CREATED_FIELD.set(true);
         DISPLAY_WIDTH_FIELD.set(width);
         DISPLAY_HEIGHT_FIELD.set(height);
@@ -208,6 +260,20 @@ public final class SDLGPUDisplayBridge {
                     org.lwjglx.input.Keyboard.addCharEvent(0, (char) codepoint);
                 }
             };
+            // lwjglxx's Display.create() initializes displayFocused from ForgeEarlyConfig and never
+            // updates it again (its windowFocusCallback field is never assigned, so focus changes
+            // are not tracked at all). The SDL path bypasses Display.create(), leaving
+            // Display.isActive() permanently false; EntityRenderer.updateCameraAndRender then
+            // treats the window as unfocused and, with pauseOnLostFocus enabled, opens the pause
+            // menu on its own ~500 ms after the last frame while in-game. Track real focus and
+            // mirror it into both lwjglxx's Display and the LWJGL2 compat shim.
+            final org.lwjgl.glfw.GLFWWindowFocusCallback focus = new org.lwjgl.glfw.GLFWWindowFocusCallback() {
+                @Override public void invoke(long window, boolean focused) {
+                    setFocused(focused);
+                }
+            };
+            setWindowCallbackField(windowClass, "windowFocusCallback", focus);
+            setFocused(true);
             setWindowCallbackField(windowClass, "cursorPosCallback", cursorPos);
             setWindowCallbackField(windowClass, "mouseButtonCallback", mouseButton);
             setWindowCallbackField(windowClass, "scrollCallback", scroll);

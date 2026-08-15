@@ -10,8 +10,10 @@
   "client": [
     "core.MinecraftAccessor",
     "core.MixinDirection",
-    "core.MixinMinecraft", "core.MixinDisplayCompat",
+    "core.MixinMinecraft",
+    "core.MixinDisplayWindowCompat",
     "core.MixinGuiScreenSDLInput",
+    "core.MixinNetHandlerPlayClientJoinGame",
     "core.MixinRenderGlobalDestroyBlock",
     "core.MixinTessellator",
     "core.MixinTileEntityRendererDispatcherBatch",
