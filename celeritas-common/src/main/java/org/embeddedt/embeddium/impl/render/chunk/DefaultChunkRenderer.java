@@ -27,9 +27,15 @@ import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.util.BitwiseMath;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProvider;
+import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProviderHolder;
 import com.mitchej123.lwjgl.GLExtension;
 import org.embeddedt.embeddium.impl.runtime.EmbeddiumRuntimeOptions;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
@@ -38,6 +44,13 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
     private static boolean loggedMultiDrawMode;
 
     private final MultiDrawEmitter emitter;
+
+    /**
+     * Dedicated emitter for sections which are currently animating. Animated sections are drawn
+     * one-by-one after the region batch with their own model offset, since a single region
+     * transform cannot express per-section translations.
+     */
+    private final MultiDrawEmitter individualEmitter = new IndividualDrawEmitter();
 
     private final Reference2ReferenceMap<ChunkPrimitiveType, SharedQuadIndexBuffer> sharedIndexBuffers;
 
@@ -145,6 +158,9 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
             long timestamp = System.nanoTime();
 
+            ChunkAnimationProvider animationProvider = ChunkAnimationProviderHolder.getProvider();
+            float[] animationOffsetBuffer = animationProvider != null ? new float[3] : null;
+
             while (iterator.hasNext()) {
                 ChunkRenderList renderList = iterator.next();
 
@@ -157,38 +173,55 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
                 regions++;
                 long fillStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                fillCommandBuffer(this.emitter, region, storage, renderList, occlusionCamera, renderPass, useBlockFaceCulling && !renderPass.isSorted());
+                List<AnimatedSectionDraw> animatedSections = animationProvider != null ? new ArrayList<>() : null;
+                fillCommandBuffer(this.emitter, region, storage, renderList, occlusionCamera, renderPass,
+                        useBlockFaceCulling && !renderPass.isSorted(), animationProvider, animationOffsetBuffer, animatedSections);
                 if (fillStartNanos != 0L) {
                     fillNanos += System.nanoTime() - fillStartNanos;
                 }
 
-                if (this.emitter.isEmpty()) {
-                    continue;
-                }
-                batches++;
-                commands += this.emitter.getCommandCount();
+                GlTessellation tessellation = null;
+                if (!this.emitter.isEmpty()) {
+                    batches++;
+                    commands += this.emitter.getCommandCount();
 
-                if (!renderPass.isSorted()) {
-                   getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, this.emitter.getIndexBufferSize());
+                    if (!renderPass.isSorted()) {
+                       getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, this.emitter.getIndexBufferSize());
+                    }
+
+                    long tessellationStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
+                    tessellation = this.prepareTessellation(commandList, region);
+                    if (tessellationStartNanos != 0L) {
+                        tessellationNanos += System.nanoTime() - tessellationStartNanos;
+                    }
+
+                    long uniformsStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
+                    setModelMatrixUniforms(shader, region, camera);
+                    shader.setSectionAges(timestamp, region.getSectionLoadTimes());
+                    if (uniformsStartNanos != 0L) {
+                        uniformsNanos += System.nanoTime() - uniformsStartNanos;
+                    }
+
+                    long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
+                    this.emitter.executeBatch(commandList, tessellation, primitiveType);
+                    if (drawStartNanos != 0L) {
+                        drawNanos += System.nanoTime() - drawStartNanos;
+                    }
                 }
 
-                long tessellationStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                var tessellation = this.prepareTessellation(commandList, region);
-                if (tessellationStartNanos != 0L) {
-                    tessellationNanos += System.nanoTime() - tessellationStartNanos;
-                }
-
-                long uniformsStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                setModelMatrixUniforms(shader, region, camera);
-                shader.setSectionAges(timestamp, region.getSectionLoadTimes());
-                if (uniformsStartNanos != 0L) {
-                    uniformsNanos += System.nanoTime() - uniformsStartNanos;
-                }
-
-                long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                this.emitter.executeBatch(commandList, tessellation, primitiveType);
-                if (drawStartNanos != 0L) {
-                    drawNanos += System.nanoTime() - drawStartNanos;
+                // Sections currently playing an animation were excluded from the region batch and
+                // must be drawn individually with their per-section offset applied.
+                if (animatedSections != null && !animatedSections.isEmpty()) {
+                    long animatedStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
+                    if (tessellation == null) {
+                        tessellation = this.prepareTessellation(commandList, region);
+                    }
+                    setModelMatrixUniforms(shader, region, camera);
+                    shader.setSectionAges(timestamp, region.getSectionLoadTimes());
+                    drawAnimatedSections(animatedSections, shader, region, camera, commandList, tessellation, primitiveType, renderPass);
+                    if (animatedStartNanos != 0L) {
+                        drawNanos += System.nanoTime() - animatedStartNanos;
+                    }
                 }
             }
 
@@ -220,7 +253,10 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
                                           ChunkRenderList renderList,
                                           CameraTransform camera,
                                           TerrainRenderPass pass,
-                                          boolean useBlockFaceCulling) {
+                                          boolean useBlockFaceCulling,
+                                          @Nullable ChunkAnimationProvider animationProvider,
+                                          @Nullable float[] animationOffsetBuffer,
+                                          @Nullable List<AnimatedSectionDraw> animatedSections) {
         emitter.clear();
 
         var iterator = renderList.sectionsWithGeometryIterator(pass.isReverseOrder());
@@ -254,9 +290,53 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             slices &= SectionRenderDataUnsafe.getSliceMask(pMeshData);
 
             if (slices != 0) {
+                if (animationProvider != null) {
+                    var section = renderRegion.getSection(sectionIndex);
+                    if (section != null && animationProvider.getSectionOffset(section, animationOffsetBuffer)) {
+                        // Animated sections cannot share the region transform; draw them
+                        // individually after the region batch with their own offset.
+                        animatedSections.add(new AnimatedSectionDraw(sectionIndex, pMeshData, slices,
+                                animationOffsetBuffer[0], animationOffsetBuffer[1], animationOffsetBuffer[2]));
+                        continue;
+                    }
+                }
                 emitter.addDrawCommands(pMeshData, slices, indexPointerMask);
             }
         }
+    }
+
+    /**
+     * Draws sections that are currently animating, one at a time, with the per-section offset
+     * added to the region model offset. The region offset is restored afterwards.
+     */
+    private void drawAnimatedSections(List<AnimatedSectionDraw> animatedSections,
+                                      ChunkShaderInterface shader,
+                                      RenderRegion region,
+                                      CameraTransform camera,
+                                      CommandList commandList,
+                                      GlTessellation tessellation,
+                                      GlPrimitiveType primitiveType,
+                                      TerrainRenderPass pass) {
+        int indexPointerMask = pass.isSorted() ? 0xFFFFFFFF : 0;
+
+        float baseX = getCameraTranslation(region.getOriginX(), camera.intX, camera.fracX);
+        float baseY = getCameraTranslation(region.getOriginY(), camera.intY, camera.fracY);
+        float baseZ = getCameraTranslation(region.getOriginZ(), camera.intZ, camera.fracZ);
+
+        MultiDrawEmitter emitter = this.individualEmitter;
+
+        for (AnimatedSectionDraw draw : animatedSections) {
+            shader.setRegionOffset(baseX + draw.offsetX(), baseY + draw.offsetY(), baseZ + draw.offsetZ());
+            emitter.clear();
+            emitter.addDrawCommands(draw.pMeshData(), draw.slices(), indexPointerMask);
+            emitter.executeBatch(commandList, tessellation, primitiveType);
+        }
+
+        shader.setRegionOffset(baseX, baseY, baseZ);
+    }
+
+    private record AnimatedSectionDraw(int sectionIndex, long pMeshData, int slices,
+                                       float offsetX, float offsetY, float offsetZ) {
     }
 
     private static final int MODEL_UNASSIGNED = ModelQuadFacing.UNASSIGNED.ordinal();
@@ -387,6 +467,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
         this.sharedIndexBuffers.values().forEach(buffer -> buffer.delete(commandList));
         this.emitter.delete();
+        this.individualEmitter.delete();
     }
 }
 
