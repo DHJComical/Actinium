@@ -30,6 +30,7 @@
 | `SDLGPUDisplayBridge.flushPendingMove` | cursorPos 回调只记录坐标，每帧由 SDL pump 合并为 1 个 move 事件 | lwjglxx 输入队列只有 32 个槽，Minecraft 每 tick 才 poll 一次；move 事件流会挤掉按钮事件 → 点击丢失 |
 | `MixinMinecraft.actinium$sdlUpdateDisplay` | `updateDisplay` HEAD 替换：`glfwPollEvents` + `SDL_PumpEvents` + `flushPendingMove` + `Mouse.poll()` + `Keyboard.poll()` + cancel | lwjglxx 在 `Display.update()` 里 poll 输入；SDL 路径替换了 updateDisplay，必须补 poll，否则输入队列永不排空 |
 | `MixinMinecraft` 帧钩子（`beginRenderFrame`/`endStreamingFrame`/`actinium$finishDisplaySwap`） | `onFrameBegin`/`onFrameEnd` 挂到 `runGameLoop` 的 `updateDisplay` 调用前后 | 对齐 Angelica 的 `MixinMinecraft_FrameHook`；present 由帧钩子驱动 |
+| `MixinMinecraft.actinium$sdlDisplayDestroy`（@Redirect `shutdownMinecraftApplet` 里的 `Display.destroy()`） | SDL 模式改调 `SDLGPUDisplayBridge.safeDisplayDestroy()`（仅 `glfwDestroyWindow`），GL 模式反射走原销毁 | LWJGL2 兼容壳的 `Display.destroy()` 先执行 `Display$Window.releaseCallbacks()`，其回调字段在 SDL 路径从不填充 → 每次退出 NPE（壳类对 mixin universe 不可见，`MixinDisplayWindowCompat` 覆盖不到） |
 | `MixinGuiScreenSDLInput.sdlHandleInput` | 接管 `GuiScreen.handleInput`：直接 `while(Mouse.next())` → 按钮按下事件经 `@Invoker` 直调 `mouseClicked`；move/键盘事件走原 `handleMouseInput`/`handleKeyboardInput` | vanilla 的循环里 Forge `GuiScreenEvent.MouseClickedEvent` 会吞掉点击（SDL 事件时序下），所以绕过 Forge 事件门 |
 | `LWJGLServiceProvider` / `SDLGPULWJGLService` | Embeddium 的 `LWJGLService` 桥：所有 GL 调用转发 `BackendManager.RENDER_BACKEND` / `GLStateManager` | 不接这个桥，Embeddium 的 GlShader 会拿到 SENTINEL 指针崩溃 |
 | `glsm/.../PersistentStreamingBuffer`（writeAt/writeAtStart） | memCopy 写 mapped buffer 后调 `RENDER_BACKEND.onPersistentBufferWrite` | SDL 后端的 `mapBufferRange(persistent)` 返回 **CPU staging**（非真实 GPU 映射）；不通知后端，GPU 永远看不到顶点数据 → 所有 persistent 路径的绘制黑屏。OpenGL 后端该调用是空实现，无副作用 |
@@ -101,3 +102,4 @@
 - `8d6f913` docs: sdl-gpu GLFW 兼容层清单
 - `ca1f888` docs: sdl-gpu 上游差异清单
 - `cf9f5dc` fix(sdlgpu): track window focus and keep persistent mappings alive
+- `ff12878` fix(sdlgpu): safe display destroy on shutdown
