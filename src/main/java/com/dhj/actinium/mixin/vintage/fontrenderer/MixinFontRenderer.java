@@ -52,11 +52,14 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
         // Recheck while absent: the splash FontRenderer can run before NFR finishes loading.
         if (actinium$neoFontRenderLoaded == null || !actinium$neoFontRenderLoaded) {
             var indexedMods = Loader.instance().getIndexedModList();
-            actinium$neoFontRenderLoaded = indexedMods != null && indexedMods.containsKey("neofontrender");
-            if (Boolean.getBoolean("actinium.fontDebug")) {
+            boolean loaded = indexedMods != null && indexedMods.containsKey("neofontrender");
+            if (Boolean.getBoolean("actinium.fontDebug")
+                && (actinium$neoFontRenderLoaded == null || loaded != actinium$neoFontRenderLoaded)) {
+                // Log only on state transitions; this check runs for every glyph otherwise.
                 actinium$LOGGER.info("font-batcher-check neofontrender={} renderer={}",
-                    actinium$neoFontRenderLoaded, FontRenderer.class.getName());
+                    loaded, FontRenderer.class.getName());
             }
+            actinium$neoFontRenderLoaded = loaded;
         }
         return actinium$neoFontRenderLoaded;
     }
@@ -108,6 +111,22 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
         }
         if ((argb & 0xfc000000) == 0) {
             argb |= 0xff000000;
+        }
+        if (argb == 0xFF000000) {
+            // Splash font renderers (Modern Splash's SplashFontRenderer) pass color 0 to draw
+            // with the fixed-pipeline current color, which they set to their configured font
+            // color beforehand. Vanilla 1.12.2 renderString forces black for color 0; honor the
+            // intended behavior for splash fonts by sampling the GLSM current color instead.
+            // Sampled before the GLStateManager.glColor4f reset below.
+            int currentArgb = BatchingFontRenderer.readCurrentGlColorAsArgb();
+            boolean splash = angelica$getBatcher().isSplash();
+            if (splash) {
+                argb = currentArgb;
+            }
+            if (Boolean.getBoolean("actinium.fontDebug")) {
+                actinium$LOGGER.info("font-draw-zero text='{}' splash={} glColor=0x{} argbOut=0x{}",
+                    text, splash, Integer.toHexString(currentArgb), Integer.toHexString(argb));
+            }
         }
 
         this.red = (argb >> 16 & 255) / 255.0F;
