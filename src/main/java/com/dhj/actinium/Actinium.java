@@ -1,5 +1,6 @@
 package com.dhj.actinium;
 
+import com.dhj.actinium.compat.chunkanimator.ChunkAnimatorCompat;
 import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
@@ -164,6 +165,7 @@ public class Actinium {
         if (Loader.isModLoaded("neofontrender")) {
             NeoFontRenderCompat.initialize();
         }
+        ChunkAnimatorCompat.install();
 
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());

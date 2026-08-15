@@ -350,6 +350,42 @@ unimined.minecraft {
 }
 
 def compatBridgeRemapOutput = remapCompatBridgeJar.flatMap { it.archiveFile }
+
+/**
+ * Chunk Animator's dev-environment coremod (MCPNames) reads ./../mcp/methods.csv and
+ * ./../mcp/fields.csv relative to the client run directory and crashes at class init when they
+ * are missing. Unimined already downloads and unpacks these MCP stable_39 mappings for its own
+ * remapping/genSources pipeline; copy them into run/mcp so the mod can initialize in dev runs.
+ */
+def chunkAnimatorMcpMappingsDir = layout.projectDirectory.dir('run/mcp').asFile
+
+def prepareChunkAnimatorMcpMappings = tasks.register('prepareChunkAnimatorMcpMappings') {
+    group = 'build'
+    description = 'Copies MCP stable_39 mappings into the run directory for Chunk Animator dev compatibility.'
+    outputs.dir(chunkAnimatorMcpMappingsDir)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        def mcpStableDir = gradle.gradleUserHomeDir.toPath()
+                .resolve('caches/minecraft/de/oceanlabs/mcp/mcp_stable/39')
+                .toFile()
+        def methodsCsv = new File(mcpStableDir, 'methods.csv')
+        def fieldsCsv = new File(mcpStableDir, 'fields.csv')
+        if (!methodsCsv.isFile() || !fieldsCsv.isFile()) {
+            throw new GradleException(
+                "Could not locate MCP stable_39 mappings for Chunk Animator dev compatibility " +
+                "in ${mcpStableDir}. Run the genSources task once so Unimined populates its mappings cache.")
+        }
+        if (!chunkAnimatorMcpMappingsDir.exists() && !chunkAnimatorMcpMappingsDir.mkdirs()) {
+            throw new GradleException("Failed to create MCP mappings directory: ${chunkAnimatorMcpMappingsDir}")
+        }
+        copy {
+            from methodsCsv, fieldsCsv
+            into chunkAnimatorMcpMappingsDir
+        }
+    }
+}
+
 def prepareCompatBridgeRun = tasks.register('prepareCompatBridgeRun') {
     group = 'build'
     description = 'Installs the remapped Celeritas compatibility bridge into the client run directory.'
@@ -379,6 +415,7 @@ def prepareCompatBridgeRun = tasks.register('prepareCompatBridgeRun') {
 tasks.named('preRunClient').configure {
     dependsOn tasks.named('classes')
     dependsOn prepareCompatBridgeRun
+    dependsOn prepareChunkAnimatorMcpMappings
 }
 
 tasks.named('preRunServer').configure {

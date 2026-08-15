@@ -43,6 +43,8 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
 import org.joml.Vector3ic;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProvider;
+import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProviderHolder;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -329,6 +331,10 @@ public abstract class RenderSectionManager {
             renderSection.setPendingUpdate(ChunkUpdateType.INITIAL_BUILD);
         }
 
+        ChunkAnimationProvider animationProvider = ChunkAnimationProviderHolder.getProvider();
+        if (animationProvider != null) {
+            animationProvider.onSectionAdded(renderSection);
+        }
 
         this.markGraphDirty();
     }
