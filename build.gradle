@@ -319,6 +319,7 @@ unimined.minecraft {
             args += ['--username', propertyString('minecraft_username')]
             if (name == 'clientSdl') {
                 jvmArgs += '-Dangelica.sdlgpu.enable=true'
+                jvmArgs += '-Dangelica.sdlgpu.debug=true'
             }
             def extraArgs = propertyString('extra_jvm_args')
             if (extraArgs != null && !extraArgs.trim().isEmpty()) {
@@ -526,7 +527,7 @@ afterEvaluate {
         runClientSdl.setClasspath(runClient.getClasspath())
         runClientSdl.setWorkingDir(runClient.getWorkingDir())
         runClientSdl.setArgs(runClient.getArgs())
-        runClientSdl.setJvmArgs(runClient.getJvmArgs() + ['-Dangelica.sdlgpu.enable=true'])
+        runClientSdl.setJvmArgs(runClient.getJvmArgs() + ['-Dangelica.sdlgpu.enable=true', '-Dangelica.sdlgpu.debug=true'])
         runClientSdl.setEnvironment(runClient.getEnvironment())
         runClientSdl.setJavaVersion(runClient.getJavaVersion())
         runClientSdl.getProperties().putAll(runClient.getProperties())

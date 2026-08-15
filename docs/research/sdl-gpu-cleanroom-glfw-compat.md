@@ -25,7 +25,7 @@
 |---|---|---|
 | `SDLGPUGate.createSDLGPUDisplay` | 用 `Minecraft.displayWidth/Height` 建 GLFW_NO_API 窗口（**不用 vidMode**），`adoptWindow` 后 `claimPlatformWindow` | vidMode 尺寸会与 Minecraft 的 framebuffer/视口错位，画面只占左上角。窗口尺寸必须匹配 `displayWidth` |
 | `SDLGPUDisplayBridge.adoptWindow` | VarHandle 镜像 lwjglxx `Display` 静态字段（handle/created/width/height/fbSize/title/resizable） | lwjglxx 的 `Display.*` 查询在绕过创建后全部失效 |
-| `SDLGPUDisplayBridge.installLwjglxWindowCallbacks` | **自建 GLFW 回调**（cursor/button/scroll/key/char）转发到 lwjglxx 公开输入 API（`Mouse.addMoveEvent` 等），反射写入 `Display$Window` 静态字段后调 `setCallbacks()` | lwjglxx 的回调对象在 `Display.create()` 里创建，被绕过后字段为 null；必须 setAccessible 才能进入 package-private 内部类。回调对象要强引用（GLFW 经 native 指针回调） |
+| `SDLGPUDisplayBridge.installLwjglxWindowCallbacks` | **自建 GLFW 回调**（cursor/button/scroll/key/char/**focus**）转发到 lwjglxx 公开输入 API（`Mouse.addMoveEvent` 等），反射写入 `Display$Window` 静态字段后调 `setCallbacks()`；**焦点回调镜像 `displayFocused`**（lwjglxx 的 `Display.isActive()` 只读该字段） | lwjglxx 的回调对象在 `Display.create()` 里创建，被绕过后字段为 null；必须 setAccessible 才能进入 package-private 内部类。回调对象要强引用（GLFW 经 native 指针回调）。**焦点不镜像则 `Display.isActive()` 恒 false → `pauseOnLostFocus` 自动弹 Esc 菜单** |
 | `SDLGPUDisplayBridge.initializeLwjglxInput` | 补调 `Mouse.create()` / `Keyboard.create()` | 两者在 `Display.create()` 里初始化 |
 | `SDLGPUDisplayBridge.flushPendingMove` | cursorPos 回调只记录坐标，每帧由 SDL pump 合并为 1 个 move 事件 | lwjglxx 输入队列只有 32 个槽，Minecraft 每 tick 才 poll 一次；move 事件流会挤掉按钮事件 → 点击丢失 |
 | `MixinMinecraft.actinium$sdlUpdateDisplay` | `updateDisplay` HEAD 替换：`glfwPollEvents` + `SDL_PumpEvents` + `flushPendingMove` + `Mouse.poll()` + `Keyboard.poll()` + cancel | lwjglxx 在 `Display.update()` 里 poll 输入；SDL 路径替换了 updateDisplay，必须补 poll，否则输入队列永不排空 |
@@ -35,7 +35,7 @@
 | `glsm/.../PersistentStreamingBuffer`（writeAt/writeAtStart） | memCopy 写 mapped buffer 后调 `RENDER_BACKEND.onPersistentBufferWrite` | SDL 后端的 `mapBufferRange(persistent)` 返回 **CPU staging**（非真实 GPU 映射）；不通知后端，GPU 永远看不到顶点数据 → 所有 persistent 路径的绘制黑屏。OpenGL 后端该调用是空实现，无副作用 |
 | `Device.claimWindow` | 加 `SDL_ShowWindow` | SDL3 Vulkan 的 swapchain acquire 在窗口未 SHOWN 时无限阻塞 |
 | `FrameManager.presentBlit` / `blitNamedFramebuffer` | `drawFramebuffer==0` 时目标用 `finalTarget` | SDL 无默认 framebuffer 语义 |
-| `build.gradle` | `runClientSdl` 任务：继承 `runClient` 的完整启动配置（含 `${mcp_to_srg}` 属性表）+ `-Dangelica.sdlgpu.enable=true` | Unimined 只对固定名 `client`/`server` 应用完整 run 模板 |
+| `build.gradle` | `runClientSdl` 任务：继承 `runClient` 的完整启动配置（含 `${mcp_to_srg}` 属性表）+ `-Dangelica.sdlgpu.enable=true`（**调试期另加 `-Dangelica.sdlgpu.debug=true` 启用 Vulkan validation，见「调试期临时改动」**） | Unimined 只对固定名 `client`/`server` 应用完整 run 模板 |
 
 ## 已知的「不规范」点（撤除时重点核对）
 
@@ -47,17 +47,25 @@
    依赖 Forge 事件的 mod 在 SDL 路径上收不到点击事件。
 4. **hover 无效**（按钮 hover 变色不生效）——用户已知悉、暂不处理；撤除时若
    CRL 提供标准输入，应验证 hover 是否恢复。
-5. **`MixinDisplayCompat` 的 target `org.lwjgl.opengl.Display` 不存在**（Cleanroom
-   用 lwjglxx，没有 lwjglx 的 Display 类）→ CleanMix 启动警告「target not found」，
-   无害但应清理。
+5. ~~`MixinDisplayCompat` 的 target `org.lwjgl.opengl.Display` 不存在~~ **已删除**
+   （2026-08-15）：mixin universe 看不到 lwjglx-1.0.0 的 LWJGL2 兼容壳类，注入从未
+   生效；改为在 `SDLGPUDisplayBridge.adoptWindow` 里**反射镜像壳的
+   `Display$Window.handle`**（壳的 `getWindow()` 供 DWM/taskbar 集成取句柄），
+   并删除 `MixinDisplayCompat`。
 6. **`glfwGetWindowUserPointer(0)` 等 GLFW 窗口句柄相关代码**（曾用于诊断）已清理。
 7. 依赖 `Display.getPixelScaleFactor()`、`Display.getHeight()` 等 lwjglxx 语义做
    坐标换算，与原生 SDL 窗口的坐标语义未必一致。
+8. **焦点跟踪是自补的**：lwjglxx 的 `windowFocusCallback` 字段从不初始化，
+   `displayFocused` 只在 `Display.create()` 赋一次初值（GL 模式靠
+   `ForgeEarlyConfig.WINDOW_START_FOCUSED`），此后永不更新；Actinium 自装
+   focus 回调并镜像 lwjglxx 与 LWJGL2 壳两个 `displayFocused`。CRL 原生 SDL
+   窗口后焦点由 CRL 管理，此镜像应删除。
 
 ## CRL 换 SDL 窗口后的撤除计划（建议顺序）
 
 1. **删除** `SDLGPUDisplayBridge` 的 Display 镜像 + 自建回调 + `flushPendingMove` +
-   `initializeLwjglxInput`（若 CRL 原生 SDL 窗口自带输入/Display 查询）。
+   `initializeLwjglxInput`（若 CRL 原生 SDL 窗口自带输入/Display 查询）——**含焦点
+   回调与两个 `displayFocused` 镜像**（见不规范点 8）。
 2. **简化** `MixinMinecraft.actinium$sdlUpdateDisplay`：事件处理交给 CRL/SDL，
    只保留 present 相关（或整个移除，帧钩子保留）。
 3. **删除** `MixinGuiScreenSDLInput`（若 CRL 输入不触发 Forge 事件吞点击问题）；
@@ -68,8 +76,19 @@
      语义不变）
    - 窗口尺寸匹配原则（SDL 窗口尺寸 = `displayWidth/Height`）
    - `Device.claimWindow` 的 `SDL_ShowWindow`、`blitNamedFramebuffer` finalTarget 修复
-5. **清理** `MixinDisplayCompat`（target 不存在）。
+5. **清理** `MixinDisplayCompat`（target 不存在）——**已完成**（2026-08-15，见不规范点 5）。
 6. 回归验证：主菜单显示、鼠标/键盘、点击切换界面、窗口 resize、进入世界渲染。
+
+## 调试期临时改动（撤除时一并恢复）
+
+以下改动与 GLFW 兼容层无直接关系，是为调试 SDL 后端而临时加的，**调试结束后应
+删除或恢复**：
+
+| 改动 | 位置 | 内容 | 恢复方法 |
+|---|---|---|---|
+| 进世界自动打开 F3 面板 | `MixinMinecraft`（`actinium$debugPanelOpenedForWorld` 字段 + `actinium$autoOpenDebugPanel` 注入） | 每次世界加载完成后置 `gameSettings.showDebugInfo = true`（SDL 模式下游戏内键盘无效，无法手动按 F3） | 移除字段与注入方法（约 12 行） |
+| Vulkan validation | `build.gradle`（`runClientSdl` 两处 JVM 参数） | `-Dangelica.sdlgpu.debug=true`；启动日志出现 “Validation layers enabled” | 移除两处该参数 |
+| 第三方渲染 mod 改为仅编译 | `gradle/scripts/dependencies.gradle`（注释 “compile-only while debugging the SDL GPU backend”） | DH / JourneyMap / StellarCore：`modImplementation`→`modCompileOnly`；celeritas-dynamic-lights / extra / leafculling：`modRuntimeOnly`→`modCompileOnly` | 改回 `modImplementation` / `modRuntimeOnly`（加载 mod 数 13→19） |
 
 ## 相关提交
 
@@ -79,3 +98,6 @@
 - `1868a52` / `382994f` build: runClientSdl 启动配置
 - `52be235` fix(sdl-gpu): present menu frame via persistent buffer sync and window size match
 - `e69c638` fix(sdl-gpu): restore mouse and keyboard input on the SDL window
+- `8d6f913` docs: sdl-gpu GLFW 兼容层清单
+- `ca1f888` docs: sdl-gpu 上游差异清单
+- `cf9f5dc` fix(sdlgpu): track window focus and keep persistent mappings alive

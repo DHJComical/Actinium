@@ -41,8 +41,13 @@
 - 上游无此文件（lwjgl3ify 环境 Display 状态与输入天然一致）。
 - Actinium 职责：
   1. VarHandle 镜像 lwjglxx `Display` 静态字段（handle/created/width/height/
-     framebufferSize/title/resizable）；
-  2. 自建 GLFW 回调（cursor/button/scroll/key/char）转发 lwjglxx 公开输入 API；
+     framebufferSize/title/resizable）**以及 LWJGL2 兼容壳的 `Display$Window.handle`**
+     （壳的 `getWindow()` 供 DWM/taskbar 集成取句柄；mixin universe 看不到壳类，
+     只能反射镜像）；
+  2. 自建 GLFW 回调（cursor/button/scroll/key/char/**focus**）转发 lwjglxx 公开
+     输入 API；**focus 回调镜像两个 `displayFocused` 字段**（lwjglxx 的
+     `Display.isActive()` 只读该字段且从不更新；不镜像则 `pauseOnLostFocus` 会
+     自动弹出 Esc 菜单）；
   3. 补调 `Mouse.create()` / `Keyboard.create()`；
   4. `flushPendingMove()`：cursor 移动合并为每帧 1 个事件。
 - 理由：绕过 lwjglxx 窗口创建 = 绕过了它的窗口初始化；不补齐则 `Display.*`
@@ -94,8 +99,20 @@
 - **`blitNamedFramebuffer`：`drawFramebuffer == 0` 时目标纹理用
   `frameManager.finalTarget().colorTexture()`**（SDL 没有默认 framebuffer 的
   FBO 0 语义；上游直接 `getFbo(0)` 返回 null）。
+- **`unmapBuffer` 不再释放 persistent mapping**（2026-08-15 修复）：上游行为未
+  核验；Actinium 实现以 GL 语义为准——persistent mapping 存活到 buffer 删除或
+  `mapBufferRange(persistent)` 重映射。原实现 `unmapBuffer` 无条件
+  `removePersistentMapping` + `releasePersistentStaging`，而 glsm 的
+  `PersistentStreamingBuffer` 与 Embeddium `MappedStagingBuffer` 持有 persistent
+  staging 持续写入，`StreamingUploader` 每帧 map+unmap 会命中并 memFree 仍在
+  使用的 staging → **use-after-free native 崩溃**（进世界渲染开始后 1-2 秒，
+  `StubRoutines::jbyte_disjoint_arraycopy`）。
+- **`releasePersistentStaging` 幂等化**（`PersistentMapping.markReleased`）：多条
+  释放路径（remap swap / buffer delete）可能重叠，防止同一 staging 被重复
+  `memFree`。
 - 新增一次性「first draw/bindFramebuffer」诊断日志与 dropped-draw 细分警告
   （`frameInactive/rpInactive/pipeline/eboMissing/fan` 计数），用于定位绘制丢失。
+  （每秒帧统计诊断 `t+Ns frame=... drawsTotal=...` 已随调试结束删除。）
 
 ### 7. `FrameManager` / `DrawDispatch` —— present 错误日志 + dropped 细分
 
@@ -134,7 +151,9 @@
 
 - **CRL 换原生 SDL 窗口后应消失**的差异：1-5（窗口创建/Display 桥/输入/执行器/
   capabilities shim）→ 见 `sdl-gpu-cleanroom-glfw-compat.md` 的撤除计划。
-- **应长期保留**：6 的 `blitNamedFramebuffer` finalTarget 修复、8（GLSL 保留字）、
-  9（persistent 写入通知）、7（dropped 细分诊断）、6 的 `isActive()` 时序注释。
+- **应长期保留**：6 的 `blitNamedFramebuffer` finalTarget 修复、**6 的
+  `unmapBuffer` persistent 生命周期修复与 `releasePersistentStaging` 幂等**、
+  8（GLSL 保留字）、9（persistent 写入通知）、7（dropped 细分诊断）、6 的
+  `isActive()` 时序注释。
 - 回归验证清单：主菜单显示、鼠标/键盘、点击切换界面、窗口 resize、进入世界
   渲染、`glBlitFramebuffer`（FBO0→finalTarget）路径。

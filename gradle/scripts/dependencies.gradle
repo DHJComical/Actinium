@@ -62,12 +62,12 @@ dependencies {
 
 //    modRuntimeOnly 'curse.maven:catalogue-vintage-1465746:7872634'
 //    compileOnly 'maven.modrinth:DistantHorizonsApi:5.1.0'
-    modImplementation "curse.maven:distant-horizons-508933:8389134"  // Distant Horizons 3.2.0-b
+    modCompileOnly "curse.maven:distant-horizons-508933:8389134"  // Distant Horizons 3.2.0-b — compile-only while debugging the SDL GPU backend
     compileOnly 'curse.maven:xaeros-minimap-263420:6310964'
     compileOnly 'curse.maven:better-hud-286066:3327633'
     compileOnly 'curse.maven:voxelmap-225179:3029445'
 
-    modImplementation 'curse.maven:journeymap-32274:5172461'  // JourneyMap 1.12.2-5.7.1p3 (StellarCore 1.6.0 references common.feature.PlayerRadarManager; 6.0.3 moved it to common.util and crashes)
+    modCompileOnly 'curse.maven:journeymap-32274:5172461'  // JourneyMap 1.12.2-5.7.1p3 — compile-only while debugging the SDL GPU backend (StellarCore 1.6.0 references common.feature.PlayerRadarManager; 6.0.3 moved it to common.util and crashes)
 
     compileOnly 'curse.maven:scalingguis-319656:5150678'
     compileOnly 'curse.maven:quark-243121:2924091'
@@ -77,7 +77,7 @@ dependencies {
 //    modImplementation 'curse.maven:nether-api-1306115:8201135'
 //    modRuntimeOnly 'curse.maven:unseens-nether-backport-1109447:7694245'
     modCompileOnly 'curse.maven:gibbed-1480667:7737413'
-    modImplementation 'curse.maven:stellarcore-1064321:8406201'
+    modCompileOnly 'curse.maven:stellarcore-1064321:8406201'  // StellarCore — compile-only while debugging the SDL GPU backend
 
     // Draconic Evolution
     modCompileOnly 'maven.modrinth:draconic-evolution:2.3.28.354'
@@ -86,9 +86,9 @@ dependencies {
     modCompileOnly 'curse.maven:lumenized-1234162:6734060'
     modCompileOnly "curse.maven:redstoneflux-270789:2920436"
 
-    modRuntimeOnly "curse.maven:celeritas-dynamic-lights-1313831:8387313"
-    modRuntimeOnly "curse.maven:celeritas-extra-1451214:8362538"
-    modRuntimeOnly "curse.maven:celeritasleafculling-1449111:7550650"
+    modCompileOnly "curse.maven:celeritas-dynamic-lights-1313831:8387313"  // compile-only while debugging the SDL GPU backend
+    modCompileOnly "curse.maven:celeritas-extra-1451214:8362538"  // compile-only while debugging the SDL GPU backend
+    modCompileOnly "curse.maven:celeritasleafculling-1449111:7550650"  // compile-only while debugging the SDL GPU backend
 
     modCompileOnly "curse.maven:ichunutil-229060:2801262"
     modCompileOnly "curse.maven:mobdismemberment-229067:2487081"
