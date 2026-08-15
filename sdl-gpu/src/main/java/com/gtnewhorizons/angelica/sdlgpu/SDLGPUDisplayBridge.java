@@ -2,6 +2,8 @@ package com.gtnewhorizons.angelica.sdlgpu;
 
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.sdlgpu.device.SDLDrawable;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.sdl.SDLEvents;
 import org.lwjglx.opengl.Display;
@@ -24,7 +26,23 @@ import java.lang.invoke.VarHandle;
 public final class SDLGPUDisplayBridge {
     private SDLGPUDisplayBridge() {}
 
+    private static final Logger LOG = LogManager.getLogger("Angelica-SDLGPU");
     private static volatile boolean drawableInstalled;
+    private static volatile double pendingMoveX;
+    private static volatile double pendingMoveY;
+    private static volatile boolean hasPendingMove;
+
+    /**
+     * Delivers the coalesced cursor position as a single move event. Called once per frame from
+     * the SDL display pump, before lwjglxx's Mouse.poll(), so the input queue never fills with
+     * move events and button events are not dropped.
+     */
+    public static void flushPendingMove() {
+        if (hasPendingMove) {
+            hasPendingMove = false;
+            org.lwjglx.input.Mouse.addMoveEvent(pendingMoveX, pendingMoveY);
+        }
+    }
 
     private static final VarHandle DISPLAY_DRAWABLE_FIELD;
     private static final VarHandle SHARED_DRAWABLE_WRAPPED_FIELD;
@@ -123,6 +141,91 @@ public final class SDLGPUDisplayBridge {
         DISPLAY_FB_HEIGHT_FIELD.set(fbHeight[0]);
         DISPLAY_TITLE_FIELD.set(title);
         DISPLAY_RESIZABLE_FIELD.set(true);
+        installLwjglxWindowCallbacks();
+        initializeLwjglxInput();
+    }
+
+    /**
+     * lwjglxx creates and initializes Mouse and Keyboard inside {@code Display.create()}, which the
+     * SDL GPU backend bypasses (no GL context is created). Without this, the input queues never
+     * fill and the mouse/keyboard are dead even though the window callbacks are installed.
+     */
+    private static void initializeLwjglxInput() {
+        try {
+            org.lwjglx.input.Mouse.create();
+        } catch (Throwable t) {
+            LOG.error("Failed to initialize lwjglxx Mouse; mouse input will not work", t);
+        }
+        try {
+            org.lwjglx.input.Keyboard.create();
+        } catch (Throwable t) {
+            LOG.error("Failed to initialize lwjglxx Keyboard; keyboard input will not work", t);
+        }
+    }
+
+    /**
+     * Installs lwjglxx's GLFW callbacks on the adopted window. lwjglxx creates the callback
+     * objects inside its own {@code Display.create()} path, which the SDL GPU backend bypasses
+     * (no GL context is created); without them the mouse and keyboard are dead and window resize
+     * is not propagated to Minecraft. We build equivalent callbacks that forward into lwjglxx's
+     * public input API (Mouse.addMoveEvent/..., Keyboard.addGlfwKeyEvent/...) and install them.
+     */
+    private static void installLwjglxWindowCallbacks() {
+        try {
+            final Class<?> windowClass = Class.forName("org.lwjglx.opengl.Display$Window");
+            // The callback objects must stay strongly reachable: GLFW calls into them through
+            // native function pointers, and lwjgl detaches a callback when its Java object is
+            // collected. Storing them in lwjglxx's Window static fields keeps them alive and is
+            // exactly what lwjglxx itself does.
+            final org.lwjgl.glfw.GLFWCursorPosCallback cursorPos = new org.lwjgl.glfw.GLFWCursorPosCallback() {
+                @Override public void invoke(long window, double xpos, double ypos) {
+                    // Coalesce moves to one event per frame: lwjglxx's input queue holds only 32
+                    // events and Minecraft polls it once per tick, so an unbounded stream of move
+                    // events can overflow the queue and drop button events, making clicks dead.
+                    pendingMoveX = xpos;
+                    pendingMoveY = ypos;
+                    hasPendingMove = true;
+                }
+            };
+            final org.lwjgl.glfw.GLFWMouseButtonCallback mouseButton = new org.lwjgl.glfw.GLFWMouseButtonCallback() {
+                @Override public void invoke(long window, int button, int action, int mods) {
+                    org.lwjglx.input.Mouse.addButtonEvent(button, action != org.lwjgl.glfw.GLFW.GLFW_RELEASE);
+                }
+            };
+            final org.lwjgl.glfw.GLFWScrollCallback scroll = new org.lwjgl.glfw.GLFWScrollCallback() {
+                @Override public void invoke(long window, double xoffset, double yoffset) {
+                    org.lwjglx.input.Mouse.addWheelEvent(yoffset);
+                }
+            };
+            final org.lwjgl.glfw.GLFWKeyCallback key = new org.lwjgl.glfw.GLFWKeyCallback() {
+                @Override public void invoke(long window, int key, int scancode, int action, int mods) {
+                    final char ascii = (key > 32 && key <= 96) ? org.lwjglx.input.KeyCodes.glfwToASCII(key) : (char) (key & 31);
+                    org.lwjglx.input.Keyboard.addGlfwKeyEvent(window, key, scancode, action, mods, ascii);
+                }
+            };
+            final org.lwjgl.glfw.GLFWCharCallback ch = new org.lwjgl.glfw.GLFWCharCallback() {
+                @Override public void invoke(long window, int codepoint) {
+                    org.lwjglx.input.Keyboard.addCharEvent(0, (char) codepoint);
+                }
+            };
+            setWindowCallbackField(windowClass, "cursorPosCallback", cursorPos);
+            setWindowCallbackField(windowClass, "mouseButtonCallback", mouseButton);
+            setWindowCallbackField(windowClass, "scrollCallback", scroll);
+            setWindowCallbackField(windowClass, "keyCallback", key);
+            setWindowCallbackField(windowClass, "charCallback", ch);
+            final java.lang.reflect.Method setCallbacks = windowClass.getMethod("setCallbacks");
+            setCallbacks.setAccessible(true);
+            setCallbacks.invoke(null);
+            LOG.info("lwjglxx input callbacks installed on SDL window");
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOG.error("Failed to install lwjglxx window callbacks; input will not work", e);
+        }
+    }
+
+    private static void setWindowCallbackField(Class<?> windowClass, String name, Object callback) throws ReflectiveOperationException {
+        final java.lang.reflect.Field field = windowClass.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(null, callback);
     }
 
     public static void ensureDrawableInstalled() {

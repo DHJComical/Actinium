@@ -16,6 +16,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.common.Loader;
 import org.embeddedt.embeddium.impl.render.frame.RenderAheadManager;
 import org.lwjgl.glfw.GLFW;
+import org.lwjglx.input.Keyboard;
+import org.lwjglx.input.Mouse;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -129,6 +131,11 @@ public class MixinMinecraft {
         if (SDLGPUGate.isActive()) {
             GLFW.glfwPollEvents();
             SDLGPUDisplayBridge.pumpEvents();
+            SDLGPUDisplayBridge.flushPendingMove();
+            // lwjglxx drains Mouse/Keyboard inside Display.update(); the SDL path replaces that
+            // method body, so poll here or the input queues never drain and the game sees no input.
+            Mouse.poll();
+            Keyboard.poll();
             ci.cancel();
         }
     }
