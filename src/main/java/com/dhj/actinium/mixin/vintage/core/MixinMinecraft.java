@@ -7,6 +7,7 @@ import com.dhj.actinium.gui.ActiniumWindowModeController;
 import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
 import com.dhj.actinium.render.EndPortalCompositeRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
+import com.gtnewhorizons.angelica.config.SystemProperties;
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import com.gtnewhorizons.angelica.sdlgpu.SDLGPUDisplayBridge;
@@ -22,6 +23,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -178,6 +180,30 @@ public class MixinMinecraft {
     @Inject(method = "shutdownMinecraftApplet", at = @At("RETURN"))
     private void actinium$closeFlightRecorder(CallbackInfo ci) {
         GlFlightRecording.closeNormally();
+    }
+
+    /**
+     * The LWJGL2 compatibility shim's {@code Display.destroy()} NPEs on the SDL backend: its
+     * {@code Display$Window.releaseCallbacks()} frees every GLFW callback field unconditionally,
+     * and those fields are never populated on the SDL path. The shim classes are invisible to the
+     * mixin universe, so redirect the call site instead. {@code SDLGPUGate.isActive()} already
+     * reports false at shutdown (the backend is torn down first), so key off the static config.
+     */
+    @Redirect(
+            method = "shutdownMinecraftApplet",
+            at = @At(value = "INVOKE", target = "Lorg/lwjgl/opengl/Display;destroy()V", remap = false),
+            remap = false
+    )
+    private static void actinium$sdlDisplayDestroy() {
+        if (SystemProperties.USE_SDL_GPU && SDLGPUGate.isSDLGPUAvailable()) {
+            SDLGPUDisplayBridge.safeDisplayDestroy();
+        } else {
+            try {
+                Class.forName("org.lwjgl.opengl.Display").getMethod("destroy").invoke(null);
+            } catch (ReflectiveOperationException e) {
+                org.apache.logging.log4j.LogManager.getLogger("SDL-INPUT").error("Failed to destroy display", e);
+            }
+        }
     }
 
     @Unique

@@ -198,6 +198,27 @@ public final class SDLGPUDisplayBridge {
     }
 
     /**
+     * Safe equivalent of the LWJGL2 {@code Display.destroy()} shutdown path for the SDL backend.
+     *
+     * <p>Minecraft's {@code shutdownMinecraftApplet()} calls {@code Display.destroy()} in a
+     * finally block. The LWJGL2 compatibility shim's {@code destroy()} first runs
+     * {@code Display$Window.releaseCallbacks()}, which frees every GLFW callback field
+     * unconditionally; those fields are never populated on the SDL path, so the shutdown NPEs.
+     * The shim classes are invisible to the mixin universe, so the call is redirected here
+     * instead: just destroy the GLFW window (GLFW releases the callbacks when the window is
+     * destroyed) and clear the mirrored state. GLFW itself is still initialized by this point.</p>
+     */
+    public static void safeDisplayDestroy() {
+        final long window = (long) WINDOW_HANDLE_FIELD.get();
+        if (window != 0) {
+            GLFW.glfwDestroyWindow(window);
+        }
+        DISPLAY_CREATED_FIELD.set(false);
+        DISPLAY_WIDTH_FIELD.set(0);
+        DISPLAY_HEIGHT_FIELD.set(0);
+    }
+
+    /**
      * lwjglxx creates and initializes Mouse and Keyboard inside {@code Display.create()}, which the
      * SDL GPU backend bypasses (no GL context is created). Without this, the input queues never
      * fill and the mouse/keyboard are dead even though the window callbacks are installed.
