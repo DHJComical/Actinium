@@ -6133,6 +6133,15 @@ public class GLStateManager {
         RENDER_BACKEND.getActiveUniform(program, index, length, size, type, name);
     }
 
+    public static String glGetActiveUniform(int program, int index, int maxLength) {
+        // Legacy convenience form returning the active uniform name. Third-party mods
+        // (e.g. HammerLib) call GL20.glGetActiveUniform(program, index, maxLength) ->
+        // String, which the GL redirector rewrites to this class, so the same signature
+        // must exist here or the call fails with NoSuchMethodError during mod init.
+        IntBuffer sizeType = BufferUtils.createIntBuffer(2);
+        return RENDER_BACKEND.getActiveUniform(program, index, maxLength, sizeType);
+    }
+
     public static void glGetAttachedShaders(int program, IntBuffer count, IntBuffer shaders) {
         RENDER_BACKEND.getAttachedShaders(program, count, shaders);
     }
