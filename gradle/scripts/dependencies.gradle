@@ -110,6 +110,9 @@ dependencies {
     modCompileOnly "curse.maven:forgelin-continuous-456403:8248535"
     modCompileOnly "curse.maven:rlfoliage-970462:7645701"
 
+    // HammerLib 12.2.66 (issue #40: its GL20.glGetActiveUniform(int, int, int) -> String call is redirected to
+    // GLSM GLStateManager, which must expose the same descriptor)
+    modImplementation "maven.modrinth:hammer-lib:B9uVCQjP"
     // Extra Utilities 2 1.9.9 (issue #48: its GLStateAttributes GUI state snapshot reads the stale vanilla
     // GlStateManager mirror under GLSM; the mixin re-reads live GL state)
     modImplementation "curse.maven:extra-utilities-2-225561:2678374"
