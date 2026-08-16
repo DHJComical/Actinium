@@ -13,6 +13,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        # Full history + tags: the build derives the version prefix from the nearest git tag
+        # (git describe), which fails on the default shallow checkout and silently falls back
+        # to gradle.properties mod_version.
+        fetch-depth: 0
     - name: Set up JDK
       uses: actions/setup-java@v5
       with:
