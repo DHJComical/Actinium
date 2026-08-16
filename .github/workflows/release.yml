@@ -12,6 +12,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history + tags: the build derives the version from git tags (git describe),
+          # which fails on the default shallow checkout even when triggered by a tag push.
+          fetch-depth: 0
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:
