@@ -65,7 +65,7 @@ dependencies {
     modImplementation "curse.maven:distant-horizons-508933:8389134"  // Distant Horizons 3.2.0-b
     compileOnly 'curse.maven:xaeros-minimap-263420:6310964'
     compileOnly 'curse.maven:better-hud-286066:3327633'
-    compileOnly 'curse.maven:voxelmap-225179:3029445'
+    compileOnly 'curse.maven:voxelmap-225179:3029445'  // issue #34: VoxelMap minimap compatibility (mixins.actinium.voxelmap.json, conditional on mod presence)
 
     modImplementation 'curse.maven:journeymap-32274:5172461'  // JourneyMap 1.12.2-5.7.1p3 (StellarCore 1.6.0 references common.feature.PlayerRadarManager; 6.0.3 moved it to common.util and crashes)
 
@@ -92,11 +92,14 @@ dependencies {
 
     modImplementation 'curse.maven:chunk-animator-236484:3850023'
 
-    modCompileOnly "curse.maven:ichunutil-229060:2801262"
+    modImplementation "curse.maven:ichunutil-229060:2801262"  // dev-verifies mixins.actinium.ichunutil.json (issue #39)
     modCompileOnly "curse.maven:mobdismemberment-229067:2487081"
 
 
     modCompileOnly 'curse.maven:revo-font-1617673:8586768'
+    // Biomes O' Plenty 7.0.1.2445 (issue #32: it swaps GuiMainMenu.titlePanoramaPaths for its own title
+    // panorama; the GTNH skybox renderer must read the swapped field instead of hard-coded vanilla paths)
+    modImplementation "curse.maven:biomes-o-plenty-220318:3558882"
     modCompileOnly 'curse.maven:revo-ui-1620532:8593682'
     modCompileOnly('com.cleanroommc:modularui:3.1.6') { transitive = false }
 
@@ -110,4 +113,7 @@ dependencies {
     // HammerLib 12.2.66 (issue #40: its GL20.glGetActiveUniform(int, int, int) -> String call is redirected to
     // GLSM GLStateManager, which must expose the same descriptor)
     modImplementation "maven.modrinth:hammer-lib:B9uVCQjP"
+    // Extra Utilities 2 1.9.9 (issue #48: its GLStateAttributes GUI state snapshot reads the stale vanilla
+    // GlStateManager mirror under GLSM; the mixin re-reads live GL state)
+    modImplementation "curse.maven:extra-utilities-2-225561:2678374"
 }

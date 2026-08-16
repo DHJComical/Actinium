@@ -34,7 +34,9 @@ class MixinLateTest {
                 "mixins.actinium.lumenized.json",
                 "mixins.actinium.revoui.json",
                 "mixins.actinium.betterfoliage.json",
-                "mixins.actinium.ccl.json"
+                "mixins.actinium.ccl.json",
+                "mixins.actinium.voxelmap.json"
+                "mixins.actinium.extrautils2.json"
             ),
             Set.copyOf(MixinLate.configsFor(modId -> true))
         );
