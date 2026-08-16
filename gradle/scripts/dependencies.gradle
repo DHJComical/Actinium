@@ -97,6 +97,9 @@ dependencies {
 
 
     modCompileOnly 'curse.maven:revo-font-1617673:8586768'
+    // Biomes O' Plenty 7.0.1.2445 (issue #32: it swaps GuiMainMenu.titlePanoramaPaths for its own title
+    // panorama; the GTNH skybox renderer must read the swapped field instead of hard-coded vanilla paths)
+    modImplementation "curse.maven:biomes-o-plenty-220318:3558882"
     modCompileOnly 'curse.maven:revo-ui-1620532:8593682'
     modCompileOnly('com.cleanroommc:modularui:3.1.6') { transitive = false }
 
