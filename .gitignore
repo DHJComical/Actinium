@@ -36,3 +36,7 @@ gradle-app.setting
 /actinium-scratchpad/
 /.codex/
 /docs/implementation-differences/
+
+# Dev-run artifacts
+assets/
+*.log
