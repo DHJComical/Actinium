@@ -30,6 +30,13 @@ public class PropertiesPreprocessor {
 		final Map<String, String> stringValues = getStringValues(shaderPackOptions);
 
 		try (Preprocessor pp = new Preprocessor()) {
+			// Install a listener before adding macros: jcpp throws LexerException for lexer warnings
+			// (e.g. "Decimal constant starts with 0, but not octal") only when no listener is set.
+			// Shader packs such as Complementary Unbound r5.8.1 trigger such warnings in macro values,
+			// and Iris treats a LexerException here as a fatal pack load failure, breaking shader
+			// toggling. With a listener installed the warning is logged and processing continues.
+			pp.setListener(new PropertiesCommentListener());
+
 			for (String value : booleanValues) {
 				pp.addMacro(value);
 			}
@@ -60,6 +67,9 @@ public class PropertiesPreprocessor {
 		}
 
 		final Preprocessor preprocessor = new Preprocessor();
+		// See the comment in the other preprocessSource overload: without a listener, jcpp turns lexer
+		// warnings into LexerExceptions, which must not be fatal for shader pack properties.
+		preprocessor.setListener(new PropertiesCommentListener());
 
 		try {
 			for (StringPair envDefine : environmentDefines) {
