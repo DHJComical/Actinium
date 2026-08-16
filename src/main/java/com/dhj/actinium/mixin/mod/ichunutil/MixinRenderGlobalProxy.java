@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = RenderGlobalProxy.class, remap = false)
 public class MixinRenderGlobalProxy {
-    @Inject(method = "loadRenderers", at = @At("TAIL"))
+    @Inject(method = "loadRenderers", remap = true, at = @At("TAIL"))
     private void actinium$reloadWorldRenderer(CallbackInfo ci) {
         ActiniumWorldRenderer renderer = SimpleWorldRenderer.Provider.getWorldRenderer(this);
         if (!renderer.isRenderingWorld(Minecraft.getMinecraft().world)) {
