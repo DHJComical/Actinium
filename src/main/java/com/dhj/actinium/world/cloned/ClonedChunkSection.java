@@ -14,6 +14,7 @@ import net.minecraft.world.chunk.NibbleArray;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.structure.StructureBoundingBox;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
+import com.dhj.actinium.compat.cavebiomes.CaveBiomesCompat;
 import com.dhj.actinium.compat.fluidlogged.FluidStateStorage;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
 
@@ -48,9 +49,9 @@ public class ClonedChunkSection {
             throw new RuntimeException(String.format("Couldn't retrieve chunk at %d, %d", x, z));
         }
 
-        ExtendedBlockStorage section = getChunkSection(chunk, y);
+        ExtendedBlockStorage section = getChunkSection(world, chunk, y);
 
-        if (section == Chunk.NULL_BLOCK_STORAGE/*ChunkSection.isEmpty(section)*/) {
+        if (section == null || section == Chunk.NULL_BLOCK_STORAGE) {
             section = EMPTY_SECTION;
         }
 
@@ -118,13 +119,14 @@ public class ClonedChunkSection {
         return lightArray != null ? lightArray.get(x, y, z) : type.defaultLightValue;
     }
 
-    private static ExtendedBlockStorage getChunkSection(Chunk chunk, int y) {
+    private static ExtendedBlockStorage getChunkSection(World world, Chunk chunk, int y) {
         ExtendedBlockStorage section = null;
 
         var storageArray = chunk.getBlockStorageArray();
+        int index = CaveBiomesCompat.storageSectionIndex(world, y);
 
-        if (y >= 0 && y < storageArray.length) {
-            section = storageArray[y];
+        if (index >= 0 && index < storageArray.length) {
+            section = storageArray[index];
         }
 
         return section;

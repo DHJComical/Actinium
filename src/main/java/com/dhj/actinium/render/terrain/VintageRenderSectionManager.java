@@ -31,6 +31,7 @@ import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import com.dhj.actinium.world.WorldSlice;
+import com.dhj.actinium.compat.cavebiomes.CaveBiomesCompat;
 import com.dhj.actinium.world.cloned.ChunkRenderContext;
 import com.dhj.actinium.world.cloned.ClonedChunkSectionCache;
 import com.dhj.actinium.runtime.ActiniumRuntime;
@@ -115,10 +116,13 @@ public class VintageRenderSectionManager extends RenderSectionManager {
             return true;
         }
         var array = chunk.getBlockStorageArray();
-        if (y < 0 || y >= array.length) {
+        // CaveBiomesAPI reshapes storageArrays to its extended layout for every world while
+        // installed, so the semantic section Y must be translated (and clamped) before indexing.
+        int index = CaveBiomesCompat.storageSectionIndex(this.world, y);
+        if (index < 0 || index >= array.length) {
             return true;
         }
-        return array[y] == Chunk.NULL_BLOCK_STORAGE || array[y].isEmpty();
+        return array[index] == Chunk.NULL_BLOCK_STORAGE || array[index].isEmpty();
     }
 
     @Override
