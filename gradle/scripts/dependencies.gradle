@@ -92,7 +92,7 @@ dependencies {
 
     modImplementation 'curse.maven:chunk-animator-236484:3850023'
 
-    modCompileOnly "curse.maven:ichunutil-229060:2801262"
+    modImplementation "curse.maven:ichunutil-229060:2801262"  // dev-verifies mixins.actinium.ichunutil.json (issue #39)
     modCompileOnly "curse.maven:mobdismemberment-229067:2487081"
 
 
@@ -106,4 +106,8 @@ dependencies {
     modCompileOnly "curse.maven:rebooter-1625784:8518809"
     modCompileOnly "curse.maven:forgelin-continuous-456403:8248535"
     modCompileOnly "curse.maven:rlfoliage-970462:7645701"
+
+    // Extra Utilities 2 1.9.9 (issue #48: its GLStateAttributes GUI state snapshot reads the stale vanilla
+    // GlStateManager mirror under GLSM; the mixin re-reads live GL state)
+    modImplementation "curse.maven:extra-utilities-2-225561:2678374"
 }
