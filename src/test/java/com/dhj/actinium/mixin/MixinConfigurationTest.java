@@ -50,6 +50,7 @@ class MixinConfigurationTest {
         "mixins.actinium.revoui.json",
         "mixins.actinium.betterfoliage.json",
         "mixins.actinium.ccl.json",
+        "mixins.actinium.voxelmap.json"
         "mixins.actinium.extrautils2.json"
     );
     private static final List<String> CONFIGS = Stream.concat(

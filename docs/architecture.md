@@ -99,7 +99,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   - `mixin/features/iris`（含 `startup/`）：约 35 个 Iris 兼容注入
     （实体、粒子、渲染器、纹理地图接入与启动期纹理注入）。
   - `mixin/mod/`：按模组分组的 conditional 注入 —— `betterfoliage`、`ccl`、`dh`（7 个）、
-    `gibbed`、`ichunutil`、`lumenized`、`revoui`；`stellarcore` 为空目录（规划占位）。
+    `gibbed`、`ichunutil`、`lumenized`、`revoui`、`voxelmap`（3 类，小地图兼容）；
+    `stellarcore` 为空目录（规划占位）。
   - `mixin/vintage/`：原版 1.12.2 注入分支 —— `core`（Minecraft/RenderGlobal/Tessellator/
     纹理上传）、`core/collections`、`core/crash`（SplashProgress）、`core/frustum`、
     `core/startup`（启动序列）、`core/terrain`（大量 Accessor + RenderGlobal/
@@ -131,6 +132,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 - **`compat/modernui/`**：`MuiGuiScaleHook` —— ModernUI 界面缩放钩子。
 - **`compat/neofontrender/`**：`NeoFontRenderCompat` —— NeoFontRender 初始化兼容。
 - **`compat/rfp2/`**：空目录（规划占位）。
+- **`compat/voxelmap/`**：`VoxelMapCompat` —— VoxelMap 小地图兼容桥（CPU 纹理路径
+  强制、mipmap 回退判定、跨 mixin 共享的 scissor 活动标志，配 `mixin/mod/voxelmap`）。
 - **`compat/sodium/`**：Embeddium/钠配置引导与旧扩展点适配 —— `ActiniumConfigBootstrap`、
   `ActiniumApplyActions(Impl)`、`ActiniumFlagHook`、`LegacyExtensionEntryPoint` /
   `LegacyOptionAdapter` / `LegacyOptionPageProvider`、`OptionGUIConstructionBridge`。
@@ -411,7 +414,7 @@ LWJGL 后端（并入本子项目）：
 
 ## Mixin 配置清单
 
-`src/main/resources/` 下 9 个配置 + 1 个门控声明：
+`src/main/resources/` 下 10 个配置 + 1 个门控声明：
 
 | 配置 | 阶段 | 用途 |
 | --- | --- | --- |
@@ -424,6 +427,7 @@ LWJGL 后端（并入本子项目）：
 | `mixins.actinium.revoui.json` | late/conditional（neofontrender_ui_enhancements） | `mixin/mod/revoui` 3 类 |
 | `mixins.actinium.betterfoliage.json` | late/conditional（betterfoliage） | `MixinChunkBuilderMeshingTaskBetterFoliage` |
 | `mixins.actinium.ccl.json` | late/conditional（codechickenlib） | `MixinGlStateTracker` |
+| `mixins.actinium.voxelmap.json` | late/conditional（voxelmap） | `mixin/mod/voxelmap` 3 类（GLUtils/GLShim/renderMap，小地图 CPU 路径与 HudCaching alpha 保护） |
 
 门控映射在 `mixins.actinium.conditions.properties`（mixin loader 不认 json 自定义字段），
 由 `MixinLate` 读取，对应 mod id 存在才加载。`META-INF/actinium_at.cfg` 访问转换器将
