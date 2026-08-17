@@ -21,6 +21,20 @@ public final class ReeseSodiumOptionsConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = net.minecraftforge.fml.common.Loader.instance().getConfigDir()
             .toPath().resolve("reeses_sodium_options.json");
+
+    // Declared BEFORE `config` so that field initializers of ConfigData read
+    // the real defaults instead of the not-yet-initialized constants (which
+    // would yield null/0 under the JVM's textual static-init order).
+    static final int DEFAULT_TOOLTIP_DELAY_MS = 500;
+    static final int MIN_TOOLTIP_DELAY_MS = 0;
+    static final int MAX_TOOLTIP_DELAY_MS = 5000;
+    static final int DEFAULT_SEARCH_RESULT_LIMIT = 15;
+    static final int MIN_SEARCH_RESULT_LIMIT = 1;
+    static final int MAX_SEARCH_RESULT_LIMIT = 50;
+    static final TabHeaderCollapseMode DEFAULT_TAB_HEADER_COLLAPSE_MODE = TabHeaderCollapseMode.ALL_EXPANDED;
+    static final DisabledOptionVisibility DEFAULT_DISABLED_OPTION_VISIBILITY = DisabledOptionVisibility.SHOWN;
+    static final FocusBorderMode DEFAULT_FOCUS_BORDER_MODE = FocusBorderMode.KEYBOARD;
+
     private static ConfigData config = new ConfigData();
 
     static {
@@ -353,16 +367,6 @@ public final class ReeseSodiumOptionsConfig {
             return this;
         }
     }
-
-    static final int DEFAULT_TOOLTIP_DELAY_MS = 500;
-    static final int MIN_TOOLTIP_DELAY_MS = 0;
-    static final int MAX_TOOLTIP_DELAY_MS = 5000;
-    static final int DEFAULT_SEARCH_RESULT_LIMIT = 15;
-    static final int MIN_SEARCH_RESULT_LIMIT = 1;
-    static final int MAX_SEARCH_RESULT_LIMIT = 50;
-    static final TabHeaderCollapseMode DEFAULT_TAB_HEADER_COLLAPSE_MODE = TabHeaderCollapseMode.ALL_EXPANDED;
-    static final DisabledOptionVisibility DEFAULT_DISABLED_OPTION_VISIBILITY = DisabledOptionVisibility.SHOWN;
-    static final FocusBorderMode DEFAULT_FOCUS_BORDER_MODE = FocusBorderMode.KEYBOARD;
 
     public enum TabHeaderCollapseMode {
         @SerializedName("selected_group")
