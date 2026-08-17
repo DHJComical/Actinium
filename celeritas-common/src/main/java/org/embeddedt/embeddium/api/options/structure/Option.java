@@ -36,4 +36,38 @@ public interface Option<T> {
     void applyChanges();
 
     Collection<OptionFlag> getFlags();
+
+    /**
+     * Actinium extension: returns the last applied (binding-backed) value.
+     * The default implementation falls back to the current value for
+     * controls that do not track a separate applied baseline.
+     */
+    default T getAppliedValue() {
+        return this.getValue();
+    }
+
+    /**
+     * Actinium extension: returns the declared default value, or the current
+     * value when the implementation does not track defaults.
+     */
+    default T getDefaultValue() {
+        return this.getValue();
+    }
+
+    /**
+     * Actinium extension: moves the pending value back to the declared
+     * default. The default implementation resets pending changes, leaving
+     * the binding value untouched.
+     */
+    default void resetToDefault() {
+        this.reset();
+    }
+
+    /**
+     * Actinium extension: returns whether this option's control should be
+     * hidden while the option is disabled.
+     */
+    default boolean shouldHideControl() {
+        return false;
+    }
 }

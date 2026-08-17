@@ -22,10 +22,13 @@ public final class StandardOptions {
     }
 
     public static class Pages {
-        public static final OptionIdentifier<Void> GENERAL = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "general");
-        public static final OptionIdentifier<Void> QUALITY = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "quality");
-        public static final OptionIdentifier<Void> PERFORMANCE = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "performance");
-        public static final OptionIdentifier<Void> ADVANCED = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "advanced");
+        // The settings pages are host-owned: they live under the actinium
+        // namespace so the RSO tab rail groups them with the host mod rather
+        // than with the celeritas compatibility bridge.
+        public static final OptionIdentifier<Void> GENERAL = OptionIdentifier.create(ACTINIUM_MOD_NAME, "general");
+        public static final OptionIdentifier<Void> QUALITY = OptionIdentifier.create(ACTINIUM_MOD_NAME, "quality");
+        public static final OptionIdentifier<Void> PERFORMANCE = OptionIdentifier.create(ACTINIUM_MOD_NAME, "performance");
+        public static final OptionIdentifier<Void> ADVANCED = OptionIdentifier.create(ACTINIUM_MOD_NAME, "advanced");
         public static final OptionIdentifier<Void> DEBUG = OptionIdentifier.create(ACTINIUM_MOD_NAME, "debug");
         public static final OptionIdentifier<Void> SHADERS = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "shaders");
     }
