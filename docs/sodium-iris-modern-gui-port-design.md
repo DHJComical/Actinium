@@ -1,9 +1,11 @@
 # Sodium / Iris 现代 GUI 移植设计规格
 
-> **状态（2026-08-14）**：本规格设想的 `net.caffeinemc.mods.sodium.*` Config API / 配置模型 /
+> **状态（2026-08-14，更新 2026-08-17）**：本规格设想的 `net.caffeinemc.mods.sodium.*` Config API / 配置模型 /
 > GUI 移植已**整体删除**（PolyForm Shield 许可），不再作为实现目标。实际成品为
 > https://docs/rso-port.md 所描述的方案：RSO（MIT）界面 + embeddium 选项数据层
-> （`org.embeddedt.embeddium.api.options.*` 自研扩展）+ 内置 Iris external page。本文件保留
+> （`org.embeddedt.embeddium.api.options.*` 自研扩展）+ 内置 Iris external page。`assets/sodium`
+> 下的 PolyForm Shield 资源与 `LICENSE-SODIUM.md` 也已**全部移除**（翻译键由 celeritas
+> namespace 语言文件承载，见 `docs/sodium-modern-gui-resource-sources.md`）。本文件保留
 > 仅作历史设计参考，其中关于 `net.caffeinemc` 章节均不代表当前代码状态。
 
 ## 1. 背景与目标
