@@ -18,7 +18,7 @@ for the full license text or legal advice.
 | Celeritas renderer | historical Celeritas/Embeddium/Sodium-derived code | `celeritas-common/`, portions of `src/main/java/org/taumc/` and `src/main/java/org/embeddedt/` | mixed upstream provenance; preserve file-level notices and consult source history | present in standalone extraction `6167e49`, split to its current tree in `2835afe` |
 | LWJGL utility code | https://github.com/LWJGL/lwjgl3 | selected `GTNHLib/.../bytebuf/` and GL debug helpers | BSD-style LWJGL license, identified in file headers | imported through GTNHLib/GLSM; service layer work in `4826cf8` |
 | GLSL Transformation Library | https://github.com/GTNewHorizons/glsl-transformation-lib | binary contained dependency | consult the dependency's published license and POM | Maven coordinate `org.taumc:glsl-transformation-lib` |
-| Sodium modern GUI resources | https://github.com/CaffeineMC/sodium | `src/main/resources/config-icon.png`, selected `src/main/resources/assets/sodium/` GUI resources and language labels | PolyForm Shield License 1.0.0 | upstream commit `3c4c4b29ad733ce3c20a1dddbb7f623d3897c82b`; see `docs/sodium-modern-gui-resource-sources.md` |
+| Sodium modern GUI language labels | https://github.com/CaffeineMC/sodium | selected `src/main/resources/assets/sodium/lang/` language labels | PolyForm Shield License 1.0.0 | upstream commit `3c4c4b29ad733ce3c20a1dddbb7f623d3897c82b`; see `docs/sodium-modern-gui-resource-sources.md` |
 
 The exact upstream commit SHA used for the initial Angelica, GTNHLib, Iris, and Celeritas
 imports was not recorded in this repository. The Actinium commits above are the reproducible
@@ -37,16 +37,21 @@ next bulk upstream refresh.
   `common/src/main/resources/assets/iris/textures/gui/config-icon.png` maps to
   `src/main/resources/assets/iris/textures/gui/config-icon.png` (Iris commit
   `844542b8440f1ce6479d2914c212d099ff9d264c`, LGPL-3.0). These files are separate
-  from the modern Sodium GUI resources and their PolyForm Shield notice.
+  from the modern Sodium GUI language labels and their PolyForm Shield notice.
 - Shader compatibility behavior is informed by OptiFine/ShadersMod conventions; shader packs
   themselves are not distributed by this repository.
 - The public Sodium maintainer comment at
   https://github.com/CaffeineMC/sodium/issues/2400#issuecomment-2038560656 states that ports to very
   old Minecraft versions do not compete with Sodium. Actinium records this as public context for
   its Minecraft 1.12.2 port, not as legal advice or a replacement for license compliance review.
-- The full PolyForm Shield License 1.0.0 text applicable to the imported modern Sodium GUI
-  resources is included in `LICENSE-SODIUM.md`. Exact source-to-target mappings are recorded in
-  `docs/sodium-modern-gui-resource-sources.md`.
+- The `net.caffeinemc.mods.sodium.client.gui` screens and the
+  `net.caffeinemc.mods.sodium.{api,client}.config` option model previously licensed under the
+  PolyForm Shield License 1.0.0 have been **removed entirely** and are no longer distributed by
+  this repository. The settings UI is now the MIT-licensed Reese's Sodium Options port backed by
+  the embeddium option model (`docs/rso-port.md`).
+- The full PolyForm Shield License 1.0.0 text applicable to the retained modern Sodium GUI
+  language labels is included in `LICENSE-SODIUM.md`. Exact source-to-target mappings are
+  recorded in `docs/sodium-modern-gui-resource-sources.md`.
 
 ## Binary dependencies
 

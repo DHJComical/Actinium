@@ -1,6 +1,6 @@
 # Modern Sodium GUI Resource Sources
 
-This inventory records the resource boundary established for the modern Sodium GUI port. It is
+This inventory records the resource boundary for the modern Sodium GUI integration. It is
 an engineering provenance record, not legal advice. Distributors remain responsible for
 evaluating the PolyForm Shield License 1.0.0 and all other applicable license obligations.
 
@@ -20,17 +20,27 @@ No additional plain-text `Required Notice:` or `Licensor Line of Business:` stat
 in the Sodium repository at the recorded commit, apart from the examples contained in the license
 text itself.
 
-## Modern Sodium files incorporated
+## Status: code and textures removed, language labels retained
 
-All upstream paths below are relative to the Sodium repository at the recorded commit.
+The PolyForm Shield licensed `net.caffeinemc.mods.sodium.{api,client}.config` data model and the
+`net.caffeinemc.mods.sodium.client.gui` settings screens were **removed entirely** from this
+repository (see `docs/rso-port.md`). The settings UI is now provided by the MIT-licensed
+Reese's Sodium Options port backed by the embeddium option model
+(`org.embeddedt.embeddium.api.options.*` plus Actinium's self-authored extensions in
+`celeritas-common/.../embeddium/api/options/`).
 
-| Upstream source | Actinium target | SHA-256 | Purpose |
+Only the language labels below remain incorporated from the modern Sodium resource tree:
+
+| Upstream source | Actinium target | Adaptation | Purpose |
 | --- | --- | --- | --- |
-| `common/src/main/resources/config-icon.png` | `src/main/resources/config-icon.png` | `CDEA65424B7676637B66F0BF2D65348F461F6055996D1AC60FC7ACB079F386C3` | Classpath icon registered by the Sodium configuration builder |
-| `common/src/main/resources/assets/sodium/textures/gui/reset_button.png` | `src/main/resources/assets/sodium/textures/gui/reset_button.png` | `7484B46E2EE32286C5988E50467126B1AB1738AC1B61424DA3F893B72BFFDCED` | Reset control icon |
-| `common/src/main/resources/assets/sodium/textures/gui/tooltip_arrows.png` | `src/main/resources/assets/sodium/textures/gui/tooltip_arrows.png` | `4319D07381D9175EE21B53CE9D5D410B99A9E7842A4D335E1B16F7AABADD49C3` | Scrollable tooltip arrows |
-| `common/src/main/resources/assets/sodium/lang/en_us.json` (selected GUI keys) | `src/main/resources/assets/sodium/lang/en_us.lang` | Adapted to the Minecraft 1.12.2 `.lang` format | General page, search, and external-page labels |
+| `common/src/main/resources/assets/sodium/lang/en_us.json` (selected GUI keys) | `src/main/resources/assets/sodium/lang/en_us.lang` | Converted to the Minecraft 1.12.2 `.lang` format | General page, search, external-page, button and impact labels |
 | Translation derived from the selected English GUI keys | `src/main/resources/assets/sodium/lang/zh_cn.lang` | Actinium translation | Simplified Chinese labels for the same GUI controls |
+
+Previously recorded but now **removed** from this repository:
+
+- `src/main/resources/config-icon.png` (classpath icon)
+- `src/main/resources/assets/sodium/textures/gui/reset_button.png` (reset control icon)
+- `src/main/resources/assets/sodium/textures/gui/tooltip_arrows.png` (scrollable tooltip arrows)
 
 `coffee_cup.png` and the donation label are intentionally not incorporated because donation UI is
 outside the port's defined scope. Renderer shaders from the modern Sodium resource tree are also
@@ -40,8 +50,8 @@ its own namespace.
 ## Legacy resource namespace migration
 
 The following pre-existing renderer resources came from the legacy GPL-associated renderer tree.
-They were moved out of `assets/sodium` so that the `sodium` namespace is reserved for the modern
-PolyForm Shield GUI resources listed above.
+They were moved out of `assets/sodium` so that the `sodium` namespace is reserved for the
+language labels listed above.
 
 | Previous path | Current path |
 | --- | --- |

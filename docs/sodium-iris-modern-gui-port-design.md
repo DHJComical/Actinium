@@ -1,5 +1,11 @@
 # Sodium / Iris 现代 GUI 移植设计规格
 
+> **状态（2026-08-14）**：本规格设想的 `net.caffeinemc.mods.sodium.*` Config API / 配置模型 /
+> GUI 移植已**整体删除**（PolyForm Shield 许可），不再作为实现目标。实际成品为
+> https://docs/rso-port.md 所描述的方案：RSO（MIT）界面 + embeddium 选项数据层
+> （`org.embeddedt.embeddium.api.options.*` 自研扩展）+ 内置 Iris external page。本文件保留
+> 仅作历史设计参考，其中关于 `net.caffeinemc` 章节均不代表当前代码状态。
+
 ## 1. 背景与目标
 
 Actinium 面向 Minecraft 1.12.2，目前需要将现代 Sodium 与 Iris 的配置界面能力移植到现有模组，同时维持可持续同步上游、清晰声明许可和继续扩展页面的能力。

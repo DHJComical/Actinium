@@ -502,8 +502,8 @@ Mixin 组织约定：
   transformer 注入逻辑）、`mixin`/`mixins`（MixinConfigurationTest 配置覆盖校验、
   MixinLate 门控逻辑）、`render`（EndPortal、流式绘制、投影纹理坐标、光照缓存等）。
 - 嵌入第三方源码的测试命名空间：`com.gtnewhorizons.angelica.*`（glsm：shader/uniform
-  兼容、ffp 生成器、GPU 诊断、streaming）、`net.caffeinemc.mods.sodium.*` 与
-  `org.embeddedt.embeddium.*`（选项/区块渲染）、`net.coderbot.iris.*` 与
+  兼容、ffp 生成器、GPU 诊断、streaming）、`org.embeddedt.embeddium.*`（选项/区块渲染）、
+  `net.coderbot.iris.*` 与
   `net.irisshaders.iris.*`（shaderpack 解析、pipeline transform、uniforms、阴影）、
   `org.taumc.celeritas.*`（Celeritas 兼容层/选项桥）。
 - `net/minecraft/client/renderer/culling/ClippingHelperImpl.java` 为测试用 stub。

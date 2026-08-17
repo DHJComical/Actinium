@@ -106,7 +106,6 @@ sodium.options.use_no_error_context.name=使用无错误上下文
 sodium.options.use_no_error_context.tooltip=启用后，将创建一个关闭错误检查的 OpenGL 上下文。这可能略微提升性能，但也会增加游戏直接崩溃而不是优雅处理 OpenGL 错误的风险。如果你遇到原因不明的突然崩溃，请关闭此选项。
 sodium.options.buttons.undo=撤销
 sodium.options.buttons.apply=应用
-sodium.options.buttons.donate=支持 Actinium！
 sodium.console.game_restart=必须重启游戏才能应用一个或多个视频设置！
 sodium.console.broken_nvidia_driver=你的 NVIDIA 显卡驱动版本过旧！\n* 在安装 Actinium 时，这会导致严重的性能问题和崩溃。\n* 请将显卡驱动更新到最新版本（536.23 或更高）。
 sodium.console.pojav_launcher=PojavLauncher 与 Actinium 不兼容。\n* 你极有可能遇到严重性能问题、图形错误和崩溃。\n* 如果你坚持继续，我们不会为由此产生的错误或崩溃提供支持！

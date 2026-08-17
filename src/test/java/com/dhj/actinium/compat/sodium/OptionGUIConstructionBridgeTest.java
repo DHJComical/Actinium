@@ -11,8 +11,8 @@ import org.embeddedt.embeddium.api.options.structure.OptionStorage;
 import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -29,11 +29,12 @@ class OptionGUIConstructionBridgeTest {
         OptionGUIConstructionEvent.BUS.addListener(broken);
         OptionGUIConstructionEvent.BUS.addListener(working);
         try {
-            Map<String, List<OptionPage>> extensions =
-                    OptionGUIConstructionBridge.collectExtensions(List.of(builtIn));
+            List<OptionPage> pages = new ArrayList<>(List.of(builtIn));
+            OptionGUIConstructionBridge.collectExtensions(pages);
 
-            assertEquals(List.of("testmod"), List.copyOf(extensions.keySet()));
-            assertEquals("testmod:extra", extensions.get("testmod").getFirst().getId().toString());
+            List<OptionPage> extensions = pages.stream().filter(page -> page != builtIn).toList();
+            assertEquals(List.of("testmod"), extensions.stream().map(page -> page.getId().getModId()).toList());
+            assertEquals("testmod:extra", extensions.getFirst().getId().toString());
         } finally {
             OptionGUIConstructionEvent.BUS.removeListener(broken);
             OptionGUIConstructionEvent.BUS.removeListener(working);
