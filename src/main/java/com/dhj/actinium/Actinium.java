@@ -46,7 +46,13 @@ import org.embeddedt.embeddium.impl.runtime.EmbeddiumRuntimeOptions;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 
-@Mod(modid = Actinium.MODID, useMetadata = true, clientSideOnly = true, acceptableRemoteVersions = "*")
+@Mod(modid =
+        Actinium.MODID,
+        useMetadata = true,
+        clientSideOnly = true,
+        acceptableRemoteVersions = "*",
+        guiFactory = "com.dhj.actinium.gui.ActiniumGuiFactory"
+)
 public class Actinium {
     public static final String MODID = ActiniumRuntime.MODID;
 
