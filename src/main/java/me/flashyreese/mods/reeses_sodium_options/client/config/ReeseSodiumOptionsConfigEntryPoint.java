@@ -17,9 +17,10 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * 自研 RSO 配置页构建器：直接以 embeddium {@link OptionPage} 形式注册
- * Reese's Sodium Options 自身配置（enabled、外观、行为），不再经过
- * Sodium 配置模型。按用户需求移除支持组（捐赠按钮）。
+ * Actinium's own RSO config page builder: registers Reese's Sodium Options'
+ * own configuration (enabled, appearance, behavior) directly as an embeddium
+ * {@link OptionPage}, without the Sodium config model. The support group
+ * (donation buttons) is removed per the user's requirement.
  */
 public final class ReeseSodiumOptionsConfigEntryPoint {
     private static final String MOD_ID = "reeses-sodium-options";
@@ -27,7 +28,7 @@ public final class ReeseSodiumOptionsConfigEntryPoint {
     private ReeseSodiumOptionsConfigEntryPoint() {
     }
 
-    /** 构建 RSO 自身配置页（embeddium 模型）。 */
+    /** Builds the RSO config page (embeddium model). */
     public static OptionPage createOptionsPage() {
         List<OptionGroup> groups = List.of(
                 createGeneralOptions(),
@@ -200,7 +201,7 @@ public final class ReeseSodiumOptionsConfigEntryPoint {
         return value.toString().toLowerCase(java.util.Locale.ROOT);
     }
 
-    /** 无持久化存储：RSO 配置直接读写静态 ConfigData，storage 仅作占位。 */
+    /** Placeholder storage: RSO config reads/writes the static ConfigData; the storage only persists on save. */
     private static final class RsoStorage implements OptionStorage<Object> {
         @Override
         public Object getData() {

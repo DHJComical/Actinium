@@ -1,8 +1,9 @@
 package com.dhj.actinium.compat.sodium;
 
+import me.flashyreese.mods.reeses_sodium_options.client.gui.option.FmlRsoModMetadataResolver;
+import me.flashyreese.mods.reeses_sodium_options.client.gui.option.RsoModMetadataResolver;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.option.RsoModOptions;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.I18n;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.api.OptionGUIConstructionEvent;
@@ -21,35 +22,40 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 自研选项宿主：收集全部 embeddium {@link OptionPage}（内置 Actinium 页面、
- * RSO 自身配置页、Iris 页与第三方事件贡献），按 modId 分组为
- * {@link RsoModOptions} 视图，并协调 apply/undo 与 flag 副作用。
- * 不依赖任何 Sodium 配置模型。
+ * Actinium's own option host: collects all embeddium {@link OptionPage}s
+ * (built-in Actinium pages, the RSO config page, Iris pages and third-party
+ * event contributions), groups them by modId into {@link RsoModOptions}
+ * views, and coordinates apply/undo and flag side effects. No Sodium config
+ * model is involved.
  */
 public final class ActiniumOptionHost {
     private static final Logger LOGGER = LogManager.getLogger("Actinium-OptionHost");
     private static final class SharedHolder {
-        private static final ActiniumOptionHost INSTANCE = new ActiniumOptionHost(new ActiniumApplyActionsImpl(Minecraft.getMinecraft()));
+        private static final ActiniumOptionHost INSTANCE = new ActiniumOptionHost(
+                new ActiniumApplyActionsImpl(Minecraft.getMinecraft()),
+                FmlRsoModMetadataResolver.forClient(Minecraft.getMinecraft().getResourceManager()));
     }
 
     private final ActiniumApplyActions applyActions;
+    private final RsoModMetadataResolver metadataResolver;
     private List<RsoModOptions> modOptions;
 
-    private ActiniumOptionHost(ActiniumApplyActions applyActions) {
+    private ActiniumOptionHost(ActiniumApplyActions applyActions, RsoModMetadataResolver metadataResolver) {
         this.applyActions = applyActions;
+        this.metadataResolver = metadataResolver;
     }
 
-    /** 返回进程级宿主（页面在首次访问时收集并冻结）。 */
+    /** Returns the process-wide host (pages are collected and frozen on first access). */
     public static ActiniumOptionHost shared() {
         return SharedHolder.INSTANCE;
     }
 
-    /** 供测试注入动作边界的构造入口。 */
-    public static ActiniumOptionHost create(ActiniumApplyActions applyActions) {
-        return new ActiniumOptionHost(applyActions);
+    /** Test entry point for injecting action and metadata boundaries. */
+    public static ActiniumOptionHost create(ActiniumApplyActions applyActions, RsoModMetadataResolver metadataResolver) {
+        return new ActiniumOptionHost(applyActions, metadataResolver);
     }
 
-    /** 收集并分组全部选项页（惰性、一次性）。 */
+    /** Collects and groups all option pages (lazy, one-time). */
     public synchronized List<RsoModOptions> modOptions() {
         if (this.modOptions == null) {
             this.modOptions = this.collect();
@@ -72,14 +78,15 @@ public final class ActiniumOptionHost {
         }
         List<RsoModOptions> result = new ArrayList<>();
         for (Map.Entry<String, List<OptionPage>> entry : byMod.entrySet()) {
-            result.add(RsoModOptions.aggregate(entry.getKey(), entry.getValue()));
+            result.add(RsoModOptions.create(entry.getKey(),
+                    this.metadataResolver.resolve(entry.getKey()), entry.getValue()));
         }
         LOGGER.info("Collected {} option page groups: {}", result.size(),
                 result.stream().map(RsoModOptions::configId).toList());
         return List.copyOf(result);
     }
 
-    /** 应用所有挂起改动，并触发去重后的 flag 副作用。 */
+    /** Applies all pending changes and triggers de-duplicated flag side effects. */
     public void applyChanges() {
         Set<OptionFlag> flags = EnumSet.noneOf(OptionFlag.class);
         Set<OptionStorage<?>> dirtyStorages = new java.util.HashSet<>();
@@ -98,7 +105,7 @@ public final class ActiniumOptionHost {
         this.applyFlagSideEffects(flags);
     }
 
-    /** 撤销所有挂起改动（回到已应用基线）。 */
+    /** Discards all pending changes (back to the applied baseline). */
     public void undoChanges() {
         for (OptionPage page : this.allPages()) {
             for (Option<?> option : page.getOptions()) {
@@ -109,7 +116,7 @@ public final class ActiniumOptionHost {
         }
     }
 
-    /** 返回是否存在挂起改动。 */
+    /** Returns whether any pending changes exist. */
     public boolean hasPendingChanges() {
         for (OptionPage page : this.allPages()) {
             for (Option<?> option : page.getOptions()) {
@@ -121,7 +128,7 @@ public final class ActiniumOptionHost {
         return false;
     }
 
-    /** 全部恢复为声明默认值（挂起状态）。 */
+    /** Restores every option to its declared default (pending state). */
     public void resetToDefaults() {
         for (OptionPage page : this.allPages()) {
             for (Option<?> option : page.getOptions()) {

@@ -1,7 +1,7 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.option;
 
 import me.flashyreese.mods.reeses_sodium_options.client.gui.theme.ActiniumTheme;
-import net.minecraft.client.resources.I18n;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -9,24 +9,27 @@ import org.embeddedt.embeddium.api.options.structure.OptionPage;
 import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Actinium 自研的 mod 选项聚合模型：把 embeddium 的 {@link OptionPage} 列表
- * 按 modId 分组，为 RSO 的 tab 体系提供 configId/name/version/icon/theme/pages
- * 视图。不依赖任何 Sodium 配置模型。
+ * Actinium's own mod-options aggregation model: groups a list of embeddium
+ * {@link OptionPage}s by modId and exposes the configId/name/version/icon/
+ * theme/pages view the RSO tab rail consumes. Name, version and icon come
+ * from {@link RsoModMetadata} (resolved by the host from FML mod metadata or
+ * the embedded-component fallback table); no Sodium config model is involved.
  */
 public final class RsoModOptions {
     private final String configId;
     private final String name;
     private final String version;
-    private final net.minecraft.util.ResourceLocation icon;
+    private final ResourceLocation icon;
     private final boolean iconMonochrome;
     private final ActiniumTheme theme;
     private final List<RsoPage> pages;
 
-    public RsoModOptions(String configId, String name, String version,
-                         net.minecraft.util.ResourceLocation icon, boolean iconMonochrome,
-                         ActiniumTheme theme, List<RsoPage> pages) {
+    private RsoModOptions(String configId, String name, String version,
+                          ResourceLocation icon, boolean iconMonochrome,
+                          ActiniumTheme theme, List<RsoPage> pages) {
         this.configId = configId;
         this.name = name;
         this.version = version;
@@ -36,49 +39,23 @@ public final class RsoModOptions {
         this.pages = List.copyOf(pages);
     }
 
-    /** 从 embeddium 页面构建（名称/版本取 mod 元数据或回退到 configId）。 */
-    public static RsoModOptions fromPage(OptionPage page) {
-        String modId = page.getId().getModId();
-        String displayName = extractText(page.getName());
-        return new RsoModOptions(
-                modId,
-                displayName,
-                "1.12",
-                null,
-                false,
-                ActiniumTheme.defaultFor(modId),
-                List.of(new RsoPage(page))
-        );
-    }
-
-    /** 把同一 modId 下的多页聚合为一个 RSO 视图。 */
-    public static RsoModOptions aggregate(String configId, List<OptionPage> pages) {
+    /** Builds the RSO view from embeddium pages and resolved mod metadata. */
+    public static RsoModOptions create(String configId, RsoModMetadata metadata, List<OptionPage> pages) {
+        Objects.requireNonNull(configId, "configId must not be null");
+        Objects.requireNonNull(metadata, "metadata must not be null");
         if (pages == null || pages.isEmpty()) {
-            throw new IllegalArgumentException("Cannot aggregate empty page list for '" + configId + "'");
+            throw new IllegalArgumentException("Cannot build options view without pages for '" + configId + "'");
         }
-        String displayName = extractText(pages.get(0).getName());
         List<RsoPage> rsoPages = pages.stream().map(RsoPage::new).toList();
-        return new RsoModOptions(configId, displayName, "1.12", null, false,
-                ActiniumTheme.defaultFor(configId), rsoPages);
+        return new RsoModOptions(configId, metadata.name(), metadata.version(), metadata.icon(),
+                metadata.iconMonochrome(), ActiniumTheme.defaultFor(configId), rsoPages);
     }
 
-    /** 展开回底层 embeddium 页面（供 apply/undo 遍历）。 */
+    /** Expands back to the underlying embeddium pages (for apply/undo walks). */
     public void unwrapPages(List<OptionPage> target) {
         for (RsoPage page : this.pages) {
             target.add(page.delegate);
         }
-    }
-
-    private static String extractText(TextComponent component) {
-        if (component instanceof TextComponent.Translatable translatable) {
-            for (String key : translatable.keys()) {
-                if (I18n.hasKey(key)) {
-                    return I18n.format(key, translatable.args().toArray());
-                }
-            }
-            return translatable.keys().get(0);
-        }
-        return component.toString();
     }
 
     public String configId() {
@@ -93,7 +70,7 @@ public final class RsoModOptions {
         return this.version;
     }
 
-    public net.minecraft.util.ResourceLocation icon() {
+    public ResourceLocation icon() {
         return this.icon;
     }
 
@@ -109,7 +86,7 @@ public final class RsoModOptions {
         return this.pages;
     }
 
-    /** RSO 视图的页面：包装 embeddium OptionPage，把文本转成 1.12.2 ITextComponent。 */
+    /** RSO view of a page: wraps an embeddium OptionPage, converting text to 1.12.2 ITextComponent. */
     public static final class RsoPage {
         private final OptionPage delegate;
 
@@ -127,13 +104,13 @@ public final class RsoModOptions {
                     .toList();
         }
 
-        /** 返回底层 embeddium 页面（供 tab 构建与 apply/undo 遍历）。 */
+        /** Returns the underlying embeddium page (for tab building and apply/undo walks). */
         public OptionPage unwrap() {
             return this.delegate;
         }
     }
 
-    /** RSO 视图的选项组：包装 embeddium OptionGroup。 */
+    /** RSO view of an option group: wraps an embeddium OptionGroup. */
     public static final class RsoOptionGroup {
         private final org.embeddedt.embeddium.api.options.structure.OptionGroup delegate;
 
@@ -142,7 +119,8 @@ public final class RsoModOptions {
         }
 
         public ITextComponent name() {
-            return new TextComponentString("");
+            org.embeddedt.embeddium.impl.gui.framework.TextComponent groupName = this.delegate.getName();
+            return groupName == null ? new TextComponentString("") : convertText(groupName);
         }
 
         public List<org.embeddedt.embeddium.api.options.structure.Option<?>> options() {

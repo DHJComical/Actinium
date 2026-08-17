@@ -1,8 +1,9 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.theme;
 
 /**
- * Actinium 自研主题色模型：为 RSO 的 tab 头部、选项控件与 tooltip 边框提供
- * 与上游一致的 ARGB 主题色三元组。不依赖任何 Sodium/Embeddium 配置模型。
+ * Actinium's own theme color model: provides the ARGB theme-color triple
+ * used by RSO tab headers, option controls and tooltip borders, matching
+ * the upstream palette. No Sodium/Embeddium config model is involved.
  */
 public final class ActiniumTheme {
     private final int theme;
@@ -15,12 +16,12 @@ public final class ActiniumTheme {
         this.themeDisabled = themeDisabled;
     }
 
-    /** 从基色派生 highlight/disabled 变体（与上游 ColorTheme.fromBase 相同算法）。 */
+    /** Derives highlight/disabled variants from a base color (same algorithm as upstream ColorTheme.fromBase). */
     public static ActiniumTheme fromBase(int theme) {
         return new ActiniumTheme(theme, adjust(theme, 0.30F), adjust(theme, -0.23F));
     }
 
-    /** 确定性选择默认主题（按 configId 哈希，与上游默认配色一致）。 */
+    /** Deterministically picks the default theme (hashed by configId, matching the upstream palette). */
     public static ActiniumTheme defaultFor(String configId) {
         int[] presets = {
                 0xFFE494A5,
@@ -42,14 +43,6 @@ public final class ActiniumTheme {
 
     public int themeDisabled() {
         return this.themeDisabled;
-    }
-
-    private static int blend(int first, int second, float secondWeight) {
-        float firstWeight = 1.0F - secondWeight;
-        int red = Math.round(((first >>> 16) & 0xFF) * firstWeight + ((second >>> 16) & 0xFF) * secondWeight);
-        int green = Math.round(((first >>> 8) & 0xFF) * firstWeight + ((second >>> 8) & 0xFF) * secondWeight);
-        int blue = Math.round((first & 0xFF) * firstWeight + (second & 0xFF) * secondWeight);
-        return 0xFF000000 | red << 16 | green << 8 | blue;
     }
 
     private static int adjust(int color, float factor) {

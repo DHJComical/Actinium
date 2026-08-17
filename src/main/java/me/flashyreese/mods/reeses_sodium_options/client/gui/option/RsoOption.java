@@ -1,6 +1,5 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.option;
 
-import me.flashyreese.mods.reeses_sodium_options.client.gui.theme.ActiniumTheme;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -10,9 +9,10 @@ import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import java.util.Objects;
 
 /**
- * RSO 行类视图：包装 embeddium {@link Option}，暴露与上游一致的
- * pending/applied 语义与类型分派辅助。行类只依赖本接口与
- * {@link RsoModOptions}，不接触任何 Sodium 配置模型。
+ * Row-level view over an embeddium {@link Option}: exposes the upstream
+ * pending/applied semantics and control-type dispatch helpers. Rows depend
+ * only on this class and {@link RsoModOptions}; no Sodium config model is
+ * involved.
  */
 public final class RsoOption {
     private final Option<?> delegate;
@@ -21,12 +21,12 @@ public final class RsoOption {
         this.delegate = Objects.requireNonNull(delegate, "Option must not be null");
     }
 
-    /** 返回底层 embeddium 选项（供控件类型检查使用）。 */
+    /** Returns the underlying embeddium option (for control type checks). */
     public Option<?> unwrap() {
         return this.delegate;
     }
 
-    /** 返回稳定的选项 ID（来自 embeddium OptionIdentifier）。 */
+    /** Returns the stable option id (from the embeddium OptionIdentifier). */
     public String rso$getId() {
         org.embeddedt.embeddium.api.options.OptionIdentifier<?> id = this.delegate.getId();
         return id == null ? "" : id.toString();
@@ -48,17 +48,17 @@ public final class RsoOption {
         return this.delegate.hasChanged();
     }
 
-    /** 返回用户尚未应用的 pending 值。 */
+    /** Returns the pending value the user has not applied yet. */
     public Object getPendingValue() {
         return this.delegate.getValue();
     }
 
-    /** 返回最近一次应用后的基线值。 */
+    /** Returns the baseline value from the last apply. */
     public Object getAppliedValue() {
         return this.delegate.getAppliedValue();
     }
 
-    /** 用新的 pending 值替换当前编辑值。 */
+    /** Replaces the current edit value with a new pending value. */
     public void modifyValue(Object value) {
         this.setValue(value);
     }
@@ -68,70 +68,70 @@ public final class RsoOption {
         ((Option<Object>) this.delegate).setValue(value);
     }
 
-    /** 撤销 pending 改动，回到已应用基线。 */
+    /** Discards pending changes, returning to the applied baseline. */
     public void undo() {
         this.delegate.reset();
     }
 
-    /** 恢复为声明默认值。 */
+    /** Restores the declared default value. */
     public void resetToDefault() {
         this.delegate.resetToDefault();
     }
 
-    /** 返回声明默认值。 */
+    /** Returns the declared default value. */
     public Object getDefaultValue() {
         return this.delegate.getDefaultValue();
     }
 
-    /** 返回性能影响标签（可能为 null）。 */
+    /** Returns the performance impact label (may be null). */
     public String getImpactName() {
         org.embeddedt.embeddium.api.options.structure.OptionImpact impact = this.delegate.getImpact();
         return impact == null ? null : impact.name();
     }
 
-    /** 控件类型分派：是否为 tick-box（布尔）。 */
+    /** Control-type dispatch: whether this is a boolean tick-box. */
     public boolean isTickBox() {
         return this.delegate.getControl() instanceof org.embeddedt.embeddium.api.options.control.TickBoxControl;
     }
 
-    /** 控件类型分派：是否为滑块（整数）。 */
+    /** Control-type dispatch: whether this is an integer slider. */
     public boolean isSlider() {
         return this.delegate.getControl() instanceof org.embeddedt.embeddium.api.options.control.SliderControl;
     }
 
-    /** 控件类型分派：是否为循环控件（枚举/离散值）。 */
+    /** Control-type dispatch: whether this is a cycling control (enum/discrete values). */
     public boolean isCycling() {
         return this.delegate.getControl() instanceof org.embeddedt.embeddium.api.options.control.CyclingControl;
     }
 
-    /** 控件类型分派：是否为外部按钮（打开独立屏幕）。 */
+    /** Control-type dispatch: whether this opens a separate screen. */
     public boolean isExternalButton() {
         return this.delegate.getControl() instanceof org.embeddedt.embeddium.api.options.control.ExternalButtonControl;
     }
 
-    /** 返回滑块范围（isSlider 时为 true 才有意义）。 */
+    /** Returns the slider lower bound (meaningful only when isSlider). */
     public int sliderMin() {
         return ((org.embeddedt.embeddium.api.options.control.SliderControl) this.delegate.getControl()).getMin();
     }
 
-    /** 返回滑块范围上限（isSlider 时为 true 才有意义）。 */
+    /** Returns the slider upper bound (meaningful only when isSlider). */
     public int sliderMax() {
         return ((org.embeddedt.embeddium.api.options.control.SliderControl) this.delegate.getControl()).getMax();
     }
 
-    /** 返回滑块步长（isSlider 时为 true 才有意义）。 */
+    /** Returns the slider step (meaningful only when isSlider). */
     public int sliderInterval() {
         return ((org.embeddedt.embeddium.api.options.control.SliderControl) this.delegate.getControl()).getInterval();
     }
 
-    /** 返回滑块值的格式化文本（isSlider 时为 true 才有意义）。 */
+    /** Returns the formatted slider value text (meaningful only when isSlider). */
     public ITextComponent formatSliderValue(Object value) {
         org.embeddedt.embeddium.api.options.control.SliderControl control =
                 (org.embeddedt.embeddium.api.options.control.SliderControl) this.delegate.getControl();
         return convertText(control.getFormatter().format((Integer) value));
     }
 
-    /** 返回循环控件的显示名（isCycling 时为 true 才有意义）。 */
+    /** Returns the cycling control label for a value (meaningful only when isCycling). */
     public ITextComponent getElementName(Object value) {
         org.embeddedt.embeddium.api.options.control.CyclingControl<Object> control =
                 (org.embeddedt.embeddium.api.options.control.CyclingControl<Object>) this.delegate.getControl();
@@ -145,7 +145,7 @@ public final class RsoOption {
         return new TextComponentString(value.toString());
     }
 
-    /** 返回循环控件是否允许该值（isCycling 时为 true 才有意义）。 */
+    /** Returns whether the cycling control accepts a value (meaningful only when isCycling). */
     public boolean isValueAllowed(Object value) {
         org.embeddedt.embeddium.api.options.control.CyclingControl<Object> control =
                 (org.embeddedt.embeddium.api.options.control.CyclingControl<Object>) this.delegate.getControl();
@@ -157,20 +157,20 @@ public final class RsoOption {
         return false;
     }
 
-    /** 返回循环控件的全部值（isCycling 时为 true 才有意义）。 */
+    /** Returns all values of the cycling control (meaningful only when isCycling). */
     public Object[] getAllowedValues() {
         org.embeddedt.embeddium.api.options.control.CyclingControl<Object> control =
                 (org.embeddedt.embeddium.api.options.control.CyclingControl<Object>) this.delegate.getControl();
         return control.getAllowedValues();
     }
 
-    /** 返回外部按钮的屏幕消费者（isExternalButton 时为 true 才有意义）。 */
+    /** Returns the external button's screen consumer (meaningful only when isExternalButton). */
     public java.util.function.Consumer<net.minecraft.client.gui.GuiScreen> getCurrentScreenConsumer() {
         return ((org.embeddedt.embeddium.api.options.control.ExternalButtonControl) this.delegate.getControl())
                 .getScreenConsumer();
     }
 
-    /** 是否应隐藏控件（embeddium 无此概念，恒为 false）。 */
+    /** Whether the control should be hidden while the option is disabled (always false here). */
     public boolean shouldHideControl() {
         return false;
     }

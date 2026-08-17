@@ -101,7 +101,7 @@ public final class IrisConfigEntryPoint {
         }
     }
 
-    /** 占位存储：Iris 值直接读写 IrisVideoSettings，save 时落盘。 */
+    /** Placeholder storage: Iris values read/write IrisVideoSettings; save persists to disk. */
     private static final class IrisStorage implements OptionStorage<Object> {
         @Override
         public Object getData() {

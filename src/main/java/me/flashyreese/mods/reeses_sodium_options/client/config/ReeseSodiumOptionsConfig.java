@@ -63,7 +63,7 @@ public final class ReeseSodiumOptionsConfig {
         }
     }
 
-    /** 供自研 storage 在 apply 事务后持久化 RSO 配置。 */
+    /** Persists the RSO config after an apply transaction of the option host. */
     public static void writeConfig() {
         writeToDisk();
     }

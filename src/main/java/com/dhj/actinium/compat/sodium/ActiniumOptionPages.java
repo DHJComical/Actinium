@@ -10,14 +10,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 自研内置选项页集合：直接返回 embeddium {@link OptionPage} 形式的
- * Actinium 视频选项页与 Iris 兼容页，不再经过 Sodium 配置模型转换。
+ * Actinium's own built-in option page collection: returns embeddium
+ * {@link OptionPage} forms of the Actinium video option pages and the Iris
+ * compatibility pages directly, without any Sodium config model conversion.
  */
 public final class ActiniumOptionPages {
     private ActiniumOptionPages() {
     }
 
-    /** 构建 Actinium 当前暴露的全部内置页面（embeddium 模型）。 */
+    /** Builds all built-in pages Actinium currently exposes (embeddium model). */
     public static List<OptionPage> builtInPages() {
         List<OptionPage> pages = new ArrayList<>(List.of(
                 ActiniumGameOptionPages.general(),
