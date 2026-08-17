@@ -6,6 +6,7 @@ import com.dhj.actinium.gui.rso.compat.FocusNavigationEvent;
 import com.dhj.actinium.gui.rso.compat.GuiEventListener;
 import com.dhj.actinium.gui.rso.compat.GuiGraphicsExtractor;
 import com.dhj.actinium.gui.rso.compat.KeyEvent;
+import com.dhj.actinium.gui.rso.compat.MouseButtonEvent;
 import com.dhj.actinium.gui.rso.compat.NarratableEntry;
 import com.dhj.actinium.gui.rso.compat.Renderable;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.frame.option.OptionRow;
@@ -49,6 +50,41 @@ public abstract class AbstractFrame extends BaseWidget implements ContainerEvent
                     return true;
                 }
             } else if (element instanceof AbstractFrame frame && frame.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The compat ContainerEventHandler default only forwards to the focused
+    // child; frames must fan clicks out to every child, matching upstream
+    // AbstractContainerEventHandler semantics. Hitting a child also claims
+    // focus so subsequent drag/release events keep routing to it.
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        for (GuiEventListener child : this.children) {
+            if (child.isMouseOver(event.x(), event.y()) && child.mouseClicked(event, doubleClick)) {
+                this.setFocused(child);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        for (GuiEventListener child : this.children) {
+            if (child.mouseReleased(event)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+        for (GuiEventListener child : this.children) {
+            if (child.mouseDragged(event, deltaX, deltaY)) {
                 return true;
             }
         }
