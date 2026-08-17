@@ -24,6 +24,11 @@ public final class FmlRsoModMetadataResolver implements RsoModMetadataResolver {
     private static final Map<String, String> EMBEDDED_NAMES = Map.of(
             "iris", "Iris",
             "reeses-sodium-options", "Reese's Sodium Options");
+    private static final String[] ICON_CANDIDATES = {
+            "textures/gui/config-icon.png",
+            "textures/gui/icon.png",
+            "icon.png"
+    };
 
     private final Function<String, RsoModInfo> infoLookup;
     private final Predicate<ResourceLocation> iconAvailable;
@@ -88,9 +93,18 @@ public final class FmlRsoModMetadataResolver implements RsoModMetadataResolver {
         return new RsoModMetadata(configId, "", null, false);
     }
 
+    /**
+     * Probes the conventional icon locations in order: the config icon under
+     * textures/gui, the legacy gui icon, and the mod-list icon at the root.
+     * RSO itself only ships a root icon.png.
+     */
     private ResourceLocation icon(String configId) {
-        String path = "reeses-sodium-options".equals(configId) ? "icon.png" : "textures/gui/config-icon.png";
-        ResourceLocation location = new ResourceLocation(configId, path);
-        return this.iconAvailable.test(location) ? location : null;
+        for (String path : ICON_CANDIDATES) {
+            ResourceLocation location = new ResourceLocation(configId, path);
+            if (this.iconAvailable.test(location)) {
+                return location;
+            }
+        }
+        return null;
     }
 }

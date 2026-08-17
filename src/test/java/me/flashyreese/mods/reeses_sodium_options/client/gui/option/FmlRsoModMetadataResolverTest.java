@@ -62,7 +62,7 @@ class FmlRsoModMetadataResolverTest {
     }
 
     @Test
-    void rsoUsesIconPngWhileRegisteredModsProbeConfigIcon() {
+    void rsoUsesRootIconWhileRegisteredModsProbeConfigIcon() {
         Predicate<ResourceLocation> tracking = location -> {
             if (location.toString().equals("reeses-sodium-options:icon.png")) {
                 return true;
@@ -76,6 +76,18 @@ class FmlRsoModMetadataResolverTest {
         assertEquals(new ResourceLocation("reeses-sodium-options", "icon.png"),
                 resolver.resolve("reeses-sodium-options").icon());
         assertEquals(new ResourceLocation("celeritas", "textures/gui/config-icon.png"),
+                resolver.resolve("celeritas").icon());
+    }
+
+    @Test
+    void fallsBackToGuiIconWhenConfigIconIsMissing() {
+        Predicate<ResourceLocation> tracking = location ->
+                location.toString().equals("celeritas:textures/gui/icon.png");
+        FmlRsoModMetadataResolver resolver = resolver(
+                modId -> "celeritas".equals(modId) ? info("Celeritas", "2.4.0-dev") : null,
+                tracking, () -> "alpha-0.0.5");
+
+        assertEquals(new ResourceLocation("celeritas", "textures/gui/icon.png"),
                 resolver.resolve("celeritas").icon());
     }
 
