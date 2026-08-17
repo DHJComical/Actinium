@@ -143,7 +143,9 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
     }
 
     public enum GraphicsQuality implements TextProvider {
-        DEFAULT(List.of("options.gamma.default", "generator.default")),
+        // "options.gamma.default" is a 1.13+ key absent from 1.12.2; use the
+        // vanilla flat-world preset key which exists on 1.12.2 instead.
+        DEFAULT("generator.default"),
         FANCY("options.clouds.fancy"),
         FAST("options.clouds.fast");
 
