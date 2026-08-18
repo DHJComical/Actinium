@@ -64,7 +64,7 @@ final class OptionRowFactory {
             case Option<?> o when o.getControl() instanceof org.embeddedt.embeddium.api.options.control.SliderControl ->
                     new IntegerSliderOptionRow(dim, this.theme, this.optionStateStore, new RsoOption(o));
             case Option<?> o when o.getControl() instanceof org.embeddedt.embeddium.api.options.control.CyclingControl ->
-                    new EnumOptionRow<>(dim, this.theme, this.optionStateStore, new RsoOption(o));
+                    new CyclingOptionRow(dim, this.theme, this.optionStateStore, new RsoOption(o));
             case Option<?> o when o.getControl() instanceof org.embeddedt.embeddium.api.options.control.ExternalButtonControl ->
                     new ExternalButtonOptionRow(this.screen, dim, this.theme, this.optionStateStore, new RsoOption(o));
             default -> this.createUnsupportedRow(option, dim);

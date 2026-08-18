@@ -117,4 +117,9 @@ dependencies {
     // Extra Utilities 2 1.9.9 (issue #48: its GLStateAttributes GUI state snapshot reads the stale vanilla
     // GlStateManager mirror under GLSM; the mixin re-reads live GL state)
     modImplementation "curse.maven:extra-utilities-2-225561:2678374"
+
+    // Snow! Real Magic! 0.7.4 (issue #35: SRM replaces snow-covered blocks with a snow layer carrying a
+    // SnowTile and only re-emits the covered block inside BlockRendererDispatcher.renderBlock; the fast
+    // chunk path must fall back to the vanilla dispatcher for its snow_layer block)
+    modRuntimeOnly 'curse.maven:snow-real-magic-308663:6275195'
 }
