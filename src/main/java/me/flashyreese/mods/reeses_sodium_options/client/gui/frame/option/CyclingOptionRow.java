@@ -16,12 +16,12 @@ import net.minecraft.client.gui.GuiScreen;
 
 import java.util.List;
 
-final class EnumOptionRow<E extends Enum<E>> extends AbstractOptionRow {
+final class CyclingOptionRow extends AbstractOptionRow {
     private static final int MAX_CONTENT_WIDTH = 70;
 
     private final RsoOption option;
 
-    EnumOptionRow(LayoutBounds dim, GuiTheme theme, OptionStateStore optionStateStore, RsoOption option) {
+    CyclingOptionRow(LayoutBounds dim, GuiTheme theme, OptionStateStore optionStateStore, RsoOption option) {
         super(dim, theme, optionStateStore, option);
         this.option = option;
     }
@@ -132,7 +132,7 @@ final class EnumOptionRow<E extends Enum<E>> extends AbstractOptionRow {
     }
 
     private void cycleControl(boolean reverse) {
-        E nextValue = this.nextValue(reverse);
+        Object nextValue = this.nextValue(reverse);
         if (java.util.Objects.equals(nextValue, this.option.getPendingValue())) {
             return;
         }
@@ -141,10 +141,9 @@ final class EnumOptionRow<E extends Enum<E>> extends AbstractOptionRow {
         this.playClickSound();
     }
 
-    @SuppressWarnings("unchecked")
-    private E nextValue(boolean reverse) {
+    private Object nextValue(boolean reverse) {
         Object[] values = this.option.getAllowedValues();
-        E currentValue = (E) this.option.getPendingValue();
+        Object currentValue = this.option.getPendingValue();
         int valueIndex = 0;
 
         for (int i = 0; i < values.length; i++) {
@@ -158,7 +157,7 @@ final class EnumOptionRow<E extends Enum<E>> extends AbstractOptionRow {
             valueIndex = reverse
                     ? (valueIndex + values.length - 1) % values.length
                     : (valueIndex + 1) % values.length;
-            E nextValue = (E) values[valueIndex];
+            Object nextValue = values[valueIndex];
 
             if (this.option.isValueAllowed(nextValue)) {
                 return nextValue;
