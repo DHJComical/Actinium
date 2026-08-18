@@ -30,6 +30,7 @@ import org.jetbrains.annotations.Nullable;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
 import com.dhj.actinium.world.WorldSlice;
 import com.dhj.actinium.world.cloned.ChunkRenderContext;
 import com.dhj.actinium.world.cloned.ClonedChunkSectionCache;
@@ -52,7 +53,9 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     }
 
     public static VintageRenderSectionManager create(ChunkVertexType vertexType, WorldClient world, int renderDistance, CommandList commandList) {
-        return new VintageRenderSectionManager(VintageRenderPassConfigurationBuilder.build(vertexType), world, renderDistance, commandList, 0, 16);
+        int minSection = DepthsUpdateCompat.getMinSection(world);
+        int maxSection = DepthsUpdateCompat.getMaxSection(world);
+        return new VintageRenderSectionManager(VintageRenderPassConfigurationBuilder.build(vertexType), world, renderDistance, commandList, minSection, maxSection);
     }
 
     @Override
@@ -115,10 +118,11 @@ public class VintageRenderSectionManager extends RenderSectionManager {
             return true;
         }
         var array = chunk.getBlockStorageArray();
-        if (y < 0 || y >= array.length) {
+        int storageIndex = DepthsUpdateCompat.toStorageIndex(this.world, y);
+        if (storageIndex < 0 || storageIndex >= array.length) {
             return true;
         }
-        return array[y] == Chunk.NULL_BLOCK_STORAGE || array[y].isEmpty();
+        return array[storageIndex] == Chunk.NULL_BLOCK_STORAGE || array[storageIndex].isEmpty();
     }
 
     @Override
