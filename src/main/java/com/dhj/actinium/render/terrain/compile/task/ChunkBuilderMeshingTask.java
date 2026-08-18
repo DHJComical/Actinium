@@ -34,6 +34,7 @@ import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
+import com.dhj.actinium.compat.snowrealmagic.SnowRealMagicCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.WorldSlice;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
@@ -123,7 +124,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                             net.minecraft.util.BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
                             ForgeHooksClient.setRenderLayer(layer);
                             block.canRenderInLayer(blockState, layer);
-                            if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer) {
+                            if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer && !SnowRealMagicCompat.shouldForceVanillaRender(block)) {
                                 buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer, false);
                             } else {
                                 var buffer = buildContext.getBufferForLayer(layer);
@@ -138,7 +139,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                             for (net.minecraft.util.BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
                                 if (block.canRenderInLayer(blockState, layer)) {
                                     ForgeHooksClient.setRenderLayer(layer);
-                                    if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer) {
+                                    if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer && !SnowRealMagicCompat.shouldForceVanillaRender(block)) {
                                         buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer);
                                     } else {
                                         var buffer = buildContext.getBufferForLayer(layer);
