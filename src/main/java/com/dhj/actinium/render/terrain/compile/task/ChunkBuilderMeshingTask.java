@@ -33,6 +33,7 @@ import org.joml.Vector3d;
 import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import com.dhj.actinium.compat.blockrender.ModdedBlockRenderCompat;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
 import com.dhj.actinium.compat.snowrealmagic.SnowRealMagicCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
@@ -123,21 +124,21 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                         if (shaderLayerOverride != null) {
                             net.minecraft.util.BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
                             ForgeHooksClient.setRenderLayer(layer);
-                            block.canRenderInLayer(blockState, layer);
+                            ModdedBlockRenderCompat.canRenderInLayer(block, blockState, layer);
                             if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer && !SnowRealMagicCompat.shouldForceVanillaRender(block)) {
                                 buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer, false);
                             } else {
                                 var buffer = buildContext.getBufferForLayer(layer);
                                 buildContext.beginVanillaBlockRender(buffer, blockPos, blockState);
                                 try {
-                                    dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                    ModdedBlockRenderCompat.renderBlock(dispatcher, blockState, blockPos, slice, buffer);
                                 } finally {
                                     buildContext.endVanillaRender(buffer);
                                 }
                             }
                         } else {
                             for (net.minecraft.util.BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
-                                if (block.canRenderInLayer(blockState, layer)) {
+                                if (ModdedBlockRenderCompat.canRenderInLayer(block, blockState, layer)) {
                                     ForgeHooksClient.setRenderLayer(layer);
                                     if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer && !SnowRealMagicCompat.shouldForceVanillaRender(block)) {
                                         buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer);
@@ -145,7 +146,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                                         var buffer = buildContext.getBufferForLayer(layer);
                                         buildContext.beginVanillaBlockRender(buffer, blockPos, blockState);
                                         try {
-                                            dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                            ModdedBlockRenderCompat.renderBlock(dispatcher, blockState, blockPos, slice, buffer);
                                         } finally {
                                             buildContext.endVanillaRender(buffer);
                                         }

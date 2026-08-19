@@ -119,6 +119,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 - **`compat/` 根**：`MixinReEntranceLockFix` —— DH mixin 配置入队前的 re-entrance lock
   清理与类预加载修复。
+- **`compat/blockrender/`**：`ModdedBlockRenderCompat` —— 为异步区块构建中已知的第三方
+  非线程安全方块 renderer 缓存提供按 renderer 归属划分的串行化边界。
 - **`compat/ccl/`**：`GlStateTrackerSnapshot` —— CCL 状态跟踪快照（配 `mixin/mod/ccl`）。
 - **`compat/dh/`**：`DistantHorizonsCompat`（DH 接入渲染桥）、`ActiniumDHIrisCompat` /
   `ActiniumDHIrisAccessor` / `DistantHorizonsIrisAccessorState`（Iris 访问器与状态）。

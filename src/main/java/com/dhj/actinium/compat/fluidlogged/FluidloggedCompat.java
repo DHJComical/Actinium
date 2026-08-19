@@ -2,6 +2,7 @@ package com.dhj.actinium.compat.fluidlogged;
 
 import git.jbredwards.fluidlogged_api.api.block.IFluidloggable;
 import git.jbredwards.fluidlogged_api.api.util.FluidState;
+import com.dhj.actinium.compat.blockrender.ModdedBlockRenderCompat;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.renderer.BlockRendererDispatcher;
 import net.minecraft.util.BlockRenderLayer;
@@ -29,12 +30,12 @@ public class FluidloggedCompat {
             var block = renderState.getBlock();
 
             for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
-                if (block.canRenderInLayer(renderState, layer)) {
+                if (ModdedBlockRenderCompat.canRenderInLayer(block, renderState, layer)) {
                     ForgeHooksClient.setRenderLayer(layer);
                     var buffer = context.getBufferForLayer(layer);
                     context.beginVanillaFluidRender(buffer, pos, renderState);
                     try {
-                        dispatcher.renderBlock(renderState, pos, blockAccess, buffer);
+                        ModdedBlockRenderCompat.renderBlock(dispatcher, renderState, pos, blockAccess, buffer);
                     } finally {
                         context.endVanillaRender(buffer);
                     }

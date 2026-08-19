@@ -1,6 +1,7 @@
 package com.dhj.actinium.render.terrain.compile.pipeline;
 
 import com.dhj.actinium.api.render.terrain.BlockQuadTransformerHolder;
+import com.dhj.actinium.compat.blockrender.ModdedBlockRenderCompat;
 import net.coderbot.iris.debug.ShaderRegressionDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -100,6 +101,12 @@ public class VintageBlockRenderer {
     }
 
     public void renderBlock(IBlockState state, BlockPos pos, ActiniumBlockAccess blockAccess, BlockRenderLayer layer, boolean allowRenderPassOptimization) {
+        ModdedBlockRenderCompat.renderBlock(state.getBlock(), () -> this.renderBlockInternal(
+                state, pos, blockAccess, layer, allowRenderPassOptimization));
+    }
+
+    private void renderBlockInternal(IBlockState state, BlockPos pos, ActiniumBlockAccess blockAccess,
+                                     BlockRenderLayer layer, boolean allowRenderPassOptimization) {
         int defaultFlags = BakedQuadGroupAnalyzer.USE_ALL_THINGS;
         if (!this.useRenderPassOptimization || !allowRenderPassOptimization) {
             defaultFlags &= ~BakedQuadGroupAnalyzer.USE_RENDER_PASS_OPTIMIZATION;
@@ -148,7 +155,7 @@ public class VintageBlockRenderer {
         );
 
         for (var dir : EnumFacing.VALUES) {
-            var quads = model.getQuads(state, dir, rand);
+            var quads = ModdedBlockRenderCompat.getQuads(state.getBlock(), model, state, dir, rand);
 
             if (quads.isEmpty() || !state.shouldSideBeRendered(blockAccess, pos, dir)) {
                 continue;
@@ -164,7 +171,7 @@ public class VintageBlockRenderer {
             renderQuadList(buffer, buffers, material, pos, dir, lighter, colorProvider, offset, quads);
         }
 
-        var quads = model.getQuads(state, null, rand);
+        var quads = ModdedBlockRenderCompat.getQuads(state.getBlock(), model, state, null, rand);
 
         if (!quads.isEmpty()) {
             quads = BlockQuadTransformerHolder.transform(

@@ -37,9 +37,10 @@ public abstract class MixinChunkBuilderMeshingTaskBetterFoliage {
             method = EXECUTE_METHOD,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/block/Block;canRenderInLayer("
-                            + "Lnet/minecraft/block/state/IBlockState;Lnet/minecraft/util/BlockRenderLayer;)Z",
-                    remap = true
+                    target = "Lcom/dhj/actinium/compat/blockrender/ModdedBlockRenderCompat;canRenderInLayer("
+                            + "Lnet/minecraft/block/Block;Lnet/minecraft/block/state/IBlockState;"
+                            + "Lnet/minecraft/util/BlockRenderLayer;)Z",
+                    remap = false
             )
     )
     private boolean actinium$betterFoliageCanRenderInLayer(
@@ -127,24 +128,28 @@ public abstract class MixinChunkBuilderMeshingTaskBetterFoliage {
             method = EXECUTE_METHOD,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/BlockRendererDispatcher;renderBlock("
+                    target = "Lcom/dhj/actinium/compat/blockrender/ModdedBlockRenderCompat;renderBlock("
+                            + "Lnet/minecraft/client/renderer/BlockRendererDispatcher;"
                             + "Lnet/minecraft/block/state/IBlockState;Lnet/minecraft/util/math/BlockPos;"
                             + "Lnet/minecraft/world/IBlockAccess;"
-                            + "Lnet/minecraft/client/renderer/BufferBuilder;)Z",
-                    remap = true
+                            + "Lnet/minecraft/client/renderer/BufferBuilder;)V",
+                    remap = false
             )
     )
-    private boolean actinium$betterFoliageWrapVanillaRenderBlock(
+    private void actinium$betterFoliageWrapVanillaRenderBlock(
             BlockRendererDispatcher dispatcher,
             IBlockState state,
             BlockPos pos,
             IBlockAccess blockAccess,
             BufferBuilder buffer,
-            Operation<Boolean> original,
+            Operation<Void> original,
             @Local(name = "layer") BlockRenderLayer layer
     ) {
         Boolean result = RenderingHandler.wrapRenderBlock(
-                () -> original.call(dispatcher, state, pos, blockAccess, buffer),
+                () -> {
+                    original.call(dispatcher, state, pos, blockAccess, buffer);
+                    return Boolean.TRUE;
+                },
                 state,
                 pos,
                 blockAccess,
@@ -152,8 +157,7 @@ public abstract class MixinChunkBuilderMeshingTaskBetterFoliage {
                 layer
         );
         if (result == null) {
-            return original.call(dispatcher, state, pos, blockAccess, buffer);
+            original.call(dispatcher, state, pos, blockAccess, buffer);
         }
-        return result;
     }
 }
