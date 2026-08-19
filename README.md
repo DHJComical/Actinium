@@ -103,3 +103,6 @@ Actinium 的开发参考、整合并适配了多个项目中的思路、代码�
 Actinium 的许可证见 `LICENSE`。
 
 来自其他项目的代码，以及围绕这些代码所做的适配性修改，除非相关源文件中另有明确说明，否则继续遵循各自上游项目原本的许可证。
+
+## 广告
+[![Powered by OrcaRouter](https://img.shields.io/badge/Powered_by-OrcaRouter-2563eb)](https://www.orcarouter.ai/ref/ref_8346735b8e00bd6f51cf)
