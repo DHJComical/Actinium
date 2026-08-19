@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-08-18。
+最后更新：2026-08-19。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -57,6 +57,8 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Snow! Real Magic! | 已验证 | 兼容门控（SRM 的 snow_layer 块退回 vanilla dispatcher 路径） | 0.7.4：带雪栅栏不渲染已修复（SRM 把被覆盖方块替换为带 SnowTile 的雪层、仅在 `BlockRendererDispatcher.renderBlock` 内重绘，快速区块路径已绕过）；`6aee395`，dev 运行验证通过（MakeUp Ultra Fast 下无光影 + 光影各验一次） |
 | Modern Splash    | 部分 | 无侵入（替换类与 mixin 注入天然兼容）+ splash 字体 color=0 修复 | 1.5.3（629058:8487408）dev 运行通过（coremod 加载、mixin 注入保留、字体颜色按配置生效）；光影场景回归待做，详见 [docs/compat/modern-splash.md](compat/modern-splash.md) |
 | Reese's Sodium Options（内嵌） | 代码支持 | 内嵌移植 UI（`me.flashyreese.mods.reeses_sodium_options`，MIT）+ embeddium 选项数据层（`org.embeddedt.embeddium.api.options.*` 自研扩展） | RSO 界面作为视频设置入口（`MixinGuiOptions` 拦截按钮 101，`enabled=false` 回退原版 `GuiVideoSettings`）；`net.caffeinemc` 设置界面与配置模型已整体删除；编译与 349 项单元测试通过，**运行期视觉对比待人工验证**，详见 [docs/rso-port.md](rso-port.md) |
+| Extra Utilities 2 | 已验证 | `ModdedBlockRenderCompat` 在完整 block-render 生命周期内按 block 实例串行化 | `extrautils2@1.0`：Java 25 dev 客户端启动 10 个 chunk-builder worker，进入已有世界并触发区块重载后未复现 Issue #36 的 CME；代码提交 `44f4295`，详见 [docs/compat/extrautils2.md](compat/extrautils2.md) |
+| AgriCraft | 部分 | `ModdedBlockRenderCompat` 使用共享 renderer 锁保护 crop 缓存 | 与 XU2 相同的异步第三方缓存访问模式已加入兼容层；dev 运行验证待补，详见 [docs/compat/extrautils2.md](compat/extrautils2.md) |
 
 ## 验证记录模板
 
