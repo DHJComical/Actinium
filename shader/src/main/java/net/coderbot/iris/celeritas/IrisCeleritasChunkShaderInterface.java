@@ -114,7 +114,10 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         // Hand and fullscreen passes can leave depth disabled or mask writes off before terrain draws.
         GLStateManager.enableDepthTest();
         GLStateManager.glDepthFunc(GL11.GL_LEQUAL);
-        GLStateManager.glDepthMask(true);
+        // Opaque terrain passes and the shadow-map pass write depth; the main translucent pass does not.
+        // Forcing depth writes on the translucent pass makes glass windows (EnderIO fluid tanks, issue #58)
+        // occlude TESR geometry drawn behind them, unlike vanilla which leaves the depth mask off for that layer.
+        GLStateManager.glDepthMask(ShadowRenderingState.areShadowsCurrentlyBeingRendered() || !pass.isReverseOrder());
 
         if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             GLStateManager.disableCull();

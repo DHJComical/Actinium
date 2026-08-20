@@ -111,6 +111,13 @@ dependencies {
     modCompileOnly "curse.maven:forgelin-continuous-456403:8248535"
     modCompileOnly "curse.maven:rlfoliage-970462:7645701"
 
+    modImplementation "curse.maven:cofh-core-69162:2920433"
+    modImplementation "curse.maven:cofh-world-271384:2920434"
+    modImplementation "curse.maven:thermal-expansion-69163:2926431"
+    modImplementation "curse.maven:thermal-foundation-222880:2926428"
+    modImplementation "curse.maven:redstone-flux-270789:2920436"
+    modImplementation "curse.maven:codechicken-lib-cre-1328922:6898525"
+
     // HammerLib 12.2.66 (issue #40: its GL20.glGetActiveUniform(int, int, int) -> String call is redirected to
     // GLSM GLStateManager, which must expose the same descriptor)
     modCompileOnly "maven.modrinth:hammer-lib:B9uVCQjP"
@@ -123,4 +130,11 @@ dependencies {
     // modCompileOnly exposes its public API (sayys.depthsupdate.api.DepthsUpdateAPI) for the compat shim.
     modImplementation 'curse.maven:depths-update-1472501:8038246'
     modRuntimeOnly 'curse.maven:assetmover-571482:4430763'
+    
+    modImplementation "curse.maven:extra-utilities-2-225561:2678374"
+
+    // Snow! Real Magic! 0.7.4 (issue #35: SRM replaces snow-covered blocks with a snow layer carrying a
+    // SnowTile and only re-emits the covered block inside BlockRendererDispatcher.renderBlock; the fast
+    // chunk path must fall back to the vanilla dispatcher for its snow_layer block)
+    modRuntimeOnly 'curse.maven:snow-real-magic-308663:6275195'
 }
