@@ -7,7 +7,7 @@
 - 评估终点：`0a3624bc2ba5bb28b01ccbbc6d185fa9247bddcf`
 - 提交范围：基准之后到评估终点，共 34 个线性提交
 - 目标项目：Minecraft 1.12.2 / Cleanroom Loader 的 Actinium
-- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40` 自适应调度专项进行中
+- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40` 已完成手工适配、直接逻辑测试、`check` 和完整 `build`，低 FPS、shadow-only、资源重载、维度切换等运行专项仍待验证
 
 ## 分支与日期
 
@@ -50,7 +50,7 @@
 
 这些提交有明确的功能或性能收益，但与 Actinium 的本地结构、1.12.2 API、LWJGL service 或 shader 资源路径存在差异，不能直接 cherry-pick。
 
-- `fadd0c40fadd7d3d26278d5ab4b377a7c5cc7256` — **Decouple chunk task dispatch rate from FPS**。将固定每帧任务预算改为依据 worker 吞吐和 starvation 调整 in-flight target，涉及 `ChunkBuilder`、`ChunkJobQueue`、`RenderSectionManager`、`RenderListManager`、`VisibleChunkCollector` 等调度语义。Actinium 的 `RenderSectionManager` 及 shadow pass、扩展世界高度有本地差异，需要单独压测初始建图、低 FPS、任务取消、资源重载、维度切换和 shadow pass。
+- `fadd0c40fadd7d3d26278d5ab4b377a7c5cc7256` — **Decouple chunk task dispatch rate from FPS**（已完成手工适配）。将固定每帧任务预算改为依据 worker 吞吐和 starvation 调整 in-flight target，涉及 `ChunkBuilder`、`ChunkJobQueue`、`RenderSectionManager`、`RenderListManager`、`VisibleChunkCollector` 等调度语义。Actinium 的 `RenderSectionManager` 及 shadow pass、扩展世界高度有本地差异，因此按本地结构完成了适配，并保留后续对初始建图、低 FPS、任务取消、资源重载、维度切换和 shadow pass 的运行专项验证。
 - `208127b4a5b754584bd81bceac3417df8509fdfa` — **Fix GlFence.sync calling API with bogus parameters**。上游修复的是 `glWaitSync(id, flags, timeout)` 的参数；Actinium 的 `GlFence` 使用 `glClientWaitSync`，其返回值和等待语义被 `MappedStagingBuffer` 的 GPU upload 回收使用。两者不是同一个 API，不能直接同步；后续必须先确认本地是否存在真正的 `glWaitSync` 调用，再独立设计适配。
 - `3d071b85205db183f54d30b7b36fe54ea096a2a2` — **Implement nearly-correct bilinear interpolation for ambient occlusion**。改变 chunk vertex ABI、AO 数据和 shader varying，涉及 compact/vanilla-like vertex format、`ChunkVertexEncoder`、mesh builder 及 terrain shader。Actinium 当前 stride 和 shader 资源均有本地差异，还要检查 `ExtendedChunkVertexType`、Iris 扩展顶点、triangulated pass 和旧版 GLSL。
 - `7de8b00c0647ed169001d8ea889efafc81044264` — **Support EXT_timer_query for ancient drivers, and remove nested query support**。上游从 timestamp query 改为 `GL_TIME_ELAPSED` begin/end，并增加 `EXT_timer_query` wrapper。Actinium 当前 `TimerQueryManager` 使用 timestamp query，且 chunk、frame、Iris composite/finalize 计时区间存在嵌套可能；直接同步会改变计时器契约并触发非法嵌套，因此本轮不直接同步，后续需先设计计时层级并补齐本地 LWJGL wrapper。
@@ -116,6 +116,19 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
    - `src/main/resources/assets/actinium/shaders/blocks/block_layer_opaque.vsh`
    - `src/main/resources/assets/actinium/shaders/blocks/block_layer_opaque.fsh`
    - 仅在启用 fog 且 chunk fade duration 大于 0 时声明 `v_ChunkAgeMs` 和 `celeritas_ChunkAges`，保持 `DefaultChunkShaderInterface` 的 optional uniform 绑定契约。
+4. 手工适配 `fadd0c40fadd7d3d26278d5ab4b377a7c5cc7256` 的区块任务调度：
+   - 生产文件：
+     - `celeritas-common/src/main/java/org/embeddedt/embeddium/impl/render/chunk/ChunkUpdateType.java`
+     - `celeritas-common/src/main/java/org/embeddedt/embeddium/impl/render/chunk/RenderSectionManager.java`
+     - `celeritas-common/src/main/java/org/embeddedt/embeddium/impl/render/chunk/compile/executor/ChunkBuilder.java`
+     - `celeritas-common/src/main/java/org/embeddedt/embeddium/impl/render/chunk/compile/executor/ChunkJobQueue.java`
+     - `celeritas-common/src/main/java/org/embeddedt/embeddium/impl/render/chunk/lists/RenderListManager.java`
+     - `celeritas-common/src/main/java/org/embeddedt/embeddium/impl/render/chunk/lists/VisibleChunkCollector.java`
+   - 直接逻辑测试：
+     - `src/test/java/org/embeddedt/embeddium/impl/render/chunk/compile/executor/ChunkBuilderSchedulingTest.java`
+     - `src/test/java/org/embeddedt/embeddium/impl/render/chunk/compile/executor/ChunkJobQueueTest.java`
+     - `src/test/java/org/embeddedt/embeddium/impl/render/chunk/region/VisibleChunkCollectorSchedulingTest.java`
+   - 适配内容包括 adaptive in-flight target、每个 worker 预热 32 个任务、调度下限、worker starvation 时翻倍、damped decay、仅 `INITIAL_BUILD` 限流、主 terrain 每帧单次 tick 以及 shadow 不覆盖主 terrain 反馈；任务取消和重要任务的阻塞语义保持不变。warm start、target 翻倍、初始队列 `target * 10` 和 SORT 预算 `* 4` 均使用 `long` 饱和处理，避免整数溢出。
 
 ## 不直接同步的提交
 
@@ -131,18 +144,23 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 
 ### 当前验证状态
 
-- 已落地同步修改 4 个 `celeritas-common` Java 文件和 2 个 Actinium shader 资源文件，未修改 GLSM、Mixin 或其他模块。
-- `compileJava --no-daemon` 已通过，使用 Java 25 和 `GRADLE_USER_HOME=D:/gradle`。
-- 最近一次 `check --no-daemon` 已通过：包含 `processResources`、根项目测试、模块边界、compat bridge Jar 和 remap Jar 校验；共 24 个 actionable tasks。
+- `fadd0c40` 已完成手工适配，涉及上文列出的 6 个 `celeritas-common` Java 生产文件和 3 个直接逻辑测试文件；未修改 GLSM、Mixin 或其他模块。
+- `compileJava --no-daemon` 和 `compileTestJava --no-daemon` 均已通过，使用 Java 25 和 `GRADLE_USER_HOME=D:/gradle`。
+- fadd 调度测试实际执行 5 个测试，`0 failures`、`0 errors`。
+- `check --no-daemon` 已通过：包含 `processResources`、根项目测试、模块边界、compat bridge Jar 和 remap Jar 校验；共 24 个 actionable tasks。
 - 完整 `build --no-daemon` 已通过：根项目及 `GTNHLib`、`glsm`、`celeritas-common`、`shader` 子项目均完成构建；共 28 个 actionable tasks。
 - `git diff --check` 已通过，已落地变更文件确认 UTF-8 无 BOM。
-- 用户反馈当前同步后的游戏渲染正常；该反馈作为本阶段 smoke validation 记录，不等同于光影包、维度切换、资源重载或条件模组的完整兼容性验证。
+- 用户反馈低风险同步后的游戏渲染正常；该反馈作为此前阶段的 smoke validation 记录，不等同于 `fadd0c40` 的低 FPS、shadow-only、资源重载、维度切换或其他运行专项已经完成。
+
+### fadd 残余风险/运行专项
+
+shadow-only workload 按上游设计不推动 adaptive target；当前实现保持主 terrain 单次 tick，shadow pass 不覆盖主 terrain 的调度反馈。低 FPS、初始建图、普通/重要 rebuild、任务取消、资源重载、维度切换、render distance 变化、shadow pass、扩展世界高度等场景尚未作为本轮完整运行矩阵完成，不能将其标记为运行时已验证。
 
 ### 后续顺序
 
 1. 已完成 `3ad8610b` 的机械同步并通过 `compileJava`、`check`。
 2. 已完成 `db107709` 两项 buffer 行为修复，保留本地 fallback，并通过 `compileJava`、`check`。
-3. [进行中] 对 `fadd0c40` 建立独立调度性能专项，保留 shadow、扩展世界高度和 cancellation 语义，并验证低 FPS、初始建图、rebuild 取消、维度切换、资源重载、render distance 变化和 shadow pass。
+3. `fadd0c40` 的代码适配、直接逻辑测试、构建验证已完成；待完成低 FPS、初始建图、普通/重要 rebuild、任务取消、资源重载、维度切换、render distance 变化、shadow pass 和扩展世界高度等运行专项验证。
 4. 将 `3d071b85` 与 `0a3624bc` 作为一个 AO ABI 变更批次处理，检查 compact/vanilla-like vertex stride、`ExtendedChunkVertexType`、普通 terrain、Iris terrain、triangulated pass 和 shader pack。
 5. 将 MultiDraw 五提交作为完整数据布局和发射器重构，先 benchmark 再决定是否移植。
 6. 将 Occlusion/lattice 十提交作为完整可见性架构重构，优先解决动态世界高度、异步 snapshot 和 camera rebasing 的适配，再进行性能优化。
