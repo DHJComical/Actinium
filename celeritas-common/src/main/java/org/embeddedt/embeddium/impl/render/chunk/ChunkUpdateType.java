@@ -64,4 +64,11 @@ public enum ChunkUpdateType {
     public boolean isSort() {
         return this == SORT || this == IMPORTANT_SORT;
     }
+
+    static {
+        // Pending update types use a three-bit field in PackedSectionMetadata.
+        if (VALUES.length > 7) {
+            throw new AssertionError("The occlusion system currently assumes there are at most 7 update types");
+        }
+    }
 }

@@ -26,7 +26,6 @@ import org.embeddedt.embeddium.impl.render.chunk.lists.SectionTicker;
 import org.embeddedt.embeddium.impl.render.chunk.lists.SortedRenderLists;
 import org.embeddedt.embeddium.impl.render.chunk.metrics.RenderSectionMetricsTracker;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
-import org.embeddedt.embeddium.impl.render.chunk.occlusion.VisibilityEncoding;
 import org.embeddedt.embeddium.impl.render.chunk.region.RenderRegion;
 import org.embeddedt.embeddium.impl.render.chunk.region.RenderRegionManager;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
@@ -90,6 +89,10 @@ public abstract class RenderSectionManager {
 
     @Nullable
     protected final RenderListManager shadowRenderListManager;
+
+    // Shared by every section (one allocation, not one per section); installed on each RenderSection so its
+    // packedMetadata changes fan out to the list manager mirror(s).
+    private final RenderSection.MetadataSink metadataSink = this::pushSectionMetadata;
 
     protected final ReferenceSet<RenderSection> sectionsWithGlobalEntities = new ReferenceOpenHashSet<>();
 
@@ -322,6 +325,7 @@ public abstract class RenderSectionManager {
 
         RenderSection renderSection = new RenderSection(region, x, y, z);
         region.addSection(renderSection);
+        renderSection.setMetadataSink(this.metadataSink);
 
         this.sectionByPosition.put(key, renderSection);
 
@@ -548,17 +552,21 @@ public abstract class RenderSectionManager {
         render.setTranslucencySortStates(sortStates.isEmpty() ? Collections.emptyMap() : sortStates);
     }
 
+    // Section MetadataSink: mirrors a section's packed metadata into the graph-search lattice(s) on every
+    // packedMetadata mutation (visibility/visuals via setInfo, pending update, build-in-flight).
+    private void pushSectionMetadata(RenderSection section) {
+        long packed = section.getPackedMetadata();
+        this.renderListManager.updateSectionMetadata(section.getChunkX(), section.getChunkY(), section.getChunkZ(), packed);
+        if (this.shadowRenderListManager != null) {
+            this.shadowRenderListManager.updateSectionMetadata(section.getChunkX(), section.getChunkY(), section.getChunkZ(), packed);
+        }
+    }
+
     @MustBeInvokedByOverriders
     protected boolean updateSectionInfo(RenderSection render, @Nullable BuiltRenderSectionData info) {
         boolean changed = render.setInfo(info);
 
         if (changed) {
-            long visibilityData = info != null ? info.visibilityData : VisibilityEncoding.NULL;
-            this.renderListManager.updateVisibilityData(render.getChunkX(), render.getChunkY(), render.getChunkZ(), visibilityData);
-            if (this.shadowRenderListManager != null) {
-                this.shadowRenderListManager.updateVisibilityData(render.getChunkX(), render.getChunkY(), render.getChunkZ(), visibilityData);
-            }
-
             if (!(info instanceof MinecraftBuiltRenderSectionData<?, ?> data)) {
                 this.sectionsWithGlobalEntities.remove(render);
             } else if (!data.globalBlockEntities.isEmpty()) {

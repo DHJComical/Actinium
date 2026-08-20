@@ -3,7 +3,6 @@ package org.embeddedt.embeddium.impl.render.chunk;
 import lombok.Getter;
 import lombok.Setter;
 import org.embeddedt.embeddium.impl.render.chunk.data.BuiltRenderSectionData;
-import org.embeddedt.embeddium.impl.render.chunk.lists.RenderVisualsService;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.VisibilityEncoding;
 import org.embeddedt.embeddium.impl.render.chunk.region.RenderRegion;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
@@ -35,9 +34,25 @@ public class RenderSection extends AbstractSection {
 
     // Rendering State
     private BuiltRenderSectionData contextData;
-    private boolean hasAnythingToRender;
-    @Getter
-    private int visualsServiceFlags;
+
+    // Packed encoding of visibility data, visual flags, pending update type,
+    // and build-in-flight state. The lattice mirror consumes this word through
+    // metadataSink, so all writes must go through writeMetadata().
+    private long packedMetadata;
+
+    // Installed after construction so the initial metadata write can happen
+    // before the section is attached to the render-list lattice.
+    @Nullable
+    private MetadataSink metadataSink;
+
+    /**
+     * Receives packed metadata changes so the graph-search lattice can mirror
+     * the authoritative state held by this section.
+     */
+    public interface MetadataSink {
+        /** Publishes the section's current packed metadata to its lattice mirror. */
+        void onMetadataChanged(RenderSection section);
+    }
 
     /**
      * A mapping from translucent render passes to the sort state for that particular pass (which contains data needed
@@ -63,9 +78,6 @@ public class RenderSection extends AbstractSection {
     //      is already in flight. submitRebuildTasks() performs the authoritative type check.
     @Nullable
     private CancellationToken buildCancellationToken = null;
-
-    @Nullable
-    private ChunkUpdateType pendingUpdateType;
 
     private int lastBuiltFrame = -1;
     private int lastSubmittedFrame = -1;
@@ -98,7 +110,7 @@ public class RenderSection extends AbstractSection {
     public void delete() {
         if (this.buildCancellationToken != null) {
             this.buildCancellationToken.setCancelled();
-            this.buildCancellationToken = null;
+            this.setBuildCancellationToken(null);
         }
 
         this.setInfo(null);
@@ -134,12 +146,43 @@ public class RenderSection extends AbstractSection {
     }
 
     public void updateCachedContextDataFlags() {
-        this.visualsServiceFlags = this.contextData != null ? this.contextData.getVisualBitmaskForSection() : 0;
-        this.hasAnythingToRender = this.visualsServiceFlags != 0;
+        int flags = this.contextData != null ? this.contextData.getVisualBitmaskForSection() : 0;
+        long visibilityData = this.contextData != null ? this.contextData.visibilityData : VisibilityEncoding.NULL;
+
+        this.writeMetadata(PackedSectionMetadata.withVisibilityData(
+                PackedSectionMetadata.withVisualsFlags(this.packedMetadata, flags), visibilityData));
+    }
+
+    /** Writes packed metadata and publishes the new value to the lattice mirror when attached. */
+    private void writeMetadata(long packed) {
+        this.packedMetadata = packed;
+        if (this.metadataSink != null) {
+            this.metadataSink.onMetadataChanged(this);
+        }
+    }
+
+    /** Returns the authoritative packed metadata word mirrored by the lattice. */
+    public long getPackedMetadata() {
+        return this.packedMetadata;
+    }
+
+    /** Installs the lattice callback used for subsequent packed metadata changes. */
+    public void setMetadataSink(@Nullable MetadataSink sink) {
+        this.metadataSink = sink;
+    }
+
+    /** Returns the visual-presence flags cached in the packed section metadata. */
+    public int getVisualsServiceFlags() {
+        return PackedSectionMetadata.getVisualsFlags(this.packedMetadata);
+    }
+
+    /** Returns the visibility graph data cached in the packed section metadata. */
+    public long getVisibilityData() {
+        return PackedSectionMetadata.getVisibilityData(this.packedMetadata);
     }
 
     public boolean hasAnythingToRender() {
-        return this.hasAnythingToRender;
+        return this.getVisualsServiceFlags() != 0;
     }
 
     public void setTranslucencySortStates(@NotNull Map<TerrainRenderPass, TranslucentQuadAnalyzer.SortState> sortStates) {
@@ -166,14 +209,15 @@ public class RenderSection extends AbstractSection {
 
     public void setBuildCancellationToken(@Nullable CancellationToken token) {
         this.buildCancellationToken = token;
+        this.writeMetadata(PackedSectionMetadata.withBuildInFlight(this.packedMetadata, token != null));
     }
 
     public @Nullable ChunkUpdateType getPendingUpdate() {
-        return this.pendingUpdateType;
+        return PackedSectionMetadata.getPendingUpdate(this.packedMetadata);
     }
 
     public void setPendingUpdate(@Nullable ChunkUpdateType type) {
-        this.pendingUpdateType = type;
+        this.writeMetadata(PackedSectionMetadata.withPendingUpdate(this.packedMetadata, type));
     }
 
     /**
@@ -183,10 +227,10 @@ public class RenderSection extends AbstractSection {
      * @return true if the section's chunk update type has changed
      */
     public boolean requestUpdate(ChunkUpdateType type) {
-        type = ChunkUpdateType.getPromotionUpdateType(this.pendingUpdateType, type);
+        type = ChunkUpdateType.getPromotionUpdateType(this.getPendingUpdate(), type);
 
         if (type != null) {
-            this.pendingUpdateType = type;
+            this.setPendingUpdate(type);
             return true;
         } else {
             return false;
