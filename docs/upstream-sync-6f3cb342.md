@@ -7,7 +7,7 @@
 - 评估终点：`0a3624bc2ba5bb28b01ccbbc6d185fa9247bddcf`
 - 提交范围：基准之后到评估终点，共 34 个线性提交
 - 目标项目：Minecraft 1.12.2 / Cleanroom Loader 的 Actinium
-- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40` 与 AO ABI 批次已完成手工适配、直接逻辑测试、`check` 和完整 `build`，低 FPS、shadow-only、资源重载、维度切换等运行专项仍待验证
+- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40`、AO ABI、MultiDraw 与 Occlusion/Lattice 批次已完成手工适配和直接逻辑验证。Occlusion/Lattice 的 Java 25 目标测试与 Javadoc 已通过，动态 Y、camera rebase、异步 occlusion 等客户端专项仍待验证
 
 ## 分支与日期
 
@@ -83,7 +83,7 @@ Actinium 的 `DefaultChunkRenderer`、MultiDraw emitter、render bridge 和 attr
 - `c4208b3604ff19ac4b72db6887e17b3ba6516dda` — **Fix race conditions when reading visibility state**。修复异步读取 visibility state 的竞态，是该链条的正确性修复，不能只同步前面的性能优化而跳过。
 - `8273d92807ca59bff220aff0e613ee219b205c6c` — **Assert the number of update types fits in 3 bits**。为 packed metadata 的 3-bit update type 假设增加断言；只有随 packed metadata/lattice 链一起同步时才有实际意义。
 
-Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 graph search 生命周期；同时近期加入了 `DepthsUpdateCompat`，支持动态 `minSection/maxSection` 和非 vanilla 世界高度。迁移 lattice 时必须重新验证 Y 维度、sentinel、数组索引、camera rebasing 和 visibility snapshot 发布，不能按 vanilla `0..15` section 范围直接套用。
+评估开始时 Actinium 仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 graph search 生命周期；同时近期加入了 `DepthsUpdateCompat`，支持动态 `minSection/maxSection` 和非 vanilla 世界高度。因此迁移 lattice 时重新核对了 Y 维度、sentinel、数组索引、camera rebasing 和 visibility snapshot 发布，未按 vanilla `0..15` section 范围直接套用。
 
 ### 跳过
 
@@ -151,6 +151,22 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
    - 动画 section 继续使用 individual draw 以保持独立 model offset；unsorted 动画命令在绘制前也会参与 shared index buffer 容量扩展。已删除不再使用的 `ReversibleByteArrayIterator`。
    - 直接逻辑测试新增 `SectionRenderDataUnsafeTest`，覆盖 primitive 元素换算、MultiDrawBatch 状态，以及 FULL/COMPACT metadata 的写入与 rebase。无 OpenGL context 的 headless JVM 执行时，native metadata 测试明确跳过并记录原因，纯逻辑测试仍执行。
 
+7. 成组手工适配 Occlusion / lattice 批次：
+   - `94d5587030750e8bd8c0d3509467dfdac2e814bc` — **Create packed metadata for sections**。
+   - `c3d030bcf366ddfb0d06ef1172aa93291e2cf19f` — **Add APIs for getting more accurate frustum information**。
+   - `094d4a21be692093c680204070d3e5b849da0e92` — **Cache frustum results for the whole region when possible**。
+   - `450dc85f594ee8fac16197f708071a35b0f8c7f9` — **Implement a better storage system for occlusion node data**。
+   - `066cda9d90253e47b3071abcf99b0e9fd5c6577d` — **Improve docs and simplify region cull cache**。
+   - `a0d478d012fa3c4197d5c192c1f6ca936d9db302` — **Optimize rebasing the lattice**。
+   - `841096aac6c836b838002bb5b9874988f229dc00` — **Unroll and inline some neighbor-visiting code in the hot loop**。
+   - `244dae560820339161977b020c9b2e56d1f69f33` — **Remove visit buffering**。
+   - `c4208b3604ff19ac4b72db6887e17b3ba6516dda` — **Fix race conditions when reading visibility state**。
+   - `8273d92807ca59bff220aff0e613ee219b205c6c` — **Assert the number of update types fits in 3 bits**。
+   - `PackedSectionMetadata` 将 visibility、visual flags、pending update 和 build-in-flight 状态编码为一个 `long`，并提供 collector 使用的 compact metadata；`GRAPH_INPUT_MASK` 保持只包含 visibility 和 visuals，pending/build 状态继续由 interim rebuild list 单独消费。
+   - `OcclusionNode` 对象图已替换为 `SectionLattice` 的 dense X/Z window、完整动态 Y 范围、sentinel border、authoritative section map、metadata mirror、camera shift/rebase 和 flat BFS queue；`RegionCullCache` 使用 per-search stamp，并将 region AABB 的距离/视锥分类与 section 级精确检查组合。
+   - `RenderListManager` 发布双缓冲 `VisibilitySnapshot`，异步搜索期间延迟 metadata mirror 更新；`VisibleChunkCollector` 直接接收 lattice index、region/section index 和 compact metadata。未把上游现代平台或固定 `0..15` 世界高度假设带入 Actinium。
+   - 为低帧号下的快照边界补充显式排除 `INITIAL`/`SENTINEL` 状态，避免未访问或空 lattice cell 被解码成可见 section；该修复由直接逻辑测试覆盖。
+
 ## 不直接同步的提交
 
 ### `208127b4`
@@ -174,6 +190,8 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 - `git diff --check` 已通过，已落地变更文件确认 UTF-8 无 BOM。
 - 用户反馈低风险同步后的游戏渲染正常；该反馈作为此前阶段的 smoke validation 记录，不等同于 `fadd0c40` 的低 FPS、shadow-only、资源重载、维度切换或其他运行专项已经完成。
 - 用户已完成本轮客户端验证：FPS 表现、维度切换、光影切换、terrain 渲染和 shadow 渲染均正常；该结果覆盖 AO 批次的主要运行路径，但不替代未单独执行的 legacy OpenGL、特定 Compact/Vanilla-like format、translucent/triangulated 细分场景验证。
+- Occlusion/Lattice 批次的 `:celeritas-common:compileJava`、目标 JUnit、根项目 `compileTestJava` 和 `:celeritas-common:javadoc` 已通过；Javadoc 仍有项目既有的缺失 `@param`、HTML 和 Minecraft API 引用警告，但没有 `PackedSectionMetadata.java` 的无法解析符号错误。`PackedSectionMetadataTest` 覆盖 full/compact metadata round-trip、字段保留和 null pending update；可见性测试覆盖 provisional traversal、NULL visibility、collector scheduling 及空/未访问快照状态。
+- 用户已完成此前渲染路径的客户端验证：FPS 表现、维度切换、光影切换、terrain 渲染和 shadow 渲染均正常；该结果不能替代 Occlusion/Lattice 的动态 Y、camera rebase、异步 snapshot 和 render distance 变化专项。
 
 ### fadd 残余风险/运行专项
 
@@ -186,7 +204,7 @@ shadow-only workload 按上游设计不推动 adaptive target；当前实现保�
 3. `fadd0c40` 的代码适配、直接逻辑测试、构建验证已完成；用户已验证 FPS、维度切换和 shadow 相关主路径；待完成初始建图、普通/重要 rebuild、任务取消、资源重载、render distance 变化和扩展世界高度等运行专项验证。
 4. AO ABI 批次的代码适配、直接逻辑测试、构建验证和主要客户端运行验证已完成；用户已验证 FPS、维度切换、光影切换、terrain 和 shadow 均正常；待补 legacy OpenGL、特定 Compact/Vanilla-like format 及 translucent/triangulated 细分场景验证。
 5. MultiDraw 五提交已完成上游对照、手工适配、`compileJava`、直接逻辑测试、`check` 和完整 `build`；用户已验证 FPS、维度切换、光影切换、terrain 和 shadow 均正常。仍待 legacy OpenGL/LWJGL2、direct/indirect/individual 模式切换、translucent/triangulated 细分场景以及动画 section 的独立客户端验证。
-6. 将 Occlusion/lattice 十提交作为完整可见性架构重构，优先解决动态世界高度、异步 snapshot 和 camera rebasing 的适配，再进行性能优化。
+6. Occlusion/Lattice 十提交已完成代码迁移、动态世界高度适配、直接逻辑测试和 Java 25 编译验证；待客户端验证初始建图、负 Y/扩展高度、camera 大幅移动与 rebase、异步 occlusion 开关、render distance 变化、资源重载、shadow pass 和低 FPS。
 7. 所有后续渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
 
 建议机械同步、1.12/Cleanroom 适配、LWJGL 适配以及 Mixin/bridge 适配分别提交，避免在同一个提交中混合上游大范围同步和无关重构。每个后续提交应记录来源 upstream SHA、实际文件范围、适配原因和验证结果。
