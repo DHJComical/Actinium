@@ -160,6 +160,7 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 - 完整 `build --no-daemon` 已通过：根项目及 `GTNHLib`、`glsm`、`celeritas-common`、`shader` 子项目均完成构建；共 28 个 actionable tasks。
 - `git diff --check` 已通过，已落地变更文件确认 UTF-8 无 BOM。
 - 用户反馈低风险同步后的游戏渲染正常；该反馈作为此前阶段的 smoke validation 记录，不等同于 `fadd0c40` 的低 FPS、shadow-only、资源重载、维度切换或其他运行专项已经完成。
+- 用户已完成本轮客户端验证：FPS 表现、维度切换、光影切换、terrain 渲染和 shadow 渲染均正常；该结果覆盖 AO 批次的主要运行路径，但不替代未单独执行的 legacy OpenGL、特定 Compact/Vanilla-like format、translucent/triangulated 细分场景验证。
 
 ### fadd 残余风险/运行专项
 
@@ -169,9 +170,9 @@ shadow-only workload 按上游设计不推动 adaptive target；当前实现保�
 
 1. 已完成 `3ad8610b` 的机械同步并通过 `compileJava`、`check`。
 2. 已完成 `db107709` 两项 buffer 行为修复，保留本地 fallback，并通过 `compileJava`、`check`。
-3. `fadd0c40` 的代码适配、直接逻辑测试、构建验证已完成；待完成低 FPS、初始建图、普通/重要 rebuild、任务取消、资源重载、维度切换、render distance 变化、shadow pass 和扩展世界高度等运行专项验证。
-4. AO ABI 批次的代码适配、直接逻辑测试、构建验证已完成；待完成无光影默认 terrain、Compact/Vanilla-like format、shader pack terrain/water/shadow、translucent/triangulated pass、资源重载、维度切换、legacy OpenGL fallback、低 FPS 和 shadow-only 场景验证。
-5. 将 MultiDraw 五提交作为完整数据布局和发射器重构，先 benchmark 再决定是否移植。
+3. `fadd0c40` 的代码适配、直接逻辑测试、构建验证已完成；用户已验证 FPS、维度切换和 shadow 相关主路径；待完成初始建图、普通/重要 rebuild、任务取消、资源重载、render distance 变化和扩展世界高度等运行专项验证。
+4. AO ABI 批次的代码适配、直接逻辑测试、构建验证和主要客户端运行验证已完成；用户已验证 FPS、维度切换、光影切换、terrain 和 shadow 均正常；待补 legacy OpenGL、特定 Compact/Vanilla-like format 及 translucent/triangulated 细分场景验证。
+5. 开始评估 MultiDraw 五提交：先完成上游与本地数据布局对照、direct/indirect/individual 路径 benchmark 入口审阅，再决定是否移植。
 6. 将 Occlusion/lattice 十提交作为完整可见性架构重构，优先解决动态世界高度、异步 snapshot 和 camera rebasing 的适配，再进行性能优化。
 7. 所有渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
 
