@@ -34,6 +34,7 @@ public class TessellatorStreamingDrawer {
 
     private static final Logger LOGGER = LogManager.getLogger("TessellatorStreamingDrawer");
     private static final int FORMAT_COUNT = VertexFlags.BITSET_SIZE; // 16
+    private static final int INITIAL_REPACK_CAPACITY = 0x10000;
     private static final boolean DEBUG_STREAMING_DRAWS = Boolean.getBoolean("actinium.glsm.verboseDrawLogs");
 
     private static PersistentStreamingBuffer persistentBuffer;
@@ -50,7 +51,7 @@ public class TessellatorStreamingDrawer {
 
     static {
         // Initial repack buffer: 64KB
-        repackCapacity = 0x10000;
+        repackCapacity = INITIAL_REPACK_CAPACITY;
         repackBuffer = memAlloc(repackCapacity);
         repackAddress = memAddress0(repackBuffer);
     }
@@ -305,17 +306,27 @@ public class TessellatorStreamingDrawer {
      * Public for use by external batch systems that need to pack data before calling {@link #drawPacked}.
      */
     public static void ensureRepackCapacity(int requiredBytes) {
-        if (requiredBytes <= repackCapacity) return;
+        if (repackBuffer != null && requiredBytes <= repackCapacity) return;
 
-        int newCapacity = repackCapacity;
-        while (newCapacity < requiredBytes) {
-            newCapacity *= 2;
+        int newCapacity = nextRepackCapacity(repackCapacity, requiredBytes);
+
+        if (repackBuffer != null) {
+            memFree(repackBuffer);
         }
-
-        memFree(repackBuffer);
         repackBuffer = memAlloc(newCapacity);
         repackAddress = memAddress0(repackBuffer);
         repackCapacity = newCapacity;
+    }
+
+    /** Calculates the next power-of-two repack capacity, including after a full drawer destroy. */
+    static int nextRepackCapacity(int currentCapacity, int requiredBytes) {
+        if (requiredBytes <= currentCapacity) return currentCapacity;
+
+        int newCapacity = Math.max(INITIAL_REPACK_CAPACITY, currentCapacity);
+        while (newCapacity < requiredBytes) {
+            newCapacity *= 2;
+        }
+        return newCapacity;
     }
 
     /** Get the repack buffer's native address. Valid until next {@link #ensureRepackCapacity} call. */

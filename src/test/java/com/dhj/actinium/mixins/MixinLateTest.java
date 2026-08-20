@@ -42,7 +42,8 @@ class MixinLateTest {
                 "mixins.actinium.ccl.json",
                 "mixins.actinium.voxelmap.json",
                 "mixins.actinium.extrautils2.json",
-                "mixins.actinium.cofhcore.json"
+                "mixins.actinium.cofhcore.json",
+                "mixins.actinium.oldresearch.json"
             ),
             Set.copyOf(MixinLate.configsFor(modId -> true))
         );
