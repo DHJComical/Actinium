@@ -7,7 +7,7 @@
 - 评估终点：`0a3624bc2ba5bb28b01ccbbc6d185fa9247bddcf`
 - 提交范围：基准之后到评估终点，共 34 个线性提交
 - 目标项目：Minecraft 1.12.2 / Cleanroom Loader 的 Actinium
-- 本轮状态：已建立同步记录；首批代码同步已完成编译与检查，运行时验证和后续批次仍待处理
+- 本轮状态：已建立同步记录；低风险同步批次已完成编译与检查，运行时验证和后续专项仍待处理
 
 ## 分支与日期
 
@@ -37,6 +37,7 @@
 
 - `3ad8610b771553b1654dcffb92554e5424da63c7` — **Remove enum array allocation to reduce noise in profilers**。同步 `ChunkUpdateType.VALUES` 缓存及 `VisibleChunkCollector` 的调用点，当前代码结构接近上游，改动小、风险低，适合作为首个机械同步提交。
 - `db1077091a64c7149abedf33ce334df01b9b78cb` — **Simplify legacy-support polyfills (#28)**。本轮只摘取 `BufferMapRangeFunctions.MAP_FULL_AND_SLICE` 的 null 处理，以及 `BufferCopyFunctions.PIXEL_PACK` 失败时的 `finally` 清理，确保 mapped buffer 解除映射并清理 binding。不上游整体删除 Actinium 自有的 `BufferStorageFunctions`、`MultidrawFunctions` 或其他旧驱动 fallback；这部分必须按本地 GLSM/LWJGL 结构手工合并。
+- `0203a1fe96d07893ff76fe7146b0f1f39794c23c` — **dont compile chunk age declarations if theyre unused (#26)**。将上游 `assets/sodium` shader 的条件声明手工映射到 Actinium 的 `assets/actinium` opaque chunk shader；只有 `USE_FOG` 且 `CHUNK_FADE_IN_DURATION_MS > 0` 时才声明/读取 chunk age varying 和 uniform，避免无 fade 路径的链接告警与 uniform 数据分配。
 
 ### 建议后续同步
 
@@ -50,7 +51,6 @@
 这些提交有明确的功能或性能收益，但与 Actinium 的本地结构、1.12.2 API、LWJGL service 或 shader 资源路径存在差异，不能直接 cherry-pick。
 
 - `fadd0c40fadd7d3d26278d5ab4b377a7c5cc7256` — **Decouple chunk task dispatch rate from FPS**。将固定每帧任务预算改为依据 worker 吞吐和 starvation 调整 in-flight target，涉及 `ChunkBuilder`、`ChunkJobQueue`、`RenderSectionManager`、`RenderListManager`、`VisibleChunkCollector` 等调度语义。Actinium 的 `RenderSectionManager` 及 shadow pass、扩展世界高度有本地差异，需要单独压测初始建图、低 FPS、任务取消、资源重载、维度切换和 shadow pass。
-- `0203a1fe96d07893ff76fe7146b0f1f39794c23c` — **dont compile chunk age declarations if theyre unused (#26)**。上游修改 `assets/sodium` 下的 chunk shader 条件声明；Actinium 使用 `assets/actinium` 资源和自有 shader/transform 路径，需手工改写资源位置和条件，验证无光影、Iris shader 以及 GLSL 1.20 legacy patch。
 - `208127b4a5b754584bd81bceac3417df8509fdfa` — **Fix GlFence.sync calling API with bogus parameters**。上游修复的是 `glWaitSync(id, flags, timeout)` 的参数；Actinium 的 `GlFence` 使用 `glClientWaitSync`，其返回值和等待语义被 `MappedStagingBuffer` 的 GPU upload 回收使用。两者不是同一个 API，不能直接同步；后续必须先确认本地是否存在真正的 `glWaitSync` 调用，再独立设计适配。
 - `3d071b85205db183f54d30b7b36fe54ea096a2a2` — **Implement nearly-correct bilinear interpolation for ambient occlusion**。改变 chunk vertex ABI、AO 数据和 shader varying，涉及 compact/vanilla-like vertex format、`ChunkVertexEncoder`、mesh builder 及 terrain shader。Actinium 当前 stride 和 shader 资源均有本地差异，还要检查 `ExtendedChunkVertexType`、Iris 扩展顶点、triangulated pass 和旧版 GLSL。
 - `7de8b00c0647ed169001d8ea889efafc81044264` — **Support EXT_timer_query for ancient drivers, and remove nested query support**。上游从 timestamp query 改为 `GL_TIME_ELAPSED` begin/end，并增加 `EXT_timer_query` wrapper。Actinium 当前 `TimerQueryManager` 使用 timestamp query，且 chunk、frame、Iris composite/finalize 计时区间存在嵌套可能；直接同步会改变计时器契约并触发非法嵌套，因此本轮不直接同步，后续需先设计计时层级并补齐本地 LWJGL wrapper。
@@ -99,9 +99,9 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 - `ac59a78dc75fcf1d9e78eabdc86e96298be3861c` — **Revert "Move stareval and parsing classes to common"**。完整撤销前一个移动提交，不能作为独立功能同步。
 - `7704538a2367df614fc494d1c48a98451ef774fc` — **Extend the region frustum optimization to Iris frustums**。依赖上游现代 Iris shadow frustum 类；Actinium 没有同一套 frustum 实现，不能直接复制。
 
-## 首批同步范围
+## 已落地同步范围
 
-本轮首批范围已经确定为以下两部分。实际代码修改不属于本文件任务，由实现任务单独维护和验收；本记录不将首批改动标记为已验证：
+当前已落地的低风险同步范围如下。所有代码均保留 Actinium 的本地 fallback 和资源命名空间：
 
 1. 完整评估并同步 `3ad8610b771553b1654dcffb92554e5424da63c7`：
    - `celeritas-common/src/main/java/org/embeddedt/embeddium/impl/render/chunk/ChunkUpdateType.java`
@@ -111,6 +111,11 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
    - `BufferCopyFunctions` `PIXEL_PACK` 失败路径的 `finally` 清理，确保 mapped buffer 解除映射并清除 binding。
 
 不会从 `db107709` 一并删除 Actinium 现有的 legacy-support fallback；`BufferStorageFunctions`、`MultidrawFunctions`、`MappedStagingBuffer` 和 `GLRenderDevice` 的其余差异需单独审阅。
+
+3. 手工适配 `0203a1fe96d07893ff76fe7146b0f1f39794c23c`：
+   - `src/main/resources/assets/actinium/shaders/blocks/block_layer_opaque.vsh`
+   - `src/main/resources/assets/actinium/shaders/blocks/block_layer_opaque.fsh`
+   - 仅在启用 fog 且 chunk fade duration 大于 0 时声明 `v_ChunkAgeMs` 和 `celeritas_ChunkAges`，保持 `DefaultChunkShaderInterface` 的 optional uniform 绑定契约。
 
 ## 不直接同步的提交
 
@@ -126,23 +131,21 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 
 ### 当前验证状态
 
-- 首批同步已修改 4 个 `celeritas-common` Java 文件，未修改 GLSM、shader、Mixin 或其他模块。
+- 已落地同步修改 4 个 `celeritas-common` Java 文件和 2 个 Actinium shader 资源文件，未修改 GLSM、Mixin 或其他模块。
 - `compileJava --no-daemon` 已通过，使用 Java 25 和 `GRADLE_USER_HOME=D:/gradle`。
-- `check --no-daemon` 已通过：包含根项目测试、模块边界、compat bridge Jar 和 remap Jar 校验；共 24 个 actionable tasks。
-- `git diff --check` 已通过，变更文件已确认 UTF-8 无 BOM。
+- 最近一次 `check --no-daemon` 已通过：包含 `processResources`、根项目测试、模块边界、compat bridge Jar 和 remap Jar 校验；共 24 个 actionable tasks。
+- `git diff --check` 已通过，已落地变更文件确认 UTF-8 无 BOM。
 - 尚未运行完整 `build`，也尚未进行客户端运行验证、光影包验证、维度切换、资源重载或条件模组验证。
-- 尚未进行客户端运行验证、光影包验证、维度切换、资源重载或条件模组验证。
 
 ### 后续顺序
 
 1. 已完成 `3ad8610b` 的机械同步并通过 `compileJava`、`check`。
 2. 已完成 `db107709` 两项 buffer 行为修复，保留本地 fallback，并通过 `compileJava`、`check`。
-3. 对 `fadd0c40` 建立独立调度性能分支，验证低 FPS、初始建图、rebuild 取消、维度切换、资源重载、render distance 变化和 shadow pass。
-4. 手工适配 `0203a1fe`，确认 Actinium shader 资源路径、Iris shader transform、普通 terrain 和 legacy GLSL variant。
-5. 将 `3d071b85` 与 `0a3624bc` 作为一个 AO ABI 变更批次处理，检查 compact/vanilla-like vertex stride、`ExtendedChunkVertexType`、普通 terrain、Iris terrain、triangulated pass 和 shader pack。
-6. 将 MultiDraw 五提交作为完整数据布局和发射器重构，先 benchmark 再决定是否移植。
-7. 将 Occlusion/lattice 十提交作为完整可见性架构重构，优先解决动态世界高度、异步 snapshot 和 camera rebasing 的适配，再进行性能优化。
-8. 所有渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
+3. 对 `fadd0c40` 建立独立调度性能专项，验证低 FPS、初始建图、rebuild 取消、维度切换、资源重载、render distance 变化和 shadow pass。
+4. 将 `3d071b85` 与 `0a3624bc` 作为一个 AO ABI 变更批次处理，检查 compact/vanilla-like vertex stride、`ExtendedChunkVertexType`、普通 terrain、Iris terrain、triangulated pass 和 shader pack。
+5. 将 MultiDraw 五提交作为完整数据布局和发射器重构，先 benchmark 再决定是否移植。
+6. 将 Occlusion/lattice 十提交作为完整可见性架构重构，优先解决动态世界高度、异步 snapshot 和 camera rebasing 的适配，再进行性能优化。
+7. 所有渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
 
 建议机械同步、1.12/Cleanroom 适配、LWJGL 适配以及 Mixin/bridge 适配分别提交，避免在同一个提交中混合上游大范围同步和无关重构。每个后续提交应记录来源 upstream SHA、实际文件范围、适配原因和验证结果。
 
@@ -153,4 +156,4 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 - 禁止整目录覆盖或无差别复制上游目录；必须基于明确 SHA 列出实际文件范围，逐文件处理平台、LWJGL、Mixin 和 bridge 差异。
 - 不使用 `duplicatesStrategy = EXCLUDE` 掩盖同步造成的重复 class。
 - 未完成运行时验证时，不把兼容状态标记为“已验证”。
-- 首批代码和同步记录尚未提交；后续提交须遵循 Conventional Commits 格式，并保持每个提交只处理一个清晰的同步或适配主题。
+- 后续提交须遵循 Conventional Commits 格式，并保持每个提交只处理一个清晰的同步或适配主题。
