@@ -91,7 +91,7 @@ dependencies {
     modRuntimeOnly "curse.maven:celeritas-extra-1451214:8362538"
     modRuntimeOnly "curse.maven:celeritasleafculling-1449111:7550650"
 
-    modImplementation 'curse.maven:chunk-animator-236484:3850023'
+    modCompileOnly 'curse.maven:chunk-animator-236484:3850023'
 
     modImplementation "curse.maven:ichunutil-229060:2801262"  // dev-verifies mixins.actinium.ichunutil.json (issue #39)
     modCompileOnly "curse.maven:mobdismemberment-229067:2487081"
@@ -100,7 +100,7 @@ dependencies {
     modCompileOnly 'curse.maven:revo-font-1617673:8586768'
     // Biomes O' Plenty 7.0.1.2445 (issue #32: it swaps GuiMainMenu.titlePanoramaPaths for its own title
     // panorama; the GTNH skybox renderer must read the swapped field instead of hard-coded vanilla paths)
-    modImplementation "curse.maven:biomes-o-plenty-220318:3558882"
+    modCompileOnly "curse.maven:biomes-o-plenty-220318:3558882"
     modCompileOnly 'curse.maven:revo-ui-1620532:8593682'
     modCompileOnly('com.cleanroommc:modularui:3.1.6') { transitive = false }
 
@@ -120,9 +120,17 @@ dependencies {
 
     // HammerLib 12.2.66 (issue #40: its GL20.glGetActiveUniform(int, int, int) -> String call is redirected to
     // GLSM GLStateManager, which must expose the same descriptor)
-    modImplementation "maven.modrinth:hammer-lib:B9uVCQjP"
+    modCompileOnly "maven.modrinth:hammer-lib:B9uVCQjP"
     // Extra Utilities 2 1.9.9 (issue #48: its GLStateAttributes GUI state snapshot reads the stale vanilla
     // GlStateManager mirror under GLSM; the mixin re-reads live GL state)
+    modCompileOnly "curse.maven:extra-utilities-2-225561:2678374"
+
+    // Depths Update 1.0.0-a10 (issue #68: extends the world build height beyond 0-255; blocks outside the
+    // vanilla range are not rendered -- its own celeritas compat mixins target pre-restructure class paths)
+    // modCompileOnly exposes its public API (sayys.depthsupdate.api.DepthsUpdateAPI) for the compat shim.
+    modImplementation 'curse.maven:depths-update-1472501:8038246'
+    modRuntimeOnly 'curse.maven:assetmover-571482:4430763'
+    
     modImplementation "curse.maven:extra-utilities-2-225561:2678374"
 
     // Snow! Real Magic! 0.7.4 (issue #35: SRM replaces snow-covered blocks with a snow layer carrying a
