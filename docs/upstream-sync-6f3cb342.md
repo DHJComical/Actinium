@@ -7,7 +7,7 @@
 - 评估终点：`0a3624bc2ba5bb28b01ccbbc6d185fa9247bddcf`
 - 提交范围：基准之后到评估终点，共 34 个线性提交
 - 目标项目：Minecraft 1.12.2 / Cleanroom Loader 的 Actinium
-- 本轮状态：已建立同步记录；低风险同步批次已完成编译与检查，运行时验证和后续专项仍待处理
+- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40` 自适应调度专项进行中
 
 ## 分支与日期
 
@@ -136,13 +136,13 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 - 最近一次 `check --no-daemon` 已通过：包含 `processResources`、根项目测试、模块边界、compat bridge Jar 和 remap Jar 校验；共 24 个 actionable tasks。
 - 完整 `build --no-daemon` 已通过：根项目及 `GTNHLib`、`glsm`、`celeritas-common`、`shader` 子项目均完成构建；共 28 个 actionable tasks。
 - `git diff --check` 已通过，已落地变更文件确认 UTF-8 无 BOM。
-- 尚未进行客户端运行验证、光影包验证、维度切换、资源重载或条件模组验证。
+- 用户反馈当前同步后的游戏渲染正常；该反馈作为本阶段 smoke validation 记录，不等同于光影包、维度切换、资源重载或条件模组的完整兼容性验证。
 
 ### 后续顺序
 
 1. 已完成 `3ad8610b` 的机械同步并通过 `compileJava`、`check`。
 2. 已完成 `db107709` 两项 buffer 行为修复，保留本地 fallback，并通过 `compileJava`、`check`。
-3. 对 `fadd0c40` 建立独立调度性能专项，验证低 FPS、初始建图、rebuild 取消、维度切换、资源重载、render distance 变化和 shadow pass。
+3. [进行中] 对 `fadd0c40` 建立独立调度性能专项，保留 shadow、扩展世界高度和 cancellation 语义，并验证低 FPS、初始建图、rebuild 取消、维度切换、资源重载、render distance 变化和 shadow pass。
 4. 将 `3d071b85` 与 `0a3624bc` 作为一个 AO ABI 变更批次处理，检查 compact/vanilla-like vertex stride、`ExtendedChunkVertexType`、普通 terrain、Iris terrain、triangulated pass 和 shader pack。
 5. 将 MultiDraw 五提交作为完整数据布局和发射器重构，先 benchmark 再决定是否移植。
 6. 将 Occlusion/lattice 十提交作为完整可见性架构重构，优先解决动态世界高度、异步 snapshot 和 camera rebasing 的适配，再进行性能优化。
