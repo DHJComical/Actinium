@@ -1,83 +1,120 @@
 package org.embeddedt.embeddium.impl.render.chunk.region;
 
-import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
+import org.embeddedt.embeddium.impl.render.chunk.PackedSectionMetadata;
 import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
-import org.embeddedt.embeddium.impl.render.chunk.occlusion.GraphDirection;
-import org.embeddedt.embeddium.impl.render.chunk.occlusion.OcclusionCuller;
-import org.embeddedt.embeddium.impl.render.chunk.occlusion.OcclusionNode;
+import org.embeddedt.embeddium.impl.render.chunk.data.BuiltRenderSectionData;
+import org.embeddedt.embeddium.impl.render.chunk.occlusion.SectionLattice;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.VisibilityEncoding;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.joml.Vector3d;
+import org.joml.Vector3i;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OcclusionCullerProvisionalVisibilityTest {
     @Test
-    void provisionalNodeAllowsTraversalToAdjacentSection() {
-        TestGraph graph = createLinearGraph();
+    void provisionalSectionVisibilityAllowsTraversalToAdjacentSection() {
+        TestGraph graph = createLinearLattice(false);
 
-        Set<OcclusionNode> visibleNodes = findVisibleNodes(graph, 1);
+        TraversalResult result = findVisibleSections(graph, 1);
 
-        assertTrue(visibleNodes.contains(graph.destination));
+        Set<Integer> expectedSections = Set.of(
+                graph.origin.getSectionIndex(),
+                graph.provisional.getSectionIndex(),
+                graph.destination.getSectionIndex()
+        );
+        assertEquals(expectedSections, result.visitedSections());
+        assertEquals(expectedSections, result.visibleSections());
     }
 
     @Test
     void nullVisibilityStopsTraversalToAdjacentSection() {
-        TestGraph graph = createLinearGraph();
-        graph.provisional.setVisibilityData(VisibilityEncoding.NULL);
+        TestGraph graph = createLinearLattice(true);
 
-        Set<OcclusionNode> visibleNodes = findVisibleNodes(graph, 2);
+        TraversalResult result = findVisibleSections(graph, 2);
 
-        assertFalse(visibleNodes.contains(graph.destination));
+        Set<Integer> expectedSections = Set.of(
+                graph.origin.getSectionIndex(),
+                graph.provisional.getSectionIndex()
+        );
+        assertEquals(expectedSections, result.visitedSections());
+        assertEquals(expectedSections, result.visibleSections());
+        assertFalse(result.visitedSections().contains(graph.destination.getSectionIndex()));
     }
 
-    private static TestGraph createLinearGraph() {
+    private static TestGraph createLinearLattice(boolean nullProvisionalVisibility) {
         RenderRegion region = new RenderRegion(0, 0, 0, 0, null);
-        OcclusionNode origin = createNode(region, 0, 0, 0);
-        OcclusionNode provisional = createNode(region, 1, 0, 0);
-        OcclusionNode destination = createNode(region, 2, 0, 0);
+        RenderSection origin = createSection(region, 0, 0, 0, VisibilityEncoding.EVERYTHING);
+        RenderSection provisional = createSection(region, 1, 0, 0, VisibilityEncoding.EVERYTHING);
+        RenderSection destination = createSection(region, 2, 0, 0, VisibilityEncoding.EVERYTHING);
 
-        connect(origin, GraphDirection.EAST, provisional);
-        connect(provisional, GraphDirection.EAST, destination);
+        if (nullProvisionalVisibility) {
+            setVisibility(provisional, VisibilityEncoding.NULL);
+        }
 
-        Long2ReferenceOpenHashMap<OcclusionNode> nodes = new Long2ReferenceOpenHashMap<>();
-        nodes.put(origin.positionAsLong(), origin);
-        nodes.put(provisional.positionAsLong(), provisional);
-        nodes.put(destination.positionAsLong(), destination);
+        SectionLattice lattice = new SectionLattice(0, 1);
+        lattice.attach(origin);
+        lattice.attach(provisional);
+        lattice.attach(destination);
+        lattice.ensureWindowCovers(new Vector3i(0, 0, 0), 64.0F);
 
-        return new TestGraph(new OcclusionCuller(nodes, 0, 1), provisional, destination);
+        return new TestGraph(lattice, origin, provisional, destination);
     }
 
-    private static OcclusionNode createNode(RenderRegion region, int x, int y, int z) {
-        return new OcclusionNode(new RenderSection(region, x, y, z));
+    private static RenderSection createSection(RenderRegion region, int x, int y, int z, long visibilityData) {
+        RenderSection section = new RenderSection(region, x, y, z);
+        setVisibility(section, visibilityData);
+        return section;
     }
 
-    private static void connect(OcclusionNode from, int direction, OcclusionNode to) {
-        from.setAdjacentNode(direction, to);
-        to.setAdjacentNode(GraphDirection.opposite(direction), from);
+    private static void setVisibility(RenderSection section, long visibilityData) {
+        BuiltRenderSectionData data = new BuiltRenderSectionData();
+        data.visibilityData = visibilityData;
+        section.setInfo(data);
     }
 
-    private static Set<OcclusionNode> findVisibleNodes(TestGraph graph, int frame) {
-        Set<OcclusionNode> visibleNodes = new HashSet<>();
+    private static TraversalResult findVisibleSections(TestGraph graph, int frame) {
+        Map<Integer, RenderSection> sectionsByIndex = Map.of(
+                graph.origin.getSectionIndex(), graph.origin,
+                graph.provisional.getSectionIndex(), graph.provisional,
+                graph.destination.getSectionIndex(), graph.destination
+        );
+        Set<Integer> visitedSections = new HashSet<>();
+        Set<Integer> visibleSections = new HashSet<>();
         Viewport viewport = new Viewport(
             (minX, minY, minZ, maxX, maxY, maxZ) -> true,
             new Vector3d(8.0, 8.0, 8.0)
         );
 
-        graph.culler.findVisible((node, visible) -> {
-            if (visible) {
-                visibleNodes.add(node);
-            }
-        }, viewport, 64.0F, true, frame);
+        graph.lattice.findVisible((latticeIndex, regionId, sectionIndex, compactMeta, visible) -> {
+            RenderSection section = graph.lattice.sectionAt(latticeIndex);
+            assertNotNull(section);
+            assertSame(sectionsByIndex.get(sectionIndex), section);
+            assertEquals(section.getRegion().getId(), regionId);
+            assertEquals(PackedSectionMetadata.toCompactMeta(section.getPackedMetadata()), compactMeta);
+            assertTrue(visitedSections.add(sectionIndex));
+            assertTrue(visible);
+            visibleSections.add(sectionIndex);
+        }, viewport, 64.0F, 1, true, frame);
 
-        return visibleNodes;
+        return new TraversalResult(Set.copyOf(visitedSections), Set.copyOf(visibleSections));
     }
 
-    private record TestGraph(OcclusionCuller culler, OcclusionNode provisional, OcclusionNode destination) {
+    private record TestGraph(SectionLattice lattice,
+                             RenderSection origin,
+                             RenderSection provisional,
+                             RenderSection destination) {
+    }
+
+    private record TraversalResult(Set<Integer> visitedSections, Set<Integer> visibleSections) {
     }
 }

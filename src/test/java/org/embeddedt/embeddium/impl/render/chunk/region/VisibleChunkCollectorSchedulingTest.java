@@ -1,9 +1,16 @@
 package org.embeddedt.embeddium.impl.render.chunk.region;
 
 import org.embeddedt.embeddium.impl.render.chunk.ChunkUpdateType;
+import org.embeddedt.embeddium.impl.render.chunk.PackedSectionMetadata;
 import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
+import org.embeddedt.embeddium.impl.render.chunk.data.BuiltRenderSectionData;
 import org.embeddedt.embeddium.impl.render.chunk.lists.VisibleChunkCollector;
-import org.embeddedt.embeddium.impl.render.chunk.occlusion.OcclusionNode;
+import org.embeddedt.embeddium.impl.render.chunk.occlusion.SectionLattice;
+import org.embeddedt.embeddium.impl.render.chunk.occlusion.SectionLattice.VisibilitySnapshot;
+import org.embeddedt.embeddium.impl.render.chunk.occlusion.VisibilityEncoding;
+import org.embeddedt.embeddium.impl.render.viewport.Viewport;
+import org.joml.Vector3d;
+import org.joml.Vector3i;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,10 +21,14 @@ class VisibleChunkCollectorSchedulingTest {
     @Test
     void capsInitialBuildQueueAndReportsOverflow() {
         RenderRegion region = new RenderRegion(0, 0, 0, 0, null);
-        VisibleChunkCollector collector = new VisibleChunkCollector(0, 1, 1);
+        SectionLattice lattice = createLattice();
+        RenderSection first = attach(lattice, region, 0, 0, 0, ChunkUpdateType.INITIAL_BUILD);
+        RenderSection second = attach(lattice, region, 1, 0, 0, ChunkUpdateType.INITIAL_BUILD);
+        VisibleChunkCollector collector = new VisibleChunkCollector(lattice, 0, 1, 1);
+        VisibilitySnapshot window = captureWindow(lattice);
 
-        collector.visit(node(region, 0, 0, 0, ChunkUpdateType.INITIAL_BUILD), true);
-        collector.visit(node(region, 1, 0, 0, ChunkUpdateType.INITIAL_BUILD), true);
+        visit(collector, window, first);
+        visit(collector, window, second);
 
         var rebuildLists = collector.getRebuildLists();
 
@@ -29,10 +40,14 @@ class VisibleChunkCollectorSchedulingTest {
     @Test
     void keepsRebuildQueueWhenTargetIsZero() {
         RenderRegion region = new RenderRegion(0, 0, 0, 0, null);
-        VisibleChunkCollector collector = new VisibleChunkCollector(0, 1, 0);
+        SectionLattice lattice = createLattice();
+        RenderSection first = attach(lattice, region, 0, 0, 0, ChunkUpdateType.REBUILD);
+        RenderSection second = attach(lattice, region, 1, 0, 0, ChunkUpdateType.REBUILD);
+        VisibleChunkCollector collector = new VisibleChunkCollector(lattice, 0, 1, 0);
+        VisibilitySnapshot window = captureWindow(lattice);
 
-        collector.visit(node(region, 0, 0, 0, ChunkUpdateType.REBUILD), true);
-        collector.visit(node(region, 1, 0, 0, ChunkUpdateType.REBUILD), true);
+        visit(collector, window, first);
+        visit(collector, window, second);
 
         var rebuildLists = collector.getRebuildLists();
 
@@ -41,9 +56,66 @@ class VisibleChunkCollectorSchedulingTest {
         assertEquals(0, rebuildLists.queueOverflowCounts().getOrDefault(ChunkUpdateType.REBUILD, 0));
     }
 
-    private static OcclusionNode node(RenderRegion region, int x, int y, int z, ChunkUpdateType updateType) {
+    @Test
+    void visibilitySnapshotRejectsEmptyAndUnvisitedCells() {
+        SectionLattice lattice = createLattice();
+        RenderRegion region = new RenderRegion(0, 0, 0, 0, null);
+        RenderSection loaded = attach(lattice, region, 0, 0, 0, null);
+        RenderSection unvisited = attach(lattice, region, 1, 0, 0, null);
+        BuiltRenderSectionData data = new BuiltRenderSectionData();
+        data.visibilityData = VisibilityEncoding.NULL;
+        loaded.setInfo(data);
+        VisibilitySnapshot snapshot = captureWindow(lattice);
+
+        assertTrue(snapshot.isSectionVisible(loaded.getChunkX(), loaded.getChunkY(), loaded.getChunkZ(), 0));
+        assertFalse(snapshot.isSectionVisible(unvisited.getChunkX(), unvisited.getChunkY(), unvisited.getChunkZ(), 0));
+        assertFalse(snapshot.isSectionVisible(2, 0, 0, 0));
+        assertFalse(snapshot.isSectionVisible(0, 0, 1, 0));
+    }
+
+    private static SectionLattice createLattice() {
+        SectionLattice lattice = new SectionLattice(0, 1);
+        lattice.ensureWindowCovers(new Vector3i(0, 0, 0), 0.0F);
+        return lattice;
+    }
+
+    private static RenderSection attach(SectionLattice lattice, RenderRegion region,
+                                        int x, int y, int z, ChunkUpdateType updateType) {
         RenderSection section = new RenderSection(region, x, y, z);
-        section.setPendingUpdate(updateType);
-        return new OcclusionNode(section);
+        if (updateType != null) {
+            section.setPendingUpdate(updateType);
+        }
+        region.addSection(section);
+        lattice.attach(section);
+        return section;
+    }
+
+    private static VisibilitySnapshot captureWindow(SectionLattice lattice) {
+        Viewport viewport = new Viewport(
+                (minX, minY, minZ, maxX, maxY, maxZ) -> true,
+                new Vector3d(8.0, 8.0, 8.0)
+        );
+
+        return lattice.findVisible((latticeIndex, regionId, sectionIndex, compactMeta, visible) -> {
+        }, viewport, 0.0F, 1, true, 0);
+    }
+
+    private static void visit(VisibleChunkCollector collector, VisibilitySnapshot window, RenderSection section) {
+        int latticeIndex = latticeIndex(window, section);
+        int compactMeta = PackedSectionMetadata.toCompactMeta(section.getPackedMetadata());
+
+        collector.visit(latticeIndex, section.getRegion().getId(), section.getSectionIndex(), compactMeta, true);
+    }
+
+    private static int latticeIndex(VisibilitySnapshot window, RenderSection section) {
+        int localX = section.getChunkX() - window.baseX();
+        int localY = section.getChunkY() - window.baseY();
+        int localZ = section.getChunkZ() - window.baseZ();
+
+        assertTrue(localX >= 1 && localX <= window.dimX() - 2);
+        assertTrue(localY >= 1 && localY <= window.dimY() - 2);
+        assertTrue(localZ >= 1 && localZ <= window.dimZ() - 2);
+
+        return (localX * window.dimZ() + localZ) * window.dimY() + localY;
     }
 }
