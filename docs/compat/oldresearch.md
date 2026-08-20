@@ -77,13 +77,10 @@ while (newCapacity < requiredBytes) {
 - `.\gradlew.bat build --no-daemon`；
 - Mixin 配置、late loader、remap Jar 和模块边界检查均通过；
 - 构建产物包含 Old Research 兼容类和 `mixins.actinium.oldresearch.json`。
-- 性能优化后的研究笔记 GUI FPS 尚待在同一客户端场景复测；当前已知基线为普通 GUI 约
-  800 FPS、放入研究笔记后约 400 FPS。
+- dev 人工回归确认性能优化后的研究笔记 GUI 不再卡死，FPS 回到 500+，与背包界面同量级。
 
 待完成：
 
-- 使用性能优化后的客户端再次打开 Old Research GUI，确认不再卡死；
-- 记录优化后的 GUI FPS，并与当前约 400 FPS 的基线对比；
 - 在实际运行环境确认 Old Research GUI 内的研究树、节点图标和 Thaumcraft 相关绘制无视觉回归。
 
 ## 来源
