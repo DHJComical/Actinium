@@ -52,7 +52,8 @@ class MixinConfigurationTest {
         "mixins.actinium.ccl.json",
         "mixins.actinium.voxelmap.json",
         "mixins.actinium.extrautils2.json",
-        "mixins.actinium.cofhcore.json"
+        "mixins.actinium.cofhcore.json",
+        "mixins.actinium.oldresearch.json"
     );
     private static final List<String> CONFIGS = Stream.concat(
         Stream.of(BRIDGE_CONFIG),
