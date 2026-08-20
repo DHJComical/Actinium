@@ -134,8 +134,9 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 - 已落地同步修改 4 个 `celeritas-common` Java 文件和 2 个 Actinium shader 资源文件，未修改 GLSM、Mixin 或其他模块。
 - `compileJava --no-daemon` 已通过，使用 Java 25 和 `GRADLE_USER_HOME=D:/gradle`。
 - 最近一次 `check --no-daemon` 已通过：包含 `processResources`、根项目测试、模块边界、compat bridge Jar 和 remap Jar 校验；共 24 个 actionable tasks。
+- 完整 `build --no-daemon` 已通过：根项目及 `GTNHLib`、`glsm`、`celeritas-common`、`shader` 子项目均完成构建；共 28 个 actionable tasks。
 - `git diff --check` 已通过，已落地变更文件确认 UTF-8 无 BOM。
-- 尚未运行完整 `build`，也尚未进行客户端运行验证、光影包验证、维度切换、资源重载或条件模组验证。
+- 尚未进行客户端运行验证、光影包验证、维度切换、资源重载或条件模组验证。
 
 ### 后续顺序
 
