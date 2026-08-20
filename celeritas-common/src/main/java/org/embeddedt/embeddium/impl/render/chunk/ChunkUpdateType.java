@@ -7,34 +7,28 @@ public enum ChunkUpdateType {
     /**
      * Chunk is being built for the first time.
      */
-    INITIAL_BUILD(128),
+    INITIAL_BUILD,
     /**
      * Chunk geometry is being sorted based on camera position change.
      */
-    SORT(Integer.MAX_VALUE),
+    SORT,
     /**
      * Like {@link ChunkUpdateType#SORT}, but will block the main thread if the camera is near enough to guarantee
      * the sort results are reflected quickly.
      */
-    IMPORTANT_SORT(Integer.MAX_VALUE),
+    IMPORTANT_SORT,
     /**
      * Chunk data has changed and remeshing is required.
      */
-    REBUILD(Integer.MAX_VALUE),
+    REBUILD,
     /**
      * Like {@link ChunkUpdateType#REBUILD}, but will block the main thread if the camera is near enough to guarantee
      * the rebuild is seen quickly.
      */
-    IMPORTANT_REBUILD(Integer.MAX_VALUE);
+    IMPORTANT_REBUILD;
 
     /** Cached enum values to avoid allocating a new array for each iteration. */
     public static final ChunkUpdateType[] VALUES = values();
-
-    private final int maximumQueueSize;
-
-    ChunkUpdateType(int maximumQueueSize) {
-        this.maximumQueueSize = maximumQueueSize;
-    }
 
     @Deprecated
     public static boolean canPromote(ChunkUpdateType prev, ChunkUpdateType next) {
@@ -55,13 +49,6 @@ public enum ChunkUpdateType {
             return IMPORTANT_REBUILD;
         }
         return null;
-    }
-
-    /**
-     * {@return the maximum size the rebuild queue should be allowed to grow to for this update type}
-     */
-    public int getMaximumQueueSize() {
-        return this.maximumQueueSize;
     }
 
     /**

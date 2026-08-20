@@ -23,17 +23,17 @@ public class VisibleChunkCollector implements OcclusionCuller.Visitor {
 
     private final int frame;
 
-    private final boolean ignoreQueueSizeLimit;
+    private final int targetQueueSize;
 
     private boolean hasAdditionalUpdates;
 
-    public VisibleChunkCollector(int frame, int regionIdsLength, boolean ignoreQueueSizeLimit) {
+    public VisibleChunkCollector(int frame, int regionIdsLength, int targetQueueSize) {
         this.frame = frame;
 
         this.sortedRenderLists = new ObjectArrayList<>();
         this.sortedRebuildLists = new EnumMap<>(ChunkUpdateType.class);
         this.rebuildQueueOverflowCounts = new int[ChunkUpdateType.VALUES.length];
-        this.ignoreQueueSizeLimit = ignoreQueueSizeLimit;
+        this.targetQueueSize = targetQueueSize;
         this.renderListsByRegion = new ChunkRenderList[regionIdsLength];
 
         for (var type : ChunkUpdateType.VALUES) {
@@ -79,7 +79,7 @@ public class VisibleChunkCollector implements OcclusionCuller.Visitor {
         if (type != null && section.getBuildCancellationToken() == null) {
             Queue<RenderSection> queue = this.sortedRebuildLists.get(type);
 
-            if (this.ignoreQueueSizeLimit || queue.size() < type.getMaximumQueueSize()) {
+            if (type != ChunkUpdateType.INITIAL_BUILD || queue.size() < this.targetQueueSize) {
                 queue.add(section);
             } else {
                 this.rebuildQueueOverflowCounts[type.ordinal()]++;

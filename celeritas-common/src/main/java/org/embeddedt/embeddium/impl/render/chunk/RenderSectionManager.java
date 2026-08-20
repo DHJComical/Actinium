@@ -277,9 +277,16 @@ public abstract class RenderSectionManager {
     private void createTerrainRenderList(Viewport viewport, int frame, boolean spectator) {
         final var searchDistance = this.getSearchDistance();
         final var useOcclusionCulling = this.shouldUseOcclusionCulling(viewport, spectator);
+        final int targetQueueSize;
+
+        if (this.shouldRespectUpdateTaskQueueSizeLimit()) {
+            targetQueueSize = (int) Math.min(Integer.MAX_VALUE, (long) this.builder.getTargetQueueSize() * 10);
+        } else {
+            targetQueueSize = Integer.MAX_VALUE;
+        }
 
         this.getCurrentRenderListManager().startGraphUpdate(viewport, frame, this.regions.getRegionIdsLength(),
-                searchDistance, useOcclusionCulling, !this.shouldRespectUpdateTaskQueueSizeLimit());
+                searchDistance, useOcclusionCulling, targetQueueSize);
     }
 
     protected abstract boolean useFogOcclusion();
@@ -421,6 +428,11 @@ public abstract class RenderSectionManager {
         this.regions.update();
         this.jobMetricsTracker.tick();
 
+        boolean mainPass = !this.isInShadowPass();
+        if (mainPass) {
+            this.builder.tickSchedulingBudget();
+        }
+
         // Promotion of the interim rebuild list is not required if a graph update is requested, as the graph
         // generates a new rebuild list anyway
         if (!this.renderListManager.isNeedsUpdate() && !sectionsRequestingUpdate.isEmpty()) {
@@ -430,6 +442,9 @@ public abstract class RenderSectionManager {
         this.sectionsRequestingUpdate.clear();
 
         if (!rebuildListHasUpdates()) {
+            if (mainPass) {
+                this.builder.setDispatchBudgetLimited(false);
+            }
             if (CONTINUOUSLY_REMESH_WORLD && !this.getCurrentRenderListManager().getRebuildLists().hasAdditionalUpdates()) {
                 this.scheduleRebuildAll();
             }
@@ -441,11 +456,18 @@ public abstract class RenderSectionManager {
 
         this.submitRebuildTasks(blockingRebuilds, ChunkUpdateType.IMPORTANT_REBUILD);
         this.submitRebuildTasks(blockingRebuilds, ChunkUpdateType.IMPORTANT_SORT);
-        this.submitRebuildTasks(updateImmediately ? blockingRebuilds : deferredRebuilds, ChunkUpdateType.REBUILD);
-        this.submitRebuildTasks(updateImmediately ? blockingRebuilds : deferredRebuilds, ChunkUpdateType.INITIAL_BUILD);
+
+        boolean budgetLimited = false;
+        budgetLimited |= this.submitRebuildTasks(updateImmediately ? blockingRebuilds : deferredRebuilds, ChunkUpdateType.REBUILD);
+        budgetLimited |= this.submitRebuildTasks(updateImmediately ? blockingRebuilds : deferredRebuilds, ChunkUpdateType.INITIAL_BUILD);
+        budgetLimited |= this.getCurrentRenderListManager().getRebuildLists().hasAdditionalUpdates();
+        if (mainPass) {
+            this.builder.setDispatchBudgetLimited(budgetLimited);
+        }
 
         // Count sort tasks as requiring a quarter of the resources of a mesh task
-        var deferredSorts = new ChunkJobCollector(Math.max(4, this.builder.getSchedulingBudget() * 4), this.buildResults::add);
+        long sortBudget = Math.min((long) Integer.MAX_VALUE, (long) this.builder.getSchedulingBudget() * 4L);
+        var deferredSorts = new ChunkJobCollector((int) Math.max(4L, sortBudget), this.buildResults::add);
         this.submitRebuildTasks(updateImmediately ? blockingRebuilds : deferredSorts, ChunkUpdateType.SORT);
 
         blockingRebuilds.awaitCompletion(this.builder);
@@ -588,7 +610,7 @@ public abstract class RenderSectionManager {
         return results;
     }
 
-    private void submitRebuildTasks(ChunkJobCollector collector, ChunkUpdateType type) {
+    private boolean submitRebuildTasks(ChunkJobCollector collector, ChunkUpdateType type) {
         var queue = this.getCurrentRenderListManager().getRebuildLists().byUpdateType().get(type);
 
         int frame = this.getCurrentRenderListManager().getLastUpdatedFrame();
@@ -642,6 +664,8 @@ public abstract class RenderSectionManager {
             }
             section.setPendingUpdate(null);
         }
+
+        return !queue.isEmpty();
     }
 
     protected abstract @Nullable ChunkBuilderTask<ChunkBuildOutput> createRebuildTask(RenderSection render, int frame);
