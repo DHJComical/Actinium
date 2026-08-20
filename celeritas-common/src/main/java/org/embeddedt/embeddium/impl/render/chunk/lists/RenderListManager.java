@@ -6,7 +6,6 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import lombok.Getter;
 import lombok.Setter;
 import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
-import org.embeddedt.embeddium.impl.render.chunk.data.SectionRenderDataUnsafe;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.GraphDirection;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.OcclusionCuller;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.OcclusionNode;
@@ -315,13 +314,11 @@ public class RenderListManager {
             for (TerrainRenderPass pass : region.getPasses()) {
                 int numToAdd = 0;
                 var storage = region.getStorage(pass);
-                var iter = Objects.requireNonNull(renderList.sectionsWithGeometryIterator(false));
+                var iter = Objects.requireNonNull(renderList.sectionsWithGeometryIterator());
 
                 while (iter.hasNext()) {
                     int sectionIndex = iter.nextByteAsInt();
-                    var pMeshData = storage.getDataPointer(sectionIndex);
-
-                    if (SectionRenderDataUnsafe.getSliceMask(pMeshData) != 0) {
+                    if (storage.getSliceMask(sectionIndex) != 0) {
                         numToAdd++;
                     }
                 }
@@ -332,7 +329,7 @@ public class RenderListManager {
             }
 
             if (isSorting) {
-                var iter = Objects.requireNonNull(renderList.sectionsWithGeometryIterator(false));
+                var iter = Objects.requireNonNull(renderList.sectionsWithGeometryIterator());
 
                 while (iter.hasNext()) {
                     int sectionIndex = iter.nextByteAsInt();
