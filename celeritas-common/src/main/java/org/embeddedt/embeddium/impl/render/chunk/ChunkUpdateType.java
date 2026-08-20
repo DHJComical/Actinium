@@ -27,6 +27,9 @@ public enum ChunkUpdateType {
      */
     IMPORTANT_REBUILD(Integer.MAX_VALUE);
 
+    /** Cached enum values to avoid allocating a new array for each iteration. */
+    public static final ChunkUpdateType[] VALUES = values();
+
     private final int maximumQueueSize;
 
     ChunkUpdateType(int maximumQueueSize) {
