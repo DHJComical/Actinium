@@ -56,6 +56,16 @@ while (newCapacity < requiredBytes) {
   `OldResearchTessellatorCompat`，再复用 Actinium streaming drawer；
 - `[DEBUG-OR74]` 临时探针已移除，Old Research Mixin 仅在 `oldresearch` 已加载时启用。
 
+## 性能优化
+
+- 常见的 `POSITION_COLOR` 和 `POSITION_TEXTURE_COLOR` legacy raw layout 直接批量打包到
+  native `IntBuffer`，避免每个属性分别调用通用 writer；`POSITION` 和
+  `POSITION_TEXTURE` 也使用同一条快路径。
+- 单个矩形 quad 在位置/UV 构成平行四边形且颜色、法线、亮度等平坦属性保持不变时，使用
+  `GL_TRIANGLE_FAN` 绘制，绕过共享 quad EBO；不满足条件的 quad 继续使用原有
+  `QuadConverter`，保留原始 provoking-vertex 语义。
+- 相关条件和 packed 输出由 `TessellatorStreamingDrawerTest` 直接调用实现验证。
+
 ## 验证状态
 
 已完成：
@@ -67,11 +77,13 @@ while (newCapacity < requiredBytes) {
 - `.\gradlew.bat build --no-daemon`；
 - Mixin 配置、late loader、remap Jar 和模块边界检查均通过；
 - 构建产物包含 Old Research 兼容类和 `mixins.actinium.oldresearch.json`。
+- 性能优化后的研究笔记 GUI FPS 尚待在同一客户端场景复测；当前已知基线为普通 GUI 约
+  800 FPS、放入研究笔记后约 400 FPS。
 
 待完成：
 
-- 使用修复后的客户端再次打开 Old Research GUI，确认不再卡死；
-- 记录修复后的 GUI FPS，并与复现基线约 850 FPS 对比；
+- 使用性能优化后的客户端再次打开 Old Research GUI，确认不再卡死；
+- 记录优化后的 GUI FPS，并与当前约 400 FPS 的基线对比；
 - 在实际运行环境确认 Old Research GUI 内的研究树、节点图标和 Thaumcraft 相关绘制无视觉回归。
 
 ## 来源
