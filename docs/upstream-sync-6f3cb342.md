@@ -7,7 +7,7 @@
 - 评估终点：`0a3624bc2ba5bb28b01ccbbc6d185fa9247bddcf`
 - 提交范围：基准之后到评估终点，共 34 个线性提交
 - 目标项目：Minecraft 1.12.2 / Cleanroom Loader 的 Actinium
-- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40` 已完成手工适配、直接逻辑测试、`check` 和完整 `build`，低 FPS、shadow-only、资源重载、维度切换等运行专项仍待验证
+- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40` 与 AO ABI 批次已完成手工适配、直接逻辑测试、`check` 和完整 `build`，低 FPS、shadow-only、资源重载、维度切换等运行专项仍待验证
 
 ## 分支与日期
 
@@ -101,7 +101,7 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 
 ## 已落地同步范围
 
-当前已落地的低风险同步范围如下。所有代码均保留 Actinium 的本地 fallback 和资源命名空间：
+当前已落地的同步范围如下。所有代码均保留 Actinium 的本地 fallback 和资源命名空间：
 
 1. 完整评估并同步 `3ad8610b771553b1654dcffb92554e5424da63c7`：
    - `celeritas-common/src/main/java/org/embeddedt/embeddium/impl/render/chunk/ChunkUpdateType.java`
@@ -130,6 +130,14 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
      - `src/test/java/org/embeddedt/embeddium/impl/render/chunk/region/VisibleChunkCollectorSchedulingTest.java`
    - 适配内容包括 adaptive in-flight target、每个 worker 预热 32 个任务、调度下限、worker starvation 时翻倍、damped decay、仅 `INITIAL_BUILD` 限流、主 terrain 每帧单次 tick 以及 shadow 不覆盖主 terrain 反馈；任务取消和重要任务的阻塞语义保持不变。warm start、target 翻倍、初始队列 `target * 10` 和 SORT 预算 `* 4` 均使用 `long` 饱和处理，避免整数溢出。
 
+5. 成对手工适配 AO ABI 批次 `3d071b85205db183f54d30b7b36fe54ea096a2a2` 与 `0a3624bc2ba5bb28b01ccbbc6d185fa9247bddcf`：
+   - `CompactChunkVertex` stride 从 20 调整为 24，`VanillaLikeChunkVertex` stride 从 28 调整为 32；两种格式均追加 normalized `BYTE x 4` 的 `a_RdhFactor`，并由对应 encoder 写入。
+   - `ChunkMeshBufferBuilder` 在支持该 ABI 的 encoder 上按四顶点颜色计算 correction；非四顶点输入清零，避免特殊 primitive 使用未定义数据。
+   - 默认 Actinium shader 仅在 vertex format 含 `a_RdhFactor` 时定义 `USE_BILINEAR_CORRECTION`；vertex shader 将 correction 乘入 lightmap RGB，fragment shader 使用优化后的 `min(x, y) - x * y` 权重。
+   - `ExtendedChunkVertexType` 过滤 `a_RdhFactor`，并按过滤后的基础属性末端重新计算动态 stride；`ExtendedChunkVertexEncoder` 使用只写 28-byte 基础布局的 encoder，明确关闭 correction，避免无扩展属性时越界写入。
+   - legacy GLSL downgrade 路径不启用 correction 宏，避免旧版 shader 依赖 `gl_VertexID` 和新增 varying；Iris shader-pack override 不消费该字段。
+   - 直接逻辑测试覆盖 correction 数学、非 quad 清零、signed-byte 边界、Compact/Vanilla-like attribute ABI、shader define 和 Iris extended layout；当前未完成的仍是实际客户端运行矩阵。
+
 ## 不直接同步的提交
 
 ### `208127b4`
@@ -145,6 +153,7 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
 ### 当前验证状态
 
 - `fadd0c40` 已完成手工适配，涉及上文列出的 6 个 `celeritas-common` Java 生产文件和 3 个直接逻辑测试文件；未修改 GLSM、Mixin 或其他模块。
+- AO ABI 批次已完成手工适配，涉及 `celeritas-common` 的顶点格式/encoder/builder/shader options、`shader` 的 Iris extended 顶点格式/encoder、Actinium 内置 terrain shader，以及对应直接逻辑测试；未修改 Iris shader-pack 的自定义 attribute requirements。
 - `compileJava --no-daemon` 和 `compileTestJava --no-daemon` 均已通过，使用 Java 25 和 `GRADLE_USER_HOME=D:/gradle`。
 - fadd 调度测试实际执行 5 个测试，`0 failures`、`0 errors`。
 - `check --no-daemon` 已通过：包含 `processResources`、根项目测试、模块边界、compat bridge Jar 和 remap Jar 校验；共 24 个 actionable tasks。
@@ -161,7 +170,7 @@ shadow-only workload 按上游设计不推动 adaptive target；当前实现保�
 1. 已完成 `3ad8610b` 的机械同步并通过 `compileJava`、`check`。
 2. 已完成 `db107709` 两项 buffer 行为修复，保留本地 fallback，并通过 `compileJava`、`check`。
 3. `fadd0c40` 的代码适配、直接逻辑测试、构建验证已完成；待完成低 FPS、初始建图、普通/重要 rebuild、任务取消、资源重载、维度切换、render distance 变化、shadow pass 和扩展世界高度等运行专项验证。
-4. 将 `3d071b85` 与 `0a3624bc` 作为一个 AO ABI 变更批次处理，检查 compact/vanilla-like vertex stride、`ExtendedChunkVertexType`、普通 terrain、Iris terrain、triangulated pass 和 shader pack。
+4. AO ABI 批次的代码适配、直接逻辑测试、构建验证已完成；待完成无光影默认 terrain、Compact/Vanilla-like format、shader pack terrain/water/shadow、translucent/triangulated pass、资源重载、维度切换、legacy OpenGL fallback、低 FPS 和 shadow-only 场景验证。
 5. 将 MultiDraw 五提交作为完整数据布局和发射器重构，先 benchmark 再决定是否移植。
 6. 将 Occlusion/lattice 十提交作为完整可见性架构重构，优先解决动态世界高度、异步 snapshot 和 camera rebasing 的适配，再进行性能优化。
 7. 所有渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
