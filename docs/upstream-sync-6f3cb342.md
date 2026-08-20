@@ -138,6 +138,19 @@ Actinium 当前仍使用 `Long2ReferenceMap<OcclusionNode>` 和旧的异步 grap
    - legacy GLSL downgrade 路径不启用 correction 宏，避免旧版 shader 依赖 `gl_VertexID` 和新增 varying；Iris shader-pack override 不消费该字段。
    - 直接逻辑测试覆盖 correction 数学、非 quad 清零、signed-byte 边界、Compact/Vanilla-like attribute ABI、shader define 和 Iris extended layout；当前未完成的仍是实际客户端运行矩阵。
 
+6. 成组手工适配 MultiDraw / section render data 批次：
+   - `a3b3f98a9454364a89c8be4ddd8626132ca96e14` — **Aggressively optimize multidraw command emission**。
+   - `2119366eb112576e0fcb1c68201aba1bb9649825` — **coalesce more adjacent multidraw commands**。
+   - `ee1e803864c9cf7e473ce97d23fc4a67737d694d` — **compact unsorted render data**。
+   - `8a7af9672802a71790b3e42de86fdbe4eb63885b` — **Refactor Strategy APIs a bit**。
+   - `a517fb5cd3eb2ace01c9faf320662ede4fa9493c` — **Apply a few more cleanups to the SectionRenderDataUnsafe.Strategy API**。
+   - `SectionRenderDataUnsafe.Strategy.FULL` 保留 sorted/translucent pass 的 slice mask、vertex offset、element count 和实际 index offset；`COMPACT` 为 unsorted pass 使用 256-byte mask header 与每 section 8 个 fence posts，通过 primitive type 从 vertex span 推导 element count，并固定 shared index pointer 为零。
+   - `SectionRenderDataStorage` 按 render pass 固定选择 strategy，统一负责 row、slice mask、rebase 和 sorted index buffer replacement；COMPACT 的 index replacement 明确 fail fast。
+   - 新增 `BatchAssembler`，支持正向/反向 section array 遍历、uniform/per-section block-face culling、连续 facing run 合并、`maxElementCount` 维护，以及把动画 section 分离为单独绘制。
+   - `MultiDrawEmitter` 改为只消费共享 `MultiDrawBatch`；direct、indirect、individual 三条路径均校验 batch 容量，indirect 保留 `firstIndex = byteOffset / 4`，并移除旧的 emitter 自有 batch 和 metadata accessor 路径。
+   - 动画 section 继续使用 individual draw 以保持独立 model offset；unsorted 动画命令在绘制前也会参与 shared index buffer 容量扩展。已删除不再使用的 `ReversibleByteArrayIterator`。
+   - 直接逻辑测试新增 `SectionRenderDataUnsafeTest`，覆盖 primitive 元素换算、MultiDrawBatch 状态，以及 FULL/COMPACT metadata 的写入与 rebase。无 OpenGL context 的 headless JVM 执行时，native metadata 测试明确跳过并记录原因，纯逻辑测试仍执行。
+
 ## 不直接同步的提交
 
 ### `208127b4`
@@ -172,9 +185,9 @@ shadow-only workload 按上游设计不推动 adaptive target；当前实现保�
 2. 已完成 `db107709` 两项 buffer 行为修复，保留本地 fallback，并通过 `compileJava`、`check`。
 3. `fadd0c40` 的代码适配、直接逻辑测试、构建验证已完成；用户已验证 FPS、维度切换和 shadow 相关主路径；待完成初始建图、普通/重要 rebuild、任务取消、资源重载、render distance 变化和扩展世界高度等运行专项验证。
 4. AO ABI 批次的代码适配、直接逻辑测试、构建验证和主要客户端运行验证已完成；用户已验证 FPS、维度切换、光影切换、terrain 和 shadow 均正常；待补 legacy OpenGL、特定 Compact/Vanilla-like format 及 translucent/triangulated 细分场景验证。
-5. 开始评估 MultiDraw 五提交：先完成上游与本地数据布局对照、direct/indirect/individual 路径 benchmark 入口审阅，再决定是否移植。
+5. MultiDraw 五提交已完成上游对照、手工适配、`compileJava`、直接逻辑测试、`check` 和完整 `build`；用户已验证 FPS、维度切换、光影切换、terrain 和 shadow 均正常。仍待 legacy OpenGL/LWJGL2、direct/indirect/individual 模式切换、translucent/triangulated 细分场景以及动画 section 的独立客户端验证。
 6. 将 Occlusion/lattice 十提交作为完整可见性架构重构，优先解决动态世界高度、异步 snapshot 和 camera rebasing 的适配，再进行性能优化。
-7. 所有渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
+7. 所有后续渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
 
 建议机械同步、1.12/Cleanroom 适配、LWJGL 适配以及 Mixin/bridge 适配分别提交，避免在同一个提交中混合上游大范围同步和无关重构。每个后续提交应记录来源 upstream SHA、实际文件范围、适配原因和验证结果。
 
