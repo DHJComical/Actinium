@@ -39,9 +39,9 @@
 - `db1077091a64c7149abedf33ce334df01b9b78cb` — **Simplify legacy-support polyfills (#28)**。本轮只摘取 `BufferMapRangeFunctions.MAP_FULL_AND_SLICE` 的 null 处理，以及 `BufferCopyFunctions.PIXEL_PACK` 失败时的 `finally` 清理，确保 mapped buffer 解除映射并清理 binding。不上游整体删除 Actinium 自有的 `BufferStorageFunctions`、`MultidrawFunctions` 或其他旧驱动 fallback；这部分必须按本地 GLSM/LWJGL 结构手工合并。
 - `0203a1fe96d07893ff76fe7146b0f1f39794c23c` — **dont compile chunk age declarations if theyre unused (#26)**。将上游 `assets/sodium` shader 的条件声明手工映射到 Actinium 的 `assets/actinium` opaque chunk shader；只有 `USE_FOG` 且 `CHUNK_FADE_IN_DURATION_MS > 0` 时才声明/读取 chunk age varying 和 uniform，避免无 fade 路径的链接告警与 uniform 数据分配。
 
-### 建议后续同步
+### 可选后续
 
-这些提交有潜在价值，但当前没有足够的直接调用场景，或应等待相关功能需求出现后再同步。
+以下内容单独列为可选后续，不阻塞本轮 34 个提交的同步，也不要求为了追上游而立即扩大改动范围。只有出现实际调用方、明确功能需求或对应驱动兼容性问题时，才另开独立分支和提交进行评估。
 
 - `4afdabd23a81b9ebb9aeee1594e6354d826b3c26` — **Support instanced vertex attribute bindings (#27)**。上游扩展顶点属性 binding、`GlProgram` 和 tessellation API。Actinium 的 GLSM/backend 已有等价的 `glVertexAttribDivisor` 能力，但 Celeritas 当前没有明确的实例化绘制调用；后续若出现实际 caller，再核对 `com.mitchej123.lwjgl` wrapper 和本地 attribute 绑定路径。
 - `1948aef10fc4a182fa305e0a7628d45264771a04` — **Add additional GL methods to LWJGL wrapper**。增加 `glDrawArrays`、纹理、draw buffers、framebuffer blit 等 wrapper API。Actinium backend 已存在部分等价底层能力，当前未确认 Celeritas 有对应直接调用；暂不为追上游而单独扩大 LWJGL service 变更面。
