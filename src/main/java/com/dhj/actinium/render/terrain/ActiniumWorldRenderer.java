@@ -146,7 +146,7 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
 
     /**
      * Captures the iChun recursive terrain matrices while leaving ordinary and shadow rendering unchanged.
-     */
+     */
 
     @Override
     public void markSectionGraphDirty() {
