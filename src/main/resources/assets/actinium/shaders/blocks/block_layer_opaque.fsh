@@ -4,8 +4,14 @@
 
 in vec4 v_Color;
 in vec2 v_TexCoord;
+#ifdef USE_BILINEAR_CORRECTION
+in vec4 v_RdhFactor;
+in vec2 v_QuadCoord;
+#endif
 
+#if defined(USE_FOG) && defined(CHUNK_FADE_IN_DURATION_MS) && CHUNK_FADE_IN_DURATION_MS > 0
 in float v_ChunkAgeMs;
+#endif
 
 in float v_MaterialMipBias;
 #ifdef USE_FRAGMENT_DISCARD
@@ -55,6 +61,12 @@ void main() {
 #endif
 
     vec4 m_color = v_Color;
+#ifdef USE_BILINEAR_CORRECTION
+    // min(x, y) * (1 - max(x, y)) == min(x, y) - (x * y)
+    float correctionWeight = min(v_QuadCoord.x, v_QuadCoord.y)
+            - (v_QuadCoord.x * v_QuadCoord.y);
+    m_color += v_RdhFactor * correctionWeight;
+#endif
 
 #ifdef USE_VANILLA_COLOR_FORMAT
     // Apply per-vertex color. AO shade is applied ahead of time on the CPU.

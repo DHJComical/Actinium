@@ -53,4 +53,26 @@ public class SafeZoneCullingFrustum extends AdvancedShadowCullingFrustum {
 
 		return checkCornerVisibility(minX, minY, minZ, maxX, maxY, maxZ);
 	}
+
+	/** Combines the safe voxel zone, outer distance limit, and advanced clipping planes. */
+	@Override
+	public int intersectAab(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+		if (distanceCuller != null && distanceCuller.isCulledViewRelative(minX, minY, minZ, maxX, maxY, maxZ)) {
+			return OUTSIDE;
+		}
+
+		if (boxCuller != null && !boxCuller.isCulledViewRelative(minX, minY, minZ, maxX, maxY, maxZ)) {
+			boolean fullyInside = boxCuller.isFullyInsideSodium(minX, minY, minZ, maxX, maxY, maxZ)
+					&& (distanceCuller == null || distanceCuller.isFullyInsideSodium(minX, minY, minZ, maxX, maxY, maxZ));
+			return fullyInside ? FULLY_INSIDE : PARTIALLY_INSIDE;
+		}
+
+		int result = intersectCorners(minX, minY, minZ, maxX, maxY, maxZ);
+		if (result == FULLY_INSIDE && distanceCuller != null
+				&& !distanceCuller.isFullyInsideSodium(minX, minY, minZ, maxX, maxY, maxZ)) {
+			return PARTIALLY_INSIDE;
+		}
+
+		return result;
+	}
 }

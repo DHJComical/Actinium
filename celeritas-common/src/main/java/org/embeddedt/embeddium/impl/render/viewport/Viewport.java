@@ -58,6 +58,17 @@ public final class Viewport {
         );
     }
 
+    /** Classifies a camera-relative box while preserving the fractional camera transform. */
+    public int intersectCameraRelativeBox(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+        return this.frustum.intersectAab(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    /** Classifies an integer camera-relative box without changing the float-based local API. */
+    public int intersectCameraRelativeBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        return this.intersectCameraRelativeBox((float) minX, (float) minY, (float) minZ,
+                (float) maxX, (float) maxY, (float) maxZ);
+    }
+
     public CameraTransform getTransform() {
         return this.transform;
     }

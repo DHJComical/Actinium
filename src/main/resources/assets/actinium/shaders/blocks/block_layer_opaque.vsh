@@ -7,8 +7,14 @@
 
 out vec4 v_Color;
 out vec2 v_TexCoord;
+#ifdef USE_BILINEAR_CORRECTION
+out vec4 v_RdhFactor;
+out vec2 v_QuadCoord;
+#endif
 
+#if defined(USE_FOG) && defined(CHUNK_FADE_IN_DURATION_MS) && CHUNK_FADE_IN_DURATION_MS > 0
 out float v_ChunkAgeMs;
+#endif
 
 out float v_MaterialMipBias;
 #ifdef USE_FRAGMENT_DISCARD
@@ -34,7 +40,9 @@ vec4 _sample_lightmap(sampler2D lightMap, ivec2 uv) {
 }
 #endif
 
+#if defined(USE_FOG) && defined(CHUNK_FADE_IN_DURATION_MS) && CHUNK_FADE_IN_DURATION_MS > 0
 uniform float celeritas_ChunkAges[REGION_SIZE];
+#endif
 
 void main() {
     _vert_init();
@@ -54,10 +62,22 @@ void main() {
     gl_Position = u_ProjectionMatrix * u_ModelViewMatrix * vec4(position, 1.0);
 
     // Add the light color to the vertex color, and pass the texture coordinates to the fragment shader
+#ifdef USE_BILINEAR_CORRECTION
+    v_RdhFactor = _vert_rdh_factor * 2.0;
+#endif
 #ifdef CELERITAS_NO_LIGHTMAP
     v_Color = _vert_color;
 #else
-    v_Color = _vert_color * _sample_lightmap(u_LightTex, _vert_tex_light_coord);
+    vec4 lightColor = _sample_lightmap(u_LightTex, _vert_tex_light_coord);
+    v_Color = _vert_color * lightColor;
+#ifdef USE_BILINEAR_CORRECTION
+    v_RdhFactor.rgb *= lightColor.rgb;
+#endif
+#endif
+#ifdef USE_BILINEAR_CORRECTION
+    int corner = gl_VertexID & 3;
+    v_QuadCoord = vec2(corner >= 2 ? 1.0 : 0.0,
+            corner == 1 || corner == 2 ? 1.0 : 0.0);
 #endif
     v_TexCoord = _vert_tex_diffuse_coord;
 
@@ -65,5 +85,7 @@ void main() {
 #ifdef USE_FRAGMENT_DISCARD
     v_MaterialAlphaCutoff = _material_alpha_cutoff(_material_params);
 #endif
+#if defined(USE_FOG) && defined(CHUNK_FADE_IN_DURATION_MS) && CHUNK_FADE_IN_DURATION_MS > 0
     v_ChunkAgeMs = celeritas_ChunkAges[_draw_id];
+#endif
 }

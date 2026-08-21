@@ -14,6 +14,9 @@ class ChunkJobQueue {
 
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
 
+    // A worker sets this when it finds no permit and is about to wait; the scheduler consumes it once per frame.
+    private final AtomicBoolean workerBlocked = new AtomicBoolean(false);
+
     public boolean isRunning() {
         return this.isRunning.get();
     }
@@ -47,9 +50,20 @@ class ChunkJobQueue {
             return null;
         }
 
-        this.semaphore.acquire();
+        if (!this.semaphore.tryAcquire()) {
+            // Report an empty queue before blocking so the target can grow when dispatch was budget-limited.
+            this.workerBlocked.set(true);
+            this.semaphore.acquire();
+        }
 
         return this.getNextTask();
+    }
+
+    /**
+     * Returns whether a worker waited for work since the last check, then clears the feedback flag.
+     */
+    public boolean checkAndClearWorkerBlocked() {
+        return this.workerBlocked.getAndSet(false);
     }
 
     public boolean stealJob(ChunkJob job) {

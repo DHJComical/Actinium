@@ -2,9 +2,8 @@ package org.embeddedt.embeddium.impl.render.chunk.lists;
 
 import org.embeddedt.embeddium.impl.render.chunk.LocalSectionIndex;
 import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
-import org.embeddedt.embeddium.impl.util.iterator.ByteIterator;
-import org.embeddedt.embeddium.impl.util.iterator.ReversibleByteArrayIterator;
 import org.embeddedt.embeddium.impl.util.iterator.ByteArrayIterator;
+import org.embeddedt.embeddium.impl.util.iterator.ByteIterator;
 import org.embeddedt.embeddium.impl.render.chunk.region.RenderRegion;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,31 +26,47 @@ public class ChunkRenderList {
     }
 
     public void add(RenderSection render) {
+        this.add(render.getSectionIndex(), render.getVisualsServiceFlags());
+    }
+
+    /**
+     * Adds a section using the metadata captured by the visibility traversal.
+     * The collector uses this overload so it does not reread mutable section state after the async search.
+     */
+    public void add(int sectionIndex, int flags) {
         if (this.size >= RenderRegion.REGION_SIZE) {
             throw new ArrayIndexOutOfBoundsException("Render list is full");
         }
 
         this.size++;
 
-        int index = render.getSectionIndex();
-        int flags = render.getVisualsServiceFlags();
-
-        this.sectionsWithGeometry[this.sectionsWithGeometryCount] = (byte) index;
+        this.sectionsWithGeometry[this.sectionsWithGeometryCount] = (byte) sectionIndex;
         this.sectionsWithGeometryCount += (flags >>> RenderVisualsService.HAS_BLOCK_GEOMETRY) & 1;
 
-        this.sectionsWithSprites[this.sectionsWithSpritesCount] = (byte) index;
+        this.sectionsWithSprites[this.sectionsWithSpritesCount] = (byte) sectionIndex;
         this.sectionsWithSpritesCount += (flags >>> RenderVisualsService.HAS_SPRITES) & 1;
 
-        this.sectionsWithEntities[this.sectionsWithEntitiesCount] = (byte) index;
+        this.sectionsWithEntities[this.sectionsWithEntitiesCount] = (byte) sectionIndex;
         this.sectionsWithEntitiesCount += (flags >>> RenderVisualsService.HAS_BLOCK_ENTITIES) & 1;
     }
 
-    public @Nullable ByteIterator sectionsWithGeometryIterator(boolean reverse) {
+    /**
+     * Returns the backing array containing local section indices with geometry. Only the first
+     * {@link #getSectionsWithGeometryCount()} entries are valid.
+     */
+    public byte[] getSectionsWithGeometry() {
+        return this.sectionsWithGeometry;
+    }
+
+    /**
+     * Returns a forward iterator over local section indices with geometry.
+     */
+    public @Nullable ByteIterator sectionsWithGeometryIterator() {
         if (this.sectionsWithGeometryCount == 0) {
             return null;
         }
 
-        return new ReversibleByteArrayIterator(this.sectionsWithGeometry, this.sectionsWithGeometryCount, reverse);
+        return new ByteArrayIterator(this.sectionsWithGeometry, this.sectionsWithGeometryCount);
     }
 
     public @Nullable ByteIterator sectionsWithSpritesIterator() {
@@ -92,7 +107,7 @@ public class ChunkRenderList {
 
     @Override
     public String toString() {
-        var iterator = this.sectionsWithGeometryIterator(false);
+        var iterator = this.sectionsWithGeometryIterator();
         if (iterator == null) {
             return "[]";
         }

@@ -16,11 +16,23 @@ public class SectionRenderDataStorage {
 
     private final long pMeshDataArray;
     private final ChunkPrimitiveType primitiveType;
+    private final SectionRenderDataUnsafe.Strategy storageStrategy;
 
     private int numAllocations;
 
+    /**
+     * Creates FULL metadata for compatibility with the existing Actinium render-region construction path.
+     */
     public SectionRenderDataStorage(ChunkPrimitiveType primitiveType) {
-        this.pMeshDataArray = SectionRenderDataUnsafe.allocateHeap(RenderRegion.REGION_SIZE);
+        this(primitiveType, true);
+    }
+
+    /**
+     * Creates FULL metadata for sorted passes and COMPACT metadata for unsorted passes.
+     */
+    public SectionRenderDataStorage(ChunkPrimitiveType primitiveType, boolean sorted) {
+        this.storageStrategy = sorted ? SectionRenderDataUnsafe.Strategy.FULL : SectionRenderDataUnsafe.Strategy.COMPACT;
+        this.pMeshDataArray = this.storageStrategy.allocateHeap();
         if (this.pMeshDataArray == 0) {
             throw new OutOfMemoryError("Failed to allocate mesh data array");
         }
@@ -31,8 +43,20 @@ public class SectionRenderDataStorage {
         return this.numAllocations == 0;
     }
 
+    /**
+     * {@return the primitive type used to derive COMPACT element counts and to rebase metadata}
+     */
+    public ChunkPrimitiveType getPrimitiveType() {
+        return this.primitiveType;
+    }
+
+    public SectionRenderDataUnsafe.Strategy getStrategy() {
+        return this.storageStrategy;
+    }
+
     public void setMeshes(int localSectionIndex,
-                          GlBufferSegment allocation, @Nullable GlBufferSegment indexAllocation, Map<ModelQuadFacing, VertexRange> ranges) {
+                          GlBufferSegment allocation, @Nullable GlBufferSegment indexAllocation,
+                          Map<ModelQuadFacing, VertexRange> ranges) {
         if (this.allocations[localSectionIndex] != null) {
             this.allocations[localSectionIndex].delete();
             this.allocations[localSectionIndex] = null;
@@ -48,52 +72,21 @@ public class SectionRenderDataStorage {
         this.indexAllocations[localSectionIndex] = indexAllocation;
         this.numAllocations++;
 
-        var pMeshData = this.getDataPointer(localSectionIndex);
-
-        int sliceMask = 0;
         int vertexOffset = allocation.getOffset();
         int indexOffset = indexAllocation != null ? indexAllocation.getOffset() * 4 : 0;
 
-        int elementsPerPrimitive = primitiveType.getIndexBufferElementsPerPrimitive();
-        int verticesPerPrimitive = primitiveType.getVerticesPerPrimitive();
-
-        for (int facingIndex = 0; facingIndex < ModelQuadFacing.COUNT; facingIndex++) {
-            VertexRange vertexRange = ranges.get(ModelQuadFacing.VALUES[facingIndex]);
-            int vertexCount;
-
-            if (vertexRange != null) {
-                vertexCount = vertexRange.vertexCount();
-            } else {
-                vertexCount = 0;
-            }
-
-            int indexCount = (vertexCount / verticesPerPrimitive) * elementsPerPrimitive;
-
-            SectionRenderDataUnsafe.setVertexOffset(pMeshData, facingIndex, vertexOffset);
-            SectionRenderDataUnsafe.setElementCount(pMeshData, facingIndex, indexCount);
-            SectionRenderDataUnsafe.setIndexOffset(pMeshData, facingIndex, indexOffset);
-
-            if (vertexCount > 0) {
-                sliceMask |= 1 << facingIndex;
-            }
-
-            vertexOffset += vertexCount;
-            indexOffset += indexCount * 4;
-        }
-
-        SectionRenderDataUnsafe.setSliceMask(pMeshData, sliceMask);
+        this.storageStrategy.writeMeshesAndSliceMask(this.pMeshDataArray, localSectionIndex,
+                vertexOffset, indexOffset, ranges, this.primitiveType);
     }
 
     public void removeMeshes(int localSectionIndex) {
         if (this.allocations[localSectionIndex] != null) {
             this.allocations[localSectionIndex].delete();
             this.allocations[localSectionIndex] = null;
-
-            SectionRenderDataUnsafe.clear(this.getDataPointer(localSectionIndex));
-
             this.numAllocations--;
         }
 
+        this.storageStrategy.clearRow(this.pMeshDataArray, localSectionIndex);
         removeIndexBuffer(localSectionIndex);
     }
 
@@ -105,19 +98,21 @@ public class SectionRenderDataStorage {
     }
 
     public void replaceIndexBuffer(int localSectionIndex, GlBufferSegment indexAllocation) {
+        if (this.storageStrategy == SectionRenderDataUnsafe.Strategy.COMPACT) {
+            throw new UnsupportedOperationException("COMPACT metadata does not support index buffer replacement");
+        }
+        if (indexAllocation == null) {
+            throw new IllegalArgumentException("indexAllocation must not be null");
+        }
+
         removeIndexBuffer(localSectionIndex);
 
         this.indexAllocations[localSectionIndex] = indexAllocation;
 
         var pMeshData = this.getDataPointer(localSectionIndex);
+        int indexOffset = indexAllocation.getOffset() * 4;
 
-        int indexOffset = indexAllocation != null ? indexAllocation.getOffset() * 4 : 0;
-
-        for (int facingIndex = 0; facingIndex < ModelQuadFacing.COUNT; facingIndex++) {
-            SectionRenderDataUnsafe.setIndexOffset(pMeshData, facingIndex, indexOffset);
-            int indexCount = SectionRenderDataUnsafe.getElementCount(pMeshData, facingIndex);
-            indexOffset += indexCount * 4;
-        }
+        this.storageStrategy.writeIndexOffsets(pMeshData, indexOffset, this.primitiveType);
     }
 
     public void onBufferResized() {
@@ -134,27 +129,31 @@ public class SectionRenderDataStorage {
         }
 
         var indexAllocation = this.indexAllocations[sectionIndex];
+        int vertexOffset = allocation.getOffset();
+        int indexOffset = indexAllocation != null ? indexAllocation.getOffset() * 4 : 0;
 
-        var vertexOffset = allocation.getOffset();
-        var indexOffset = indexAllocation != null ? indexAllocation.getOffset() * 4 : 0;
-
-        var data = this.getDataPointer(sectionIndex);
-
-        int elementsPerPrimitive = primitiveType.getIndexBufferElementsPerPrimitive();
-        int verticesPerPrimitive = primitiveType.getVerticesPerPrimitive();
-
-        for (int facing = 0; facing < ModelQuadFacing.COUNT; facing++) {
-            SectionRenderDataUnsafe.setVertexOffset(data, facing, vertexOffset);
-            SectionRenderDataUnsafe.setIndexOffset(data, facing, indexOffset);
-
-            var indexCount = SectionRenderDataUnsafe.getElementCount(data, facing);
-            vertexOffset += (indexCount / elementsPerPrimitive) * verticesPerPrimitive; // convert elements back into vertices
-            indexOffset += indexCount * 4;
-        }
+        this.storageStrategy.rebase(this.getDataPointer(sectionIndex), vertexOffset, indexOffset, this.primitiveType);
     }
 
+    /**
+     * {@return the address of one section's metadata row}
+     */
     public long getDataPointer(int sectionIndex) {
-        return SectionRenderDataUnsafe.heapPointer(this.pMeshDataArray, sectionIndex);
+        return this.storageStrategy.heapPointer(this.pMeshDataArray, sectionIndex);
+    }
+
+    /**
+     * {@return the address of the first metadata row, after any strategy-specific header}
+     */
+    public long getRowBasePointer() {
+        return this.storageStrategy.getRowBasePointer(this.pMeshDataArray);
+    }
+
+    /**
+     * {@return the slice mask for one section}
+     */
+    public int getSliceMask(int sectionIndex) {
+        return this.storageStrategy.getSliceMask(this.pMeshDataArray, sectionIndex);
     }
 
     public void delete() {
@@ -173,7 +172,7 @@ public class SectionRenderDataStorage {
         Arrays.fill(this.allocations, null);
         Arrays.fill(this.indexAllocations, null);
 
-        SectionRenderDataUnsafe.freeHeap(this.pMeshDataArray);
+        this.storageStrategy.freeHeap(this.pMeshDataArray);
 
         this.numAllocations = 0;
     }

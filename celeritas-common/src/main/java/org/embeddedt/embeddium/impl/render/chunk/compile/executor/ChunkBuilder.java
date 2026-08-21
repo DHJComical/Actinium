@@ -21,19 +21,40 @@ public class ChunkBuilder {
      * threads when the game is given a small heap.
      */
     private static final int MBS_PER_CHUNK_BUILDER = 64;
+
     /**
      * The number of tasks to allow in the queue per available worker thread. This value should be kept conservative
      * to avoid the threads becoming backlogged and failing to keep up with changes in chunk visibility (e.g.
      * camera movement). However, it also needs to be large enough that the thread is not spending part of the
      * frame doing nothing. 2 seems to be a decent value, and is what Sodium 0.2 used.
+     * <p></p>
+     * With adaptive scheduling, this is used as the floor for the in-flight target.
      */
     private static final int TASK_QUEUE_LIMIT_PER_WORKER = 2;
+
+    /** Initial in-flight target per worker before measured throughput is available. */
+    private static final int WARM_START_PER_WORKER = 32;
+
+    /** Dampens target decay so temporary worker slowdown does not immediately discard useful queue capacity. */
+    private static final int TARGET_DECAY_DAMPING = 2;
+
+    /** Keeps the legacy fixed floor available as a local fallback during tuning or regression diagnosis. */
+    private static final boolean ENABLE_ADAPTIVE_SCHEDULING = true;
+
+    /** Enables target-change logging for local tuning. */
+    private static final boolean DEBUG_ADAPTIVE_SCHEDULING = false;
 
     private final ChunkJobQueue queue = new ChunkJobQueue();
 
     private final List<WorkerThread> threads = new ArrayList<>();
 
     private final AtomicInteger busyThreadCount = new AtomicInteger();
+
+    /** Current desired number of queued in-flight tasks, bounded below by the scheduling floor. */
+    private int targetInFlight;
+
+    /** Whether the previous dispatch stopped at its budget while more rebuild work remained. */
+    private boolean lastDispatchBudgetLimited;
 
     private final ChunkBuildContext localContext;
 
@@ -62,14 +83,72 @@ public class ChunkBuilder {
         this.localContext = contextSupplier.get();
 
         this.managedBlocker = managedBlocker;
+
+        if (ENABLE_ADAPTIVE_SCHEDULING && !this.threads.isEmpty()) {
+            long warmStartTarget = (long) WARM_START_PER_WORKER * this.threads.size();
+            this.targetInFlight = (int) Math.min(Integer.MAX_VALUE,
+                    Math.max(this.getSchedulingFloor(), warmStartTarget));
+        } else {
+            this.targetInFlight = this.getSchedulingFloor();
+        }
     }
 
     /**
-     * Returns the remaining number of build tasks which should be scheduled this frame. If an attempt is made to
-     * spawn more tasks than the budget allows, it will block until resources become available.
+     * Returns the minimum in-flight queue size needed to keep the workers supplied.
+     */
+    private int getSchedulingFloor() {
+        return Math.max(1, this.threads.size()) * TASK_QUEUE_LIMIT_PER_WORKER;
+    }
+
+    /**
+     * Advances the adaptive target once for the current frame.
+     */
+    public void tickSchedulingBudget() {
+        if (!ENABLE_ADAPTIVE_SCHEDULING) {
+            return;
+        }
+
+        int floor = this.getSchedulingFloor();
+        int queued = this.queue.size();
+        boolean workerStarved = this.queue.checkAndClearWorkerBlocked();
+        int previousTarget = this.targetInFlight;
+
+        if (workerStarved && this.lastDispatchBudgetLimited) {
+            this.targetInFlight = (int) Math.min(Integer.MAX_VALUE, (long) this.targetInFlight * 2);
+        } else if (queued > floor) {
+            int excess = queued - floor;
+            int decayStep = Math.max(1, excess / TARGET_DECAY_DAMPING);
+            this.targetInFlight -= decayStep;
+        }
+
+        this.targetInFlight = Math.max(floor, this.targetInFlight);
+
+        if (DEBUG_ADAPTIVE_SCHEDULING && this.targetInFlight != previousTarget) {
+            LOGGER.info("Adaptive scheduling target {} {} -> {} (queued={}, starved={}, budgetLimited={})",
+                    this.targetInFlight > previousTarget ? "grew" : "shrank",
+                    previousTarget, this.targetInFlight, queued, workerStarved, this.lastDispatchBudgetLimited);
+        }
+    }
+
+    /**
+     * Returns the current desired number of in-flight tasks.
+     */
+    public int getTargetQueueSize() {
+        return this.targetInFlight;
+    }
+
+    /**
+     * Returns the remaining number of tasks allowed before reaching the current in-flight target.
      */
     public int getSchedulingBudget() {
-        return Math.max(0, (Math.max(1, this.threads.size()) * TASK_QUEUE_LIMIT_PER_WORKER) - this.queue.size());
+        return Math.max(0, this.targetInFlight - this.queue.size());
+    }
+
+    /**
+     * Records whether the previous dispatch was limited by this builder's budget.
+     */
+    public void setDispatchBudgetLimited(boolean budgetLimited) {
+        this.lastDispatchBudgetLimited = budgetLimited;
     }
 
     /**

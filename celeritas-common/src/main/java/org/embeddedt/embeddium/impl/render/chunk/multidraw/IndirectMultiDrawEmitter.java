@@ -5,13 +5,13 @@ import org.embeddedt.embeddium.impl.gl.buffer.GlBufferUsage;
 import org.embeddedt.embeddium.impl.gl.buffer.GlMutableBuffer;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.gl.device.DrawCommandList;
+import org.embeddedt.embeddium.impl.gl.device.MultiDrawBatch;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlIndexType;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlTessellation;
-import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
-import org.embeddedt.embeddium.impl.render.chunk.data.SectionRenderDataUnsafe;
-import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 import com.mitchej123.lwjgl.LWJGLServiceProvider;
+
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
 /**
  * A multidraw emitter that uses indirect rendering to exploit hardware acceleration, which
@@ -28,7 +28,6 @@ public class IndirectMultiDrawEmitter implements MultiDrawEmitter {
     private static final int BUFFER_SIZE = MultiDrawEmitter.MAX_COMMAND_COUNT * COMMAND_SIZE;
 
     private final long indirectBuffer;
-    private int numCommands;
     private final GlMutableBuffer indirectBufferGpu;
 
     public IndirectMultiDrawEmitter() {
@@ -41,7 +40,6 @@ public class IndirectMultiDrawEmitter implements MultiDrawEmitter {
     }
 
     private void prefillConstants() {
-        // Prefill constants
         long ptr = this.indirectBuffer;
         for (int i = 0; i < MultiDrawEmitter.MAX_COMMAND_COUNT; i++) {
             LWJGL.memPutInt(ptr + 4L, 1); // instanceCount
@@ -51,63 +49,55 @@ public class IndirectMultiDrawEmitter implements MultiDrawEmitter {
     }
 
     @Override
-    public void addDrawCommands(long pMeshData, int facingMask, int indexPointerMask) {
-        int size = this.numCommands;
-
-        long basePtr = this.indirectBuffer;
-
-        for (int facing = 0; facing < ModelQuadFacing.COUNT; facing++) {
-            long ptr = basePtr + (long)size * COMMAND_SIZE;
-            LWJGL.memPutInt(ptr + 0L, SectionRenderDataUnsafe.getElementCount(pMeshData, facing)); // count
-            int indexOffset = SectionRenderDataUnsafe.getIndexOffset(pMeshData, facing) & indexPointerMask;
-            LWJGL.memPutInt(ptr + 8L, indexOffset / 4);
-            LWJGL.memPutInt(ptr + 12L, SectionRenderDataUnsafe.getVertexOffset(pMeshData, facing)); // baseVertex
-
-            size += (facingMask >> facing) & 1;
+    public void executeBatch(CommandList commandList, GlTessellation tessellation, GlPrimitiveType primitiveType,
+                             MultiDrawBatch batch) {
+        int commandCount = batch.size;
+        if (commandCount < 0 || commandCount > batch.capacity()) {
+            throw new IllegalStateException("MultiDrawBatch command count exceeds its capacity");
+        }
+        if (commandCount == 0) {
+            return;
+        }
+        if (commandCount > MultiDrawEmitter.MAX_COMMAND_COUNT) {
+            throw new IllegalStateException("MultiDrawBatch command count exceeds indirect buffer capacity");
         }
 
-        this.numCommands = size;
+        this.buildCommands(batch, commandCount);
+        this.uploadAndDraw(commandList, tessellation, primitiveType, commandCount);
     }
 
-    @Override
-    public void executeBatch(CommandList commandList, GlTessellation tessellation, GlPrimitiveType primitiveType) {
-        commandList.uploadData(this.indirectBufferGpu, this.indirectBuffer, (long)this.numCommands * COMMAND_SIZE,
+    private void uploadAndDraw(CommandList commandList, GlTessellation tessellation, GlPrimitiveType primitiveType,
+                               int commandCount) {
+        commandList.uploadData(this.indirectBufferGpu, this.indirectBuffer, (long) commandCount * COMMAND_SIZE,
                 GlBufferUsage.STREAM_DRAW);
 
         commandList.bindBuffer(GlBufferTarget.DRAW_INDIRECT_BUFFER, this.indirectBufferGpu);
         try (DrawCommandList drawCommandList = commandList.beginTessellating(tessellation)) {
-            drawCommandList.multiDrawElementsIndirect(indirectBufferGpu, numCommands, primitiveType, GlIndexType.UNSIGNED_INT);
+            drawCommandList.multiDrawElementsIndirect(this.indirectBufferGpu, commandCount, primitiveType,
+                    GlIndexType.UNSIGNED_INT);
         }
         commandList.bindBuffer(GlBufferTarget.DRAW_INDIRECT_BUFFER, null);
     }
 
-    @Override
-    public boolean isEmpty() {
-        return this.numCommands == 0;
-    }
+    /**
+     * Converts shared direct-draw command arrays into this emitter's native indirect command layout.
+     */
+    private void buildCommands(MultiDrawBatch batch, int commandCount) {
+        long pBaseVertex = batch.pBaseVertex;
+        long pElementCount = batch.pElementCount;
+        long pElementPointer = batch.pElementPointer;
+        long pointer = this.indirectBuffer;
+        int pointerSize = LWJGL.getPointerSize();
 
-    @Override
-    public int getIndexBufferSize() {
-        int elements = 0;
-
-        long pElementCount = this.indirectBuffer;
-
-        for (var index = 0; index < this.numCommands; index++) {
-            elements = Math.max(elements, LWJGL.memGetInt(pElementCount));
-            pElementCount += COMMAND_SIZE;
+        for (int i = 0; i < commandCount; i++) {
+            LWJGL.memPutInt(pointer,
+                    LWJGL.memGetInt(pElementCount + ((long) i * Integer.BYTES))); // count
+            LWJGL.memPutInt(pointer + 8L,
+                    (int) (LWJGL.memGetAddress(pElementPointer + ((long) i * pointerSize)) / 4)); // firstIndex
+            LWJGL.memPutInt(pointer + 12L,
+                    LWJGL.memGetInt(pBaseVertex + ((long) i * Integer.BYTES))); // baseVertex
+            pointer += COMMAND_SIZE;
         }
-
-        return elements;
-    }
-
-    @Override
-    public int getCommandCount() {
-        return this.numCommands;
-    }
-
-    @Override
-    public void clear() {
-        this.numCommands = 0;
     }
 
     @Override
@@ -116,4 +106,3 @@ public class IndirectMultiDrawEmitter implements MultiDrawEmitter {
         this.indirectBufferGpu.delete();
     }
 }
-

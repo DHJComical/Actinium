@@ -8,6 +8,7 @@ import net.minecraft.block.BlockStaticLiquid;
 import org.embeddedt.embeddium.api.util.NormI8;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
+import org.embeddedt.embeddium.impl.render.chunk.vertex.format.impl.VanillaLikeChunkVertex;
 import org.joml.Vector3f;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
@@ -21,7 +22,7 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
     private static final float TEX_CENTROID_BIAS = 1.0f / 32768.0f;
 
     private final ExtendedChunkVertexType vertexType;
-    private final ChunkVertexEncoder baseEncoder = ExtendedChunkVertexType.BASE_TYPE.createEncoder();
+    private final ChunkVertexEncoder baseEncoder = VanillaLikeChunkVertex.createBaseEncoder();
     private final LwjglQuadView quad = new LwjglQuadView();
     private final Vector3f normal = new Vector3f();
     private final int midTexOffset;
@@ -46,6 +47,11 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
         this.midBlockOffset = getOffset(TerrainVertexFormatRequirements.Attribute.MID_BLOCK, "at_midBlock");
         this.texCoordOffset = vertexType.getVertexFormat().getAttribute("a_TexCoord").getPointer();
         this.stride = vertexType.getVertexFormat().getStride();
+    }
+
+    @Override
+    public boolean supportsBilinearCorrection() {
+        return false;
     }
 
     @Override
@@ -106,6 +112,7 @@ public class ExtendedChunkVertexEncoder implements ContextAwareChunkVertexEncode
             this.vertexCount++;
         }
 
+        vertex.rdhFactor = 0;
         this.baseEncoder.write(ptr, material, vertex, sectionIndex);
 
         BlockRenderContext ctx = this.context;
