@@ -15,7 +15,21 @@ public record RenderPassConfiguration<R>(Map<R, Material> chunkRenderTypeToMater
                                       Map<R, Collection<TerrainRenderPass>> vanillaRenderStages,
                                       Material defaultSolidMaterial,
                                       Material defaultCutoutMippedMaterial,
-                                      Material defaultTranslucentMaterial) {
+                                      Material defaultTranslucentMaterial,
+                                      Material defaultFluidMaterial) {
+    public RenderPassConfiguration(Map<R, Material> chunkRenderTypeToMaterialMap,
+                                   Map<R, Collection<TerrainRenderPass>> vanillaRenderStages,
+                                   Material defaultSolidMaterial,
+                                   Material defaultCutoutMippedMaterial,
+                                   Material defaultTranslucentMaterial) {
+        this(chunkRenderTypeToMaterialMap,
+                vanillaRenderStages,
+                defaultSolidMaterial,
+                defaultCutoutMippedMaterial,
+                defaultTranslucentMaterial,
+                defaultTranslucentMaterial);
+    }
+
     @Deprecated
     public ChunkVertexType getVertexTypeForPass(TerrainRenderPass pass) {
         return pass.vertexType();

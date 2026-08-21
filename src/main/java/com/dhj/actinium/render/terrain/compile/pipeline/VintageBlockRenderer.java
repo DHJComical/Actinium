@@ -41,6 +41,7 @@ import org.embeddedt.embeddium.api.shader.vertex.ContextAwareChunkVertexEncoder;
 import org.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import net.coderbot.iris.block_rendering.BlockMaterialMapping;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
@@ -56,6 +57,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+
+import static net.minecraft.block.material.Material.LAVA;
+import static net.minecraft.block.material.Material.WATER;
 
 public class VintageBlockRenderer {
     private final BlockModelShapes shapes;
@@ -120,7 +124,10 @@ public class VintageBlockRenderer {
         this.currentRenderLayer = layer;
 
         var buffers = this.context.buffers;
-        var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+        boolean isFluid = state.getMaterial() == WATER || state.getMaterial() == LAVA;
+        var material = isFluid && layer == BlockRenderLayer.TRANSLUCENT
+                ? buffers.getRenderPassConfiguration().defaultFluidMaterial()
+                : buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
         var buffer = buffers.get(material);
 
         long rand = MathHelper.getPositionRandom(pos);
@@ -228,7 +235,9 @@ public class VintageBlockRenderer {
 
             ModelQuadOrientation orientation = ModelQuadOrientation.NORMAL;
 
-            var quadMaterial = BakedQuadGroupAnalyzer.chooseOptimalMaterial(this.currentQuadRenderingFlags, material, config, BakedQuadView.of(quad));
+            var quadMaterial = isCurrentFluid()
+                    ? material
+                    : BakedQuadGroupAnalyzer.chooseOptimalMaterial(this.currentQuadRenderingFlags, material, config, BakedQuadView.of(quad));
             ChunkModelBuilder buffer = (quadMaterial == material) ? defaultBuffer : buffers.get(quadMaterial);
             this.prepareEncoder(buffer, pos);
 
@@ -255,8 +264,7 @@ public class VintageBlockRenderer {
 
         Block block = this.currentState.getBlock();
         byte lightValue = (byte) this.currentState.getLightValue(this.currentBlockAccess, pos);
-        boolean isFluid = this.currentState.getMaterial() == net.minecraft.block.material.Material.WATER
-                || this.currentState.getMaterial() == net.minecraft.block.material.Material.LAVA;
+        boolean isFluid = isCurrentFluid();
         int blockId = Block.getIdFromBlock(block);
         short renderType = isFluid
                 ? ExtendedDataHelper.FLUID_RENDER_TYPE
@@ -286,11 +294,15 @@ public class VintageBlockRenderer {
         this.usedContextEncoders.add(encoder);
     }
 
+    private boolean isCurrentFluid() {
+        return this.currentState.getMaterial() == WATER || this.currentState.getMaterial() == LAVA;
+    }
+
     private int applyShaderStateBits(IBlockState state, BlockPos pos, ActiniumBlockAccess blockAccess, int metadata) {
         if (BlockRenderingSettings.INSTANCE.hasSnowyEntries()
                 && BlockRenderingSettings.INSTANCE.getSnowyBlocks().contains(state.getBlock())
                 && isSnowCovered(blockAccess, pos)) {
-            return metadata | net.coderbot.iris.block_rendering.BlockMaterialMapping.SNOWY_META_BIT;
+            return metadata | BlockMaterialMapping.SNOWY_META_BIT;
         }
 
         return metadata;

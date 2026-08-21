@@ -1,5 +1,6 @@
 package org.embeddedt.embeddium.impl.render.chunk.terrain;
 
+import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 import org.embeddedt.embeddium.impl.render.chunk.compile.sorting.ChunkPrimitiveType;
@@ -23,6 +24,23 @@ import java.util.Objects;
 @EqualsAndHashCode
 public class TerrainRenderPass {
     /**
+     * Identifies the fixed-function terrain behavior represented by a render pass.
+     */
+    public enum Semantic {
+        SOLID,
+        CUTOUT,
+        TRANSLUCENT,
+        WATER;
+
+        private static Semantic fromLegacyFlags(boolean useReverseOrder, boolean fragmentDiscard) {
+            if (useReverseOrder) {
+                return TRANSLUCENT;
+            }
+            return fragmentDiscard ? CUTOUT : SOLID;
+        }
+    }
+
+    /**
      * The friendly name of this render pass.
      */
     @EqualsAndHashCode.Exclude
@@ -37,6 +55,14 @@ public class TerrainRenderPass {
      * Whether sections on this render pass should be rendered farthest-to-nearest, rather than nearest-to-farthest.
      */
     private final boolean useReverseOrder;
+    /**
+     * The stable semantic used by shader and pipeline integrations to classify this pass.
+     */
+    private final Semantic semantic;
+    /**
+     * Whether drawing this render pass updates the depth buffer.
+     */
+    private final boolean writesDepth;
     /**
      * Whether fragment alpha testing should be enabled for this render pass.
      */
@@ -55,6 +81,12 @@ public class TerrainRenderPass {
 
     private final Map<String, String> extraDefines;
 
+    /**
+     * The depth-mask state active before this pass starts drawing.
+     */
+    @EqualsAndHashCode.Exclude
+    private boolean previousDepthMaskEnabled;
+
     public TerrainRenderPass(String name,
                              PipelineState pipelineState,
                              boolean useReverseOrder,
@@ -64,15 +96,94 @@ public class TerrainRenderPass {
                              @NotNull ChunkVertexType vertexType,
                              @NotNull ChunkPrimitiveType primitiveType,
                              Map<String, String> extraDefines) {
+        this(name,
+                pipelineState,
+                useReverseOrder,
+                fragmentDiscard,
+                useTranslucencySorting,
+                hasNoLightmap,
+                vertexType,
+                primitiveType,
+                extraDefines,
+                Semantic.fromLegacyFlags(useReverseOrder, fragmentDiscard),
+                !useReverseOrder);
+    }
+
+    /**
+     * Constructs a terrain render pass with an explicit depth-write policy.
+     *
+     * @param name the friendly name of this render pass
+     * @param pipelineState the callback used to configure the GPU pipeline
+     * @param useReverseOrder whether sections are rendered farthest-to-nearest
+     * @param fragmentDiscard whether fragment alpha testing is enabled
+     * @param useTranslucencySorting whether translucency sorting is enabled
+     * @param hasNoLightmap whether this pass has no lightmap texture
+     * @param vertexType the vertex type used by this pass
+     * @param primitiveType the primitive type used by this pass
+     * @param extraDefines additional shader defines for this pass
+     * @param writesDepth whether drawing this pass updates the depth buffer
+     */
+    public TerrainRenderPass(String name,
+                             PipelineState pipelineState,
+                             boolean useReverseOrder,
+                             boolean fragmentDiscard,
+                             boolean useTranslucencySorting,
+                             boolean hasNoLightmap,
+                             @NotNull ChunkVertexType vertexType,
+                             @NotNull ChunkPrimitiveType primitiveType,
+                             Map<String, String> extraDefines,
+                             boolean writesDepth) {
+        this(name,
+                pipelineState,
+                useReverseOrder,
+                fragmentDiscard,
+                useTranslucencySorting,
+                hasNoLightmap,
+                vertexType,
+                primitiveType,
+                extraDefines,
+                Semantic.fromLegacyFlags(useReverseOrder, fragmentDiscard),
+                writesDepth);
+    }
+
+    /**
+     * Constructs a terrain render pass with explicit semantic and depth-write policies.
+     *
+     * @param name the friendly name of this render pass
+     * @param pipelineState the callback used to configure the GPU pipeline
+     * @param useReverseOrder whether sections are rendered farthest-to-nearest
+     * @param fragmentDiscard whether fragment alpha testing is enabled
+     * @param useTranslucencySorting whether translucency sorting is enabled
+     * @param hasNoLightmap whether this pass has no lightmap texture
+     * @param vertexType the vertex type used by this pass
+     * @param primitiveType the primitive type used by this pass
+     * @param extraDefines additional shader defines for this pass
+     * @param semantic the fixed-function behavior represented by this pass
+     * @param writesDepth whether drawing this pass updates the depth buffer
+     */
+    public TerrainRenderPass(String name,
+                             PipelineState pipelineState,
+                             boolean useReverseOrder,
+                             boolean fragmentDiscard,
+                             boolean useTranslucencySorting,
+                             boolean hasNoLightmap,
+                             @NotNull ChunkVertexType vertexType,
+                             @NotNull ChunkPrimitiveType primitiveType,
+                             Map<String, String> extraDefines,
+                             @NotNull Semantic semantic,
+                             boolean writesDepth) {
         if(name == null || name.length() == 0) {
             throw new IllegalArgumentException("Name not specified for terrain pass");
         }
         Objects.requireNonNull(vertexType);
         Objects.requireNonNull(primitiveType);
+        Objects.requireNonNull(semantic);
 
         this.name = name;
         this.pipelineState = pipelineState != null ? pipelineState : PipelineState.DEFAULT;
         this.useReverseOrder = useReverseOrder;
+        this.semantic = semantic;
+        this.writesDepth = writesDepth;
         this.fragmentDiscard = fragmentDiscard;
         this.useTranslucencySorting = useTranslucencySorting;
         this.hasNoLightmap = hasNoLightmap;
@@ -93,6 +204,20 @@ public class TerrainRenderPass {
         return this.useReverseOrder;
     }
 
+    /**
+     * Returns the stable semantic used to classify this render pass.
+     */
+    public Semantic semantic() {
+        return this.semantic;
+    }
+
+    /**
+     * Returns whether drawing this render pass updates the depth buffer.
+     */
+    public boolean writesDepth() {
+        return this.writesDepth;
+    }
+
     public boolean isSorted() {
         return this.useTranslucencySorting;
     }
@@ -102,11 +227,17 @@ public class TerrainRenderPass {
     }
 
     public void startDrawing() {
+        this.previousDepthMaskEnabled = GLStateManager.getDepthState().isMaskEnabled();
         this.pipelineState.setup();
+        GLStateManager.glDepthMask(this.writesDepth);
     }
 
     public void endDrawing() {
-        this.pipelineState.clear();
+        try {
+            this.pipelineState.clear();
+        } finally {
+            GLStateManager.glDepthMask(this.previousDepthMaskEnabled);
+        }
     }
 
     public boolean supportsFragmentDiscard() {
@@ -151,6 +282,8 @@ public class TerrainRenderPass {
         private String name;
         private PipelineState pipelineState;
         private boolean useReverseOrder;
+        private Semantic semantic;
+        private Boolean writesDepth;
         private boolean fragmentDiscard;
         private boolean useTranslucencySorting;
         private boolean hasNoLightmap;
@@ -170,6 +303,22 @@ public class TerrainRenderPass {
 
         public TerrainRenderPassBuilder useReverseOrder(boolean useReverseOrder) {
             this.useReverseOrder = useReverseOrder;
+            return this;
+        }
+
+        /**
+         * Sets the fixed-function semantic represented by this render pass.
+         */
+        public TerrainRenderPassBuilder semantic(Semantic semantic) {
+            this.semantic = semantic;
+            return this;
+        }
+
+        /**
+         * Sets whether drawing this render pass updates the depth buffer.
+         */
+        public TerrainRenderPassBuilder writesDepth(boolean writesDepth) {
+            this.writesDepth = writesDepth;
             return this;
         }
 
@@ -216,7 +365,11 @@ public class TerrainRenderPass {
                     this.hasNoLightmap,
                     this.vertexType,
                     this.primitiveType,
-                    this.extraDefines
+                    this.extraDefines,
+                    this.semantic != null
+                            ? this.semantic
+                            : Semantic.fromLegacyFlags(this.useReverseOrder, this.fragmentDiscard),
+                    this.writesDepth != null ? this.writesDepth : !this.useReverseOrder
             );
         }
     }
