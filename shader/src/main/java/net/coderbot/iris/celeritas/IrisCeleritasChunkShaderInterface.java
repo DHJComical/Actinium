@@ -106,7 +106,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
 
         if (!depthStateOverridden) {
             previousDepthTestEnabled = GLStateManager.glIsEnabled(GL11.GL_DEPTH_TEST);
-            previousDepthMaskEnabled = GLStateManager.getDepthState().isEnabled();
+            previousDepthMaskEnabled = GLStateManager.getDepthState().isMaskEnabled();
             previousDepthFunc = GLStateManager.getDepthState().getFunc();
             depthStateOverridden = true;
         }
@@ -114,10 +114,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         // Hand and fullscreen passes can leave depth disabled or mask writes off before terrain draws.
         GLStateManager.enableDepthTest();
         GLStateManager.glDepthFunc(GL11.GL_LEQUAL);
-        // Opaque terrain passes and the shadow-map pass write depth; the main translucent pass does not.
-        // Forcing depth writes on the translucent pass makes glass windows (EnderIO fluid tanks, issue #58)
-        // occlude TESR geometry drawn behind them, unlike vanilla which leaves the depth mask off for that layer.
-        GLStateManager.glDepthMask(ShadowRenderingState.areShadowsCurrentlyBeingRendered() || !pass.isReverseOrder());
+        GLStateManager.glDepthMask(shouldWriteDepth(pass, ShadowRenderingState.areShadowsCurrentlyBeingRendered()));
 
         if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             GLStateManager.disableCull();
@@ -159,6 +156,10 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
 
         customUniforms.push(this);
         IrisGlDebug.logCeleritasTerrainState(pass.name(), this.handle, alphaTestOverride != null, alphaReference);
+    }
+
+    public static boolean shouldWriteDepth(TerrainRenderPass pass, boolean shadowPass) {
+        return shadowPass || pass.writesDepth();
     }
 
     @Override
@@ -256,20 +257,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         }
 
         final boolean isShadow = ShadowRenderingState.areShadowsCurrentlyBeingRendered();
-        final IrisTerrainPass irisPass;
-        if (isShadow) {
-            if (pass.isReverseOrder()) {
-                irisPass = IrisTerrainPass.SHADOW_TRANSLUCENT;
-            } else {
-                irisPass = pass.supportsFragmentDiscard() ? IrisTerrainPass.SHADOW_CUTOUT : IrisTerrainPass.SHADOW;
-            }
-        } else if (pass.isReverseOrder()) {
-            irisPass = IrisTerrainPass.GBUFFER_TRANSLUCENT;
-        } else if (pass.supportsFragmentDiscard()) {
-            irisPass = IrisTerrainPass.GBUFFER_CUTOUT;
-        } else {
-            irisPass = IrisTerrainPass.GBUFFER_SOLID;
-        }
+        final IrisTerrainPass irisPass = IrisTerrainPass.fromTerrainPass(pass, isShadow);
 
         final GlFramebuffer framebuffer = pipeline.getPassInfo(irisPass).framebuffer();
         if (framebuffer != null) {

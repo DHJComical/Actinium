@@ -52,34 +52,50 @@ public class VintageRenderPassConfigurationBuilder {
 
     public static RenderPassConfiguration<BlockRenderLayer> build(ChunkVertexType vertexType) {
         // First, build the main passes
-        TerrainRenderPass solidPass, cutoutMippedPass, translucentPass;
+        TerrainRenderPass solidPass, cutoutMippedPass, translucentPass, fluidPass;
 
         solidPass = builderForRenderType(BlockRenderLayer.SOLID, vertexType, true)
                 .name("solid")
                 .fragmentDiscard(false)
                 .useReverseOrder(false)
+                .semantic(TerrainRenderPass.Semantic.SOLID)
+                .writesDepth(true)
                 .build();
         cutoutMippedPass = builderForRenderType(BlockRenderLayer.CUTOUT_MIPPED, vertexType, true)
                 .name("cutout_mipped")
                 .fragmentDiscard(true)
                 .useReverseOrder(false)
+                .semantic(TerrainRenderPass.Semantic.CUTOUT)
+                .writesDepth(true)
+                .build();
+        fluidPass = builderForRenderType(BlockRenderLayer.TRANSLUCENT, vertexType, true)
+                .name("water")
+                .fragmentDiscard(false)
+                .useReverseOrder(true)
+                .semantic(TerrainRenderPass.Semantic.WATER)
+                .writesDepth(true)
+                .useTranslucencySorting(ActiniumRuntime.options().performance.useTranslucentFaceSorting)
                 .build();
         translucentPass = builderForRenderType(BlockRenderLayer.TRANSLUCENT, vertexType, true)
                 .name("translucent")
                 .fragmentDiscard(false)
                 .useReverseOrder(true)
+                .semantic(TerrainRenderPass.Semantic.TRANSLUCENT)
+                .writesDepth(false)
                 .useTranslucencySorting(ActiniumRuntime.options().performance.useTranslucentFaceSorting)
                 .build();
 
         ImmutableListMultimap.Builder<BlockRenderLayer, TerrainRenderPass> vanillaRenderStages = ImmutableListMultimap.builder();
 
         // Build the materials for the vanilla render passes
-        Material solidMaterial, cutoutMaterial, cutoutMippedMaterial, translucentMaterial;
+        Material solidMaterial, cutoutMaterial, cutoutMippedMaterial, translucentMaterial, fluidMaterial;
         solidMaterial = new Material(solidPass, AlphaCutoffParameter.ZERO, true);
         translucentMaterial = new Material(translucentPass, AlphaCutoffParameter.ZERO, true);
+        fluidMaterial = new Material(fluidPass, AlphaCutoffParameter.ZERO, true);
         cutoutMippedMaterial = new Material(cutoutMippedPass, AlphaCutoffParameter.ONE_TENTH, true);
 
         vanillaRenderStages.put(BlockRenderLayer.SOLID, solidPass);
+        vanillaRenderStages.put(BlockRenderLayer.TRANSLUCENT, fluidPass);
         vanillaRenderStages.put(BlockRenderLayer.TRANSLUCENT, translucentPass);
 
         if (ActiniumRuntime.options().performance.useRenderPassConsolidation) {
@@ -93,6 +109,8 @@ public class VintageRenderPassConfigurationBuilder {
                     .name("cutout")
                     .fragmentDiscard(true)
                     .useReverseOrder(false)
+                    .semantic(TerrainRenderPass.Semantic.CUTOUT)
+                    .writesDepth(true)
                     .build();
 
             cutoutMaterial = new Material(cutoutPass, AlphaCutoffParameter.ONE_TENTH, false);
@@ -112,7 +130,7 @@ public class VintageRenderPassConfigurationBuilder {
         for (BlockRenderLayer layer : BlockRenderLayer.values()) {
             if (!renderTypeToMaterialMap.containsKey(layer)) {
                 ActiniumRuntime.logger().warn("Falling back to cutout-like behavior for custom block render layer '{}'", layer);
-                TerrainRenderPass pass = builderForRenderType(layer, vertexType, true).name(layer.name().toLowerCase(Locale.ROOT)).fragmentDiscard(true).useReverseOrder(false).build();
+                TerrainRenderPass pass = builderForRenderType(layer, vertexType, true).name(layer.name().toLowerCase(Locale.ROOT)).fragmentDiscard(true).useReverseOrder(false).semantic(TerrainRenderPass.Semantic.CUTOUT).writesDepth(true).build();
                 Material material = new Material(pass, AlphaCutoffParameter.ONE_TENTH, true);
                 vanillaRenderStages.put(layer, pass);
                 renderTypeToMaterialMap.put(layer, material);
@@ -125,7 +143,8 @@ public class VintageRenderPassConfigurationBuilder {
                 vanillaRenderStageMap.asMap(),
                 solidMaterial,
                 cutoutMippedMaterial,
-                translucentMaterial);
+                translucentMaterial,
+                fluidMaterial);
     }
 }
 

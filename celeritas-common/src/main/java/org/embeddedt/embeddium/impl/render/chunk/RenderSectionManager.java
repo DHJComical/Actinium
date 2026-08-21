@@ -213,14 +213,13 @@ public abstract class RenderSectionManager {
         var sortRebuildList = rebuildLists.get(ChunkUpdateType.SORT);
         var importantSortRebuildList = rebuildLists.get(ChunkUpdateType.IMPORTANT_SORT);
         var allowImportant = allowImportantRebuilds();
-        var translucentPass = this.renderPassConfiguration.defaultTranslucentMaterial().pass;
         if (!this.hasTranslucencySortedSections()) {
             return;
         }
         for (Iterator<ChunkRenderList> it = renderListManager.getRenderLists().iterator(); it.hasNext(); ) {
             ChunkRenderList entry = it.next();
             var region = entry.getRegion();
-            if (!region.hasSectionsInPass(translucentPass)) {
+            if (region.getPasses().stream().noneMatch(TerrainRenderPass::isSorted)) {
                 continue;
             }
             ByteIterator sectionIterator = entry.sectionsWithGeometryIterator();

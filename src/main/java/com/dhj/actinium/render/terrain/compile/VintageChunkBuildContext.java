@@ -9,6 +9,7 @@ import org.embeddedt.embeddium.api.shader.vertex.BlockRenderContext;
 import org.embeddedt.embeddium.api.shader.vertex.ContextAwareChunkVertexEncoder;
 import org.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
 import lombok.Getter;
+import net.coderbot.iris.block_rendering.BlockMaterialMapping;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -42,6 +43,9 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+
+import static net.minecraft.block.material.Material.LAVA;
+import static net.minecraft.block.material.Material.WATER;
 
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
@@ -107,8 +111,9 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             List<VanillaQuadContext> quadContexts = bufferBuilder instanceof BufferBuilderExtension extension
                     ? extension.actinium$consumeQuadContexts()
                     : Collections.emptyList();
-            var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(LAYERS[i]);
-            copyBlockData(rawBuffer, buffers, material, quadContexts);
+            BlockRenderLayer layer = LAYERS[i];
+            var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+            copyBlockData(rawBuffer, buffers, material, layer, quadContexts);
         }
     }
 
@@ -124,7 +129,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         if (nbtBlockId != -1) {
             shaderBlockId = nbtBlockId;
         }
-        short renderType = state.getMaterial() == net.minecraft.block.material.Material.WATER
+        short renderType = state.getMaterial() == WATER || state.getMaterial() == LAVA
                 ? ExtendedDataHelper.FLUID_RENDER_TYPE
                 : ExtendedDataHelper.BLOCK_RENDER_TYPE;
 
@@ -200,7 +205,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         BLOCK_VERTEX_FORMAT_SIZE = size;
     }
 
-    private void copyBlockData(ByteBuffer source, ChunkBuildBuffers buffers, Material material, List<VanillaQuadContext> quadContexts) {
+    private void copyBlockData(ByteBuffer source, ChunkBuildBuffers buffers, Material material, BlockRenderLayer layer, List<VanillaQuadContext> quadContexts) {
         int vsize = BLOCK_VERTEX_FORMAT_SIZE;
         int numQuads = source.limit() / (vsize * 4);
         long ptr = LWJGL.memAddress(source);
@@ -236,7 +241,14 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             VanillaQuadContext quadContext = q < quadContexts.size() ? quadContexts.get(q) : null;
             boolean isFluidQuad = quadContext != null && quadContext.renderType() == ExtendedDataHelper.FLUID_RENDER_TYPE;
             Material optimizedMaterial = selectMaterial(material, sprite);
-            Material correctMaterial = isFluidQuad ? material : optimizedMaterial;
+            Material correctMaterial;
+            if (isFluidQuad) {
+                correctMaterial = layer == BlockRenderLayer.TRANSLUCENT
+                        ? buffers.getRenderPassConfiguration().defaultFluidMaterial()
+                        : material;
+            } else {
+                correctMaterial = optimizedMaterial;
+            }
 
             ChunkModelBuilder builder = buffers.get(correctMaterial);
             ContextAwareChunkVertexEncoder encoder = this.prepareVanillaEncoder(builder, quadContext);
@@ -284,7 +296,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         if (BlockRenderingSettings.INSTANCE.hasSnowyEntries()
                 && BlockRenderingSettings.INSTANCE.getSnowyBlocks().contains(state.getBlock())
                 && isSnowCovered(pos)) {
-            return metadata | net.coderbot.iris.block_rendering.BlockMaterialMapping.SNOWY_META_BIT;
+            return metadata | BlockMaterialMapping.SNOWY_META_BIT;
         }
 
         return metadata;
