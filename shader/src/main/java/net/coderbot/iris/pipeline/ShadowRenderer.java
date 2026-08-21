@@ -52,6 +52,8 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
+import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
+import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -194,7 +196,7 @@ public class ShadowRenderer {
 	}
 
 	public static MatrixStack createShadowModelView(float sunPathRotation, float intervalSize) {
-		final Vector3d entityPos = getShadowCameraAnchor(CapturedRenderingState.INSTANCE.getTickDelta());
+		final Vector3d entityPos = getShadowCameraAnchor();
 
 		// Set up our modelview matrix stack
 		final MatrixStack modelView = new MatrixStack();
@@ -203,16 +205,14 @@ public class ShadowRenderer {
 		return modelView;
 	}
 
-	private MatrixStack getShadowModelView() {
-		final Vector3d entityPos = getShadowCameraAnchor(CapturedRenderingState.INSTANCE.getTickDelta());
-
+	private MatrixStack getShadowModelView(Vector3d entityPos) {
 		shadowModelView.reset();
 		ShadowMatrices.createModelViewMatrix(shadowModelView, getShadowAngle(), this.intervalSize, this.sunPathRotation, entityPos.x, entityPos.y, entityPos.z);
 		return shadowModelView;
 	}
 
-	private static Vector3d getShadowCameraAnchor(float tickDelta) {
-		return Camera.INSTANCE.getEntityPos();
+	private static Vector3d getShadowCameraAnchor() {
+		return new Vector3d(Camera.INSTANCE.getEntityPos());
 	}
 
 	private static WorldClient getLevel() {
@@ -452,12 +452,21 @@ public class ShadowRenderer {
 		return cachedTileEntityCuller;
 	}
 
+	// State captured before setupGlState so a failed shadow pass cannot force the caller's defaults.
+	private boolean savedCullEnabled;
+	private boolean cullStateCaptured;
+	private boolean projectionMatrixPushed;
+
 	private void setupGlState(Matrix4f projMatrix) {
+		savedCullEnabled = GLStateManager.glIsEnabled(GL11.GL_CULL_FACE);
+		cullStateCaptured = true;
+
 		// Bind shadow framebuffer and set viewport to shadow resolution
 		targets.getDepthSourceFb().bind();
 		GLStateManager.glViewport(0, 0, resolution, resolution);
 
 		// Set up our projection matrix and load it into the legacy matrix stack
+		projectionMatrixPushed = true;
 		RenderSystem.setupProjectionMatrix(projMatrix);
 
 		// Disable backface culling
@@ -472,10 +481,18 @@ public class ShadowRenderer {
 
 	private void restoreGlState() {
 		// Restore backface culling
-        GLStateManager.enableCull();
+        if (cullStateCaptured && savedCullEnabled) {
+            GLStateManager.enableCull();
+        } else {
+            GLStateManager.disableCull();
+        }
+		cullStateCaptured = false;
 
 		// Make sure to unload the projection matrix
-		RenderSystem.restoreProjectionMatrix();
+		if (projectionMatrixPushed) {
+			RenderSystem.restoreProjectionMatrix();
+			projectionMatrixPushed = false;
+		}
 
 		// Restore main framebuffer and viewport
 		Minecraft mc = Minecraft.getMinecraft();
@@ -528,10 +545,13 @@ public class ShadowRenderer {
 	}
 
 	// Saved RenderManager position for shadow pass
-    private double savedRenderPosX, savedRenderPosY, savedRenderPosZ;
+	private double savedRenderPosX, savedRenderPosY, savedRenderPosZ;
     private double savedViewerPosX, savedViewerPosY, savedViewerPosZ;
     private boolean savedRenderShadow;
     private int savedMatrixMode;
+    private boolean savedPolygonOffsetFill;
+    private float savedPolygonOffsetFactor;
+    private float savedPolygonOffsetUnits;
     private final Matrix4f savedRenderingStateModelView = new Matrix4f();
     private final Matrix4f savedRenderingStateProjection = new Matrix4f();
 
@@ -544,6 +564,9 @@ public class ShadowRenderer {
         savedViewerPosY = renderManager.viewerPosY;
         savedViewerPosZ = renderManager.viewerPosZ;
         savedRenderShadow = renderManager.isRenderShadow();
+        savedPolygonOffsetFill = GLStateManager.glIsEnabled(GL11.GL_POLYGON_OFFSET_FILL);
+        savedPolygonOffsetFactor = GLStateManager.getPolygonState().getOffsetFactor();
+        savedPolygonOffsetUnits = GLStateManager.getPolygonState().getOffsetUnits();
 
         renderManager.setRenderPosition(cameraX, cameraY, cameraZ);
         renderManager.viewerPosX = cameraX;
@@ -583,8 +606,12 @@ public class ShadowRenderer {
         GLStateManager.glMatrixMode(savedMatrixMode);
         popShadowRenderingState();
 
-        GLStateManager.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
-        GLStateManager.glPolygonOffset(0.0f, 0.0f);
+        if (savedPolygonOffsetFill) {
+            GLStateManager.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+        } else {
+            GLStateManager.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+        }
+        GLStateManager.glPolygonOffset(savedPolygonOffsetFactor, savedPolygonOffsetUnits);
 
         RenderManager renderManager = Minecraft.getMinecraft().getRenderManager();
         renderManager.setRenderPosition(savedRenderPosX, savedRenderPosY, savedRenderPosZ);
@@ -753,8 +780,9 @@ public class ShadowRenderer {
 		visibleTileEntities.clear();
 		globalTileEntities.clear();
 
-		// Create our camera
-		final MatrixStack modelView = getShadowModelView();
+		// Snapshot the camera anchor once so every shadow-pass consumer uses the same coordinate origin.
+		final Vector3d entityPos = new Vector3d(playerCamera.getEntityPos());
+		final MatrixStack modelView = getShadowModelView(entityPos);
 		MODELVIEW.set(modelView.peek().getModel());
 
 		final Matrix4f shadowProjection;
@@ -779,11 +807,20 @@ public class ShadowRenderer {
 			0
 		);
 
+		boolean cullingStateSaved = false;
+		boolean celeritasManaged = false;
+		boolean glStateSetup = false;
+		boolean glStateRestored = false;
+		boolean celeritasViewportCaptured = false;
+		WorldRendererCompat celeritasRenderer = null;
+		Viewport savedCeleritasViewport = null;
+
 		try {
 		profiler.startSection("terrain_setup");
 
 		if (levelRenderer instanceof CullingDataCache) {
 			((CullingDataCache) levelRenderer).saveState();
+			cullingStateSaved = true;
 		}
 
 		profiler.startSection("initialize frustum");
@@ -791,9 +828,8 @@ public class ShadowRenderer {
 		terrainFrustumHolder = createShadowFrustum(renderDistanceMultiplier, terrainFrustumHolder);
 		FRUSTUM = terrainFrustumHolder.getFrustum();
 
-		// Use the player/entity position for shadow rendering
+		// Use the frame-stable player/entity position for all shadow rendering origins.
 		final float tickDelta = CapturedRenderingState.INSTANCE.getTickDelta();
-		final Vector3d entityPos = playerCamera.getEntityPos();
 		final double entityX = entityPos.x;
 		final double entityY = entityPos.y;
 		final double entityZ = entityPos.z;
@@ -819,16 +855,17 @@ public class ShadowRenderer {
 
 		// Mark the shadow graph as needing update before terrain setup
 		// Modern Celeritas does this to ensure the shadow render lists get populated
-		boolean celeritasManaged = false;
 		if (IrisDebugOptions.enableCeleritas()) {
+			celeritasRenderer = WorldRendererCompatBridge.instance();
+			savedCeleritasViewport = celeritasRenderer.getCurrentViewport();
+			celeritasViewportCaptured = true;
 			RenderDevice.enterManagedCode();
 			celeritasManaged = true;
-			WorldRendererCompat renderer = WorldRendererCompatBridge.instance();
 			var terrainViewport = ((ViewportProvider)terrainFrustumHolder.getFrustum()).sodium$createViewport();
-			renderer.markSectionGraphDirty();
-			renderer.setupTerrain(
+			celeritasRenderer.markSectionGraphDirty();
+			celeritasRenderer.setupTerrain(
 				terrainViewport,
-				new org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer.CameraState(
+				new SimpleWorldRenderer.CameraState(
 					entityX,
 					entityY,
 					entityZ,
@@ -840,7 +877,7 @@ public class ShadowRenderer {
 				false,
 				false
 			);
-			renderer.setCurrentViewport(terrainViewport);
+			celeritasRenderer.setCurrentViewport(terrainViewport);
 		}
 
 		// Execute the vanilla terrain setup / culling routines using our shadow frustum.
@@ -853,6 +890,7 @@ public class ShadowRenderer {
 
 		profiler.endStartSection("terrain");
 
+		glStateSetup = true;
 		setupGlState(PROJECTION);
 
 		// Render all opaque terrain unless pack requests not to
@@ -885,8 +923,8 @@ public class ShadowRenderer {
 		entityShadowFrustum.setPosition(entityX, entityY, entityZ);
 
 		// Set viewport for entity visibility checks during shadow pass (matches modern Celeritas)
-		if (IrisDebugOptions.enableCeleritas()) {
-			WorldRendererCompatBridge.instance().setCurrentViewport(((ViewportProvider)entityShadowFrustum).sodium$createViewport());
+		if (celeritasRenderer != null) {
+			celeritasRenderer.setCurrentViewport(((ViewportProvider)entityShadowFrustum).sodium$createViewport());
 		}
 
 		// Render nearby entities
@@ -921,8 +959,11 @@ public class ShadowRenderer {
 		}
 
 		if (celeritasManaged) {
-			RenderDevice.exitManagedCode();
-			celeritasManaged = false;
+			try {
+				RenderDevice.exitManagedCode();
+			} finally {
+				celeritasManaged = false;
+			}
 		}
 
 		// Note: Apparently tripwire isn't rendered in the shadow pass.
@@ -938,10 +979,18 @@ public class ShadowRenderer {
 
 		profiler.endStartSection("restore gl state");
 
-		restoreGlState();
+		try {
+			restoreGlState();
+		} finally {
+			glStateRestored = true;
+		}
 
 		if (levelRenderer instanceof CullingDataCache) {
-			((CullingDataCache) levelRenderer).restoreState();
+			try {
+				((CullingDataCache) levelRenderer).restoreState();
+			} finally {
+				cullingStateSaved = false;
+			}
 		}
 
 		IrisGlDebug.logShadowPassState(
@@ -951,7 +1000,7 @@ public class ShadowRenderer {
 			shouldRenderEntities,
 			shouldRenderPlayer,
 			shouldRenderBlockEntities,
-			IrisDebugOptions.enableCeleritas() ? WorldRendererCompatBridge.instance().getVisibleChunkCount() : -1,
+			celeritasRenderer != null ? celeritasRenderer.getVisibleChunkCount() : -1,
 			renderedShadowEntities,
 			renderedShadowTileEntities
 		);
@@ -960,17 +1009,51 @@ public class ShadowRenderer {
 
 		if (compositeRenderer != null) compositeRenderer.renderAll();
 
-		if (celeritasManaged) {
-			RenderDevice.exitManagedCode();
-		}
 		ACTIVE = false;
 		CURRENT_TARGETS = null;
 		profiler.endSection();
 		profiler.endStartSection("updatechunks");
 		} finally {
-			InternalShadowRenderingState.end();
-			ACTIVE = false;
-			CURRENT_TARGETS = null;
+			try {
+				if (glStateSetup && !glStateRestored) {
+					try {
+						restoreGlState();
+					} finally {
+						glStateRestored = true;
+					}
+				}
+			} finally {
+				try {
+					if (celeritasManaged) {
+						try {
+							RenderDevice.exitManagedCode();
+						} finally {
+							celeritasManaged = false;
+						}
+					}
+				} finally {
+					try {
+						if (cullingStateSaved) {
+							try {
+								((CullingDataCache) levelRenderer).restoreState();
+							} finally {
+								cullingStateSaved = false;
+							}
+						}
+					} finally {
+						try {
+							if (celeritasViewportCaptured) {
+								celeritasRenderer.setCurrentViewport(savedCeleritasViewport);
+								celeritasViewportCaptured = false;
+							}
+						} finally {
+							InternalShadowRenderingState.end();
+							ACTIVE = false;
+							CURRENT_TARGETS = null;
+						}
+					}
+				}
+			}
 		}
 	}
 

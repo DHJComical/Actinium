@@ -19,6 +19,11 @@ public interface WorldRendererCompat {
 
     String getChunksDebugString();
 
+    /**
+     * Returns the viewport active before a temporary shadow-pass viewport is installed.
+     */
+    Viewport getCurrentViewport();
+
     void setCurrentViewport(Viewport viewport);
 
     void drawChunkLayer(BlockRenderLayer renderLayer, double x, double y, double z);

@@ -144,6 +144,11 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         this.currentViewport = viewport;
     }
 
+    @Override
+    public Viewport getCurrentViewport() {
+        return this.currentViewport;
+    }
+
     /**
      * Captures the iChun recursive terrain matrices while leaving ordinary and shadow rendering unchanged.
      */

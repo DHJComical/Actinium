@@ -878,12 +878,12 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	public void beginPass(Pass pass) {
         WorldRenderingPhase activePhase = getPhase();
         int previousProgram = getActivePassProgramId();
-		int nextProgram = pass != null && pass.getProgram() != null ? pass.getProgram().getProgramId() : -1;
+		int nextProgram = getPassProgramId(pass == null ? null : pass.getProgram());
 
 		if (current == pass) {
-			if (IrisGlDebug.shouldCaptureGlState()) {
+			if (shouldCheckCurrentProgram(activePhase, isRenderingShadow)) {
 				int currentProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-				if (currentProgram != nextProgram) {
+				if (shouldRebindPass(activePhase, isRenderingShadow, currentProgram, nextProgram)) {
 					if (pass != null) {
 						pass.use();
 					} else {
@@ -916,6 +916,52 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
         if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
             IrisGlDebug.logPassBind("begin-pass", activePhase.name(), previousProgram, nextProgram);
         }
+	}
+
+	/**
+	 * Limits GL program queries to phases where entity renderers can bypass pipeline ownership.
+	 */
+	static boolean shouldCheckCurrentProgram(WorldRenderingPhase activePhase, boolean renderingShadow) {
+		return renderingShadow
+			|| activePhase == WorldRenderingPhase.ENTITIES
+			|| activePhase == WorldRenderingPhase.BLOCK_ENTITIES;
+	}
+
+	/**
+	 * Determines whether the cached pass must be rebound after an external program change.
+	 */
+	static boolean shouldRebindPass(WorldRenderingPhase activePhase, boolean renderingShadow, int currentProgram, int nextProgram) {
+		return shouldCheckCurrentProgram(activePhase, renderingShadow) && currentProgram != nextProgram;
+	}
+
+	/**
+	 * Returns the GL program expected for a pass; a null program is the default pass and maps to program 0.
+	 */
+	static int getPassProgramId(@Nullable Program program) {
+		return program == null ? 0 : program.getProgramId();
+	}
+
+	/**
+	 * Runs a shadow pass and retains its failure if cleanup fails as well.
+	 */
+	static void runShadowPassWithCleanup(Runnable shadowPass, Runnable cleanup) {
+		Throwable shadowFailure = null;
+		try {
+			shadowPass.run();
+		} catch (RuntimeException | Error exception) {
+			shadowFailure = exception;
+			throw exception;
+		} finally {
+			try {
+				cleanup.run();
+			} catch (RuntimeException | Error cleanupFailure) {
+				if (shadowFailure != null) {
+					shadowFailure.addSuppressed(cleanupFailure);
+				} else {
+					throw cleanupFailure;
+				}
+			}
+		}
 	}
 
 	@Override
@@ -1238,6 +1284,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 			if (program != null) {
 				program.use();
+			} else {
+				Program.unbind();
 			}
 
 			DeferredWorldRenderingPipeline.this.customUniforms.push(this);
@@ -1657,16 +1705,24 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 		if (shadowRenderer != null) {
 			isRenderingShadow = true;
-			matchPass();  // Ensure shadow shader is bound for entity rendering
-            IrisGlDebug.check("level:shadows:match-pass");
+			try {
+				runShadowPassWithCleanup(
+					() -> {
+						matchPass();  // Ensure shadow shader is bound for entity rendering
+                        IrisGlDebug.check("level:shadows:match-pass");
 
-			shadowRenderer.renderShadows(levelRenderer, playerCamera);
-            IrisGlDebug.check("level:shadows:render");
-
-			// needed to remove blend mode overrides and similar
-			beginPass(null);
-            IrisGlDebug.check("level:shadows:begin-pass-null");
-			isRenderingShadow = false;
+						shadowRenderer.renderShadows(levelRenderer, playerCamera);
+                        IrisGlDebug.check("level:shadows:render");
+					},
+					() -> {
+						// needed to remove blend mode overrides and similar
+						beginPass(null);
+                        IrisGlDebug.check("level:shadows:begin-pass-null");
+					}
+				);
+			} finally {
+				isRenderingShadow = false;
+			}
 		}
 
 		if (!shouldRenderPrepareBeforeShadow && !hasRenderedPreparePass) {
