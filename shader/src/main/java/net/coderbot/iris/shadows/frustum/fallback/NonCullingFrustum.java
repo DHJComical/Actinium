@@ -34,6 +34,12 @@ public class NonCullingFrustum extends Frustum implements ViewportProvider, org.
 		return true;
 	}
 
+	/** Reports every camera-relative box as fully inside because this frustum never culls. */
+	@Override
+	public int intersectAab(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+		return FULLY_INSIDE;
+	}
+
 	@Override
 	public Viewport sodium$createViewport() {
 		return new Viewport(this, position.set(x, y, z));

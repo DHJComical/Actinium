@@ -7,12 +7,12 @@
 - 评估终点：`0a3624bc2ba5bb28b01ccbbc6d185fa9247bddcf`
 - 提交范围：基准之后到评估终点，共 34 个线性提交
 - 目标项目：Minecraft 1.12.2 / Cleanroom Loader 的 Actinium
-- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40`、AO ABI、MultiDraw 与 Occlusion/Lattice 批次已完成手工适配和直接逻辑验证。Occlusion/Lattice 的 Java 25 目标测试与 Javadoc 已通过，动态 Y、camera rebase、异步 occlusion 等客户端专项仍待验证
+- 本轮状态：低风险同步批次已完成编译、完整构建并收到渲染正常反馈；`fadd0c40`、AO ABI、MultiDraw、Occlusion/Lattice 与 Iris frustum 三态分类批次已完成手工适配和直接逻辑验证。Occlusion/Lattice 的动态 Y、camera rebase、异步 occlusion 等客户端专项，以及 Iris frustum 优化的客户端运行专项仍待验证
 
 ## 分支与日期
 
 - 分支：`codex/sync-celeritas-upstream-6f3cb342`
-- 日期：2026-08-20（Asia/Shanghai）
+- 日期：2026-08-21（Asia/Shanghai）
 - 工作约束：同步按明确 SHA 和文件范围进行；机械同步、平台适配和运行时验证分阶段完成
 
 ## 已阅读的规范文件
@@ -55,6 +55,7 @@
 - `3d071b85205db183f54d30b7b36fe54ea096a2a2` — **Implement nearly-correct bilinear interpolation for ambient occlusion**。改变 chunk vertex ABI、AO 数据和 shader varying，涉及 compact/vanilla-like vertex format、`ChunkVertexEncoder`、mesh builder 及 terrain shader。Actinium 当前 stride 和 shader 资源均有本地差异，还要检查 `ExtendedChunkVertexType`、Iris 扩展顶点、triangulated pass 和旧版 GLSL。
 - `7de8b00c0647ed169001d8ea889efafc81044264` — **Support EXT_timer_query for ancient drivers, and remove nested query support**。上游从 timestamp query 改为 `GL_TIME_ELAPSED` begin/end，并增加 `EXT_timer_query` wrapper。Actinium 当前 `TimerQueryManager` 使用 timestamp query，且 chunk、frame、Iris composite/finalize 计时区间存在嵌套可能；直接同步会改变计时器契约并触发非法嵌套，因此本轮不直接同步，后续需先设计计时层级并补齐本地 LWJGL wrapper。
 - `0a3624bc2ba5bb28b01ccbbc6d185fa9247bddcf` — **Make bilinear interpolation slightly faster (#33)**。这是 AO 提交的后续优化，继续修改 `ChunkMeshBufferBuilder`、`ChunkVertexEncoder`、`XHFPTerrainVertex` 和 shader，必须与 `3d071b85` 成对手工适配，不能单独 cherry-pick。
+- `7704538a2367df614fc494d1c48a98451ef774fc` — **Extend the region frustum optimization to Iris frustums**（已完成手工适配）。上游只修改现代 Iris 的 frustum 实现；Actinium 的 Iris 包名、1.12.2 AABB API 和高级 frustum 命名不同，因此按本地结构将三态 `intersectAab()` 适配到 `BoxCuller`、fallback frustum、`AdvancedShadowCullingFrustum` 与 `SafeZoneCullingFrustum`。
 
 ### 成组重构
 
@@ -97,7 +98,6 @@ Actinium 的 `DefaultChunkRenderer`、MultiDraw emitter、render bridge 和 attr
 - `7d0eeed5e497e0e70875555d29c2542a339c411d` — **Fix import**。属于上述 Fabric BlockColors 修复链的导入调整，目标平台不适用。
 - `7df5a37920ac83e221e9c234458eb0c7c9e70aa3` — **Move stareval and parsing classes to common**。随后被完整 revert；最终没有应同步的净功能变化。
 - `ac59a78dc75fcf1d9e78eabdc86e96298be3861c` — **Revert "Move stareval and parsing classes to common"**。完整撤销前一个移动提交，不能作为独立功能同步。
-- `7704538a2367df614fc494d1c48a98451ef774fc` — **Extend the region frustum optimization to Iris frustums**。依赖上游现代 Iris shadow frustum 类；Actinium 没有同一套 frustum 实现，不能直接复制。
 
 ## 已落地同步范围
 
@@ -167,6 +167,12 @@ Actinium 的 `DefaultChunkRenderer`、MultiDraw emitter、render bridge 和 attr
    - `RenderListManager` 发布双缓冲 `VisibilitySnapshot`，异步搜索期间延迟 metadata mirror 更新；`VisibleChunkCollector` 直接接收 lattice index、region/section index 和 compact metadata。未把上游现代平台或固定 `0..15` 世界高度假设带入 Actinium。
    - 为低帧号下的快照边界补充显式排除 `INITIAL`/`SENTINEL` 状态，避免未访问或空 lattice cell 被解码成可见 section；该修复由直接逻辑测试覆盖。
 
+8. 手工适配 `7704538a2367df614fc494d1c48a98451ef774fc` 的 Iris region frustum 优化：
+   - `BoxCuller` 增加 view-relative 的完整包含判定；`BoxCullingFrustum`、`NonCullingFrustum` 与 `CullEverythingFrustum` 暴露 full/partial/outside 三态结果。
+   - `AdvancedShadowCullingFrustum` 增加 near/far corner plane 检查；当距离 culler 只部分覆盖 AABB 时，将 full containment 保守降级为 partial。`SafeZoneCullingFrustum` 按上游 `ReversedAdvancedShadowCullingFrustum` 组合 voxel safe zone 与 distance culler。
+   - 保持既有 `testAab()` 布尔行为不变；`RegionCullCache` 通过已有 `Viewport.intersectCameraRelativeBox()` 消费这些三态结果，不改变 common/shader 依赖方向。
+   - 直接逻辑测试覆盖 BoxCuller 边界、fallback/sentinel frustum、advanced plane/distance 边界和 SafeZone 组合分类。
+
 ## 不直接同步的提交
 
 ### `208127b4`
@@ -191,6 +197,7 @@ Actinium 的 `DefaultChunkRenderer`、MultiDraw emitter、render bridge 和 attr
 - 用户反馈低风险同步后的游戏渲染正常；该反馈作为此前阶段的 smoke validation 记录，不等同于 `fadd0c40` 的低 FPS、shadow-only、资源重载、维度切换或其他运行专项已经完成。
 - 用户已完成本轮客户端验证：FPS 表现、维度切换、光影切换、terrain 渲染和 shadow 渲染均正常；该结果覆盖 AO 批次的主要运行路径，但不替代未单独执行的 legacy OpenGL、特定 Compact/Vanilla-like format、translucent/triangulated 细分场景验证。
 - Occlusion/Lattice 批次的 `:celeritas-common:compileJava`、目标 JUnit、根项目 `compileTestJava` 和 `:celeritas-common:javadoc` 已通过；Javadoc 仍有项目既有的缺失 `@param`、HTML 和 Minecraft API 引用警告，但没有 `PackedSectionMetadata.java` 的无法解析符号错误。`PackedSectionMetadataTest` 覆盖 full/compact metadata round-trip、字段保留和 null pending update；可见性测试覆盖 provisional traversal、NULL visibility、collector scheduling 及空/未访问快照状态。
+- Iris frustum 三态适配的 `ShadowOptimizationRegressionTest` 在 Java 25 / `GRADLE_USER_HOME=D:/gradle` 下通过 10 项、0 failures、0 errors；`compileTestJava` 与生产源码编译同步通过。测试覆盖 BoxCuller、fallback/sentinel、AdvancedShadowCullingFrustum 和 SafeZoneCullingFrustum 的 full/partial/outside 分类；尚未完成实际客户端的 region cull 性能与各光影包运行专项。
 - 用户已完成此前渲染路径的客户端验证：FPS 表现、维度切换、光影切换、terrain 渲染和 shadow 渲染均正常；该结果不能替代 Occlusion/Lattice 的动态 Y、camera rebase、异步 snapshot 和 render distance 变化专项。
 
 ### fadd 残余风险/运行专项
@@ -205,7 +212,8 @@ shadow-only workload 按上游设计不推动 adaptive target；当前实现保�
 4. AO ABI 批次的代码适配、直接逻辑测试、构建验证和主要客户端运行验证已完成；用户已验证 FPS、维度切换、光影切换、terrain 和 shadow 均正常；待补 legacy OpenGL、特定 Compact/Vanilla-like format 及 translucent/triangulated 细分场景验证。
 5. MultiDraw 五提交已完成上游对照、手工适配、`compileJava`、直接逻辑测试、`check` 和完整 `build`；用户已验证 FPS、维度切换、光影切换、terrain 和 shadow 均正常。仍待 legacy OpenGL/LWJGL2、direct/indirect/individual 模式切换、translucent/triangulated 细分场景以及动画 section 的独立客户端验证。
 6. Occlusion/Lattice 十提交已完成代码迁移、动态世界高度适配、直接逻辑测试和 Java 25 编译验证；待客户端验证初始建图、负 Y/扩展高度、camera 大幅移动与 rebase、异步 occlusion 开关、render distance 变化、资源重载、shadow pass 和低 FPS。
-7. 所有后续渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
+7. Iris frustum 三态适配已完成代码和直接逻辑验证；待客户端验证 region cull 的实际收益、advanced/safe-zone shadow culling、fallback frustum、维度切换、资源重载和目标光影包组合。
+8. 所有后续渲染相关代码完成后，按项目规范运行 `compileJava`、`check` 和 `build --no-daemon`；Gradle 缓存统一使用 `D:/gradle`，并进行无光影、目标光影包、维度切换、资源重载和条件兼容模组的运行验证。
 
 建议机械同步、1.12/Cleanroom 适配、LWJGL 适配以及 Mixin/bridge 适配分别提交，避免在同一个提交中混合上游大范围同步和无关重构。每个后续提交应记录来源 upstream SHA、实际文件范围、适配原因和验证结果。
 
