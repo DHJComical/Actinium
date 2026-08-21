@@ -10,6 +10,11 @@ import net.minecraft.client.renderer.Tessellator;
 public abstract class IrisGuiSlot extends GuiSlot {
     @Setter @Getter protected boolean renderBackground = true;
     boolean scrolling = false;
+    // Drag origin and scale: the handle tracks the cursor across the full track while
+    // the content crosses its whole scroll range (see ScrollBarGeometry).
+    private float scrollingFactor = 1.0F;
+    private float scrollingStartAmount;
+    private int scrollingStartMouseY;
 
     protected IrisGuiSlot(Minecraft mc, int width, int height, int top, int bottom, int slotHeight) {
         super(mc, width, height, top, bottom, slotHeight);
@@ -75,6 +80,9 @@ public abstract class IrisGuiSlot extends GuiSlot {
         if (mouseButton == 0 && mouseX >= scrollBarX && mouseX <= scrollBarX + 6) {
             scrolling = true;
             this.initialClickY = mouseY;
+            this.scrollingStartMouseY = mouseY;
+            this.scrollingStartAmount = this.amountScrolled;
+            this.scrollingFactor = ScrollBarGeometry.dragFactor(this.getContentHeight(), this.bottom - this.top, this.headerPadding);
             handled = true;
         } else if (mouseButton == 0 || mouseButton == 1) {
             final int index = relativeY / this.slotHeight;
@@ -112,8 +120,8 @@ public abstract class IrisGuiSlot extends GuiSlot {
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         if (this.scrolling) {
-            this.amountScrolled += (mouseY - this.initialClickY);
-            this.initialClickY = mouseY;
+            this.amountScrolled = this.scrollingStartAmount + (mouseY - this.scrollingStartMouseY) * this.scrollingFactor;
+            this.bindAmountScrolled();
         }
 
         super.drawScreen(mouseX, mouseY, partialTicks);
