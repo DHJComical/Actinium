@@ -91,7 +91,7 @@ public abstract class ShaderChunkRenderer implements ChunkRenderer {
     }
 
     protected GlProgram<ChunkShaderInterface> createShader(String path, ChunkShaderOptions options) {
-        ShaderConstants constants = options.constants();
+        ShaderConstants constants = options.constants(!this.enableLegacyGLPatches);
 
         List<GlShader> loadedShaders = new ArrayList<>();
 

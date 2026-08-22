@@ -35,6 +35,12 @@ public class OptionImpl<S, T> implements Option<T> {
      */
     private @Nullable T modifiedValue;
 
+    /**
+     * Actinium extension: the declared default value used by reset-to-default.
+     * When null the binding's current value is treated as the default.
+     */
+    private @Nullable T defaultValue;
+
     private final BooleanSupplier enabled;
 
     private OptionImpl(OptionStorage<S> storage,
@@ -100,6 +106,22 @@ public class OptionImpl<S, T> implements Option<T> {
     }
 
     @Override
+    public T getAppliedValue() {
+        return this.binding.getValue(this.storage.getData());
+    }
+
+    @Override
+    public T getDefaultValue() {
+        return this.defaultValue != null ? this.defaultValue : this.binding.getValue(this.storage.getData());
+    }
+
+    @Override
+    public void resetToDefault() {
+        T fallback = this.binding.getValue(this.storage.getData());
+        this.modifiedValue = this.defaultValue != null ? this.defaultValue : fallback;
+    }
+
+    @Override
     public OptionStorage<?> getStorage() {
         return this.storage;
     }
@@ -144,6 +166,7 @@ public class OptionImpl<S, T> implements Option<T> {
         private static final BooleanSupplier ALWAYS_ENABLED = () -> true;
         private static final BooleanSupplier ALWAYS_DISABLED = () -> false;
         private BooleanSupplier enabled = ALWAYS_ENABLED;
+        private T defaultValue;
 
         private Builder(OptionStorage<S> storage, Class<T> type) {
             this.storage = storage;
@@ -206,6 +229,17 @@ public class OptionImpl<S, T> implements Option<T> {
             return this;
         }
 
+        /**
+         * Actinium extension: declares the default value used by
+         * {@code resetToDefault()}. When omitted the binding's current value
+         * at reset time is used as the fallback default.
+         */
+        public Builder<S, T> setDefaultValue(T defaultValue) {
+            this.defaultValue = defaultValue;
+
+            return this;
+        }
+
         public Builder<S, T> setEnabledPredicate(BooleanSupplier value) {
             this.enabled = value;
 
@@ -245,6 +279,7 @@ public class OptionImpl<S, T> implements Option<T> {
             Objects.requireNonNull(this.control, "Control must be specified");
 
             OptionImpl<S, T> impl = new OptionImpl<>(this.storage, this.id, this.name, this.tooltip, this.binding, this.control, this.flags, this.impact, this.enabled);
+            impl.defaultValue = this.defaultValue;
             return impl;
         }
     }

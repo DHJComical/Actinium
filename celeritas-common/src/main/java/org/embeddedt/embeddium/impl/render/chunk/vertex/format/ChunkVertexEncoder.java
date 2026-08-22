@@ -5,11 +5,20 @@ import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 public interface ChunkVertexEncoder {
     long write(long ptr, Material material, Vertex vertex, int sectionIndex);
 
+    /**
+     * Returns whether the encoder's vertex format contains the built-in bilinear AO correction attribute.
+     */
+    default boolean supportsBilinearCorrection() {
+        return true;
+    }
+
     class Vertex {
         public float x;
         public float y;
         public float z;
         public int color;
+        /** The packed signed-byte correction used to reduce quad diagonal AO artifacts. */
+        public int rdhFactor;
         public float u;
         public float v;
         public int light;

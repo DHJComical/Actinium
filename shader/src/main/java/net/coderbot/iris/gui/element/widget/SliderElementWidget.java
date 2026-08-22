@@ -5,11 +5,9 @@ import net.coderbot.iris.shaderpack.option.menu.OptionMenuStringOptionElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.util.math.MathHelper;
 
 public class SliderElementWidget extends StringElementWidget {
 	private static final int PREVIEW_SLIDER_WIDTH = 4;
-	private static final int ACTIVE_SLIDER_WIDTH = 6;
 
 	private boolean mouseDown = false;
 
@@ -34,11 +32,9 @@ public class SliderElementWidget extends StringElementWidget {
 		}
 
 		if (this.mouseDown) {
-			// Release if the mouse went off the slider
-			if (!hovered) {
-				this.onReleased();
-			}
-
+			// The drag keeps tracking the cursor even when it leaves the row or widget,
+			// so the handle follows the mouse one-to-one; it only ends on mouse release
+			// (release events are broadcast to every widget, see ElementRowEntry).
 			whileDragging(x, width, mouseX);
 		}
 	}
@@ -51,12 +47,10 @@ public class SliderElementWidget extends StringElementWidget {
 		// Draw slider area
 		GuiUtil.drawButton(x + 2, y + 2, width - 4, height - 4, false, true);
 
-		// Range of x values the slider can occupy
-		final int sliderSpace = (width - 8) - ACTIVE_SLIDER_WIDTH;
 		// Position of slider
-		final int sliderPos = (x + 4) + (int)(((float)valueIndex / (valueCount - 1)) * sliderSpace);
+		final int sliderPos = SliderGeometry.sliderXForIndex(x, width, valueIndex, valueCount);
 		// Draw slider
-		GuiUtil.drawButton(sliderPos, y + 4, ACTIVE_SLIDER_WIDTH, height - 8, this.mouseDown, false);
+		GuiUtil.drawButton(sliderPos, y + 4, SliderGeometry.ACTIVE_SLIDER_WIDTH, height - 8, this.mouseDown, false);
 
 		// Draw value label
 		final FontRenderer font = Minecraft.getMinecraft().fontRenderer;
@@ -64,9 +58,7 @@ public class SliderElementWidget extends StringElementWidget {
 	}
 
 	private void whileDragging(int x, int width, int mouseX) {
-		final float mousePositionAcrossWidget = MathHelper.clamp((float)(mouseX - (x + 4)) / (width - 8), 0.0F, 1.0F);
-
-		final int newValueIndex = Math.min(valueCount - 1, (int)(mousePositionAcrossWidget * valueCount));
+		final int newValueIndex = SliderGeometry.valueIndexForMouseX(mouseX, x, width, valueCount);
 
 		if (valueIndex != newValueIndex) {
 			this.valueIndex = newValueIndex;

@@ -27,6 +27,11 @@ class MixinLateTest {
         );
 
         assertEquals(
+            Set.of("mixins.actinium.cofhcore.json"),
+            Set.copyOf(MixinLate.configsFor("cofhcore"::equals))
+        );
+
+        assertEquals(
             Set.of(
                 "mixins.actinium.dh.json",
                 "mixins.actinium.gibbed.json",
@@ -36,7 +41,9 @@ class MixinLateTest {
                 "mixins.actinium.betterfoliage.json",
                 "mixins.actinium.ccl.json",
                 "mixins.actinium.voxelmap.json",
-                "mixins.actinium.extrautils2.json"
+                "mixins.actinium.extrautils2.json",
+                "mixins.actinium.cofhcore.json",
+                "mixins.actinium.oldresearch.json"
             ),
             Set.copyOf(MixinLate.configsFor(modId -> true))
         );

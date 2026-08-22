@@ -21,6 +21,7 @@ import net.minecraftforge.client.model.pipeline.LightUtil;
 import net.minecraftforge.fml.common.Optional;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
+import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.biome.BiomeColorCache;
@@ -105,7 +106,8 @@ public class WorldSlice implements ActiniumBlockAccess {
 
     public static ChunkRenderContext prepare(World world, SectionPos origin, ClonedChunkSectionCache sectionCache) {
         Chunk chunk = world.getChunk(origin.x(), origin.z());
-        ExtendedBlockStorage section = chunk.getBlockStorageArray()[origin.y()];
+        int storageIndex = DepthsUpdateCompat.toStorageIndex(world, origin.y());
+        ExtendedBlockStorage section = storageIndex >= 0 ? chunk.getBlockStorageArray()[storageIndex] : null;
 
         // If the chunk section is absent or empty, simply terminate now. There will never be anything in this chunk
         // section to render, so we need to signal that a chunk render task shouldn't created. This saves a considerable

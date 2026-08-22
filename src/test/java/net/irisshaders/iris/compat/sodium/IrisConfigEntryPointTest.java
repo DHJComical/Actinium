@@ -1,66 +1,69 @@
 package net.irisshaders.iris.compat.sodium;
 
-import net.caffeinemc.mods.sodium.client.config.ConfigManager;
-import net.caffeinemc.mods.sodium.client.config.structure.Config;
-import net.caffeinemc.mods.sodium.client.config.structure.ExternalPage;
-import net.caffeinemc.mods.sodium.client.config.structure.IntegerOption;
-import net.caffeinemc.mods.sodium.client.config.structure.ModOptions;
-import net.caffeinemc.mods.sodium.client.config.structure.OptionPage;
 import net.coderbot.iris.gui.option.IrisVideoSettings;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.util.ResourceLocation;
+import org.embeddedt.embeddium.api.options.structure.ExternalPage;
+import org.embeddedt.embeddium.api.options.structure.Option;
+import org.embeddedt.embeddium.api.options.structure.OptionPage;
+import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IrisConfigEntryPointTest {
     @Test
-    void registersShadowOptionAndExternalPageAndAppliesInjectedBinding() {
+    void buildsShadowOptionPageAndExternalPageAndAppliesInjectedBinding() {
         AtomicInteger persisted = new AtomicInteger(32);
         AtomicBoolean openedCalled = new AtomicBoolean();
-        ConfigManager manager = new ConfigManager(id -> new ConfigManager.ModMetadata(id, "test"), () -> "en_us");
-        manager.registerConfigEntryPoint("iris", new IrisConfigEntryPoint(persisted::set, persisted::get,
-                ignored -> openedCalled.set(true), (key, arguments) -> "translated:" + key));
+        IrisConfigEntryPoint entryPoint = new IrisConfigEntryPoint(persisted::set, persisted::get,
+                ignored -> openedCalled.set(true));
 
-        Config config = manager.freeze();
-        assertTrue(config.optionIds().contains(new ResourceLocation("iris", "shadow_distance")));
-        ModOptions irisOptions = config.getModOptions().stream()
-                .filter(options -> "iris".equals(options.configId())).findFirst().orElseThrow();
-        ExternalPage external = irisOptions.pages().stream()
-                .filter(ExternalPage.class::isInstance).map(ExternalPage.class::cast).findFirst().orElseThrow();
-        OptionPage optionPage = irisOptions.pages().stream()
-                .filter(OptionPage.class::isInstance).map(OptionPage.class::cast).findFirst().orElseThrow();
-        assertEquals(1, irisOptions.pages().stream().filter(ExternalPage.class::isInstance).count());
-        assertEquals("translated:options.iris.title", optionPage.name().getUnformattedText());
-        assertEquals("translated:options.iris.shaderPackSelection", external.name().getUnformattedText());
-        external.screenConsumer().accept(null);
+        List<OptionPage> pages = entryPoint.createPages();
+        assertEquals(2, pages.size());
+        OptionPage videoSettings = pages.stream()
+                .filter(page -> "video_settings".equals(page.getId().getPath()))
+                .findFirst().orElseThrow();
+        ExternalPage shaderPacks = pages.stream()
+                .filter(ExternalPage.class::isInstance)
+                .map(ExternalPage.class::cast)
+                .findFirst().orElseThrow();
+
+        assertEquals("iris", videoSettings.getId().getModId());
+        assertTrue(videoSettings.getName() instanceof TextComponent.Translatable);
+        assertEquals("options.iris.title", ((TextComponent.Translatable) videoSettings.getName()).keys().get(0));
+        assertEquals("options.iris.shaderPackSelection",
+                ((TextComponent.Translatable) shaderPacks.getName()).keys().get(0));
+
+        shaderPacks.getScreenConsumer().accept(null);
         assertTrue(openedCalled.get());
 
-        IntegerOption shadow = config.getOption(new ResourceLocation("iris", "shadow_distance"), IntegerOption.class);
-        assertEquals("translated:options.iris.shadowDistance", shadow.getName().getUnformattedText());
+        @SuppressWarnings("unchecked")
+        Option<Integer> shadow = (Option<Integer>) videoSettings.getOptions().stream()
+                .filter(option -> "shadow_distance".equals(option.getId().getPath()))
+                .findFirst().orElseThrow();
+        assertEquals("options.iris.shadowDistance",
+                ((TextComponent.Translatable) shadow.getName()).keys().get(0));
         String expectedTooltipKey = IrisVideoSettings.isShadowDistanceSliderEnabled()
                 ? "options.iris.shadowDistance.enabled"
                 : "options.iris.shadowDistance.disabled";
-        assertEquals("translated:" + expectedTooltipKey, shadow.getTooltip().getUnformattedText());
-        shadow.modifyValue(64);
-        config.applyChanges();
+        assertEquals(expectedTooltipKey,
+                ((TextComponent.Translatable) shadow.getTooltip()).keys().get(0));
+
+        shadow.setValue(64);
+        shadow.applyChanges();
         assertEquals(64, persisted.get());
     }
 
     @Test
-    void freezeIsIdempotentAndRejectsLateRegistration() {
-        ConfigManager manager = new ConfigManager(id -> new ConfigManager.ModMetadata(id, "test"), () -> "en_us");
-        manager.registerConfigEntryPoint("iris", new IrisConfigEntryPoint(value -> { }, () -> 32, ignored -> { },
-                (key, arguments) -> "translated:" + key));
-        Config first = manager.freeze();
-        assertSame(first, manager.freeze());
-        assertThrows(IllegalStateException.class,
-                () -> manager.registerConfigEntryPoint("late", new IrisConfigEntryPoint()));
+    void externalPageActivationSkipsVideoSettingsWhenOpeningShaderPacks() {
+        IrisConfigEntryPoint entryPoint = new IrisConfigEntryPoint(value -> { }, () -> 32, ignored -> { });
+        List<OptionPage> pages = entryPoint.createPages();
+        assertInstanceOf(ExternalPage.class, pages.get(1));
+        assertEquals("shader_pack_selection", pages.get(1).getId().getPath());
     }
 }

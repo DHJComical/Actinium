@@ -36,17 +36,10 @@ public enum IrisTerrainPass {
     }
 
     public static IrisTerrainPass fromTerrainPass(TerrainRenderPass pass, boolean isShadow) {
-        if (isShadow) {
-            if (pass.isReverseOrder()) {
-                return SHADOW_TRANSLUCENT;
-            }
-            return pass.supportsFragmentDiscard() ? SHADOW_CUTOUT : SHADOW;
-        } else if (pass.supportsFragmentDiscard()) {
-            return GBUFFER_CUTOUT;
-        } else if (pass.isReverseOrder()) {
-            return GBUFFER_TRANSLUCENT;
-        } else {
-            return GBUFFER_SOLID;
-        }
+        return switch (pass.semantic()) {
+            case WATER, TRANSLUCENT -> isShadow ? SHADOW_TRANSLUCENT : GBUFFER_TRANSLUCENT;
+            case CUTOUT -> isShadow ? SHADOW_CUTOUT : GBUFFER_CUTOUT;
+            case SOLID -> isShadow ? SHADOW : GBUFFER_SOLID;
+        };
     }
 }

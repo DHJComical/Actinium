@@ -29,6 +29,7 @@ import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import net.coderbot.iris.pipeline.ShadowRenderer;
+import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -62,7 +63,7 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
 
     @Override
     public int getMinimumBuildHeight() {
-        return 0;
+        return DepthsUpdateCompat.getMinBuildHeight(this.world);
     }
 
     @Override
@@ -145,7 +146,7 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
 
     /**
      * Captures the iChun recursive terrain matrices while leaving ordinary and shadow rendering unchanged.
-     */
+     */
 
     @Override
     public void markSectionGraphDirty() {
