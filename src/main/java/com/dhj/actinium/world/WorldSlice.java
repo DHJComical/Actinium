@@ -285,7 +285,21 @@ public class WorldSlice implements ActiniumBlockAccess {
         copyBlocks(states, section, minBlockY, maxBlockY, minBlockZ, maxBlockZ, minBlockX, maxBlockX);
     }
 
-    private static boolean blockBoxContains(StructureBoundingBox box, int x, int y, int z) {
+    /**
+     * Whether the given block coordinate lies inside the given snapshot volume.
+     *
+     * <p>A {@code null} volume is legal: the slice is a reused snapshot object that only covers
+     * anything between {@link #copyData(ChunkRenderContext)} and {@link #reset()}. Renderers
+     * outside the chunk build pipeline may retain the {@link IBlockAccess} instance handed to
+     * {@code BlockRendererDispatcher} and query it later on the main thread (MalisisCore's
+     * {@code AnimatedRenderer} does exactly this from {@code RenderWorldLastEvent}, see issue
+     * #57); after the slice has been reset it covers nothing, so every coordinate is out of
+     * bounds and the callers' fallback paths apply instead of dereferencing a null box.</p>
+     */
+    static boolean blockBoxContains(@Nullable StructureBoundingBox box, int x, int y, int z) {
+        if (box == null) {
+            return false;
+        }
         return x >= box.minX &&
                 x <= box.maxX &&
                 y >= box.minY &&
