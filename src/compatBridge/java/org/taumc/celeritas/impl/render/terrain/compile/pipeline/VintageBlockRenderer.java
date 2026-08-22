@@ -1,5 +1,6 @@
 package org.taumc.celeritas.impl.render.terrain.compile.pipeline;
 
+import com.dhj.actinium.compat.blockrender.ModdedBlockRenderCompat;
 import com.dhj.actinium.render.terrain.compile.VintageChunkBuildContext;
 import com.dhj.actinium.render.terrain.compile.light.LightDataCache;
 import com.dhj.actinium.render.terrain.compile.light.VintageDiffuseProvider;
@@ -94,7 +95,8 @@ public class VintageBlockRenderer extends ActiniumVintageBlockRenderer {
                 ambientOcclusion ? LightMode.SMOOTH : LightMode.FLAT);
 
         for (EnumFacing direction : EnumFacing.VALUES) {
-            List<BakedQuad> quads = model.getQuads(state, direction, random);
+            List<BakedQuad> quads = ModdedBlockRenderCompat.getQuads(
+                    state.getBlock(), model, state, direction, random);
             if (quads.isEmpty() || !state.shouldSideBeRendered(legacyAccess, pos, direction)) {
                 continue;
             }
@@ -104,7 +106,8 @@ public class VintageBlockRenderer extends ActiniumVintageBlockRenderer {
             renderQuadList(buffer, buffers, material, pos, direction, lighter, colorProvider, offset, quads);
         }
 
-        List<BakedQuad> quads = model.getQuads(state, null, random);
+        List<BakedQuad> quads = ModdedBlockRenderCompat.getQuads(
+                state.getBlock(), model, state, null, random);
         if (!quads.isEmpty()) {
             access.actiniumLegacy$setCurrentQuadRenderingFlags(analyzer.getFlagsForRendering(
                     ModelQuadFacing.UNASSIGNED, BakedQuadView.ofList(quads)));
