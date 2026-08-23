@@ -1,42 +1,43 @@
 package net.irisshaders.iris.compat.sodium;
 
-import net.caffeinemc.mods.sodium.api.config.ConfigEntryPoint;
-import net.caffeinemc.mods.sodium.api.config.ConfigState;
-import net.caffeinemc.mods.sodium.api.config.option.Range;
-import net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder;
-import net.caffeinemc.mods.sodium.api.config.structure.ExternalPageBuilder;
-import net.caffeinemc.mods.sodium.api.config.structure.IntegerOptionBuilder;
-import net.caffeinemc.mods.sodium.api.config.structure.ModOptionsBuilder;
-import net.caffeinemc.mods.sodium.client.gui.text.ClientTranslatedText;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.gui.option.IrisVideoSettings;
 import net.coderbot.iris.gui.screen.ShaderPackScreen;
-import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.text.TextComponentString;
+import net.minecraft.client.gui.GuiScreen;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.embeddedt.embeddium.api.options.OptionIdentifier;
+import org.embeddedt.embeddium.api.options.control.ControlValueFormatter;
+import org.embeddedt.embeddium.api.options.control.SliderControl;
+import org.embeddedt.embeddium.api.options.structure.ExternalPage;
+import org.embeddedt.embeddium.api.options.structure.OptionGroup;
+import org.embeddedt.embeddium.api.options.structure.OptionImpl;
+import org.embeddedt.embeddium.api.options.structure.OptionPage;
+import org.embeddedt.embeddium.api.options.structure.OptionStorage;
+import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Objects;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Exposes the supported Iris settings through Sodium's explicit Config API.
- * The entrypoint deliberately binds only the legacy Iris shadow distance value.
+ * Exposes the supported Iris settings through the embeddium option model.
+ * The entrypoint deliberately binds only the legacy Iris shadow distance
+ * value; shader pack selection is a navigation-only external page.
  */
-public final class IrisConfigEntryPoint implements ConfigEntryPoint {
+public final class IrisConfigEntryPoint {
     private static final Logger LOGGER = LogManager.getLogger("Actinium-Iris-Config");
-    private static final ResourceLocation ICON = new ResourceLocation("iris", "textures/gui/config-icon.png");
-    private static final ResourceLocation SHADOW_DISTANCE = new ResourceLocation("iris", "shadow_distance");
+    private static final String MOD_ID = "iris";
+    private static final int SHADOW_DISTANCE_MIN = 0;
+    private static final int SHADOW_DISTANCE_MAX = 256;
+    private static final int SHADOW_DISTANCE_DEFAULT = 32;
+
     private final Consumer<Integer> shadowSaver;
     private final Supplier<Integer> shadowLoader;
     private final Consumer<GuiScreen> shaderPackOpener;
-    private final BiFunction<String, Object[], String> translator;
 
     /** Creates the production entrypoint backed by Iris' legacy settings and screen. */
     public IrisConfigEntryPoint() {
@@ -44,60 +45,48 @@ public final class IrisConfigEntryPoint implements ConfigEntryPoint {
             IrisVideoSettings.shadowDistance = value;
             saveIrisConfig();
         }, () -> IrisVideoSettings.shadowDistance,
-                parent -> Minecraft.getMinecraft().displayGuiScreen(new ShaderPackScreen(parent)),
-                I18n::format);
+                parent -> Minecraft.getMinecraft().displayGuiScreen(new ShaderPackScreen(parent)));
     }
 
     /** Allows direct logic tests to supply persistence and screen boundaries without client bootstrapping. */
     public IrisConfigEntryPoint(Consumer<Integer> shadowSaver, Supplier<Integer> shadowLoader,
                                 Consumer<GuiScreen> shaderPackOpener) {
-        this(shadowSaver, shadowLoader, shaderPackOpener, I18n::format);
-    }
-
-    /** Creates an integration boundary with an explicit client translator. */
-    public IrisConfigEntryPoint(Consumer<Integer> shadowSaver, Supplier<Integer> shadowLoader,
-                                Consumer<GuiScreen> shaderPackOpener,
-                                BiFunction<String, Object[], String> translator) {
         this.shadowSaver = Objects.requireNonNull(shadowSaver, "Iris shadow saver must not be null");
         this.shadowLoader = Objects.requireNonNull(shadowLoader, "Iris shadow loader must not be null");
         this.shaderPackOpener = Objects.requireNonNull(shaderPackOpener, "Iris shader pack opener must not be null");
-        this.translator = Objects.requireNonNull(translator, "Iris client translator must not be null");
     }
 
-    @Override
-    public void registerConfigLate(ConfigBuilder builder) {
-        ModOptionsBuilder owner = builder.registerModOptions("iris", Iris.MODNAME, "1.12")
-                .setNonTintedIcon(ICON)
-                .setColorTheme(builder.createColorTheme().setFullThemeRGB(0x6A5ACD, 0x8A79E8, 0x40358A));
+    /** Builds the Iris option page (shadow distance slider) and the shader pack external page. */
+    public List<OptionPage> createPages() {
+        OptionImpl<Object, Integer> shadow = OptionImpl.createBuilder(int.class, new IrisStorage())
+                .setId(OptionIdentifier.create(MOD_ID, "shadow_distance", int.class))
+                .setName(TextComponent.translatable("options.iris.shadowDistance"))
+                .setTooltip(TextComponent.translatable(IrisVideoSettings.isShadowDistanceSliderEnabled()
+                        ? "options.iris.shadowDistance.enabled"
+                        : "options.iris.shadowDistance.disabled"))
+                .setControl(option -> new SliderControl(option,
+                        SHADOW_DISTANCE_MIN, SHADOW_DISTANCE_MAX, 1, ControlValueFormatter.number()))
+                .setBinding((ignored, value) -> this.shadowSaver.accept(value), ignored -> this.shadowLoader.get())
+                .setDefaultValue(SHADOW_DISTANCE_DEFAULT)
+                .setEnabledPredicate(() -> Iris.enabled)
+                .build();
 
-        IntegerOptionBuilder shadow = builder.createIntegerOption(SHADOW_DISTANCE)
-                .setName(this.text("options.iris.shadowDistance"))
-                .setTooltip(value -> this.text(
-                        IrisVideoSettings.isShadowDistanceSliderEnabled()
-                                ? "options.iris.shadowDistance.enabled"
-                                : "options.iris.shadowDistance.disabled"))
-                .setRange(new Range(0, 256, 1))
-                .setDefaultValue(32)
-                .setStorageHandler(() -> { })
-                .setValueFormatter(value -> new TextComponentString(Integer.toString(value)))
-                .setEnabledProvider(this::isIrisEnabled)
-                .setBinding(this.shadowSaver, this.shadowLoader);
-        owner.addPage(builder.createOptionPage()
-                .setName(this.text("options.iris.title"))
-                .addOption(shadow));
+        OptionGroup group = OptionGroup.createBuilder()
+                .setId(OptionIdentifier.create(MOD_ID, "shadow"))
+                .add(shadow)
+                .build();
 
-        ExternalPageBuilder shaderPacks = builder.createExternalPage()
-                .setName(this.text("options.iris.shaderPackSelection"))
-                .setScreenConsumer(this::openShaderPackScreen);
-        owner.addPage(shaderPacks);
-    }
+        OptionPage page = new OptionPage(
+                OptionIdentifier.create(MOD_ID, "video_settings"),
+                TextComponent.translatable("options.iris.title"),
+                List.of(group));
 
-    private Boolean isIrisEnabled(ConfigState ignored) {
-        return Iris.enabled;
-    }
+        ExternalPage shaderPacks = new ExternalPage(
+                OptionIdentifier.create(MOD_ID, "shader_pack_selection"),
+                TextComponent.translatable("options.iris.shaderPackSelection"),
+                this::openShaderPackScreen);
 
-    private ClientTranslatedText text(String key) {
-        return new ClientTranslatedText(key, this.translator);
+        return List.of(page, shaderPacks);
     }
 
     private void openShaderPackScreen(GuiScreen parent) {
@@ -108,7 +97,20 @@ public final class IrisConfigEntryPoint implements ConfigEntryPoint {
         try {
             Iris.getIrisConfig().save();
         } catch (IOException exception) {
-            LOGGER.error("Failed to save Iris configuration after applying Sodium options", exception);
+            LOGGER.error("Failed to save Iris configuration after applying options", exception);
+        }
+    }
+
+    /** Placeholder storage: Iris values read/write IrisVideoSettings; save persists to disk. */
+    private static final class IrisStorage implements OptionStorage<Object> {
+        @Override
+        public Object getData() {
+            return this;
+        }
+
+        @Override
+        public void save() {
+            saveIrisConfig();
         }
     }
 }

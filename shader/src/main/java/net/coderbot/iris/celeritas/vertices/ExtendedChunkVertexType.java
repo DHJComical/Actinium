@@ -9,6 +9,7 @@ import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import java.util.Objects;
 
 public class ExtendedChunkVertexType implements ChunkVertexType {
+    private static final String RDH_FACTOR_ATTRIBUTE = "a_RdhFactor";
     public static final ChunkVertexType BASE_TYPE = ChunkMeshFormats.VANILLA_LIKE;
     public static final float MID_TEX_SCALE = 1.0f / 32768.0f;
 
@@ -59,7 +60,7 @@ public class ExtendedChunkVertexType implements ChunkVertexType {
     }
 
     private static GlVertexFormat createVertexFormat(TerrainVertexFormatRequirements requirements) {
-        int stride = BASE_TYPE.getVertexFormat().getStride();
+        int stride = baseVertexStrideWithoutBilinearCorrection();
         for (TerrainVertexFormatRequirements.Attribute attribute : TerrainVertexFormatRequirements.Attribute.values()) {
             if (requirements.requires(attribute)) {
                 stride += attributeSize(attribute);
@@ -68,7 +69,9 @@ public class ExtendedChunkVertexType implements ChunkVertexType {
         stride = (stride + 3) & ~3;
 
         GlVertexFormat.Builder builder = GlVertexFormat.builder(stride)
-                .addAllElements(BASE_TYPE.getVertexFormat());
+                .addElements(BASE_TYPE.getVertexFormat().getAttributes().stream()
+                        .filter(attribute -> !RDH_FACTOR_ATTRIBUTE.equals(attribute.getName()))
+                        .toList());
         if (requirements.requires(TerrainVertexFormatRequirements.Attribute.MID_TEX_COORD)) {
             builder.addElement("mc_midTexCoord", GlVertexFormat.NEXT_ALIGNED_POINTER, GlVertexAttributeFormat.UNSIGNED_SHORT, 2, false, false);
         }
@@ -85,6 +88,14 @@ public class ExtendedChunkVertexType implements ChunkVertexType {
             builder.addElement("at_midBlock", GlVertexFormat.NEXT_ALIGNED_POINTER, GlVertexAttributeFormat.BYTE, 4, false, false);
         }
         return builder.build();
+    }
+
+    private static int baseVertexStrideWithoutBilinearCorrection() {
+        return BASE_TYPE.getVertexFormat().getAttributes().stream()
+                .filter(attribute -> !RDH_FACTOR_ATTRIBUTE.equals(attribute.getName()))
+                .mapToInt(attribute -> attribute.getPointer() + attribute.getSize())
+                .max()
+                .orElseThrow(() -> new IllegalStateException("Base terrain vertex format has no usable attributes"));
     }
 
     private static int attributeSize(TerrainVertexFormatRequirements.Attribute attribute) {

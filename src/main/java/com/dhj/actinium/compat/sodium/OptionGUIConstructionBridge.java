@@ -29,10 +29,11 @@ public final class OptionGUIConstructionBridge {
     }
 
     /**
-     * Posts the retained event with complete built-in page context and returns only newly contributed pages.
+     * Posts the retained event with complete built-in page context and appends
+     * only newly contributed pages to the supplied mutable list.
      */
-    public static Map<String, List<OptionPage>> collectExtensions(List<OptionPage> builtInPages) {
-        List<OptionPage> mutablePages = new ArrayList<>(builtInPages);
+    public static void collectExtensions(List<OptionPage> mutablePages) {
+        List<OptionPage> builtInPages = List.copyOf(mutablePages);
         Set<OptionPage> builtInIdentities = Collections.newSetFromMap(new IdentityHashMap<>());
         builtInIdentities.addAll(builtInPages);
         OptionGUIConstructionEvent event = new OptionGUIConstructionEvent(mutablePages);
@@ -60,21 +61,11 @@ public final class OptionGUIConstructionBridge {
                 ActiniumRuntime.logger().error("Legacy Celeritas page provider failed and was isolated", exception);
             }
         }
-        Map<String, List<OptionPage>> extensions = new LinkedHashMap<>();
-        for (OptionPage page : mutablePages) {
-            if (!builtInIdentities.contains(page)) {
-                String namespace = page.getId().getModId();
-                if (namespace == null || namespace.isBlank()) {
-                    throw new IllegalArgumentException("Legacy extension page has a blank namespace: " + page.getId());
-                }
-                extensions.computeIfAbsent(namespace, ignored -> new ArrayList<>()).add(page);
-            }
-        }
-        extensions.replaceAll((namespace, pages) -> List.copyOf(pages));
-        ActiniumRuntime.logger().info("Collected legacy option GUI extensions: {}", extensions.entrySet().stream()
-                .map(entry -> entry.getKey() + "=" + entry.getValue().size())
-                .toList());
-        return Collections.unmodifiableMap(new LinkedHashMap<>(extensions));
+        List<OptionPage> extensions = mutablePages.stream()
+                .filter(page -> !builtInIdentities.contains(page))
+                .toList();
+        ActiniumRuntime.logger().info("Collected legacy option GUI extensions: {}",
+                extensions.stream().map(page -> page.getId().getModId() + "=" + 1).toList());
     }
 
     private static void validatePages(List<OptionPage> pages, Set<OptionPage> builtInPages) {

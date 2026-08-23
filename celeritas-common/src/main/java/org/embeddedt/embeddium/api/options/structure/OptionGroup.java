@@ -13,9 +13,20 @@ public class OptionGroup {
     private final List<Option<?>> options;
 
     public final OptionIdentifier<Void> id;
-    private OptionGroup(OptionIdentifier<Void> id, List<Option<?>> options) {
+
+    /** Actinium extension: optional localized group header label. */
+    private final org.embeddedt.embeddium.impl.gui.framework.TextComponent name;
+
+    private OptionGroup(OptionIdentifier<Void> id, List<Option<?>> options,
+                        org.embeddedt.embeddium.impl.gui.framework.TextComponent name) {
         this.id = id;
         this.options = options;
+        this.name = name;
+    }
+
+    /** Returns the optional localized group header label (Actinium extension), or null. */
+    public org.embeddedt.embeddium.impl.gui.framework.TextComponent getName() {
+        return this.name;
     }
 
     public OptionIdentifier<Void> getId() {
@@ -35,8 +46,17 @@ public class OptionGroup {
 
         private OptionIdentifier<Void> id;
 
+        private org.embeddedt.embeddium.impl.gui.framework.TextComponent name;
+
         public Builder setId(OptionIdentifier<Void> id) {
             this.id = id;
+
+            return this;
+        }
+
+        /** Actinium extension: sets the localized group header label. */
+        public Builder setName(org.embeddedt.embeddium.impl.gui.framework.TextComponent name) {
+            this.name = name;
 
             return this;
         }
@@ -64,7 +84,7 @@ public class OptionGroup {
 
             OptionGroupConstructionEvent.BUS.post(new OptionGroupConstructionEvent(this.id, this.options));
 
-            return new OptionGroup(this.id, List.copyOf(this.options));
+            return new OptionGroup(this.id, List.copyOf(this.options), this.name);
         }
     }
 }

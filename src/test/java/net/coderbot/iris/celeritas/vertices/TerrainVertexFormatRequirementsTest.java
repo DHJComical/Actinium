@@ -31,7 +31,11 @@ class TerrainVertexFormatRequirementsTest {
         ));
 
         assertFalse(requirements.requires(TerrainVertexFormatRequirements.Attribute.NORMAL));
-        assertEquals(28, new ExtendedChunkVertexType(requirements).getVertexFormat().getStride());
+        ExtendedChunkVertexType vertexType = new ExtendedChunkVertexType(requirements);
+        assertEquals(28, vertexType.getVertexFormat().getStride());
+        assertFalse(vertexType.getVertexFormat().getAttributes().stream()
+                .anyMatch(attribute -> attribute.getName().equals("a_RdhFactor")));
+        assertFalse(vertexType.createEncoder().supportsBilinearCorrection());
     }
 
     @Test

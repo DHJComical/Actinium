@@ -6,82 +6,38 @@ import org.embeddedt.embeddium.impl.gl.device.MultiDrawBatch;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlIndexType;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlTessellation;
-import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
-import org.embeddedt.embeddium.impl.render.chunk.data.SectionRenderDataUnsafe;
-import com.mitchej123.lwjgl.LWJGLServiceProvider;
 
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
-public record IndividualDrawEmitter(MultiDrawBatch batch) implements MultiDrawEmitter {
-    public IndividualDrawEmitter() {
-        this(new MultiDrawBatch(MAX_COMMAND_COUNT));
-    }
-
+public final class IndividualDrawEmitter implements MultiDrawEmitter {
     @Override
-    @SuppressWarnings("IntegerMultiplicationImplicitCastToLong")
-    public void addDrawCommands(long pMeshData, int mask, int indexPointerMask) {
-        var batch = this.batch;
-        final var pBaseVertex = batch.pBaseVertex;
-        final var pElementCount = batch.pElementCount;
-        final var pElementPointer = batch.pElementPointer;
-
-        int size = batch.size;
-
-        for (int facing = 0; facing < ModelQuadFacing.COUNT; facing++) {
-            LWJGL.memPutInt(pBaseVertex + (size << 2), SectionRenderDataUnsafe.getVertexOffset(pMeshData, facing));
-            LWJGL.memPutInt(pElementCount + (size << 2), SectionRenderDataUnsafe.getElementCount(pMeshData, facing));
-            LWJGL.memPutAddress(pElementPointer + (size << 3), SectionRenderDataUnsafe.getIndexOffset(pMeshData, facing) & indexPointerMask);
-
-            size += (mask >> facing) & 1;
+    public void executeBatch(CommandList commandList, GlTessellation tessellation, GlPrimitiveType primitiveType,
+                             MultiDrawBatch batch) {
+        int commandCount = batch.size;
+        if (commandCount < 0 || commandCount > batch.capacity()) {
+            throw new IllegalStateException("MultiDrawBatch command count exceeds its capacity");
+        }
+        if (commandCount == 0) {
+            return;
         }
 
-        batch.size = size;
-    }
-
-    @Override
-    public void executeBatch(CommandList commandList, GlTessellation tessellation, GlPrimitiveType primitiveType) {
         try (DrawCommandList ignored = commandList.beginTessellating(tessellation)) {
             final int mode = primitiveType.getId();
             final int type = GlIndexType.UNSIGNED_INT.getFormatId();
+            final int pointerSize = LWJGL.getPointerSize();
 
-            for (int i = 0; i < batch.size(); i++) {
+            for (int i = 0; i < commandCount; i++) {
                 final int count = LWJGL.memGetInt(batch.pElementCount + (long) i * Integer.BYTES);
                 if (count > 0) {
                     LWJGL.glDrawElementsBaseVertex(
                         mode,
                         count,
                         type,
-                        LWJGL.memGetAddress(batch.pElementPointer + (long) i * LWJGLServiceProvider.POINTER_SIZE),
+                        LWJGL.memGetAddress(batch.pElementPointer + (long) i * pointerSize),
                         LWJGL.memGetInt(batch.pBaseVertex + (long) i * Integer.BYTES)
                     );
                 }
             }
         }
     }
-
-    @Override
-    public int getIndexBufferSize() {
-        return this.batch.getIndexBufferSize();
-    }
-
-    @Override
-    public int getCommandCount() {
-        return this.batch.size();
-    }
-
-    @Override
-    public boolean isEmpty() {
-        return this.batch.isEmpty();
-    }
-
-    @Override
-    public void clear() {
-        this.batch.clear();
-    }
-
-    @Override
-    public void delete() {
-        this.batch.delete();
-    }
 }
-

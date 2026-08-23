@@ -7,31 +7,28 @@ public enum ChunkUpdateType {
     /**
      * Chunk is being built for the first time.
      */
-    INITIAL_BUILD(128),
+    INITIAL_BUILD,
     /**
      * Chunk geometry is being sorted based on camera position change.
      */
-    SORT(Integer.MAX_VALUE),
+    SORT,
     /**
      * Like {@link ChunkUpdateType#SORT}, but will block the main thread if the camera is near enough to guarantee
      * the sort results are reflected quickly.
      */
-    IMPORTANT_SORT(Integer.MAX_VALUE),
+    IMPORTANT_SORT,
     /**
      * Chunk data has changed and remeshing is required.
      */
-    REBUILD(Integer.MAX_VALUE),
+    REBUILD,
     /**
      * Like {@link ChunkUpdateType#REBUILD}, but will block the main thread if the camera is near enough to guarantee
      * the rebuild is seen quickly.
      */
-    IMPORTANT_REBUILD(Integer.MAX_VALUE);
+    IMPORTANT_REBUILD;
 
-    private final int maximumQueueSize;
-
-    ChunkUpdateType(int maximumQueueSize) {
-        this.maximumQueueSize = maximumQueueSize;
-    }
+    /** Cached enum values to avoid allocating a new array for each iteration. */
+    public static final ChunkUpdateType[] VALUES = values();
 
     @Deprecated
     public static boolean canPromote(ChunkUpdateType prev, ChunkUpdateType next) {
@@ -55,13 +52,6 @@ public enum ChunkUpdateType {
     }
 
     /**
-     * {@return the maximum size the rebuild queue should be allowed to grow to for this update type}
-     */
-    public int getMaximumQueueSize() {
-        return this.maximumQueueSize;
-    }
-
-    /**
      * {@return true if the task is "important" and should block the main thread if the camera is near enough}
      */
     public boolean isImportant() {
@@ -73,5 +63,12 @@ public enum ChunkUpdateType {
      */
     public boolean isSort() {
         return this == SORT || this == IMPORTANT_SORT;
+    }
+
+    static {
+        // Pending update types use a three-bit field in PackedSectionMetadata.
+        if (VALUES.length > 7) {
+            throw new AssertionError("The occlusion system currently assumes there are at most 7 update types");
+        }
     }
 }
