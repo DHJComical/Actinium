@@ -34,6 +34,15 @@ public class ChunkBuilderSortTask extends ChunkBuilderTask<ChunkSortOutput> {
         var meshes = new Reference2ReferenceOpenHashMap<TerrainRenderPass, ChunkSortOutput.SortedMesh>();
         for(Map.Entry<TerrainRenderPass, TranslucentQuadAnalyzer.SortState> entry : translucentMeshes.entrySet()) {
             var sortInfo = entry.getValue();
+
+            // Only passes that need dynamic re-sorting (camera-dependent) should produce a new index
+            // buffer here. Static and none-sorted states were compacted for storage (their centers were
+            // dropped), so centersLength() is 0 and a zero-length index buffer would be allocated, which
+            // later breaks the GL buffer arena (GlBufferSegment.mergeInto throws "len <= 0").
+            if (!sortInfo.requiresDynamicSorting()) {
+                continue;
+            }
+
             var primitiveType = this.renderPassConfiguration.getPrimitiveTypeForPass(entry.getKey());
             var newIndexBuffer = new NativeBuffer(primitiveType.getIndexBufferSize(sortInfo.centersLength() / 3));
             primitiveType.generateSortedIndexBuffer(newIndexBuffer.getDirectBuffer(), sortInfo.centersLength() / 3, sortInfo, cameraX - this.render.getOriginX(), cameraY - this.render.getOriginY(), cameraZ - this.render.getOriginZ());

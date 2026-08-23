@@ -6289,6 +6289,19 @@ public class GLStateManager {
         glTranslated(x, y, z);
     }
 
+    /**
+     * Double-precision angle form of {@link #glRotatef(float, float, float, float)}.
+     *
+     * <p>The GLSM redirector rewrites vanilla {@code GlStateManager.rotate} calls to this class by
+     * method name while preserving the caller's descriptor. HBM's Nuclear Tech (Community Edition)
+     * calls the {@code rotate(double, float, float, float)} overload from its tile entity item
+     * renderers (issue #64); without this overload the rewritten call resolved to nothing and the
+     * game crashed with {@code NoSuchMethodError}.</p>
+     */
+    public static void glRotatef(double angle, float x, float y, float z) {
+        glRotatef((float) angle, x, y, z);
+    }
+
     public static void glRotatef(org.lwjgl.util.vector.Quaternion quaternion) {
         FloatBuffer buffer = BufferUtils.createFloatBuffer(16);
         float x = quaternion.x;

@@ -37,7 +37,7 @@ class GLStateManagerRedirectContractTest {
     @Test
     void glGetActiveUniformLegacyStringFormExists() throws IOException {
         assertTrue(
-            glGetActiveUniformDescriptors().contains(LEGACY_STRING_FORM),
+            methodDescriptors("glGetActiveUniform").contains(LEGACY_STRING_FORM),
             "GLStateManager must expose glGetActiveUniform(int, int, int) returning String: "
                 + "the GL redirector rewrites HammerLib's GL20.glGetActiveUniform(III)Ljava/lang/String; "
                 + "call to it (issue #40)"
@@ -47,12 +47,31 @@ class GLStateManagerRedirectContractTest {
     @Test
     void glGetActiveUniformBufferFormStillExists() throws IOException {
         assertTrue(
-            glGetActiveUniformDescriptors().contains(BUFFER_FORM),
+            methodDescriptors("glGetActiveUniform").contains(BUFFER_FORM),
             "GLStateManager must keep the buffer-based glGetActiveUniform overload"
         );
     }
 
-    private static Set<String> glGetActiveUniformDescriptors() throws IOException {
+    @Test
+    void glRotatefFloatFormExists() throws IOException {
+        assertTrue(
+            methodDescriptors("glRotatef").contains("(FFFF)V"),
+            "GLStateManager must expose glRotatef(float, float, float, float), the redirect target "
+                + "for vanilla GlStateManager.rotate(float, float, float, float)"
+        );
+    }
+
+    @Test
+    void glRotatefDoubleAngleFormExists() throws IOException {
+        assertTrue(
+            methodDescriptors("glRotatef").contains("(DFFF)V"),
+            "GLStateManager must expose glRotatef(double, float, float, float): the GL redirector "
+                + "rewrites NTM-CE's GlStateManager.rotate(double, float, float, float) call to it "
+                + "while preserving the (DFFF)V descriptor (issue #64)"
+        );
+    }
+
+    private static Set<String> methodDescriptors(String methodName) throws IOException {
         ClassNode classNode = new ClassNode();
         try (InputStream in = GLStateManagerRedirectContractTest.class.getClassLoader()
             .getResourceAsStream(GL_STATE_MANAGER_FILE)) {
@@ -62,7 +81,7 @@ class GLStateManagerRedirectContractTest {
             new ClassReader(in).accept(classNode, 0);
         }
         return classNode.methods.stream()
-            .filter(method -> method.name.equals("glGetActiveUniform"))
+            .filter(method -> method.name.equals(methodName))
             .map(method -> method.desc)
             .collect(Collectors.toSet());
     }

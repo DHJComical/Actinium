@@ -55,6 +55,53 @@ class GLSMRedirectorTest {
     }
 
     @Test
+    void rewritesVanillaRotateDoubleToGlsmGlRotatefPreservingDescriptor() {
+        // NTM-CE calls GlStateManager.rotate(double, float, float, float) from its tile entity
+        // item renderers (issue #64); the redirector must rewrite it to the GLSM GLStateManager
+        // with the same (DFFF)V descriptor so the runtime link matches an existing overload.
+        ClassWriter cw = new ClassWriter(0);
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "sample/Rotator", null, "java/lang/Object", null);
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "render", "()V", null, null);
+        mv.visitCode();
+        mv.visitLdcInsn(90.0D); // double angle
+        mv.visitInsn(Opcodes.FCONST_0);
+        mv.visitInsn(Opcodes.FCONST_1);
+        mv.visitInsn(Opcodes.FCONST_0);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, VANILLA_GL_STATE_MANAGER, "rotate", "(DFFF)V", false);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(4, 1);
+        mv.visitEnd();
+        cw.visitEnd();
+
+        byte[] classBytes = cw.toByteArray();
+        GLSMRedirector redirector = new GLSMRedirector();
+
+        assertTrue(redirector.shouldTransform(classBytes), "class referencing GlStateManager.rotate must be a redirect candidate");
+
+        ClassNode cn = new ClassNode();
+        new ClassReader(classBytes).accept(cn, 0);
+        boolean changed = redirector.transformClassNode("sample/Rotator", cn);
+        assertTrue(changed, "GlStateManager.rotate call must be rewritten");
+
+        MethodNode render = cn.methods.stream()
+            .filter(m -> m.name.equals("render"))
+            .findFirst()
+            .orElseThrow();
+        boolean redirected = false;
+        for (AbstractInsnNode node : render.instructions) {
+            if (node instanceof MethodInsnNode call
+                && call.getOpcode() == Opcodes.INVOKESTATIC
+                && call.owner.equals(GLSM_GL_STATE_MANAGER)
+                && call.name.equals("glRotatef")
+                && call.desc.equals("(DFFF)V")) {
+                redirected = true;
+                break;
+            }
+        }
+        assertTrue(redirected, "GlStateManager.rotate(DFFF) must be redirected to GLSM GLStateManager.glRotatef(DFFF)");
+    }
+
+    @Test
     void untouchedClassWithoutGlReferencesIsNotTransformed() {
         ClassWriter cw = new ClassWriter(0);
         cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "sample/Plain", null, "java/lang/Object", null);
