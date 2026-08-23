@@ -338,6 +338,36 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
         return tessellation;
     }
 
+    /**
+     * Legacy Celeritas command-buffer fill API — HBM-CE compatibility seam.
+     *
+     * <p>HBM-CE's {@code MixinDefaultChunkRenderer} (from {@code hbm.mod.mixin.json})
+     * applies {@code @Redirect} injections on this class that replace direct reads of
+     * the camera transform's integer coordinates with unsafe accessors (see HBM's
+     * {@code CeleritasCameraTransformAccess}). One group of those redirects targets
+     * {@link #setModelMatrixUniforms} (which this renderer retains); the other group
+     * targets a {@code fillCommandBuffer} method that existed in the upstream Celeritas
+     * {@code DefaultChunkRenderer} but no longer exists in Actinium's rewritten pipeline
+     * (command buffers are now filled by {@code BatchAssembler}). Without this method the
+     * whole mixin application aborts with a Critical injection error, which poisons this
+     * class and breaks world loading (a subsequent {@code NoClassDefFoundError} on
+     * {@code VintageRenderSectionManager$ChunkRenderer} surfaces during
+     * {@code Minecraft.loadWorld}).
+     *
+     * <p>This method is never invoked by Actinium's render path; it exists purely so the
+     * third-party mixin finds its injection targets and applies cleanly. The reads below
+     * are kept so the redirects have a {@code CameraTransform.intX/intY/intZ} getfield to
+     * rewrite, matching the same unsafe camera access they apply to
+     * {@code setModelMatrixUniforms}.</p>
+     */
+    @SuppressWarnings("unused")
+    void fillCommandBuffer(CameraTransform camera) {
+        int originX = camera.intX;
+        int originY = camera.intY;
+        int originZ = camera.intZ;
+        // Intentionally unused: the values are consumed by HBM-CE's redirected accessors.
+    }
+
     @Override
     public void delete(CommandList commandList) {
         super.delete(commandList);
