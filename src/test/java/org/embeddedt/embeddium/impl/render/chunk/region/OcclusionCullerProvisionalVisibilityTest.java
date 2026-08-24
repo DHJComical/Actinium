@@ -104,7 +104,7 @@ class OcclusionCullerProvisionalVisibilityTest {
             assertTrue(visitedSections.add(sectionIndex));
             assertTrue(visible);
             visibleSections.add(sectionIndex);
-        }, viewport, 64.0F, 1, true, frame);
+        }, viewport, 64.0F, 1, true, true, frame);
 
         return new TraversalResult(Set.copyOf(visitedSections), Set.copyOf(visibleSections));
     }
