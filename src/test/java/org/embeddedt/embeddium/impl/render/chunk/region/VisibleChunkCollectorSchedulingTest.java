@@ -74,7 +74,7 @@ class VisibleChunkCollectorSchedulingTest {
     }
 
     private static SectionLattice createLattice() {
-        SectionLattice lattice = new SectionLattice(0, 1);
+        SectionLattice lattice = new SectionLattice(0, 1, false);
         lattice.ensureWindowCovers(new Vector3i(0, 0, 0), 0.0F);
         return lattice;
     }
