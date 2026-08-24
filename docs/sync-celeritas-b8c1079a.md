@@ -1,7 +1,8 @@
 # 同步上游 celeritas 方案（0a3624bc → b8c1079a）
 
-> 状态：**已全部完成**。7 个上游提交全部收编，各阶段独立提交、编译 + `check`（423 测试）通过。
-> dev 运行验证（阴影剔除运行时表现 + JMH 基准 + 上一轮待验证专项）待执行。
+> 状态：**核心同步完成**。7 个上游提交中 6 个已收编（FFC/快照/阴影剔除算法/渲染器架构/Iris 接入），
+> JMH 基准（f3c5642e）**暂缓**：已收编后因 Windows Mesa EGL 运行时问题（error 126）回退，待有可用
+> EGL 环境再议。编译 + `check`（423 测试）通过。dev 已实测阴影渲染正常。
 
 ## 完成记录
 
@@ -11,14 +12,14 @@
 | 3a | `d8dde88` | 阴影剔除算法/数据类（ShadowOcclusionCuller/ShadowSearchFrustum/SectionLattice/OcclusionCuller/Viewport） |
 | 3b | `106b7e3` | 渲染器架构重构（SectionGraph/updateForShadowPass + 本地双 manager 适配） |
 | 4 | `f375bab` | Iris 阴影剔除激活（setupShadowTerrain + AdvancedShadowCullingFrustum 实现 ShadowSearchFrustum） |
-| 5 | `16eaec9` | JMH 基准（LWJGL 3.4.1 适配，含 GL bench） |
+| 5 | ~~`16eaec9`~~ → 回退 | JMH 基准：已收编（LWJGL 3.4.1 适配），后因 Windows Mesa EGL `error 126` 无法运行而 revert（`90d7aa1`） |
 
 协调风险已解决：与 `fix/issue64-ntm-glsm`（HBM seam）merge 预演无冲突，FFC + seam 共存。
 
 ## 遗留验证项（C 类）
 
-- 阴影剔除运行时表现（MakeUp/BSL/Complementary 光影包）
-- JMH 基准运行（需 EGL 环境：Linux Mesa/llvmpipe 或 Windows Mesa3D）
+- 阴影剔除运行时表现（MakeUp/BSL/Complementary 光影包）——**已实测阴影渲染正常**
+- JMH 基准（暂缓）：需可用的 EGL 环境（Linux Mesa/llvmpipe 或 Windows Mesa3D 正常加载）；当前 Windows 下 Mesa `libEGL.dll` 加载报 error 126，已回退收编
 - 上一轮 `6f3cb342.md` 列出的待运行验证专项（fadd 调度、AO ABI、MultiDraw、Occlusion/Lattice、Iris frustum 三态）
 
 ## 目标
