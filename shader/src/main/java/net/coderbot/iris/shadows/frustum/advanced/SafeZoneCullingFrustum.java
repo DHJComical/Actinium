@@ -16,6 +16,13 @@ public class SafeZoneCullingFrustum extends AdvancedShadowCullingFrustum {
 	}
 
 	@Override
+	public boolean supportsOcclusionSearch() {
+		// The safe-zone culler keeps everything within the voxel distance visible regardless of the light path,
+		// so the receiver-driven search would incorrectly drop sections that are inside the safe zone.
+		return false;
+	}
+
+	@Override
 	public void setPosition(double cameraX, double cameraY, double cameraZ) {
 		if (this.distanceCuller != null) {
 			this.distanceCuller.setPosition(cameraX, cameraY, cameraZ);
