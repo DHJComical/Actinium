@@ -137,69 +137,98 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
                              boolean updateChunksImmediately) {
         NativeBuffer.reclaim(false);
 
-        if (this.renderSectionManager != null) {
+        // When a shadow pass preceded this one, it joined the previous frame's searches, applied the chunk events
+        // and submitted this frame's searches; joining again here would stall on those, and chunk events must
+        // be applied while no search is in flight.
+        if (!this.renderSectionManager.didShadowPassRunThisFrame()) {
             this.renderSectionManager.finishAllGraphUpdates();
+            this.processChunkEvents();
         }
 
-        boolean isShadowPass = this.renderSectionManager.isInShadowPass();
-        int previousRenderDistance = this.renderSectionManager.getRenderDistance();
+        this.renderSectionManager.runAsyncTasks();
+
+        if (getEffectiveRenderDistance() != this.renderDistance) {
+            this.reload();
+        }
+
+        this.prepareFrame(viewport, cameraState, updateChunksImmediately);
+
+        this.renderSectionManager.uploadChunks();
+
+        if (this.renderSectionManager.needsUpdate()) {
+            this.renderSectionManager.update(viewport, frame, spectator);
+        }
+
+        if (updateChunksImmediately) {
+            this.renderSectionManager.uploadChunks();
+        }
+
+        this.renderSectionManager.tickVisibleRenders();
+    }
+
+    /**
+     * Shadow-pass counterpart of {@link #setupTerrain}. The shadow pass precedes the terrain pass in a frame, so
+     * this joins the previous frame's searches, applies chunk load/unload events while the lattice is quiescent,
+     * and runs the terrain search for {@code playerViewport} when one is due; the terrain pass then reuses it.
+     * Render-distance reloads and uploads are left to the terrain pass.
+     *
+     * @param playerViewport the player camera's viewport for this frame
+     * @param shadowViewport the shadow frustum, centred on the player camera
+     */
+    public void setupShadowTerrain(Viewport playerViewport,
+                                   Viewport shadowViewport,
+                                   CameraState cameraState,
+                                   @Deprecated(forRemoval = true) int frame,
+                                   boolean spectator) {
+        NativeBuffer.reclaim(false);
+
+        // The shadow pass renders at a reduced render distance when configured, which limits the terrain search
+        // radius while preserving the full-distance search for the main pass.
+        int previousRenderDistance = this.renderDistance;
+        int shadowRenderDistance = Math.max(1, this.getShadowEffectiveRenderDistance());
         boolean restoreRenderDistance = false;
 
-        if (isShadowPass) {
-            int shadowRenderDistance = Math.max(1, this.getShadowEffectiveRenderDistance());
-            if (shadowRenderDistance != previousRenderDistance) {
-                this.renderSectionManager.setRenderDistance(shadowRenderDistance);
-                restoreRenderDistance = true;
-            }
+        if (shadowRenderDistance != previousRenderDistance) {
+            this.renderDistance = shadowRenderDistance;
+            restoreRenderDistance = true;
         }
 
         try {
-            if (!isShadowPass) {
-                this.processChunkEvents();
+            this.renderSectionManager.finishAllGraphUpdates();
 
-                this.renderSectionManager.runAsyncTasks();
+            this.processChunkEvents();
 
-                if (getEffectiveRenderDistance() != this.renderDistance) {
-                    this.reload();
-                }
-            }
+            this.prepareFrame(shadowViewport, cameraState, false);
 
-            boolean dirty = this.lastCameraState == null || !this.lastCameraState.equals(cameraState);
-
-            if (dirty) {
-                this.renderSectionManager.markGraphDirty();
-                this.lastCameraState = cameraState;
-            }
-
-            this.currentViewport = viewport;
-
-            this.renderSectionManager.runAsyncTasks();
-
-            this.renderSectionManager.updateChunks(updateChunksImmediately);
-
-            // We don't need to upload chunks during shadow, they will be uploaded on the next real frame.
-            if (!isShadowPass) {
-                this.renderSectionManager.uploadChunks();
-            }
-
-            if (this.renderSectionManager.needsUpdate() || dirty) {
-                this.renderSectionManager.update(viewport, frame, spectator);
-            }
-
-            if (updateChunksImmediately) {
-                this.renderSectionManager.uploadChunks();
-            }
+            // The shadow search runs every frame; the terrain search only when its graph is dirty.
+            this.renderSectionManager.updateForShadowPass(playerViewport, shadowViewport, frame, spectator);
 
             this.renderSectionManager.tickVisibleRenders();
         } finally {
             if (restoreRenderDistance) {
-                this.renderSectionManager.setRenderDistance(previousRenderDistance);
+                this.renderDistance = previousRenderDistance;
             }
         }
     }
 
     protected int getShadowEffectiveRenderDistance() {
         return this.getEffectiveRenderDistance();
+    }
+
+    // Steps common to both passes: camera-change detection, async task draining and chunk build scheduling.
+    private void prepareFrame(Viewport viewport, CameraState cameraState, boolean updateChunksImmediately) {
+        boolean dirty = this.lastCameraState == null || !this.lastCameraState.equals(cameraState);
+
+        if (dirty) {
+            this.renderSectionManager.markGraphDirty();
+            this.lastCameraState = cameraState;
+        }
+
+        this.currentViewport = viewport;
+
+        this.renderSectionManager.runAsyncTasks();
+
+        this.renderSectionManager.updateChunks(updateChunksImmediately);
     }
 
     private void processChunkEvents() {

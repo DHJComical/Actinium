@@ -22,6 +22,7 @@ import org.embeddedt.embeddium.impl.render.chunk.data.BuiltSectionMeshParts;
 import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
 import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderList;
 import org.embeddedt.embeddium.impl.render.chunk.lists.RenderListManager;
+import org.embeddedt.embeddium.impl.render.chunk.lists.SectionGraph;
 import org.embeddedt.embeddium.impl.render.chunk.lists.SectionTicker;
 import org.embeddedt.embeddium.impl.render.chunk.lists.SortedRenderLists;
 import org.embeddedt.embeddium.impl.render.chunk.metrics.RenderSectionMetricsTracker;
@@ -33,6 +34,7 @@ import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.common.util.MathUtil;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
+import org.embeddedt.embeddium.impl.render.viewport.frustum.ShadowSearchFrustum;
 import org.embeddedt.embeddium.impl.util.PositionUtil;
 import org.embeddedt.embeddium.impl.util.iterator.ByteIterator;
 import org.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
@@ -40,6 +42,8 @@ import org.embeddedt.embeddium.impl.util.suppliers.ExpiringSupplier;
 import org.jetbrains.annotations.MustBeInvokedByOverriders;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3d;
+import org.joml.Vector3f;
+import org.joml.Vector3fc;
 import org.joml.Vector3ic;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProvider;
@@ -73,7 +77,7 @@ public abstract class RenderSectionManager {
 
     private final ChunkRenderer chunkRenderer;
 
-    private int renderDistance;
+    private final int renderDistance;
 
     protected @Nullable Vector3ic lastCameraPosition;
     protected Vector3d cameraPosition = new Vector3d();
@@ -85,10 +89,17 @@ public abstract class RenderSectionManager {
 
     private final int minSection, maxSection;
 
+    // Lattice and search thread shared by the terrain and shadow passes.
+    private final SectionGraph sectionGraph;
+
     protected final RenderListManager renderListManager;
 
     @Nullable
     protected final RenderListManager shadowRenderListManager;
+
+    // Set by the shadow pass, which precedes the terrain pass in a frame and submits both searches. The terrain
+    // pass of the same frame then skips re-running the search.
+    private boolean shadowPassRanThisFrame;
 
     // Shared by every section (one allocation, not one per section); installed on each RenderSection so its
     // packedMetadata changes fan out to the list manager mirror(s).
@@ -130,10 +141,11 @@ public abstract class RenderSectionManager {
 
         this.minSection = minSection;
         this.maxSection = maxSection;
-        this.renderListManager = new RenderListManager(this.minSection, this.maxSection, this.getAsyncOcclusionMode() == AsyncOcclusionMode.EVERYTHING, true, this.createSectionTicker());
+        AsyncOcclusionMode asyncMode = this.getAsyncOcclusionMode();
+        this.sectionGraph = new SectionGraph(this.minSection, this.maxSection, asyncMode, hasShadowPass);
+        this.renderListManager = new RenderListManager(this.sectionGraph, false, asyncMode, this.createSectionTicker());
         if (hasShadowPass) {
-            // The shadow pass is an orthographic directional view, so the camera-anchored frustum clamp is disabled for it.
-            this.shadowRenderListManager = new RenderListManager(this.minSection, this.maxSection, this.getAsyncOcclusionMode() != AsyncOcclusionMode.NONE, false, this.createSectionTicker());
+            this.shadowRenderListManager = new RenderListManager(this.sectionGraph, true, asyncMode, this.createSectionTicker());
         } else {
             this.shadowRenderListManager = null;
         }
@@ -181,20 +193,66 @@ public abstract class RenderSectionManager {
         return false;
     }
 
+    /**
+     * Terrain-pass update: run the terrain search (unless the shadow pass already ran it this frame) and the
+     * per-frame camera bookkeeping.
+     */
     public void update(Viewport positionedViewport, int frame, boolean spectator) {
-        this.lastCameraPosition = positionedViewport.getBlockCoord();
-        var transform = positionedViewport.getTransform();
-        this.cameraPosition = new Vector3d(transform.x, transform.y, transform.z);
+        this.updateCameraPosition(positionedViewport);
 
-        this.createTerrainRenderList(positionedViewport, frame, spectator);
-
-        if (isInShadowPass()) {
-            return;
+        if (this.shadowPassRanThisFrame) {
+            // The shadow pass searched for this frame if the graph was dirty then. Any needsUpdate raised by
+            // build results between the two passes carries over to the next frame.
+            this.shadowPassRanThisFrame = false;
+        } else {
+            this.createTerrainRenderList(positionedViewport, frame, spectator);
         }
 
         this.checkTranslucencyChange();
+    }
 
-        this.getCurrentRenderListManager().setNeedsUpdate(false);
+    /**
+     * Shadow-pass update. The shadow pass runs before the terrain pass in a frame, so this first runs the terrain
+     * search for the player viewport when one is due, then the shadow search.
+     */
+    public void updateForShadowPass(Viewport playerViewport, Viewport shadowViewport, int frame, boolean spectator) {
+        if (this.shadowRenderListManager == null) {
+            throw new IllegalStateException("No shadow pass configured");
+        }
+
+        this.updateCameraPosition(playerViewport);
+        this.shadowPassRanThisFrame = true;
+
+        if (this.renderListManager.isNeedsUpdate()) {
+            this.createTerrainRenderList(playerViewport, frame, spectator);
+        }
+
+        Vector3fc lightVector = null;
+
+        if (shadowViewport.getFrustum() instanceof ShadowSearchFrustum searchFrustum && searchFrustum.supportsOcclusionSearch()) {
+            lightVector = new Vector3f(searchFrustum.shadowLightX(), searchFrustum.shadowLightY(), searchFrustum.shadowLightZ());
+        }
+
+        this.shadowRenderListManager.startShadowGraphUpdate(shadowViewport, frame, this.regions.getRegionIdsLength(),
+                this.getSearchDistance(), lightVector, this.getTargetQueueSize());
+    }
+
+    private void updateCameraPosition(Viewport positionedViewport) {
+        this.lastCameraPosition = positionedViewport.getBlockCoord();
+        var transform = positionedViewport.getTransform();
+        this.cameraPosition = new Vector3d(transform.x, transform.y, transform.z);
+    }
+
+    public boolean hasShadowPass() {
+        return this.shadowRenderListManager != null;
+    }
+
+    /**
+     * Whether the shadow pass has already run this frame, in which case the terrain pass must not join the
+     * searches it submitted.
+     */
+    public boolean didShadowPassRunThisFrame() {
+        return this.shadowPassRanThisFrame;
     }
 
     private void checkTranslucencyChange() {
@@ -214,13 +272,14 @@ public abstract class RenderSectionManager {
         var sortRebuildList = rebuildLists.get(ChunkUpdateType.SORT);
         var importantSortRebuildList = rebuildLists.get(ChunkUpdateType.IMPORTANT_SORT);
         var allowImportant = allowImportantRebuilds();
+        var translucentPass = this.renderPassConfiguration.defaultTranslucentMaterial().pass;
         if (!this.hasTranslucencySortedSections()) {
             return;
         }
         for (Iterator<ChunkRenderList> it = renderListManager.getRenderLists().iterator(); it.hasNext(); ) {
             ChunkRenderList entry = it.next();
             var region = entry.getRegion();
-            if (region.getPasses().stream().noneMatch(TerrainRenderPass::isSorted)) {
+            if (!region.hasSectionsInPass(translucentPass)) {
                 continue;
             }
             ByteIterator sectionIterator = entry.sectionsWithGeometryIterator();
@@ -280,16 +339,17 @@ public abstract class RenderSectionManager {
     private void createTerrainRenderList(Viewport viewport, int frame, boolean spectator) {
         final var searchDistance = this.getSearchDistance();
         final var useOcclusionCulling = this.shouldUseOcclusionCulling(viewport, spectator);
-        final int targetQueueSize;
 
+        this.renderListManager.startGraphUpdate(viewport, frame, this.regions.getRegionIdsLength(),
+                searchDistance, useOcclusionCulling, this.getTargetQueueSize());
+    }
+
+    private int getTargetQueueSize() {
         if (this.shouldRespectUpdateTaskQueueSizeLimit()) {
-            targetQueueSize = (int) Math.min(Integer.MAX_VALUE, (long) this.builder.getTargetQueueSize() * 10);
+            return (int) Math.min(Integer.MAX_VALUE, (long) this.builder.getTargetQueueSize() * 10);
         } else {
-            targetQueueSize = Integer.MAX_VALUE;
+            return Integer.MAX_VALUE;
         }
-
-        this.getCurrentRenderListManager().startGraphUpdate(viewport, frame, this.regions.getRegionIdsLength(),
-                searchDistance, useOcclusionCulling, targetQueueSize);
     }
 
     protected abstract boolean useFogOcclusion();
@@ -300,7 +360,7 @@ public abstract class RenderSectionManager {
         if (this.useFogOcclusion()) {
             distance = this.getEffectiveRenderDistance();
         } else {
-            distance = this.getRenderDistanceBlocks();
+            distance = this.getRenderDistance();
         }
 
         return distance;
@@ -329,10 +389,8 @@ public abstract class RenderSectionManager {
 
         this.sectionByPosition.put(key, renderSection);
 
-        this.renderListManager.attachRenderSection(renderSection);
-        if (this.shadowRenderListManager != null) {
-            this.shadowRenderListManager.attachRenderSection(renderSection);
-        }
+        this.sectionGraph.attachRenderSection(renderSection);
+        this.markGraphDirty();
 
         this.invalidateCachedSectionData(renderSection);
 
@@ -367,10 +425,8 @@ public abstract class RenderSectionManager {
 
         this.updateSectionInfo(section, null);
 
-        this.renderListManager.detachRenderSection(section);
-        if (this.shadowRenderListManager != null) {
-            this.shadowRenderListManager.detachRenderSection(section);
-        }
+        this.sectionGraph.detachRenderSection(section);
+        this.markGraphDirty();
 
         this.sectionMetricsTracker.removeSection(section);
 
@@ -432,7 +488,11 @@ public abstract class RenderSectionManager {
         this.regions.update();
         this.jobMetricsTracker.tick();
 
+        // Advance the adaptive scheduling controller once per frame, before any dispatch reads the budget. This
+        // runs only on the main terrain pass so that an additional shadow pass in the same frame does not
+        // double-tick the controller; both passes share the same worker queue and in-flight target.
         boolean mainPass = !this.isInShadowPass();
+
         if (mainPass) {
             this.builder.tickSchedulingBudget();
         }
@@ -446,6 +506,7 @@ public abstract class RenderSectionManager {
         this.sectionsRequestingUpdate.clear();
 
         if (!rebuildListHasUpdates()) {
+            // Nothing was dispatched, so the workers cannot have been starved for lack of budget.
             if (mainPass) {
                 this.builder.setDispatchBudgetLimited(false);
             }
@@ -461,9 +522,14 @@ public abstract class RenderSectionManager {
         this.submitRebuildTasks(blockingRebuilds, ChunkUpdateType.IMPORTANT_REBUILD);
         this.submitRebuildTasks(blockingRebuilds, ChunkUpdateType.IMPORTANT_SORT);
 
+        // Track whether the deferred dispatch was throttled by the budget while work still
+        // remained. Combined with worker starvation, this is what tells the controller to grow the in-flight
+        // target next frame.
         boolean budgetLimited = false;
         budgetLimited |= this.submitRebuildTasks(updateImmediately ? blockingRebuilds : deferredRebuilds, ChunkUpdateType.REBUILD);
         budgetLimited |= this.submitRebuildTasks(updateImmediately ? blockingRebuilds : deferredRebuilds, ChunkUpdateType.INITIAL_BUILD);
+        // The BFS itself may have discarded candidates that did not fit in the rebuild lists; that is also work
+        // we were unable to dispatch this frame.
         budgetLimited |= this.getCurrentRenderListManager().getRebuildLists().hasAdditionalUpdates();
         if (mainPass) {
             this.builder.setDispatchBudgetLimited(budgetLimited);
@@ -552,14 +618,11 @@ public abstract class RenderSectionManager {
         render.setTranslucencySortStates(sortStates.isEmpty() ? Collections.emptyMap() : sortStates);
     }
 
-    // Section MetadataSink: mirrors a section's packed metadata into the graph-search lattice(s) on every
+    // Section MetadataSink: mirrors a section's packed metadata into the graph-search lattice on every
     // packedMetadata mutation (visibility/visuals via setInfo, pending update, build-in-flight).
     private void pushSectionMetadata(RenderSection section) {
-        long packed = section.getPackedMetadata();
-        this.renderListManager.updateSectionMetadata(section.getChunkX(), section.getChunkY(), section.getChunkZ(), packed);
-        if (this.shadowRenderListManager != null) {
-            this.shadowRenderListManager.updateSectionMetadata(section.getChunkX(), section.getChunkY(), section.getChunkZ(), packed);
-        }
+        this.sectionGraph.updateSectionMetadata(section.getChunkX(), section.getChunkY(), section.getChunkZ(),
+                section.getPackedMetadata(), this::markGraphDirty);
     }
 
     @MustBeInvokedByOverriders
@@ -618,6 +681,10 @@ public abstract class RenderSectionManager {
         return results;
     }
 
+    /**
+     * {@return true if dispatch stopped because the collector's budget was exhausted while sections still
+     * remained in the queue, i.e. dispatch was budget-limited rather than work-limited for this update type}
+     */
     private boolean submitRebuildTasks(ChunkJobCollector collector, ChunkUpdateType type) {
         var queue = this.getCurrentRenderListManager().getRebuildLists().byUpdateType().get(type);
 
@@ -673,6 +740,7 @@ public abstract class RenderSectionManager {
             section.setPendingUpdate(null);
         }
 
+        // The loop only exits early on !canOffer(), so leftover sections mean we ran out of budget, not work.
         return !queue.isEmpty();
     }
 
@@ -698,8 +766,15 @@ public abstract class RenderSectionManager {
         }
     }
 
+    /**
+     * Whether {@link #update} must run in the current pass. In the terrain pass this is also true when the shadow
+     * pass already ran the terrain search this frame, so that {@link #update} can consume that state.
+     */
     public boolean needsUpdate() {
-        return this.getCurrentRenderListManager().isNeedsUpdate();
+        if (this.isInShadowPass()) {
+            return this.shadowRenderListManager.isNeedsUpdate();
+        }
+        return this.renderListManager.isNeedsUpdate() || this.shadowPassRanThisFrame;
     }
 
     public ChunkBuilder getBuilder() {
@@ -719,6 +794,7 @@ public abstract class RenderSectionManager {
         if (this.shadowRenderListManager != null) {
             this.shadowRenderListManager.destroy();
         }
+        this.sectionGraph.destroy();
 
         try (CommandList commandList = RenderDevice.INSTANCE.createCommandList()) {
             this.regions.delete(commandList);
@@ -840,7 +916,7 @@ public abstract class RenderSectionManager {
         var alpha = color[3];
         var distance = ChunkShaderFogComponent.FOG_SERVICE.getFogCutoff();
 
-        var renderDistance = this.getRenderDistanceBlocks();
+        var renderDistance = this.getRenderDistance();
 
         // The fog must be fully opaque in order to skip rendering of chunks behind it
         if (Math.abs(alpha - 1.0f) >= 1.0E-5F) {
@@ -850,15 +926,7 @@ public abstract class RenderSectionManager {
         return Math.min(renderDistance, distance + 0.5f);
     }
 
-    public int getRenderDistance() {
-        return this.renderDistance;
-    }
-
-    public void setRenderDistance(int renderDistance) {
-        this.renderDistance = Math.max(1, renderDistance);
-    }
-
-    private float getRenderDistanceBlocks() {
+    private float getRenderDistance() {
         return this.renderDistance * 16.0f;
     }
 

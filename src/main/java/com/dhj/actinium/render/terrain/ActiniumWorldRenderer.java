@@ -162,7 +162,6 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         super.setupTerrain(viewport, cameraState, frame, spectator, updateChunksImmediately);
 
         if (this.renderSectionManager.isInShadowPass() && ShaderProviderHolder.isActive()) {
-            this.renderSectionManager.finishAllGraphUpdates();
             collectTileEntitiesForShadow();
             RenderDebugHooksHolder.logShadowTerrainLayer(
                 "culling",
