@@ -46,6 +46,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import com.dhj.actinium.render.entity.EntityGatherer;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
+import com.dhj.actinium.render.terrain.TileEntityGlStateGuard;
 
 import java.util.*;
 
@@ -275,15 +276,22 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
             synchronized(this.setTileEntities) {
                 if (!this.setTileEntities.isEmpty()) {
                     long setBlockEntityStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                    TileEntityRendererDispatcher.instance.preDrawBatch();
+                    TileEntityGlStateGuard.push();
                     try {
-                        for (var te : this.setTileEntities) {
-                            if (te.shouldRenderInPass(pass)) {
-                                TileEntityRendererDispatcher.instance.render(te, partialTicks, -1);
+                        TileEntityRendererDispatcher.instance.preDrawBatch();
+                        try {
+                            for (var te : this.setTileEntities) {
+                                if (te.shouldRenderInPass(pass)) {
+                                    TileEntityRendererDispatcher.instance.render(te, partialTicks, -1);
+                                }
                             }
+                        } finally {
+                            // Same leak guard as ActiniumWorldRenderer.renderBlockEntities.
+                            TileEntityGlStateGuard.restoreForBatch();
+                            TileEntityRendererDispatcher.instance.drawBatch(pass);
                         }
                     } finally {
-                        TileEntityRendererDispatcher.instance.drawBatch(pass);
+                        TileEntityGlStateGuard.pop();
                     }
                     RenderDebugHooksHolder.recordRenderGlobalStageTiming("block-entities-set", pass, setBlockEntityStartNanos);
                 }
