@@ -24,7 +24,10 @@ public class VintageRenderPassConfigurationBuilder {
         return new TerrainRenderPass.PipelineState() {
             @Override
             public void setup() {
-                apply(mipped);
+                // A pass only requests mipmapped sampling when both the pass wants it and mipmaps are
+                // actually enabled; otherwise the atlas has a single level and the mipmap filter would
+                // sample an incomplete texture. clear() already reads the live setting.
+                apply(mipped && Minecraft.getMinecraft().gameSettings.mipmapLevels > 0);
             }
 
             @Override
@@ -81,7 +84,7 @@ public class VintageRenderPassConfigurationBuilder {
                 .fragmentDiscard(false)
                 .useReverseOrder(true)
                 .semantic(TerrainRenderPass.Semantic.TRANSLUCENT)
-                .writesDepth(false)
+                .writesDepth(true)
                 .useTranslucencySorting(ActiniumRuntime.options().performance.useTranslucentFaceSorting)
                 .build();
 
