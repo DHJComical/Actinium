@@ -13,7 +13,6 @@ in vec2 v_QuadCoord;
 in float v_ChunkAgeMs;
 #endif
 
-in float v_MaterialMipBias;
 #ifdef USE_FRAGMENT_DISCARD
 in float v_MaterialAlphaCutoff;
 #endif
@@ -52,7 +51,10 @@ out vec4 fragColor; // The output fragment for the color framebuffer
 #endif
 
 void main() {
-    vec4 diffuseColor = texture(u_BlockTex, v_TexCoord, v_MaterialMipBias);
+    // Two-argument sampling: the GL filter state picks the mip level instead of per-fragment
+    // derivatives, so alpha-test fragments are not discarded at mip level boundaries where the
+    // derivative-based bias would sample an undefined level and return an alpha of ~0.
+    vec4 diffuseColor = texture(u_BlockTex, v_TexCoord);
 
 #ifdef USE_FRAGMENT_DISCARD
     if (diffuseColor.a < v_MaterialAlphaCutoff) {
