@@ -1,6 +1,25 @@
 # 同步上游 celeritas 方案（0a3624bc → b8c1079a）
 
-> 状态：待审阅。确认后按阶段执行，每阶段独立提交、编译 + `check` 验证。
+> 状态：**已全部完成**。7 个上游提交全部收编，各阶段独立提交、编译 + `check`（423 测试）通过。
+> dev 运行验证（阴影剔除运行时表现 + JMH 基准 + 上一轮待验证专项）待执行。
+
+## 完成记录
+
+| 阶段 | commit | 内容 |
+|---|---|---|
+| 1+2 | `099a74f` | FFC + 快照/RegionCullCache 对齐 |
+| 3a | `d8dde88` | 阴影剔除算法/数据类（ShadowOcclusionCuller/ShadowSearchFrustum/SectionLattice/OcclusionCuller/Viewport） |
+| 3b | `106b7e3` | 渲染器架构重构（SectionGraph/updateForShadowPass + 本地双 manager 适配） |
+| 4 | `f375bab` | Iris 阴影剔除激活（setupShadowTerrain + AdvancedShadowCullingFrustum 实现 ShadowSearchFrustum） |
+| 5 | `16eaec9` | JMH 基准（LWJGL 3.4.1 适配，含 GL bench） |
+
+协调风险已解决：与 `fix/issue64-ntm-glsm`（HBM seam）merge 预演无冲突，FFC + seam 共存。
+
+## 遗留验证项（C 类）
+
+- 阴影剔除运行时表现（MakeUp/BSL/Complementary 光影包）
+- JMH 基准运行（需 EGL 环境：Linux Mesa/llvmpipe 或 Windows Mesa3D）
+- 上一轮 `6f3cb342.md` 列出的待运行验证专项（fadd 调度、AO ABI、MultiDraw、Occlusion/Lattice、Iris frustum 三态）
 
 ## 目标
 
