@@ -63,6 +63,10 @@ public final class Viewport {
         return this.frustum.intersectAab(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
+    public Frustum getFrustum() {
+        return this.frustum;
+    }
+
     /** Classifies an integer camera-relative box without changing the float-based local API. */
     public int intersectCameraRelativeBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
         return this.intersectCameraRelativeBox((float) minX, (float) minY, (float) minZ,

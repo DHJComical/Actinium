@@ -252,6 +252,16 @@ public abstract class RenderBackend {
     public abstract boolean isBuffer(int buffer);
     public abstract ByteBuffer mapBufferRange(int target, long offset, long length, int access);
 
+    /**
+     * Maps a buffer range and returns its base address, or {@code 0L} when the driver failed the mapping.
+     * Callers copying through raw addresses must treat {@code 0L} as "mapping unavailable" — feeding a null
+     * mapping into {@code memAddress0} crashes the JVM with an access violation instead of raising an exception.
+     */
+    public long mapBufferRangeAddress(int target, long offset, long length, int access) {
+        final ByteBuffer buf = mapBufferRange(target, offset, length, access);
+        return buf == null ? 0L : MemoryUtilities.memAddress0(buf);
+    }
+
     public abstract int genVertexArrays();
     public abstract void deleteVertexArrays(int array);
     public abstract void bindVertexArray(int array);

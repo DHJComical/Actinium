@@ -189,7 +189,6 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     @Override
     public void renderLayer(ChunkRenderMatrices matrices, TerrainRenderPass pass, CameraTransform occlusionCamera, CameraTransform camera) {
         if (ShaderProviderHolder.isShadowPass()) {
-            finishAllGraphUpdates();
             RenderDebugHooksHolder.logShadowTerrainLayer("before-render-layer", pass.name(), getVisibleChunkCount());
         }
         super.renderLayer(matrices, pass, occlusionCamera, camera);

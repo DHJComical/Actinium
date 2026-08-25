@@ -74,7 +74,7 @@ class VisibleChunkCollectorSchedulingTest {
     }
 
     private static SectionLattice createLattice() {
-        SectionLattice lattice = new SectionLattice(0, 1);
+        SectionLattice lattice = new SectionLattice(0, 1, false);
         lattice.ensureWindowCovers(new Vector3i(0, 0, 0), 0.0F);
         return lattice;
     }
@@ -97,7 +97,7 @@ class VisibleChunkCollectorSchedulingTest {
         );
 
         return lattice.findVisible((latticeIndex, regionId, sectionIndex, compactMeta, visible) -> {
-        }, viewport, 0.0F, 1, true, 0);
+        }, viewport, 0.0F, 1, true, true, 0);
     }
 
     private static void visit(VisibleChunkCollector collector, VisibilitySnapshot window, RenderSection section) {

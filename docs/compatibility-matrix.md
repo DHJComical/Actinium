@@ -9,6 +9,14 @@
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 
+> 2026-08-24 追加：改 mipmap 后地形方块概率性消失（无光影与光影下均出现）的修复——见下方
+> [mipmap 与地形渲染](#mipmap-与地形渲染)。根因有两点：(1) terrain shader 用三参数 `texture()`
+> 按片元偏导选 mip 层，mip 级别改变后 UV 接缝处偏导取到未定义层返回 alpha≈0，被 cutout 的
+> alpha 测试裁掉；(2) 地形材质 `mipped` 位硬编码为 true，mipmap 关闭时仍请求 mip 采样。修复后
+> 采样改为由 GL 过滤状态决定 mip 层，材质位随实时 mipmap 级别生成，并与 atlas 过滤状态一致。
+> 验证：RSO 界面反复切换 mipmap 0↔4 共 10 次，无方块消失（commit `64b9c32`、`f94dfa6`、
+> `43aefae`，dev 运行）。
+
 > 2026-08-16 追加：VoxelMap 1.9.25（分支 `fix/voxelmap-minimap-black`）小地图黑屏修复验证——见下方
 > [模组与环境](#模组与环境) 的 VoxelMap 行与 [docs/compat/voxelmap.md](compat/voxelmap.md)。
 
