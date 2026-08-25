@@ -38,7 +38,7 @@ gradle-app.setting
 /docs/implementation-differences/
 
 # Dev-run artifacts
-assets/
+/assets/
 *.log
 
 # Mesa EGL/GLES DLLs for the (deferred) JMH GL benchmark harness; not committed.
