@@ -370,7 +370,7 @@ public class ShadowRenderer {
 				boxCuller = getOrCreateAdvancedBoxCuller(distance);
 			}
 
-			cullingInfo = (hasSafeZone ? "Safe Zone" : "Advanced") + " Frustum Culling enabled";
+			cullingInfo = hasSafeZone ? "Safe Zone Frustum Culling enabled" : "Advanced Occlusion Culling enabled";
 
 			final Vector4f shadowLightPosition = celestialUniforms.getShadowLightPositionInWorldSpace();
 			shadowLightVectorCache.set(shadowLightPosition.x(), shadowLightPosition.y(), shadowLightPosition.z());
@@ -385,12 +385,26 @@ public class ShadowRenderer {
 					shadowLightVectorCache, boxCuller, distanceCuller);
 				return holder.setInfo(safeZoneFrustum, distanceInfo, cullingInfo);
 			} else {
-				cachedAdvancedFrustum.init(RenderingState.INSTANCE.getModelViewMatrix(), projView, shadowLightVectorCache, boxCuller);
+				// Legacy perspective shadow packs (fov != null) have no fixed depth range, so the planes are omitted.
+				float depthNear = Float.NaN, depthFar = Float.NaN;
+				if (this.fov == null) {
+					depthNear = this.resolvedNearPlane();
+					depthFar = this.resolvedFarPlane();
+				}
+				cachedAdvancedFrustum.init(RenderingState.INSTANCE.getModelViewMatrix(), projView, shadowLightVectorCache, boxCuller, depthNear, depthFar, intervalSize);
 				return holder.setInfo(cachedAdvancedFrustum, distanceInfo, cullingInfo);
 			}
 		}
 
 		return holder;
+	}
+
+	private float resolvedNearPlane() {
+		return this.nearPlane < 0 ? -DHCompat.getRenderDistance() : this.nearPlane;
+	}
+
+	private float resolvedFarPlane() {
+		return this.farPlane < 0 ? DHCompat.getRenderDistance() : this.farPlane;
 	}
 
 	private FrustumHolder createEntityShadowFrustum(float renderMultiplier, FrustumHolder holder) {
@@ -826,7 +840,8 @@ public class ShadowRenderer {
 			WorldRendererCompat renderer = WorldRendererCompatBridge.instance();
 			var terrainViewport = ((ViewportProvider)terrainFrustumHolder.getFrustum()).sodium$createViewport();
 			renderer.markSectionGraphDirty();
-			renderer.setupTerrain(
+			renderer.setupShadowTerrain(
+				renderer.getLastViewport(),
 				terrainViewport,
 				new org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer.CameraState(
 					entityX,
@@ -837,7 +852,6 @@ public class ShadowRenderer {
 					halfPlaneLength
 				),
 				this.celeritasShadowFrame++,
-				false,
 				false
 			);
 			renderer.setCurrentViewport(terrainViewport);

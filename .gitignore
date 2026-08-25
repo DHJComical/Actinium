@@ -40,3 +40,6 @@ gradle-app.setting
 # Dev-run artifacts
 assets/
 *.log
+
+# Mesa EGL/GLES DLLs for the (deferred) JMH GL benchmark harness; not committed.
+celeritas-common/jmh-natives/

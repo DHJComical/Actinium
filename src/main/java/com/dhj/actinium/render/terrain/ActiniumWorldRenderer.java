@@ -144,6 +144,11 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         this.currentViewport = viewport;
     }
 
+    @Override
+    public Viewport getLastViewport() {
+        return super.getLastViewport();
+    }
+
     /**
      * Captures the iChun recursive terrain matrices while leaving ordinary and shadow rendering unchanged.
      */
@@ -162,7 +167,6 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         super.setupTerrain(viewport, cameraState, frame, spectator, updateChunksImmediately);
 
         if (this.renderSectionManager.isInShadowPass() && ShaderProviderHolder.isActive()) {
-            this.renderSectionManager.finishAllGraphUpdates();
             collectTileEntitiesForShadow();
             RenderDebugHooksHolder.logShadowTerrainLayer(
                 "culling",
@@ -170,6 +174,11 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
                 this.renderSectionManager.getVisibleChunkCount()
             );
         }
+    }
+
+    @Override
+    public void setupShadowTerrain(Viewport playerViewport, Viewport shadowViewport, CameraState cameraState, int frame, boolean spectator) {
+        super.setupShadowTerrain(playerViewport, shadowViewport, cameraState, frame, spectator);
     }
 
     @SuppressWarnings("unchecked")
