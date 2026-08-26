@@ -1,0 +1,17 @@
+{
+  "package": "com.dhj.actinium.mixin.mod.botania",
+  "required": true,
+  "refmap": "mixins.actinium-refmap.json",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [],
+  "server": [],
+  "client": [
+    "MixinBlockHighlightRenderHandler",
+    "MixinBoundTileRenderer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
