@@ -30,13 +30,21 @@ public class TopButtonRowEntry extends BaseEntry {
         this.enableDisableButton = new EnableShadersButtonElement(
             getEnableDisableLabel(),
             button -> {
-                if (this.allowEnableShadersButton) {
-                    setShadersEnabled(!this.shadersEnabled);
-                    GuiUtil.playButtonClickSound();
+                if (!this.allowEnableShadersButton) {
+                    return false;
+                }
+
+                if (!this.shadersEnabled && this.shaderPackSelectionList.getSelected() == null) {
+                    // Enabling without a selected pack can never load anything; refuse the
+                    // toggle so the switch never shows "enabled" while nothing can load.
+                    this.shaderPackSelectionList.getScreen().displayNotification(
+                        I18n.format("options.iris.shaders.selectPackFirst"));
                     return true;
                 }
 
-                return false;
+                setShadersEnabled(!this.shadersEnabled);
+                GuiUtil.playButtonClickSound();
+                return true;
             });
         this.refreshPacksButton = new IrisElementRow.IconButtonElement(
             GuiUtil.Icon.REFRESH,

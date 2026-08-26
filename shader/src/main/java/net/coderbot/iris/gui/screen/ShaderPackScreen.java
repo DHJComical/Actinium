@@ -404,7 +404,18 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
     public void applyChanges() {
         final ShaderPackEntry entry = this.shaderPackList.getSelected();
 
-        if (entry == null) return;
+        final boolean enabled = this.shaderPackList.getTopButtonRow().shadersEnabled;
+
+        if (entry == null) {
+            // No pack entry is selected (e.g. the configured pack vanished from the
+            // shaderpacks folder). Enabling is already blocked in the UI because there
+            // is no pack to load, but turning shaders off must still reach the config
+            // instead of being silently dropped.
+            if (!enabled && Iris.getIrisConfig().areShadersEnabled()) {
+                IrisApi.getInstance().getConfig().setShadersEnabledAndApply(false);
+            }
+            return;
+        }
 
         this.shaderPackList.setApplied(entry);
 
@@ -416,15 +427,12 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
             Iris.clearShaderPackOptionQueue();
         }
 
-        final boolean enabled = this.shaderPackList.getTopButtonRow().shadersEnabled;
-
         final String previousPackName = Iris.getIrisConfig().getShaderPackName().orElse(null);
         final boolean previousShadersEnabled = Iris.getIrisConfig().areShadersEnabled();
 
-        // Only reload if the pack would be different from before, or shaders were toggled, or options were changed, or if we're about to reset options.
-        // Also reload if shaders are enabled but the pack isn't loaded yet, which happens when opening
-        // this screen from the main menu (pack loading is deferred until the render system is ready).
-        if (!name.equals(previousPackName) || enabled != previousShadersEnabled || !Iris.getShaderPackOptionQueue().isEmpty() || Iris.shouldResetShaderPackOptionsOnNextReload() || (enabled && Iris.getCurrentPack().isEmpty())) {
+        if (ShaderPackApplyLogic.shouldReloadOnApply(name, previousPackName, enabled, previousShadersEnabled,
+                Iris.getShaderPackOptionQueue().isEmpty(), Iris.shouldResetShaderPackOptionsOnNextReload(),
+                Iris.getCurrentPack().isPresent(), Iris.isFallback())) {
             Iris.getIrisConfig().setShaderPackName(name);
             IrisApi.getInstance().getConfig().setShadersEnabledAndApply(enabled);
         }
