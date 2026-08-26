@@ -491,12 +491,14 @@ public class Iris {
 
         if (externalName.isEmpty()) {
             logger.info("Shaders are disabled because no valid shaderpack is selected");
+            notifyPlayer(I18n.format("iris.shaders.noPackSelected"));
             setShadersDisabled();
             return;
         }
 
         if (!loadExternalShaderpack(externalName.get())) {
             logger.warn("Falling back to normal rendering without shaders because the shaderpack could not be loaded");
+            notifyPlayer(I18n.format("iris.shaders.loadFailed", externalName.get()));
             setShadersDisabled();
             fallback = true;
         }
@@ -697,8 +699,10 @@ public class Iris {
                     // Prevent a pack simply named "shaders" from being
                     // identified as a valid pack
                     .filter(path -> !path.equals(pack)).anyMatch(path -> path.endsWith("shaders"));
-            } catch (IOException ignored) {
-                // ignored, not a valid shader pack.
+            } catch (IOException e) {
+                // Not a valid pack, but never fail silently: this is what makes a
+                // configured pack vanish from the selection list.
+                logger.warn("Failed to inspect potential shaderpack folder \"{}\", it will be skipped", pack, e);
             }
         }
 
@@ -711,8 +715,10 @@ public class Iris {
             } catch (ZipError zipError) {
                 // Java 8 seems to throw a ZipError instead of a subclass of IOException
                 Iris.logger.warn("The ZIP at " + pack + " is corrupt");
-            } catch (IOException ignored) {
-                // ignored, not a valid shader pack.
+            } catch (IOException e) {
+                // Same here: a transient read failure (file lock, sync client) hides
+                // the pack from the list, which then silently drops apply requests.
+                Iris.logger.warn("Failed to inspect potential shaderpack zip \"{}\", it will be skipped", pack, e);
             }
         }
 
@@ -876,8 +882,22 @@ public class Iris {
             logger.error("Failed to create shader rendering pipeline, disabling shaders!", e);
             // TODO: This should be reverted if a dimension change causes shaders to compile again
             fallback = true;
+            notifyPlayer(I18n.format("iris.shaders.pipelineFailed", Throwables.getRootCause(e).getMessage()));
 
             return new FixedFunctionWorldRenderingPipeline();
+        }
+    }
+
+    /**
+     * Sends a user-facing message to the in-game chat when a player is present.
+     * Shader loading failures must never be silent: the enable switch stays on in the
+     * config even when rendering fell back to vanilla, so without this the user has no
+     * way to tell why the pack did not load.
+     */
+    private static void notifyPlayer(String message) {
+        final Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null && mc.player != null) {
+            mc.player.sendMessage(new TextComponentString(message));
         }
     }
 
