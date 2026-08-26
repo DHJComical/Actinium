@@ -1,5 +1,7 @@
 package org.taumc.celeritas.impl.render.terrain.compile.pipeline;
 
+import com.dhj.actinium.api.render.terrain.BlockQuadTransformerHolder;
+import com.dhj.actinium.compat.MissingModelCompat;
 import com.dhj.actinium.render.terrain.compile.VintageChunkBuildContext;
 import com.dhj.actinium.render.terrain.compile.light.LightDataCache;
 import com.dhj.actinium.render.terrain.compile.light.VintageDiffuseProvider;
@@ -69,6 +71,12 @@ public class VintageBlockRenderer extends ActiniumVintageBlockRenderer {
             state = state.getActualState(legacyAccess, pos);
         }
         var model = access.actiniumLegacy$getShapes().getModelForState(state);
+        if (MissingModelCompat.isMissingModel(model)) {
+            // Missing models have no renderable quads; Forge's fancy variant lazily renders a
+            // "missing" label through the font renderer, which requires a GL context and crashes
+            // when chunk meshes are built on worker threads.
+            return;
+        }
         this.currentBlockAccess = legacyAccess;
         access.actiniumLegacy$setCurrentBlockAccess(legacyAccess);
         int currentMetadata = state.getBlock().getMetaFromState(state);
@@ -98,6 +106,11 @@ public class VintageBlockRenderer extends ActiniumVintageBlockRenderer {
             if (quads.isEmpty() || !state.shouldSideBeRendered(legacyAccess, pos, direction)) {
                 continue;
             }
+            quads = BlockQuadTransformerHolder.transform(
+                    state, pos, legacyAccess, layer, direction, quads);
+            if (quads.isEmpty()) {
+                continue;
+            }
             access.actiniumLegacy$setCurrentQuadRenderingFlags(analyzer.getFlagsForRendering(
                     VintageDiffuseProvider.fromEnumFacing(direction),
                     BakedQuadView.ofList(quads)));
@@ -106,9 +119,13 @@ public class VintageBlockRenderer extends ActiniumVintageBlockRenderer {
 
         List<BakedQuad> quads = model.getQuads(state, null, random);
         if (!quads.isEmpty()) {
-            access.actiniumLegacy$setCurrentQuadRenderingFlags(analyzer.getFlagsForRendering(
-                    ModelQuadFacing.UNASSIGNED, BakedQuadView.ofList(quads)));
-            renderQuadList(buffer, buffers, material, pos, null, lighter, colorProvider, offset, quads);
+            quads = BlockQuadTransformerHolder.transform(
+                    state, pos, legacyAccess, layer, null, quads);
+            if (!quads.isEmpty()) {
+                access.actiniumLegacy$setCurrentQuadRenderingFlags(analyzer.getFlagsForRendering(
+                        ModelQuadFacing.UNASSIGNED, BakedQuadView.ofList(quads)));
+                renderQuadList(buffer, buffers, material, pos, null, lighter, colorProvider, offset, quads);
+            }
         }
 
         access.actiniumLegacy$getUsedContextEncoders().forEach(encoder -> encoder.finishRenderingBlock());
