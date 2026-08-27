@@ -36,7 +36,7 @@ immediate draw 合并、client-array ring、native multi-draw，以及相应的�
 | 避免每次上传 `glBufferData` | 两个 streaming drawer 的正常路径直接复制到 mapped buffer；orphan 仅是硬件不支持或 ring 暂时不可用时的 fallback | 已等价；应分别统计 persistent/orphan 命中率 |
 | Shadow GL state，减少同步查询 | `GLStateManager` 已跟踪 VAO、VBO、program、texture 等状态，`getBoundVAO()` 和 `getBoundVBO()` 读取缓存 | 已等价；不要另建一套 shadow state |
 | Dirty-gated uniform/attribute 提交 | GLSM 使用 generation/dirty 标记更新 FFP uniform 和 current attributes；streaming VAO 在格式首次出现时创建并复用 | 已等价；后续优化应先证明仍有重复 driver call |
-| Native multi-draw | Celeritas 已有 `DirectMultiDrawEmitter`、`IndirectMultiDrawEmitter` 和 native `multiDrawElementsBaseVertex`/`multiDrawElementsIndirect` backend | 区块管线已等价，不从 wrapper 再移植 |
+| Native multi-draw | Celeritas 已有 `DirectMultiDrawBatch`、`IndirectMultiDrawBatch` 和 native `multiDrawElementsBaseVertex`/`multiDrawElementsIndirect` backend | 区块管线已等价，不从 wrapper 再移植 |
 | VAO 隔离 app-owned vertex state | streaming drawer 按 vertex format 分别持有 persistent/orphan VAO，attribute pointer 在 VAO 创建时捕获对应 VBO | 已等价，也是本轮可删除 draw-time persistent VBO bind 的前提 |
 
 ## 不适用或暂不采用

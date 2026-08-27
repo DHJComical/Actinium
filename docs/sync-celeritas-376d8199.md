@@ -1,6 +1,17 @@
 # 同步上游 celeritas 方案（b8c1079a → 376d8199）
 
-> 状态：**进行中**。目标为上游镜像 stonecutter 分支最后两个提交（multidraw 批次缓存 + 批次重构）。
+> 状态：**同步完成**。2 个上游提交均已收编，`check` 全绿。JMH bench 部分跳过（本地 harness 已 revert）。
+> 运行时回归（multidraw 三模式、动画模组组合、shadow pass 双缓存槽）为遗留 C 类验证项。
+
+## 完成记录
+
+| commit | 内容 |
+|---|---|
+| `54cc25f` | 2dc805c1：region 级 multidraw 批次缓存（CachedBatch + BatchCacheParams 双槽 + cameraValidityInterval）；动画 provider 路径保留逐帧重建、不读写缓存 |
+| `1b292e5` | 376d8199：MultiDrawBatch 抽象化 + Direct/IndirectMultiDrawBatch，删除 3 个 Emitter；本地保留 MultiDrawMode 选择与 IndividualDrawEmitter；gl/device 三文件与上游逐字节一致（仅 LWJGL 包名差异） |
+
+适配要点：INDIRECT + 动画模组组合下 batch 为每 region 每帧 ephemeral（one-shot 语义决定无法复用）；
+其余路径与上游语义一致。
 
 ## 目标
 
