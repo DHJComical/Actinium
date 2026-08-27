@@ -86,23 +86,105 @@ public final class BatchAssembler {
     }
 
     /**
-     * Clears {@code batch} and assembles all commands for the supplied region and render pass.
+     * Assembles all commands for the supplied region and render pass into a new, right-sized batch.
      * Sorted passes consume FULL rows and retain their real index offsets. Unsorted passes consume COMPACT rows and
      * use the shared index buffer at pointer zero.
+     *
+     * @param useBlockFaceCulling whether the caller wants face culling; already false for sorted passes
+     * @return the assembled batch, or {@code null} when the region emits no commands
      */
-    public static void fillRegion(MultiDrawBatch batch,
-                                  RenderRegion region,
-                                  SectionRenderDataStorage storage,
-                                  ChunkRenderList renderList,
-                                  CameraTransform camera,
-                                  TerrainRenderPass pass,
-                                  boolean useBlockFaceCulling) {
-        fillRegion(batch, region, storage, renderList, camera, pass, useBlockFaceCulling,
-                null, null, null);
+    public static @Nullable MultiDrawBatch fillRegion(RenderRegion region,
+                                                      SectionRenderDataStorage storage,
+                                                      ChunkRenderList renderList,
+                                                      CameraTransform camera,
+                                                      TerrainRenderPass pass,
+                                                      boolean useBlockFaceCulling) {
+        byte[] sections = renderList.getSectionsWithGeometry();
+        int sectionCount = renderList.getSectionsWithGeometryCount();
+
+        if (sectionCount == 0) {
+            return null;
+        }
+
+        int cursor = pass.isReverseOrder() ? sectionCount - 1 : 0;
+        int step = pass.isReverseOrder() ? -1 : 1;
+
+        ChunkPrimitiveType primitiveType = storage.getPrimitiveType();
+
+        if (pass.isSorted()) {
+            // Sorted passes keep the FULL layout: real per-facing index offsets, so no merging is possible, and no
+            // culling is applied. In practice only UNASSIGNED is ever populated.
+            // We need one command per section count and facing.
+            var batch = new MultiDrawBatch(sectionCount * ModelQuadFacing.COUNT);
+            fillSorted(batch, storage, sections, cursor, step, sectionCount, primitiveType);
+            return batch;
+        }
+
+        if (!useBlockFaceCulling) {
+            // Every facing visible everywhere: one run (and command) covering the whole section.
+            var batch = new MultiDrawBatch(sectionCount);
+            fillSingleRun(batch, storage, sections, cursor, step, sectionCount, primitiveType,
+                    0, ModelQuadFacing.COUNT - 1);
+            return batch;
+        }
+
+        // Determine whether every section in the region will use the same cull mask. If so, the relevant runs
+        // can be precomputed at the region-level rather than once per section.
+        int uniformMask = uniformCullMask(region, camera);
+        if (uniformMask == MASK_NOT_UNIFORM) {
+            var batch = new MultiDrawBatch(sectionCount * ModelQuadFacing.COUNT);
+            fillPerSectionRuns(batch, region, storage, sections, cursor, step, sectionCount, primitiveType, camera);
+            return batch;
+        }
+
+        long runs = packRuns(uniformMask);
+        int runCount = runCount(runs);
+        if (runCount == 0) {
+            return null;
+        }
+
+        var batch = new MultiDrawBatch(sectionCount * runCount);
+        if (runCount == 1) {
+            fillSingleRun(batch, storage, sections, cursor, step, sectionCount, primitiveType,
+                    runFirst(runs, 0), runLast(runs, 0));
+        } else {
+            fillUniformRuns(batch, storage, sections, cursor, step, sectionCount, primitiveType, runs, runCount);
+        }
+        return batch;
     }
 
     /**
-     * Assembles a region while diverting sections with an active animation to the supplied consumer.
+     * Builds a {@link CachedBatch} for the region, recording the section list and the interval of camera positions
+     * within which block face culling (and therefore the assembled batch) stays unchanged.
+     */
+    public static CachedBatch createCachedBatch(RenderRegion region,
+                                                SectionRenderDataStorage storage,
+                                                ChunkRenderList renderList,
+                                                CameraTransform camera,
+                                                TerrainRenderPass pass,
+                                                boolean useBlockFaceCulling) {
+        var batch = fillRegion(region, storage, renderList, camera, pass, useBlockFaceCulling);
+
+        long intervalX, intervalY, intervalZ;
+
+        if (useBlockFaceCulling) {
+            intervalX = cameraValidityInterval(camera.intX, region.getChunkX(), RenderRegion.REGION_WIDTH);
+            intervalY = cameraValidityInterval(camera.intY, region.getChunkY(), RenderRegion.REGION_HEIGHT);
+            intervalZ = cameraValidityInterval(camera.intZ, region.getChunkZ(), RenderRegion.REGION_LENGTH);
+        } else {
+            intervalX = intervalY = intervalZ = (Integer.MIN_VALUE & 0xFFFFFFFFL) | ((long) Integer.MAX_VALUE << 32);
+        }
+
+        return new CachedBatch(batch,
+                renderList.getSectionsWithGeometry(), renderList.getSectionsWithGeometryCount(),
+                intervalMin(intervalX), intervalMax(intervalX),
+                intervalMin(intervalY), intervalMax(intervalY),
+                intervalMin(intervalZ), intervalMax(intervalZ));
+    }
+
+    /**
+     * Assembles a region into {@code batch} (cleared first) while diverting sections with an active animation to
+     * the supplied consumer. The result depends on per-frame animation state, so it is not cacheable.
      */
     public static void fillRegion(MultiDrawBatch batch,
                                   RenderRegion region,
@@ -111,9 +193,9 @@ public final class BatchAssembler {
                                   CameraTransform camera,
                                   TerrainRenderPass pass,
                                   boolean useBlockFaceCulling,
-                                  @Nullable ChunkAnimationProvider animationProvider,
-                                  @Nullable float[] animationOffsetBuffer,
-                                  @Nullable AnimatedSectionConsumer animatedSectionConsumer) {
+                                  ChunkAnimationProvider animationProvider,
+                                  float[] animationOffsetBuffer,
+                                  AnimatedSectionConsumer animatedSectionConsumer) {
         batch.clear();
 
         int sectionCount = renderList.getSectionsWithGeometryCount();
@@ -121,51 +203,16 @@ public final class BatchAssembler {
             return;
         }
 
+        if (animationProvider == null || animationOffsetBuffer == null || animatedSectionConsumer == null) {
+            throw new IllegalArgumentException("Animation assembly requires a provider, an offset buffer and a consumer");
+        }
+
         byte[] sections = renderList.getSectionsWithGeometry();
         int cursor = pass.isReverseOrder() ? sectionCount - 1 : 0;
         int step = pass.isReverseOrder() ? -1 : 1;
 
-        ChunkPrimitiveType primitiveType = storage.getPrimitiveType();
-
-        if (animationProvider != null) {
-            if (animationOffsetBuffer == null || animatedSectionConsumer == null) {
-                throw new IllegalArgumentException("Animation assembly requires an offset buffer and consumer");
-            }
-
-            fillAnimatedRegion(batch, region, storage, sections, cursor, step, sectionCount, camera,
-                    useBlockFaceCulling, animationProvider, animationOffsetBuffer, animatedSectionConsumer);
-            return;
-        }
-
-        if (pass.isSorted()) {
-            fillSorted(batch, storage, sections, cursor, step, sectionCount, primitiveType);
-            return;
-        }
-
-        if (!useBlockFaceCulling) {
-            fillSingleRun(batch, storage, sections, cursor, step, sectionCount, primitiveType,
-                    0, ModelQuadFacing.COUNT - 1);
-            return;
-        }
-
-        int uniformMask = uniformCullMask(region, camera);
-        if (uniformMask == MASK_NOT_UNIFORM) {
-            fillPerSectionRuns(batch, region, storage, sections, cursor, step, sectionCount, primitiveType, camera);
-            return;
-        }
-
-        long runs = packRuns(uniformMask);
-        int runCount = runCount(runs);
-        if (runCount == 0) {
-            return;
-        }
-
-        if (runCount == 1) {
-            fillSingleRun(batch, storage, sections, cursor, step, sectionCount, primitiveType,
-                    runFirst(runs, 0), runLast(runs, 0));
-        } else {
-            fillUniformRuns(batch, storage, sections, cursor, step, sectionCount, primitiveType, runs, runCount);
-        }
+        fillAnimatedRegion(batch, region, storage, sections, cursor, step, sectionCount, camera,
+                useBlockFaceCulling, animationProvider, animationOffsetBuffer, animatedSectionConsumer);
     }
 
     private static void fillAnimatedRegion(MultiDrawBatch batch,
@@ -258,6 +305,49 @@ public final class BatchAssembler {
 
     private static int runLast(long runs, int run) {
         return (int) (runs >>> ((run << 3) + 4)) & 0xF;
+    }
+
+    /**
+     * Finds how far the camera can move along one axis before block face culling would alter the assembled batch.
+     * <p>
+     * The result is a half-open interval, {@code [lower, upper)}. Every camera coordinate in that interval produces
+     * the same culling mask for every section in the region.
+     */
+    public static long cameraValidityInterval(int camera, int minChunkCoord, int sizeInChunks) {
+        int maxChunkCoord = minChunkCoord + sizeInChunks - 1;
+
+        int min = Integer.MIN_VALUE;
+        int max = Integer.MAX_VALUE;
+
+        // Check the POS-face boundary (16*k - 2) and NEG-face boundary (16*k + 19).
+        for (int offset = -2; offset <= 19; offset += 21) {
+            // Find the section whose boundary is immediately at or below the camera.
+            int lastBelow = Math.floorDiv(camera - offset, 16);
+
+            // Only that boundary and the next one can be closest to the camera.
+            for (int i = 0; i <= 1; i++) {
+                // Clamp to the region when the camera is completely before or after it.
+                int k = Math.max(minChunkCoord, Math.min(lastBelow + i, maxChunkCoord));
+                int threshold = (k << 4) + offset;
+
+                // Keep the closest boundary on each side of the camera.
+                if (threshold <= camera) {
+                    min = Math.max(min, threshold);
+                } else {
+                    max = Math.min(max, threshold);
+                }
+            }
+        }
+
+        return (min & 0xFFFFFFFFL) | ((long) max << 32);
+    }
+
+    private static int intervalMin(long interval) {
+        return (int) interval;
+    }
+
+    private static int intervalMax(long interval) {
+        return (int) (interval >>> 32);
     }
 
     /**

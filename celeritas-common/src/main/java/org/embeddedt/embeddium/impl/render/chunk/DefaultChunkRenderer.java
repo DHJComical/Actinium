@@ -43,6 +43,10 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
     private final MultiDrawEmitter emitter;
 
+    /**
+     * Scratch batch used only when a chunk animation provider is active: animated sections are diverted
+     * per frame, so their region batch is rebuilt instead of served from the per-storage batch cache.
+     */
     private final MultiDrawBatch batch = new MultiDrawBatch(MultiDrawEmitter.MAX_COMMAND_COUNT);
 
     /**
@@ -161,6 +165,9 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             ChunkAnimationProvider animationProvider = ChunkAnimationProviderHolder.getProvider();
             float[] animationOffsetBuffer = animationProvider != null ? new float[3] : null;
 
+            useBlockFaceCulling = useBlockFaceCulling && !renderPass.isSorted();
+            var cacheParams = new SectionRenderDataStorage.BatchCacheParams(useBlockFaceCulling);
+
             while (iterator.hasNext()) {
                 ChunkRenderList renderList = iterator.next();
 
@@ -173,23 +180,45 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
                 regions++;
                 long fillStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                List<AnimatedSectionDraw> animatedSections = animationProvider != null ? new ArrayList<>() : null;
-                BatchAssembler.fillRegion(this.batch, region, storage, renderList, occlusionCamera, renderPass,
-                        useBlockFaceCulling && !renderPass.isSorted(), animationProvider, animationOffsetBuffer,
-                        animationProvider == null ? null : (animatedStorage, sectionIndex, slices, offsetX, offsetY, offsetZ) ->
-                                animatedSections.add(new AnimatedSectionDraw(animatedStorage, sectionIndex, slices,
-                                        offsetX, offsetY, offsetZ)));
+
+                MultiDrawBatch batch;
+                List<AnimatedSectionDraw> animatedSections = null;
+
+                if (animationProvider != null) {
+                    // Animated sections are diverted every frame, so the region batch cannot be cached.
+                    List<AnimatedSectionDraw> diverted = new ArrayList<>();
+                    animatedSections = diverted;
+                    batch = this.batch;
+                    BatchAssembler.fillRegion(batch, region, storage, renderList, occlusionCamera, renderPass,
+                            useBlockFaceCulling, animationProvider, animationOffsetBuffer,
+                            (animatedStorage, sectionIndex, slices, offsetX, offsetY, offsetZ) ->
+                                    diverted.add(new AnimatedSectionDraw(animatedStorage, sectionIndex, slices,
+                                            offsetX, offsetY, offsetZ)));
+                } else {
+                    var cached = storage.getCachedMultiDrawBatch(cacheParams);
+
+                    if (cached == null || !cached.isValidFor(renderList.getSectionsWithGeometry(), renderList.getSectionsWithGeometryCount(),
+                            occlusionCamera.intX, occlusionCamera.intY, occlusionCamera.intZ)) {
+                        cached = BatchAssembler.createCachedBatch(region, storage, renderList, occlusionCamera, renderPass,
+                                useBlockFaceCulling);
+
+                        storage.storeCachedMultiDrawBatch(cacheParams, cached);
+                    }
+
+                    batch = cached.getBatch();
+                }
+
                 if (fillStartNanos != 0L) {
                     fillNanos += System.nanoTime() - fillStartNanos;
                 }
 
                 GlTessellation tessellation = null;
-                if (!this.batch.isEmpty()) {
+                if (batch != null && !batch.isEmpty()) {
                     batches++;
-                    commands += this.batch.size;
+                    commands += batch.size;
 
                     if (!renderPass.isSorted()) {
-                       getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, this.batch.maxElementCount);
+                       getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, batch.maxElementCount);
                     }
 
                     long tessellationStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
@@ -206,7 +235,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
                     }
 
                     long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                    this.emitter.executeBatch(commandList, tessellation, primitiveType, this.batch);
+                    this.emitter.executeBatch(commandList, tessellation, primitiveType, batch);
                     if (drawStartNanos != 0L) {
                         drawNanos += System.nanoTime() - drawStartNanos;
                     }
