@@ -91,7 +91,7 @@ public class VintageBlockRenderer extends ActiniumVintageBlockRenderer {
         access.actiniumLegacy$setCurrentRenderLayer(layer);
 
         ChunkBuildBuffers buffers = access.actiniumLegacy$getContext().buffers;
-        Material material = buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+        Material material = this.resolveRenderMaterial(buffers, state, layer);
         ChunkModelBuilder buffer = buffers.get(material);
         long random = MathHelper.getPositionRandom(pos);
         IBlockColor colorProvider = access.actiniumLegacy$getBlockColors().get(state.getBlock().delegate);

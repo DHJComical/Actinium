@@ -1,6 +1,6 @@
 # Actinium 架构说明
 
-最后更新：2026-08-13。
+最后更新：2026-08-27。
 
 ## 概述
 
@@ -405,7 +405,14 @@ LWJGL 后端（并入本子项目）：
   `CeleritasTileEntityRendererDispatcherMixin`（恢复旧六参 TE render ABI）、
   `LegacyRendererAccessMixin`、`LegacyRendererConstructionMixin`、`LegacyWorldSliceMixin`。
 - **`impl/`**：`gui/MinecraftOptionsStorage`（旧存储门面）、
-  `render/terrain/compile/pipeline`（`VintageBlockRenderer`、`ActiniumVintageBlockRenderer`）、
+  `render/terrain/compile/pipeline`（`VintageBlockRenderer`、`ActiniumVintageBlockRenderer`
+  —— 注意：桥内 renderBlock 编排及其私有成员是 Celeritas 2.4.0 兼容契约的一部分，
+  第三方 addon（celeritasleafculling 的 VintageBlockRendererMixin）会 @Shadow 其私有
+  字段与 renderQuadList，并 redirect renderBlock 内部的 renderQuadList 调用点，
+  因此编排不可收缩为纯转发别名；易漂移的渲染决策（如流体材质路由）经主实现共享
+  helper（`VintageBlockRenderer#resolveRenderMaterial`）保持单份实现，契约由
+  `CeleritasCompatBridgeJarTest#legacyRendererRetainsThirdPartyMixinBindingContract`
+  锁定）、
   `world/cloned`（`CeleritasBlockAccess` 旧名接口）。
 
 桥通过 `com.dhj.actinium.*`（`ActiniumRuntime`、`compat.sodium.LegacyOptionPageProvider`/
