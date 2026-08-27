@@ -267,7 +267,7 @@ public class GLRenderDevice implements RenderDevice {
         }
 
         @Override
-        public void multiDrawElementsBaseVertex(MultiDrawBatch batch, GlPrimitiveType primitiveType, GlIndexType indexType) {
+        public void multiDrawElementsBaseVertex(DirectMultiDrawBatch batch, GlPrimitiveType primitiveType, GlIndexType indexType) {
             GLRenderDevice.this.functions.multidrawFunctions().multiDrawElementsBaseVertex(primitiveType.getId(),
                     batch.pElementCount,
                     indexType.getFormatId(),

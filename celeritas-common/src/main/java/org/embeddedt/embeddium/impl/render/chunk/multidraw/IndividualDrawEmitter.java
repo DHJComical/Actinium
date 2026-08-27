@@ -1,19 +1,22 @@
 package org.embeddedt.embeddium.impl.render.chunk.multidraw;
 
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
+import org.embeddedt.embeddium.impl.gl.device.DirectMultiDrawBatch;
 import org.embeddedt.embeddium.impl.gl.device.DrawCommandList;
-import org.embeddedt.embeddium.impl.gl.device.MultiDrawBatch;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlIndexType;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlTessellation;
 
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 
-public final class IndividualDrawEmitter implements MultiDrawEmitter {
-    @Override
+/**
+ * Executes a direct multidraw batch as individual glDrawElementsBaseVertex calls. Used for sections
+ * with an active animation (each needs its own model offset) and for the INDIVIDUAL multidraw mode.
+ */
+public final class IndividualDrawEmitter {
     public void executeBatch(CommandList commandList, GlTessellation tessellation, GlPrimitiveType primitiveType,
-                             MultiDrawBatch batch) {
-        int commandCount = batch.size;
+                             DirectMultiDrawBatch batch) {
+        int commandCount = batch.size();
         if (commandCount < 0 || commandCount > batch.capacity()) {
             throw new IllegalStateException("MultiDrawBatch command count exceeds its capacity");
         }
