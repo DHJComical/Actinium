@@ -41,6 +41,8 @@ class CeleritasCompatBridgeJarTest {
             "org/taumc/celeritas/compat/LegacyRendererAccess.class";
     private static final String LEGACY_RENDERER_CLASS =
             "org/taumc/celeritas/impl/render/terrain/compile/pipeline/VintageBlockRenderer.class";
+    private static final String LEGACY_RENDERER_INTERNAL_NAME =
+            "org/taumc/celeritas/impl/render/terrain/compile/pipeline/VintageBlockRenderer";
     private static final String MIXIN_CONFIG = "celeritas-compat-bridge.mixin.json";
     private static final String TARGET_OWNER =
             "net/minecraft/client/renderer/tileentity/TileEntityRendererDispatcher";
@@ -118,6 +120,60 @@ class CeleritasCompatBridgeJarTest {
                     renderer.methods, BLOCK_ACCESS_OWNER, WORLD_TYPE_DESCRIPTOR);
 
             assertEquals("func_175624_G", worldTypeCall.name);
+        }
+    }
+
+    private static final String RENDER_QUAD_LIST_DESCRIPTOR =
+            "(Lorg/embeddedt/embeddium/impl/render/chunk/compile/buffers/ChunkModelBuilder;"
+                    + "Lorg/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildBuffers;"
+                    + "Lorg/embeddedt/embeddium/impl/render/chunk/terrain/material/Material;"
+                    + "Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/EnumFacing;"
+                    + "Lorg/embeddedt/embeddium/impl/model/light/LightPipeline;"
+                    + "Lnet/minecraft/client/renderer/color/IBlockColor;Lnet/minecraft/util/math/Vec3d;"
+                    + "Ljava/util/List;)V";
+
+    /**
+     * Third-party renderer addons (celeritasleafculling's VintageBlockRendererMixin) shadow this
+     * class's private fields and its private renderQuadList method, and redirect the renderQuadList
+     * call sites inside renderBlock. Those internals are part of the Celeritas 2.4.0 compatibility
+     * contract: removing any of them fails addon mixin application and crashes world join
+     * (2026-08-27 production crash). The orchestration body may delegate decisions to shared
+     * helpers, but its shape and these members must stay.
+     */
+    @Test
+    void legacyRendererRetainsThirdPartyMixinBindingContract() throws IOException {
+        try (JarFile jar = openBridgeJar();
+             InputStream stream = jar.getInputStream(jar.getJarEntry(LEGACY_RENDERER_CLASS))) {
+            ClassNode renderer = readClass(stream);
+
+            assertTrue(renderer.fields.stream().anyMatch(field -> field.name.equals("currentState")
+                            && field.desc.equals("Lnet/minecraft/block/state/IBlockState;")),
+                    "The shadowed currentState field must stay declared");
+            assertTrue(renderer.fields.stream().anyMatch(field -> field.name.equals("currentBlockAccess")
+                            && field.desc.equals("Lorg/taumc/celeritas/impl/world/cloned/CeleritasBlockAccess;")),
+                    "The shadowed currentBlockAccess field must stay declared");
+            assertTrue(renderer.methods.stream().anyMatch(method -> method.name.equals("renderQuadList")
+                            && method.desc.equals(RENDER_QUAD_LIST_DESCRIPTOR)),
+                    "The shadowed renderQuadList method must stay declared");
+
+            int redirectableCallSites = 0;
+            for (MethodNode method : renderer.methods) {
+                if (!method.name.startsWith("renderBlock")) {
+                    continue;
+                }
+                for (AbstractInsnNode instruction = method.instructions.getFirst(); instruction != null;
+                        instruction = instruction.getNext()) {
+                    if (instruction instanceof MethodInsnNode call
+                            && call.owner.equals(LEGACY_RENDERER_INTERNAL_NAME)
+                            && call.name.equals("renderQuadList")
+                            && call.desc.equals(RENDER_QUAD_LIST_DESCRIPTOR)) {
+                        redirectableCallSites++;
+                    }
+                }
+            }
+            assertTrue(redirectableCallSites >= 2,
+                    "renderBlock must keep self-calls to renderQuadList for third-party redirects, found "
+                            + redirectableCallSites);
         }
     }
 

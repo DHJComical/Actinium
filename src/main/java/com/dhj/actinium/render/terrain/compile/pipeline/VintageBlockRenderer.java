@@ -100,6 +100,19 @@ public class VintageBlockRenderer {
     public void resetSharedState() {
     }
 
+    /**
+     * Resolves the terrain material for one block render pass. Translucent water and lava are
+     * routed to the dedicated fluid material so they keep depth writes without forcing ordinary
+     * translucent terrain into the fluid pass (#79). The compat-bridge renderer inherits this
+     * decision so both render paths cannot drift apart again.
+     */
+    protected Material resolveRenderMaterial(ChunkBuildBuffers buffers, IBlockState state, BlockRenderLayer layer) {
+        boolean isFluid = state.getMaterial() == WATER || state.getMaterial() == LAVA;
+        return isFluid && layer == BlockRenderLayer.TRANSLUCENT
+                ? buffers.getRenderPassConfiguration().defaultFluidMaterial()
+                : buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+    }
+
     public void renderBlock(IBlockState state, BlockPos pos, ActiniumBlockAccess blockAccess, BlockRenderLayer layer) {
         this.renderBlock(state, pos, blockAccess, layer, true);
     }
@@ -131,10 +144,7 @@ public class VintageBlockRenderer {
         this.currentRenderLayer = layer;
 
         var buffers = this.context.buffers;
-        boolean isFluid = state.getMaterial() == WATER || state.getMaterial() == LAVA;
-        var material = isFluid && layer == BlockRenderLayer.TRANSLUCENT
-                ? buffers.getRenderPassConfiguration().defaultFluidMaterial()
-                : buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+        var material = resolveRenderMaterial(buffers, state, layer);
         var buffer = buffers.get(material);
 
         long rand = MathHelper.getPositionRandom(pos);
