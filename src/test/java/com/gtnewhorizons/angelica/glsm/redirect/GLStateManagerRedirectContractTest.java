@@ -52,6 +52,36 @@ class GLStateManagerRedirectContractTest {
         );
     }
 
+    @Test
+    void outlineModeMethodsExistForVanillaGlowRendering() throws IOException {
+        assertTrue(
+            methodDescriptors("enableOutlineMode").contains("(I)V"),
+            "GLStateManager must expose enableOutlineMode(int): the GL redirector rewrites vanilla "
+                + "GlStateManager.func_187431_e(I)V to it, and RenderLivingBase calls it whenever a living entity "
+                + "is glowing (spectral arrow, glowing potion, etc.) — missing it crashes rendering with "
+                + "NoSuchMethodError"
+        );
+        assertTrue(
+            methodDescriptors("disableOutlineMode").contains("()V"),
+            "GLStateManager must expose disableOutlineMode() to match the redirector registration"
+        );
+    }
+
+    private static Set<String> methodDescriptors(String methodName) throws IOException {
+        ClassNode classNode = new ClassNode();
+        try (InputStream in = GLStateManagerRedirectContractTest.class.getClassLoader()
+            .getResourceAsStream(GL_STATE_MANAGER_FILE)) {
+            if (in == null) {
+                throw new IOException("Could not find " + GL_STATE_MANAGER_FILE + " on the test classpath");
+            }
+            new ClassReader(in).accept(classNode, 0);
+        }
+        return classNode.methods.stream()
+            .filter(method -> method.name.equals(methodName))
+            .map(method -> method.desc)
+            .collect(Collectors.toSet());
+    }
+
     private static Set<String> glGetActiveUniformDescriptors() throws IOException {
         ClassNode classNode = new ClassNode();
         try (InputStream in = GLStateManagerRedirectContractTest.class.getClassLoader()

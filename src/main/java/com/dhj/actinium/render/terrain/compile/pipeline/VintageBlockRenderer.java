@@ -1,6 +1,7 @@
 package com.dhj.actinium.render.terrain.compile.pipeline;
 
 import com.dhj.actinium.api.render.terrain.BlockQuadTransformerHolder;
+import com.dhj.actinium.compat.MissingModelCompat;
 import net.coderbot.iris.debug.ShaderRegressionDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -115,6 +116,12 @@ public class VintageBlockRenderer {
             state = state.getActualState(blockAccess, pos);
         }
         var model = this.shapes.getModelForState(state);
+        if (MissingModelCompat.isMissingModel(model)) {
+            // Missing models have no renderable quads; Forge's fancy variant lazily renders a
+            // "missing" label through the font renderer, which requires a GL context and crashes
+            // when chunk meshes are built on worker threads.
+            return;
+        }
         this.currentBlockAccess = blockAccess;
         this.currentMetadata = state.getBlock().getMetaFromState(state);
         this.currentShaderMetadata = applyShaderStateBits(state, pos, blockAccess, this.currentMetadata);

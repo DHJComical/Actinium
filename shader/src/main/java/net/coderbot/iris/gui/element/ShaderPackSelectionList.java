@@ -42,6 +42,10 @@ public class ShaderPackSelectionList extends IrisGuiSlot {
 
     public void refresh() {
         this.entries.clear();
+        // Drop stale selection state; addPackEntry re-establishes both from the
+        // config so a pack that vanished from the folder cannot stay "applied".
+        this.selected = null;
+        this.applied = null;
 
         final Collection<String> names;
 
