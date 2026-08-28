@@ -82,6 +82,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Extra Utilities 2 | 已验证 | `ModdedBlockRenderCompat` 在完整 block-render 生命周期内按 block 实例串行化 | `extrautils2@1.0`：Java 25 dev 客户端启动 10 个 chunk-builder worker，进入已有世界并触发区块重载后未复现 Issue #36 的 CME；代码提交 `44f4295`，详见 [docs/compat/extrautils2.md](compat/extrautils2.md) |
 | AgriCraft | 部分 | `ModdedBlockRenderCompat` 使用共享 renderer 锁保护 crop 缓存 | 与 XU2 相同的异步第三方缓存访问模式已加入兼容层；dev 运行验证待补，详见 [docs/compat/extrautils2.md](compat/extrautils2.md) |
 | Kirino Engine（Cleanroom 内建） | 部分（Headless） | early 配置 + `IMixinConfigPlugin` 门控，钉死 `isEnableRenderDelegate()` 为 false（`MixinKirinoConfigHub`） | Kirino Graphics 模式会整体替换 `EntityRenderer#renderWorld`，使 Actinium 全部渲染注入点失效；共存的唯一路径是 Kirino Headless 模式：本兼容层强制其渲染委托关闭、保留 ECS/分析运行时，Actinium 独掌渲染管线。Cleanroom 0.6.7-alpha（kirino epoch-1.a5）dev 运行通过（early 配置注册、headless installer、兼容层日志、渲染循环正常），详见 [docs/compat/kirino.md](compat/kirino.md) |
+| Scannable | 已验证 | 条件 Mixin（接管 `ProxyOptiFine` 探针，扫描波走其 overlay 路径） | 1.6.3.26（266784:3146549）：使用扫描器后无光影透视 / 光影全白拖影的根因是其 INJECT 路径换装主 FBO 深度 attachment（Actinium 下 `Framebuffer.depthBuffer` 为 0，"恢复"即卸下深度）；已引导其走 OptiFine 式 overlay 渲染路径，详见 [docs/compat/scannable.md](compat/scannable.md)；dev 运行验证通过（无光影透视与光影全白均消失、扫描波区域正确；相邻结果合并为聚类大框为 Scannable 固有设计） |
 
 ## 验证记录模板
 
