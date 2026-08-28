@@ -17,7 +17,8 @@ import java.util.Map;
 public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
     private static final List<String> MIXIN_CONFIGS = List.of(
         "mixins.actinium.vintage.json",
-        "mixins.actinium.iris.json"
+        "mixins.actinium.iris.json",
+        "mixins.actinium.kirino.json"
     );
 
     static {

@@ -9,6 +9,8 @@ import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeBinding;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
 import org.embeddedt.embeddium.impl.gl.debug.GLDebug;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
+import org.embeddedt.embeddium.impl.gl.device.DirectMultiDrawBatch;
+import org.embeddedt.embeddium.impl.gl.device.IndirectMultiDrawBatch;
 import org.embeddedt.embeddium.impl.gl.device.MultiDrawBatch;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.gl.tessellation.*;
@@ -16,11 +18,8 @@ import org.embeddedt.embeddium.impl.render.chunk.compile.sorting.ChunkPrimitiveT
 import org.embeddedt.embeddium.impl.render.chunk.data.SectionRenderDataStorage;
 import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderListIterable;
 import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderList;
-import org.embeddedt.embeddium.impl.render.chunk.multidraw.DirectMultiDrawEmitter;
 import org.embeddedt.embeddium.impl.render.chunk.multidraw.BatchAssembler;
-import org.embeddedt.embeddium.impl.render.chunk.multidraw.IndirectMultiDrawEmitter;
 import org.embeddedt.embeddium.impl.render.chunk.multidraw.IndividualDrawEmitter;
-import org.embeddedt.embeddium.impl.render.chunk.multidraw.MultiDrawEmitter;
 import org.embeddedt.embeddium.impl.render.chunk.region.RenderRegion;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
@@ -41,16 +40,24 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
     private static final Logger LOGGER = LogManager.getLogger("EmbeddiumChunkRenderer");
     private static boolean loggedMultiDrawMode;
 
-    private final MultiDrawEmitter emitter;
+    /**
+     * Resolved multidraw mode; selects the storage format of assembled batches and how they are executed.
+     */
+    private final MultiDrawMode multiDrawMode;
 
-    private final MultiDrawBatch batch = new MultiDrawBatch(MultiDrawEmitter.MAX_COMMAND_COUNT);
+    /**
+     * Scratch batch used only when a chunk animation provider is active: animated sections are diverted
+     * per frame, so their region batch is rebuilt instead of served from the per-storage batch cache.
+     * Always uses the direct layout so that animated sections can be replayed from it individually.
+     */
+    private final DirectMultiDrawBatch batch = new DirectMultiDrawBatch(MultiDrawBatch.MAX_COMMAND_COUNT);
 
     /**
      * Dedicated emitter for sections which are currently animating. Animated sections are drawn
      * one-by-one after the region batch with their own model offset, since a single region
      * transform cannot express per-section translations.
      */
-    private final MultiDrawEmitter individualEmitter = new IndividualDrawEmitter();
+    private final IndividualDrawEmitter individualEmitter = new IndividualDrawEmitter();
 
     private final Reference2ReferenceMap<ChunkPrimitiveType, SharedQuadIndexBuffer> sharedIndexBuffers;
 
@@ -58,17 +65,13 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
     private GlVertexFormat currentVertexFormat;
 
     public DefaultChunkRenderer(RenderDevice device, RenderPassConfiguration<?> renderPassConfiguration) {
-        this(device, renderPassConfiguration, createEmitter(device));
-    }
-
-    public DefaultChunkRenderer(RenderDevice device, RenderPassConfiguration<?> renderPassConfiguration, MultiDrawEmitter emitter) {
         super(device, renderPassConfiguration);
 
-        this.emitter = emitter;
+        this.multiDrawMode = selectMultiDrawMode(device);
         this.sharedIndexBuffers = new Reference2ReferenceOpenHashMap<>();
     }
 
-    private static MultiDrawEmitter createEmitter(RenderDevice device) {
+    private static MultiDrawMode selectMultiDrawMode(RenderDevice device) {
         String override = System.getProperty("actinium.chunkMultiDrawMode", "").trim();
         MultiDrawMode configuredMode = EmbeddiumRuntimeOptions.chunkMultiDrawMode();
         MultiDrawMode mode = override.isEmpty() ? configuredMode : MultiDrawMode.fromProperty(override);
@@ -94,11 +97,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             );
         }
 
-        return switch (mode) {
-            case DIRECT -> new DirectMultiDrawEmitter();
-            case INDIRECT -> new IndirectMultiDrawEmitter();
-            case INDIVIDUAL -> new IndividualDrawEmitter();
-        };
+        return mode;
     }
 
     protected boolean useBlockFaceCulling() {
@@ -161,6 +160,9 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             ChunkAnimationProvider animationProvider = ChunkAnimationProviderHolder.getProvider();
             float[] animationOffsetBuffer = animationProvider != null ? new float[3] : null;
 
+            useBlockFaceCulling = useBlockFaceCulling && !renderPass.isSorted();
+            var cacheParams = new SectionRenderDataStorage.BatchCacheParams(useBlockFaceCulling);
+
             while (iterator.hasNext()) {
                 ChunkRenderList renderList = iterator.next();
 
@@ -173,23 +175,56 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
                 regions++;
                 long fillStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                List<AnimatedSectionDraw> animatedSections = animationProvider != null ? new ArrayList<>() : null;
-                BatchAssembler.fillRegion(this.batch, region, storage, renderList, occlusionCamera, renderPass,
-                        useBlockFaceCulling && !renderPass.isSorted(), animationProvider, animationOffsetBuffer,
-                        animationProvider == null ? null : (animatedStorage, sectionIndex, slices, offsetX, offsetY, offsetZ) ->
-                                animatedSections.add(new AnimatedSectionDraw(animatedStorage, sectionIndex, slices,
-                                        offsetX, offsetY, offsetZ)));
+
+                MultiDrawBatch batch;
+                boolean ephemeralBatch = false;
+                List<AnimatedSectionDraw> animatedSections = null;
+
+                if (animationProvider != null) {
+                    // Animated sections are diverted every frame, so the region batch cannot be cached.
+                    List<AnimatedSectionDraw> diverted = new ArrayList<>();
+                    animatedSections = diverted;
+                    if (this.multiDrawMode == MultiDrawMode.INDIRECT) {
+                        // Indirect batches are one-shot: upload() releases the CPU-side command storage,
+                        // so each per-frame rebuild needs a fresh batch.
+                        batch = new IndirectMultiDrawBatch(MultiDrawBatch.MAX_COMMAND_COUNT);
+                        ephemeralBatch = true;
+                    } else {
+                        batch = this.batch;
+                    }
+                    BatchAssembler.fillRegion(batch, region, storage, renderList, occlusionCamera, renderPass,
+                            useBlockFaceCulling, animationProvider, animationOffsetBuffer,
+                            (animatedStorage, sectionIndex, slices, offsetX, offsetY, offsetZ) ->
+                                    diverted.add(new AnimatedSectionDraw(animatedStorage, sectionIndex, slices,
+                                            offsetX, offsetY, offsetZ)));
+                    if (ephemeralBatch) {
+                        batch.upload(commandList);
+                    }
+                } else {
+                    var cached = storage.getCachedMultiDrawBatch(cacheParams);
+
+                    if (cached == null || !cached.isValidFor(renderList.getSectionsWithGeometry(), renderList.getSectionsWithGeometryCount(),
+                            occlusionCamera.intX, occlusionCamera.intY, occlusionCamera.intZ)) {
+                        cached = BatchAssembler.createCachedBatch(region, storage, renderList, occlusionCamera, renderPass,
+                                useBlockFaceCulling, commandList, this.multiDrawMode);
+
+                        storage.storeCachedMultiDrawBatch(cacheParams, cached);
+                    }
+
+                    batch = cached.getBatch();
+                }
+
                 if (fillStartNanos != 0L) {
                     fillNanos += System.nanoTime() - fillStartNanos;
                 }
 
                 GlTessellation tessellation = null;
-                if (!this.batch.isEmpty()) {
+                if (batch != null && !batch.isEmpty()) {
                     batches++;
-                    commands += this.batch.size;
+                    commands += batch.size();
 
                     if (!renderPass.isSorted()) {
-                       getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, this.batch.maxElementCount);
+                       getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, batch.getIndexBufferSize());
                     }
 
                     long tessellationStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
@@ -206,10 +241,19 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
                     }
 
                     long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                    this.emitter.executeBatch(commandList, tessellation, primitiveType, this.batch);
+                    if (this.multiDrawMode == MultiDrawMode.INDIVIDUAL) {
+                        // INDIVIDUAL batches use the direct storage layout.
+                        this.individualEmitter.executeBatch(commandList, tessellation, primitiveType, (DirectMultiDrawBatch) batch);
+                    } else {
+                        batch.execute(commandList, tessellation, primitiveType);
+                    }
                     if (drawStartNanos != 0L) {
                         drawNanos += System.nanoTime() - drawStartNanos;
                     }
+                }
+
+                if (ephemeralBatch) {
+                    batch.delete();
                 }
 
                 // Sections currently playing an animation were excluded from the region batch and
@@ -272,7 +316,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             BatchAssembler.fillSection(this.batch, draw.storage(), draw.sectionIndex(), draw.slices());
             if (!pass.isSorted() && !this.batch.isEmpty()) {
                 this.getSharedIndexBuffer(this.renderPassConfiguration.getPrimitiveTypeForPass(pass), commandList)
-                        .ensureCapacity(commandList, this.batch.maxElementCount);
+                        .ensureCapacity(commandList, this.batch.getIndexBufferSize());
             }
             this.individualEmitter.executeBatch(commandList, tessellation, primitiveType, this.batch);
         }
@@ -373,8 +417,6 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
         super.delete(commandList);
 
         this.sharedIndexBuffers.values().forEach(buffer -> buffer.delete(commandList));
-        this.emitter.delete();
-        this.individualEmitter.delete();
         this.batch.delete();
     }
 }

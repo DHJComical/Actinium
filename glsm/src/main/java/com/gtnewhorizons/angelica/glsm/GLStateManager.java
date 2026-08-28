@@ -5472,6 +5472,38 @@ public class GLStateManager {
         }
     }
 
+    /**
+     * Entity glow outline. Mirrors vanilla GlStateManager.enableOutlineMode: switches the active texture unit's texenv to
+     * GL_COMBINE wired so the fragment color is replaced by the given outline color, letting the entity render as a flat
+     * silhouette. All state changes flow through the tracked glTexEnv/glTexEnvi paths, so FFP shaders pick them up.
+     */
+    public static void enableOutlineMode(int color) {
+        final FloatBuffer envColor = BufferUtils.createFloatBuffer(4);
+        envColor.put(0, (color >> 16 & 255) / 255.0F);
+        envColor.put(1, (color >> 8 & 255) / 255.0F);
+        envColor.put(2, (color & 255) / 255.0F);
+        envColor.put(3, (color >> 24 & 255) / 255.0F);
+        glTexEnv(GL11.GL_TEXTURE_ENV, GL11.GL_TEXTURE_ENV_COLOR, envColor);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL11.GL_TEXTURE_ENV_MODE, GL13.GL_COMBINE);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_COMBINE_RGB, GL13.GL_REPLACE);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_SOURCE0_RGB, GL13.GL_CONSTANT);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_OPERAND0_RGB, GL11.GL_SRC_COLOR);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_COMBINE_ALPHA, GL13.GL_REPLACE);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_SOURCE0_ALPHA, GL13.GL_PREVIOUS);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_OPERAND0_ALPHA, GL11.GL_SRC_ALPHA);
+    }
+
+    /** Reverts enableOutlineMode to the default modulate texenv. */
+    public static void disableOutlineMode() {
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL11.GL_TEXTURE_ENV_MODE, GL11.GL_MODULATE);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_COMBINE_RGB, GL11.GL_MODULATE);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_SOURCE0_RGB, GL11.GL_TEXTURE);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_OPERAND0_RGB, GL11.GL_SRC_COLOR);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_COMBINE_ALPHA, GL11.GL_MODULATE);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_SOURCE0_ALPHA, GL11.GL_TEXTURE);
+        glTexEnvi(GL11.GL_TEXTURE_ENV, GL13.GL_OPERAND0_ALPHA, GL11.GL_SRC_ALPHA);
+    }
+
     public static void glTexEnvi(int target, int pname, int param) {
         handleTexEnvScalar(target, pname, param);
     }

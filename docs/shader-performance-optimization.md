@@ -610,7 +610,7 @@ if (fo && lu == 0) {
 | Work Stealing ChunkBuilder | `ChunkBuilder.tryStealTask()` |
 | 20-byte CompactChunkVertex | `CompactChunkVertex`（已集成） |
 | 遮挡图 BFS 遍历 | `OcclusionCuller`（已集成） |
-| Multi-draw emitter (Direct/Indirect) | `DirectMultiDrawEmitter` / `IndirectMultiDrawEmitter` |
+| Multi-draw batches (Direct/Indirect) | `DirectMultiDrawBatch` / `IndirectMultiDrawBatch` |
 | VAO 隔离 vertex state | streaming drawer 按 format 分别持有 VAO |
 | VertexKey 单 long 打包 | `VertexKey.packFromState()`（持续优化中） |
 | LightDataCache 全 opaque 跳过 | `LightDataCache.compute()`（已实现） |

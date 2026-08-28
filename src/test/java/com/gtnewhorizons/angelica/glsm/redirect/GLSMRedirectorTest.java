@@ -55,6 +55,36 @@ class GLSMRedirectorTest {
     }
 
     @Test
+    void rewritesVanillaGlStateManagerOutlineModeToGlsmCache() {
+        byte[] classBytes = generateClassCallingVanillaOutlineMode();
+        GLSMRedirector redirector = new GLSMRedirector();
+
+        assertTrue(redirector.shouldTransform(classBytes), "class referencing GlStateManager.enableOutlineMode must be a redirect candidate");
+
+        ClassNode cn = new ClassNode();
+        new ClassReader(classBytes).accept(cn, 0);
+        boolean changed = redirector.transformClassNode("sample/Class", cn);
+        assertTrue(changed, "GlStateManager.enableOutlineMode call must be rewritten");
+
+        MethodNode render = cn.methods.stream()
+            .filter(m -> m.name.equals("render"))
+            .findFirst()
+            .orElseThrow();
+        boolean redirected = false;
+        for (AbstractInsnNode node : render.instructions) {
+            if (node instanceof MethodInsnNode call
+                && call.getOpcode() == Opcodes.INVOKESTATIC
+                && call.owner.equals(GLSM_GL_STATE_MANAGER)
+                && call.name.equals("enableOutlineMode")
+                && call.desc.equals("(I)V")) {
+                redirected = true;
+                break;
+            }
+        }
+        assertTrue(redirected, "call must be redirected to GLSM GLStateManager.enableOutlineMode(I)V");
+    }
+
+    @Test
     void rewritesVanillaRotateDoubleToGlsmGlRotatefPreservingDescriptor() {
         // NTM-CE calls GlStateManager.rotate(double, float, float, float) from its tile entity
         // item renderers (issue #64); the redirector must rewrite it to the GLSM GLStateManager
@@ -129,6 +159,21 @@ class GLSMRedirectorTest {
         mv.visitMethodInsn(Opcodes.INVOKESTATIC, VANILLA_GL_STATE_MANAGER, "color", "(FFFF)V", false);
         mv.visitInsn(Opcodes.RETURN);
         mv.visitMaxs(4, 1);
+        mv.visitEnd();
+        cw.visitEnd();
+        return cw.toByteArray();
+    }
+
+    private static byte[] generateClassCallingVanillaOutlineMode() {
+        ClassWriter cw = new ClassWriter(0);
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "sample/Class", null, "java/lang/Object", null);
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "render", "()V", null, null);
+        mv.visitCode();
+        mv.visitLdcInsn(0xFFFF00);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, VANILLA_GL_STATE_MANAGER, "enableOutlineMode", "(I)V", false);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, VANILLA_GL_STATE_MANAGER, "disableOutlineMode", "()V", false);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(1, 1);
         mv.visitEnd();
         cw.visitEnd();
         return cw.toByteArray();

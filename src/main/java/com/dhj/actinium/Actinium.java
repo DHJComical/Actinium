@@ -3,6 +3,7 @@ package com.dhj.actinium;
 import com.dhj.actinium.compat.chunkanimator.ChunkAnimatorCompat;
 import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
+import com.dhj.actinium.compat.kirino.KirinoCompat;
 import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
 import com.dhj.actinium.command.TogglePassCommand;
 import com.dhj.actinium.config.ActiniumConfig;
@@ -172,6 +173,7 @@ public class Actinium {
             NeoFontRenderCompat.initialize();
         }
         ChunkAnimatorCompat.install();
+        KirinoCompat.install();
 
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());
@@ -240,6 +242,11 @@ public class Actinium {
 
         if (renderer != null) {
             strings.addAll(renderer.getDebugStrings());
+        }
+
+        String kirinoStatus = KirinoCompat.debugStatus();
+        if (kirinoStatus != null) {
+            strings.add(kirinoStatus);
         }
 
         for (int i = 0; i < strings.size(); i++) {

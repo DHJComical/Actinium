@@ -1,6 +1,6 @@
 package org.embeddedt.embeddium.impl.render.chunk.data;
 
-import org.embeddedt.embeddium.impl.gl.device.MultiDrawBatch;
+import org.embeddedt.embeddium.impl.gl.device.DirectMultiDrawBatch;
 import org.embeddedt.embeddium.impl.gl.util.VertexRange;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.render.chunk.compile.sorting.ChunkPrimitiveType;
@@ -43,14 +43,15 @@ class SectionRenderDataUnsafeTest {
     @Test
     void clearsMultiDrawStateAndReleasesNativeArrays() {
         assumeNativeLwjgl();
-        MultiDrawBatch batch = new MultiDrawBatch(4);
+        DirectMultiDrawBatch batch = new DirectMultiDrawBatch(4);
         try {
-            assertEquals(4, batch.capacity());
+            // capacity() includes the one extra slot reserved for branchless appends
+            assertEquals(5, batch.capacity());
             assertEquals(0, batch.size());
             assertTrue(batch.isEmpty());
 
-            batch.size = 2;
-            batch.maxElementCount = 17;
+            batch.appendDrawCommand(0, 17, 0L);
+            batch.appendDrawCommand(0, 3, 0L);
 
             assertEquals(2, batch.size());
             assertEquals(17, batch.getIndexBufferSize());
@@ -59,10 +60,9 @@ class SectionRenderDataUnsafeTest {
             batch.clear();
 
             assertEquals(0, batch.size());
-            assertEquals(0, batch.maxElementCount);
             assertEquals(0, batch.getIndexBufferSize());
             assertTrue(batch.isEmpty());
-            assertEquals(4, batch.capacity());
+            assertEquals(5, batch.capacity());
         } finally {
             batch.delete();
         }

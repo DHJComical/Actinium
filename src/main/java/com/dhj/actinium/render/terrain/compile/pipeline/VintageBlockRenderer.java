@@ -1,6 +1,7 @@
 package com.dhj.actinium.render.terrain.compile.pipeline;
 
 import com.dhj.actinium.api.render.terrain.BlockQuadTransformerHolder;
+import com.dhj.actinium.compat.MissingModelCompat;
 import net.coderbot.iris.debug.ShaderRegressionDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -99,6 +100,19 @@ public class VintageBlockRenderer {
     public void resetSharedState() {
     }
 
+    /**
+     * Resolves the terrain material for one block render pass. Translucent water and lava are
+     * routed to the dedicated fluid material so they keep depth writes without forcing ordinary
+     * translucent terrain into the fluid pass (#79). The compat-bridge renderer inherits this
+     * decision so both render paths cannot drift apart again.
+     */
+    protected Material resolveRenderMaterial(ChunkBuildBuffers buffers, IBlockState state, BlockRenderLayer layer) {
+        boolean isFluid = state.getMaterial() == WATER || state.getMaterial() == LAVA;
+        return isFluid && layer == BlockRenderLayer.TRANSLUCENT
+                ? buffers.getRenderPassConfiguration().defaultFluidMaterial()
+                : buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+    }
+
     public void renderBlock(IBlockState state, BlockPos pos, ActiniumBlockAccess blockAccess, BlockRenderLayer layer) {
         this.renderBlock(state, pos, blockAccess, layer, true);
     }
@@ -115,6 +129,12 @@ public class VintageBlockRenderer {
             state = state.getActualState(blockAccess, pos);
         }
         var model = this.shapes.getModelForState(state);
+        if (MissingModelCompat.isMissingModel(model)) {
+            // Missing models have no renderable quads; Forge's fancy variant lazily renders a
+            // "missing" label through the font renderer, which requires a GL context and crashes
+            // when chunk meshes are built on worker threads.
+            return;
+        }
         this.currentBlockAccess = blockAccess;
         this.currentMetadata = state.getBlock().getMetaFromState(state);
         this.currentShaderMetadata = applyShaderStateBits(state, pos, blockAccess, this.currentMetadata);
@@ -124,10 +144,7 @@ public class VintageBlockRenderer {
         this.currentRenderLayer = layer;
 
         var buffers = this.context.buffers;
-        boolean isFluid = state.getMaterial() == WATER || state.getMaterial() == LAVA;
-        var material = isFluid && layer == BlockRenderLayer.TRANSLUCENT
-                ? buffers.getRenderPassConfiguration().defaultFluidMaterial()
-                : buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+        var material = resolveRenderMaterial(buffers, state, layer);
         var buffer = buffers.get(material);
 
         long rand = MathHelper.getPositionRandom(pos);
