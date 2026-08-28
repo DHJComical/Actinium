@@ -10,6 +10,7 @@ import com.gtnewhorizons.angelica.glsm.hooks.DeferredBlendHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.stacks.Vec3fStack;
 import com.gtnewhorizons.angelica.glsm.stacks.Vec4fStack;
+import com.gtnewhorizons.angelica.glsm.states.VertexAttribState;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;
 import lombok.Getter;
@@ -150,7 +151,13 @@ public class ShaderManager {
     }
 
     public void preDraw() {
-        preDraw(currentVertexFlags);
+        // Draw entry points reached without an explicit VertexFormat (raw GL draws from
+        // third-party mods, e.g. HBM-CE's VAO path) must not trust the globally tracked
+        // currentVertexFlags: client-state calls during model upload can leak bits (e.g.
+        // COLOR_BIT) into it without a matching VAO attribute, which makes the shader read
+        // default (0,0,0,1) for the missing attribute and render black. Derive from the
+        // currently bound VAO's actual attribute enablement instead.
+        preDraw(VertexAttribState.deriveVertexFlags());
     }
 
     private void updateVariant(boolean hasColor, boolean hasNormal, boolean hasTexCoord, boolean hasLightmap) {
@@ -226,6 +233,12 @@ public class ShaderManager {
         final int flags = vaoVertexFlags.get(vaoId);
         if (flags != -1) {
             currentVertexFlags = flags;
+        } else {
+            // VAO never seen through the vanilla VertexFormat setup path (e.g. a third-party
+            // VAO like HBM-CE's OBJ models): do not keep whatever flags a previous draw left
+            // behind, derive them from the VAO's actual attributes so a later raw draw cannot
+            // pick up leaked COLOR_BIT/NORMAL_BIT and render black.
+            currentVertexFlags = VertexAttribState.deriveVertexFlags();
         }
     }
 

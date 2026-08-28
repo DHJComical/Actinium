@@ -1,5 +1,7 @@
 package com.gtnewhorizons.angelica.glsm.states;
 
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 import org.lwjgl.opengl.GL11;
@@ -123,6 +125,32 @@ public class VertexAttribState {
     public static boolean hasAnyClientSideEnabledAttrib() {
         return clientSideEnabledCount > 0;
     }
+
+    /**
+     * Derives the FFP shader vertex-flag mask from the currently bound VAO's enabled
+     * vertex attributes.
+     *
+     * <p>Used by the FFP shader pipeline when drawing through the raw GL draw entry points
+     * (glDrawElements/glDrawArrays and friends). Those paths must not reuse the globally
+     * tracked {@code currentVertexFlags} from a previous draw: third-party mods (e.g. HBM-CE)
+     * upload OBJ models into VAOs while client-side state calls ({@code glEnableClientState})
+     * leak {@code COLOR_BIT} and friends into the global flags without a matching VAO attribute,
+     * so the shader ends up declaring attributes the VAO does not provide and reads the default
+     * (0,0,0,1) — rendering black. Deriving from the per-VAO attribute enablement is always
+     * consistent with the real GL state.</p>
+     */
+    public static int deriveVertexFlags() {
+        if (current == null) {
+            return 0;
+        }
+        int flags = 0;
+        if (current[Usage.COLOR.getAttributeLocation()].enabled) flags |= VertexFlags.COLOR_BIT;
+        if (current[Usage.PRIMARY_UV.getAttributeLocation()].enabled) flags |= VertexFlags.TEXTURE_BIT;
+        if (current[Usage.SECONDARY_UV.getAttributeLocation()].enabled) flags |= VertexFlags.BRIGHTNESS_BIT;
+        if (current[Usage.NORMAL.getAttributeLocation()].enabled) flags |= VertexFlags.NORMAL_BIT;
+        return flags;
+    }
+
     public static class Attrib {
         public boolean enabled;
         public int size;
