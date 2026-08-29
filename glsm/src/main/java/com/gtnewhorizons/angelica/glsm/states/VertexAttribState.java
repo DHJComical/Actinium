@@ -2,6 +2,7 @@ package com.gtnewhorizons.angelica.glsm.states;
 
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
+import com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 import org.lwjgl.opengl.GL11;
@@ -82,7 +83,7 @@ public class VertexAttribState {
         a.stride = stride;
         a.offset = 0;
         a.vboId = vboId;
-        a.clientPointer = (vboId == 0) ? pointer : null;
+        a.clientPointer = (vboId == 0 && pointer != null) ? captureClientPointer(pointer) : null;
         final boolean now = a.isClientSide();
         if (was != now) clientSideEnabledCount += now ? 1 : -1;
     }
@@ -98,6 +99,17 @@ public class VertexAttribState {
 
     public static Attrib get(int index) {
         return current[index];
+    }
+
+    /**
+     * Captures the native pointer address without treating the Java buffer limit as its GL
+     * allocation boundary. HBM reuses a BufferBuilder allocation and changes its limit between
+     * uploads; OpenGL client pointers remain valid for the allocation range.
+     */
+    private static ByteBuffer captureClientPointer(ByteBuffer pointer) {
+        final int position = pointer.position();
+        final int capacity = pointer.capacity() - position;
+        return MemoryUtilities.memByteBuffer(MemoryUtilities.memAddress(pointer), capacity);
     }
 
 

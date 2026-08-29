@@ -2,9 +2,13 @@ package com.gtnewhorizons.angelica.glsm.states;
 
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
+import org.lwjgl.opengl.GL11;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -106,6 +110,39 @@ class VertexAttribStateDeriveVertexFlagsTest {
 
         setEnabled(Usage.COLOR.getAttributeLocation(), false);
         assertEquals(0, VertexAttribState.deriveVertexFlags());
+    }
+
+    /**
+     * Motivation: HBM's client-memory arrays can pass a view whose position skips a prefix;
+     * recorder reads must treat that position as the pointer base and retain the vertex stride.
+     */
+    @Test
+    void clientPointerReadsFromCurrentPositionAcrossVertexStride() {
+        final int position = 8;
+        final int stride = 16;
+        final ByteBuffer source = ByteBuffer.allocateDirect(position + stride * 2).order(ByteOrder.nativeOrder());
+        source.putFloat(0, -100.0f);
+        source.putFloat(position, 10.0f);
+        source.putFloat(position + 4, 11.0f);
+        source.putFloat(position + 8, 12.0f);
+        source.putFloat(position + stride, 20.0f);
+        source.putFloat(position + stride + 4, 21.0f);
+        source.putFloat(position + stride + 8, 22.0f);
+        source.limit(position + 12);
+        source.position(position);
+
+        final int location = Usage.POSITION.getAttributeLocation();
+        VertexAttribState.set(location, 3, GL11.GL_FLOAT, false, stride, source, 0);
+        final VertexAttribState.Attrib attrib = VertexAttribState.get(location);
+
+        assertEquals(position, source.position());
+        assertEquals(0, attrib.clientPointer.position());
+        assertEquals(source.capacity() - position, attrib.clientPointer.capacity());
+        assertEquals(ByteOrder.nativeOrder(), attrib.clientPointer.order());
+        assertEquals(10.0f, attrib.readComponent(attrib.clientPointer, 0, 0));
+        assertEquals(12.0f, attrib.readComponent(attrib.clientPointer, 0, 2));
+        assertEquals(20.0f, attrib.readComponent(attrib.clientPointer, stride, 0));
+        assertEquals(22.0f, attrib.readComponent(attrib.clientPointer, stride, 2));
     }
 
     private static void setEnabled(int index, boolean enabled) {
