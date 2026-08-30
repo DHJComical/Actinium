@@ -145,4 +145,8 @@ dependencies {
     // Botania CEU (issue: held items render flat white because its RenderWorldLastEvent handlers leave
     // GL_TEXTURE_2D disabled in the GLSM cache; the conditional botania mixin restores it)
     modImplementation 'curse.maven:botania-ceu-1179448:8706250'
+
+    // ArchitectureCraft 1.12-3.108 TridenMC (issue #101: its blocks are invisible / sawbench hits
+    // FancyMissingModel inside the fast chunk meshing path; dev-verifies the shape rendering compat)
+    modImplementation 'curse.maven:architecturecraft-tridev-277631:4344128'
 }
