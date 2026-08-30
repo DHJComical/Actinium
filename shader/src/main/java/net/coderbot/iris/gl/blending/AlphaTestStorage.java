@@ -1,17 +1,20 @@
 package net.coderbot.iris.gl.blending;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.gtnewhorizons.angelica.glsm.hooks.VanillaBooleanLayer;
+import com.gtnewhorizons.angelica.glsm.hooks.VanillaStateLayer;
 import com.gtnewhorizons.angelica.glsm.states.AlphaState;
 import lombok.Getter;
 
 public class AlphaTestStorage {
 	private static boolean originalAlphaTestEnable;
-	private static AlphaTest originalAlphaTest;
+    private static AlphaTest originalAlphaTest;
 	@Getter
     private static boolean alphaTestLocked;
+	private static boolean overrideHeld;
 
     public static void overrideAlphaTest(AlphaTest override) {
-		if (!alphaTestLocked) {
+		if (!overrideHeld) {
             final AlphaState alphaState = GLStateManager.getAlphaState();
 
 			// Only save the previous state if the alpha test wasn't already locked
@@ -19,16 +22,18 @@ public class AlphaTestStorage {
 			originalAlphaTest = new AlphaTest(AlphaTestFunction.fromGlId(alphaState.getFunction()).orElse(AlphaTestFunction.ALWAYS), alphaState.getReference());
 		}
 
+		overrideHeld = true;
 		alphaTestLocked = false;
-
-		if (override == null) {
-            GLStateManager.disableAlphaTest();
-		} else {
-            GLStateManager.enableAlphaTest();
-            GLStateManager.glAlphaFunc(override.getFunction().getGlId(), override.getReference());
+		try {
+			if (override == null) {
+				GLStateManager.disableAlphaTest();
+			} else {
+				GLStateManager.enableAlphaTest();
+				GLStateManager.glAlphaFunc(override.getFunction().getGlId(), override.getReference());
+			}
+		} finally {
+			alphaTestLocked = true;
 		}
-
-		alphaTestLocked = true;
 	}
 
 	public static void deferAlphaTestToggle(boolean enabled) {
@@ -40,7 +45,7 @@ public class AlphaTestStorage {
 	}
 
 	public static void restoreAlphaTest() {
-		if (!alphaTestLocked) {
+		if (!overrideHeld) {
 			return;
 		}
 
@@ -53,5 +58,43 @@ public class AlphaTestStorage {
 		}
 
         GLStateManager.glAlphaFunc(originalAlphaTest.getFunction().getGlId(), originalAlphaTest.getReference());
+		overrideHeld = false;
 	}
+
+	/** Exposes the deferred vanilla alpha-test enable state to GLSM. */
+	public static final VanillaBooleanLayer ENABLE_LAYER = new VanillaBooleanLayer() {
+		@Override
+		public boolean isOverrideHeld() {
+			return overrideHeld;
+		}
+
+		@Override
+		public boolean getVanilla() {
+			return originalAlphaTestEnable;
+		}
+
+		@Override
+		public void setVanilla(boolean enabled) {
+			deferAlphaTestToggle(enabled);
+		}
+	};
+
+	/** Exposes the deferred vanilla alpha-test function to GLSM. */
+	public static final VanillaStateLayer<AlphaState> FUNC_LAYER = new VanillaStateLayer<>() {
+		@Override
+		public boolean isOverrideHeld() {
+			return overrideHeld;
+		}
+
+		@Override
+		public void readVanilla(AlphaState into) {
+			into.setFunction(originalAlphaTest.getFunction().getGlId());
+			into.setReference(originalAlphaTest.getReference());
+		}
+
+		@Override
+		public void writeVanilla(AlphaState from) {
+			deferAlphaFunc(from.getFunction(), from.getReference());
+		}
+	};
 }

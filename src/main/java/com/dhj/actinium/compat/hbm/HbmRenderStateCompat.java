@@ -13,6 +13,7 @@ import org.lwjgl.opengl.GL11;
  * as the rest of the client.</p>
  */
 public final class HbmRenderStateCompat {
+    private static final String HBM_PACKAGE_PREFIX = "com.hbm.";
     private static final int HBM_ENABLE_BIT = 0x02000;
     private static final int HBM_LIGHTING_BIT = 0x00040;
     private static final int HBM_TEXTURE_BIT = 0x40000;
@@ -34,6 +35,11 @@ public final class HbmRenderStateCompat {
     /** Pops the GLSM state saved for an HBM attribute scope. */
     public static void popAttrib() {
         GLStateManager.glPopAttrib();
+    }
+
+    /** Returns whether the tile entity belongs to HBM's renderer family. */
+    public static boolean isHbmTile(TileEntity tileEntity) {
+        return tileEntity.getClass().getName().startsWith(HBM_PACKAGE_PREFIX);
     }
 
     /**

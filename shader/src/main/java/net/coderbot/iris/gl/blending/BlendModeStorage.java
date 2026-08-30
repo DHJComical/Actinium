@@ -2,6 +2,8 @@ package net.coderbot.iris.gl.blending;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
+import com.gtnewhorizons.angelica.glsm.hooks.VanillaBooleanLayer;
+import com.gtnewhorizons.angelica.glsm.hooks.VanillaStateLayer;
 import com.gtnewhorizons.angelica.glsm.states.BlendState;
 import lombok.Getter;
 
@@ -12,35 +14,31 @@ public class BlendModeStorage {
 	private static final BlendState originalBlend = new BlendState();
 	@Getter private static boolean blendLocked;
 	@Getter private static boolean hasDeferredChanges;
+	@Getter private static boolean overrideHeld;
+	private static boolean hasGlobalOverride;
 	private static final BlendStateAccess DEFAULT_STATE_ACCESS = new BlendStateAccessImpl();
 	private static BlendStateAccess stateAccess = DEFAULT_STATE_ACCESS;
 
-    public static void overrideBlend(BlendState override) {
-		if (!blendLocked) {
-			// A pending unlocked change already describes the state that must be restored.
-			if (!hasDeferredChanges) {
-				saveCurrentBlend();
-			}
-		}
+	public static void overrideBlend(BlendState override) {
+		captureVanilla();
 
+		overrideHeld = true;
+		hasGlobalOverride = true;
 		blendLocked = false;
-
-		if (override == null) {
-			stateAccess.setBlendEnabled(false);
-		} else {
-			stateAccess.setBlendEnabled(true);
-			stateAccess.setBlendFunction(override);
+		try {
+			if (override == null) {
+				stateAccess.setBlendEnabled(false);
+			} else {
+				stateAccess.setBlendEnabled(true);
+				stateAccess.setBlendFunction(override);
+			}
+		} finally {
+			blendLocked = true;
 		}
-
-		blendLocked = true;
 	}
 
 	public static void overrideBufferBlend(int index, BlendState override) {
-		if (!blendLocked) {
-			if (!hasDeferredChanges) {
-				saveCurrentBlend();
-			}
-		}
+		captureVanilla();
 
 		if (override == null) {
 			stateAccess.setBufferBlendEnabled(index, false);
@@ -50,6 +48,7 @@ public class BlendModeStorage {
 		}
 
 		blendLocked = true;
+		overrideHeld = true;
 	}
 
 	public static void deferBlendModeToggle(boolean enabled) {
@@ -74,13 +73,15 @@ public class BlendModeStorage {
 	}
 
 	public static void restoreBlend() {
-		if (!blendLocked) {
+		if (!overrideHeld) {
 			return;
 		}
 
+		hasGlobalOverride = false;
 		blendLocked = false;
 		applyOriginalBlend();
 		hasDeferredChanges = false;
+		overrideHeld = false;
 	}
 
 	private static void prepareDeferredState() {
@@ -92,6 +93,12 @@ public class BlendModeStorage {
 	private static void saveCurrentBlend() {
 		originalBlendEnable = stateAccess.isBlendEnabled();
 		stateAccess.copyBlendState(originalBlend);
+	}
+
+	private static void captureVanilla() {
+		if (!overrideHeld) {
+			saveCurrentBlend();
+		}
 	}
 
 	private static void applyOriginalBlend() {
@@ -113,7 +120,45 @@ public class BlendModeStorage {
 	private static void resetStorageState() {
 		blendLocked = false;
 		hasDeferredChanges = false;
+		overrideHeld = false;
+		hasGlobalOverride = false;
 	}
+
+	/** Exposes the deferred vanilla enable state to GLSM without replacing the shader override. */
+	public static final VanillaBooleanLayer ENABLE_LAYER = new VanillaBooleanLayer() {
+		@Override
+		public boolean isOverrideHeld() {
+			return overrideHeld;
+		}
+
+		@Override
+		public boolean getVanilla() {
+			return originalBlendEnable;
+		}
+
+		@Override
+		public void setVanilla(boolean enabled) {
+			deferBlendModeToggle(enabled);
+		}
+	};
+
+	/** Exposes the deferred vanilla blend function to GLSM without replacing the shader override. */
+	public static final VanillaStateLayer<BlendState> FUNC_LAYER = new VanillaStateLayer<>() {
+		@Override
+		public boolean isOverrideHeld() {
+			return overrideHeld;
+		}
+
+		@Override
+		public void readVanilla(BlendState into) {
+			into.set(originalBlend);
+		}
+
+		@Override
+		public void writeVanilla(BlendState from) {
+			deferBlendFunc(from.getSrcRgb(), from.getDstRgb(), from.getSrcAlpha(), from.getDstAlpha());
+		}
+	};
 
 	/**
 	 * Provides the concrete blend state operations used by the override state machine.

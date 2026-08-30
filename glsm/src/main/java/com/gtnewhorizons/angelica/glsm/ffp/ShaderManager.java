@@ -110,6 +110,7 @@ public class ShaderManager {
                 final int currentProgramId = GLStateManager.getActiveProgram();
                 if (currentProgramId != 0) {
                     CompatUniformManager.onUseProgram(currentProgramId);
+                    notifyDrawObserver(hasColor, hasNormal, hasTexCoord, hasLightmap);
                     if (perfDebugEnabled) {
                         GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_PREDRAW, perfStart);
                     }
@@ -117,6 +118,7 @@ public class ShaderManager {
                 }
                 active = true;
             } else {
+                notifyDrawObserver(hasColor, hasNormal, hasTexCoord, hasLightmap);
                 if (perfDebugEnabled) {
                     GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_PREDRAW, perfStart);
                 }
@@ -132,9 +134,29 @@ public class ShaderManager {
         }
 
         uploadUniforms();
+        notifyDrawObserver(hasColor, hasNormal, hasTexCoord, hasLightmap);
         if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.FFP_PREDRAW, perfStart);
         }
+    }
+
+    private static void notifyDrawObserver(
+        boolean hasColor,
+        boolean hasNormal,
+        boolean hasTexCoord,
+        boolean hasLightmap
+    ) {
+        final var observer = GLSMHooks.drawCallObserver;
+        if (observer == null) {
+            return;
+        }
+
+        int vertexFlags = 0;
+        if (hasColor) vertexFlags |= VertexFlags.COLOR_BIT;
+        if (hasNormal) vertexFlags |= VertexFlags.NORMAL_BIT;
+        if (hasTexCoord) vertexFlags |= VertexFlags.TEXTURE_BIT;
+        if (hasLightmap) vertexFlags |= VertexFlags.BRIGHTNESS_BIT;
+        observer.beforeDraw(vertexFlags);
     }
 
     public synchronized void preDraw(int vertexFlags) {

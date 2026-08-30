@@ -20,6 +20,13 @@ public class DepthState implements ISettableState<DepthState> {
         return this;
     }
 
+    /** Restores depth comparison state while retaining the active depth-write mask. */
+    public void setExceptMask(DepthState state) {
+        final boolean savedMask = maskEnabled;
+        set(state);
+        maskEnabled = savedMask;
+    }
+
     @Override
     public boolean sameAs(Object state) {
         if (this == state) return true;

@@ -43,6 +43,8 @@ import com.gtnewhorizons.angelica.glsm.stacks.PolygonStateStack;
 import com.gtnewhorizons.angelica.glsm.stacks.StencilStateStack;
 import com.gtnewhorizons.angelica.glsm.stacks.TextureUnitBooleanStateStack;
 import com.gtnewhorizons.angelica.glsm.stacks.ViewPortStateStack;
+import com.gtnewhorizons.angelica.glsm.states.AlphaState;
+import com.gtnewhorizons.angelica.glsm.states.BlendState;
 import com.gtnewhorizons.angelica.glsm.states.ClipPlaneState;
 import com.gtnewhorizons.angelica.glsm.states.Color4;
 import com.gtnewhorizons.angelica.glsm.states.TextureBinding;
@@ -296,6 +298,9 @@ public class GLStateManager {
     @Getter protected static final TextureUnitArray textures = new TextureUnitArray();
     @Getter protected static final BlendStateStack blendState = new BlendStateStack();
     @Getter protected static final BooleanStateStack blendMode = new BooleanStateStack(GL11.GL_BLEND);
+    private static final BlendState vanillaBlendBefore = new BlendState();
+    private static final BlendState vanillaBlendAfter = new BlendState();
+    private static boolean vanillaBlendEnabledBefore;
     @Getter protected static final BooleanStateStack scissorTest = new BooleanStateStack(GL11.GL_SCISSOR_TEST);
     @Getter protected static final DepthStateStack depthState = new DepthStateStack();
     @Getter protected static final BooleanStateStack depthTest = new BooleanStateStack(GL11.GL_DEPTH_TEST);
@@ -1249,15 +1254,20 @@ public class GLStateManager {
                 return;
             }
         }
+        final boolean wasEnabled = blendMode.isEffectivelyEnabled();
         final DeferredBlendHandler bh = GLSMHooks.blendHandler;
         if (bh != null && bh.isBlendLocked()) {
+            blendMode.beforeModify();
             bh.deferBlendModeToggle(true);
-            return;
+        } else {
+            blendMode.enable();
         }
         if (GLSMConfig.hudCacheOverride) {
             GLSMConfig.hudCacheBlendEnabled = true;
         }
-        blendMode.enable();
+        if (!wasEnabled && blendMode.isEffectivelyEnabled()) {
+            postVanillaBlendChange();
+        }
     }
 
     public static void disableBlend() {
@@ -1268,15 +1278,96 @@ public class GLStateManager {
                 return;
             }
         }
+        final boolean wasEnabled = blendMode.isEffectivelyEnabled();
         final DeferredBlendHandler bh = GLSMHooks.blendHandler;
         if (bh != null && bh.isBlendLocked()) {
+            blendMode.beforeModify();
             bh.deferBlendModeToggle(false);
-            return;
+        } else {
+            blendMode.disable();
         }
         if (GLSMConfig.hudCacheOverride) {
             GLSMConfig.hudCacheBlendEnabled = false;
         }
-        blendMode.disable();
+        if (wasEnabled && !blendMode.isEffectivelyEnabled()) {
+            postVanillaBlendChange();
+        }
+    }
+
+    private static void postVanillaBlendChange() {
+        if (GLSMHooks.VANILLA_BLEND_CHANGE.hasListeners()) {
+            GLSMHooks.VANILLA_BLEND_CHANGE.post(GLSMHooks.vanillaBlendChangeEvent);
+        }
+    }
+
+    private static boolean snapshotVanillaBlendFunc() {
+        if (!GLSMHooks.VANILLA_BLEND_CHANGE.hasListeners()) {
+            return false;
+        }
+        blendState.readEffective(vanillaBlendBefore);
+        vanillaBlendEnabledBefore = blendMode.isEffectivelyEnabled();
+        return true;
+    }
+
+    private static void postVanillaBlendChangeIfMoved(boolean snapshotted) {
+        if (!snapshotted) {
+            return;
+        }
+        final BlendState after = blendState.readEffective(vanillaBlendAfter);
+        if (blendMode.isEffectivelyEnabled() != vanillaBlendEnabledBefore
+            || after.getSrcRgb() != vanillaBlendBefore.getSrcRgb()
+            || after.getDstRgb() != vanillaBlendBefore.getDstRgb()
+            || after.getSrcAlpha() != vanillaBlendBefore.getSrcAlpha()
+            || after.getDstAlpha() != vanillaBlendBefore.getDstAlpha()) {
+            postVanillaBlendChange();
+        }
+    }
+
+    /** Returns the blend enable value requested by vanilla for the current draw. */
+    public static boolean isEffectiveBlendEnabled() {
+        return blendMode.isEffectivelyEnabled();
+    }
+
+    /** Copies the blend function requested by vanilla into {@code out}. */
+    public static BlendState getEffectiveBlendState(BlendState out) {
+        return blendState.readEffective(out);
+    }
+
+    /** Returns the depth-write mask requested by vanilla for the current draw. */
+    public static boolean isEffectiveDepthMaskEnabled() {
+        return depthState.isEffectiveMaskEnabled();
+    }
+
+    /** Returns the alpha-test enable value requested by vanilla for the current draw. */
+    public static boolean isEffectiveAlphaTestEnabled() {
+        return alphaTest.isEffectivelyEnabled();
+    }
+
+    /** Copies the alpha-test function requested by vanilla into {@code out}. */
+    public static AlphaState getEffectiveAlphaState(AlphaState out) {
+        return alphaState.readEffective(out);
+    }
+
+    private static int foreignDrawDepth;
+
+    /** Marks the beginning of a renderer that may issue raw GL state changes. */
+    public static void beginForeignDraw() {
+        foreignDrawDepth++;
+    }
+
+    /** Marks the end of a renderer that may issue raw GL state changes. */
+    public static void endForeignDraw() {
+        if (foreignDrawDepth <= 0) {
+            throw new IllegalStateException("Foreign draw scope underflow");
+        }
+        if (--foreignDrawDepth == 0 && GLSMHooks.FOREIGN_DRAW_END.hasListeners()) {
+            GLSMHooks.FOREIGN_DRAW_END.post(GLSMHooks.foreignDrawEndEvent);
+        }
+    }
+
+    /** Returns whether a foreign renderer is currently changing GL state. */
+    public static boolean isForeignDraw() {
+        return foreignDrawDepth > 0;
     }
 
     public static void enableScissorTest() {
@@ -1309,9 +1400,11 @@ public class GLStateManager {
                 return;
             }
         }
+        final boolean snapshotted = snapshotVanillaBlendFunc();
         final DeferredBlendHandler bh = GLSMHooks.blendHandler;
         if (bh != null && bh.isBlendLocked()) {
             bh.deferBlendFunc(srcFactor, dstFactor, srcFactor, dstFactor);
+            postVanillaBlendChangeIfMoved(snapshotted);
             return;
         }
         // Cache thread check - only update state on main thread, but always make GL call if needed
@@ -1319,13 +1412,8 @@ public class GLStateManager {
         if (GLSMConfig.hudCacheOverride) {
             if (caching) blendState.setAll(srcFactor, dstFactor, GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
             RENDER_BACKEND.blendFuncSeparate(srcFactor, dstFactor, GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            if (GLSMHooks.BLEND_FUNC_CHANGE.hasListeners()) {
-                GLSMHooks.blendFuncChangeEvent.srcRgb = srcFactor;
-                GLSMHooks.blendFuncChangeEvent.dstRgb = dstFactor;
-                GLSMHooks.blendFuncChangeEvent.srcAlpha = GL11.GL_ONE;
-                GLSMHooks.blendFuncChangeEvent.dstAlpha = GL11.GL_ONE_MINUS_SRC_ALPHA;
-                GLSMHooks.BLEND_FUNC_CHANGE.post(GLSMHooks.blendFuncChangeEvent);
-            }
+            postBlendFuncChange(srcFactor, dstFactor, GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            postVanillaBlendChangeIfMoved(snapshotted);
             return;
         }
         final boolean bypass = BYPASS_CACHE || !caching;
@@ -1336,14 +1424,9 @@ public class GLStateManager {
                 || blendState.getDstAlpha() != dstFactor) {
             if (caching) blendState.setAll(srcFactor, dstFactor, srcFactor, dstFactor);
             RENDER_BACKEND.blendFunc(srcFactor, dstFactor);
-            if (GLSMHooks.BLEND_FUNC_CHANGE.hasListeners()) {
-                GLSMHooks.blendFuncChangeEvent.srcRgb = srcFactor;
-                GLSMHooks.blendFuncChangeEvent.dstRgb = dstFactor;
-                GLSMHooks.blendFuncChangeEvent.srcAlpha = srcFactor;
-                GLSMHooks.blendFuncChangeEvent.dstAlpha = dstFactor;
-                GLSMHooks.BLEND_FUNC_CHANGE.post(GLSMHooks.blendFuncChangeEvent);
-            }
+            postBlendFuncChange(srcFactor, dstFactor, srcFactor, dstFactor);
         }
+        postVanillaBlendChangeIfMoved(snapshotted);
     }
 
     public static void glBlendEquation(int mode) {
@@ -1384,9 +1467,11 @@ public class GLStateManager {
                 return;
             }
         }
+        final boolean snapshotted = snapshotVanillaBlendFunc();
         final DeferredBlendHandler bh = GLSMHooks.blendHandler;
         if (bh != null && bh.isBlendLocked()) {
             bh.deferBlendFunc(srcRgb, dstRgb, srcAlpha, dstAlpha);
+            postVanillaBlendChangeIfMoved(snapshotted);
             return;
         }
         if (GLSMConfig.hudCacheOverride && dstAlpha != GL11.GL_ONE_MINUS_SRC_ALPHA) {
@@ -1399,18 +1484,23 @@ public class GLStateManager {
         if (bypass || blendState.getSrcRgb() != srcRgb || blendState.getDstRgb() != dstRgb || blendState.getSrcAlpha() != srcAlpha || blendState.getDstAlpha() != dstAlpha) {
             if (caching) blendState.setAll(srcRgb, dstRgb, srcAlpha, dstAlpha);
             RENDER_BACKEND.blendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
-            if (GLSMHooks.BLEND_FUNC_CHANGE.hasListeners()) {
-                GLSMHooks.blendFuncChangeEvent.srcRgb = srcRgb;
-                GLSMHooks.blendFuncChangeEvent.dstRgb = dstRgb;
-                GLSMHooks.blendFuncChangeEvent.srcAlpha = srcAlpha;
-                GLSMHooks.blendFuncChangeEvent.dstAlpha = dstAlpha;
-                GLSMHooks.BLEND_FUNC_CHANGE.post(GLSMHooks.blendFuncChangeEvent);
-            }
+            postBlendFuncChange(srcRgb, dstRgb, srcAlpha, dstAlpha);
         }
+        postVanillaBlendChangeIfMoved(snapshotted);
     }
 
     public static void glBlendFuncSeparate(int srcRGB, int dstRGB, int srcAlpha, int dstAlpha) {
         tryBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+    }
+
+    private static void postBlendFuncChange(int srcRgb, int dstRgb, int srcAlpha, int dstAlpha) {
+        if (GLSMHooks.BLEND_FUNC_CHANGE.hasListeners()) {
+            GLSMHooks.blendFuncChangeEvent.srcRgb = srcRgb;
+            GLSMHooks.blendFuncChangeEvent.dstRgb = dstRgb;
+            GLSMHooks.blendFuncChangeEvent.srcAlpha = srcAlpha;
+            GLSMHooks.blendFuncChangeEvent.dstAlpha = dstAlpha;
+            GLSMHooks.BLEND_FUNC_CHANGE.post(GLSMHooks.blendFuncChangeEvent);
+        }
     }
 
     public static void checkCompiling() {
@@ -1709,10 +1799,11 @@ public class GLStateManager {
         }
         final DeferredAlphaHandler ah = GLSMHooks.alphaHandler;
         if (ah != null && ah.isAlphaTestLocked()) {
+            alphaTest.beforeModify();
             ah.deferAlphaTestToggle(true);
-            return;
+        } else {
+            alphaTest.enable();
         }
-        alphaTest.enable();
         fragmentGeneration++;
     }
 
@@ -1726,10 +1817,11 @@ public class GLStateManager {
         }
         final DeferredAlphaHandler ah = GLSMHooks.alphaHandler;
         if (ah != null && ah.isAlphaTestLocked()) {
+            alphaTest.beforeModify();
             ah.deferAlphaTestToggle(false);
-            return;
+        } else {
+            alphaTest.disable();
         }
-        alphaTest.disable();
         fragmentGeneration++;
     }
 
@@ -3379,6 +3471,12 @@ public class GLStateManager {
     public static void popState() {
         final int mask = attribs.popInt();
         attribDepth--;
+        final boolean blendSnapshotted = (mask & (GL11.GL_COLOR_BUFFER_BIT | GL11.GL_ENABLE_BIT)) != 0
+            && snapshotVanillaBlendFunc();
+        final int blendSrcRgbBeforeRestore = blendState.getSrcRgb();
+        final int blendDstRgbBeforeRestore = blendState.getDstRgb();
+        final int blendSrcAlphaBeforeRestore = blendState.getSrcAlpha();
+        final int blendDstAlphaBeforeRestore = blendState.getDstAlpha();
 
         // First: restore BooleanStateStack states that were actually modified (fast path)
         // These use lazy copy-on-write with global depth tracking
@@ -3410,7 +3508,19 @@ public class GLStateManager {
 
         // Third: apply restored state to the GL driver. BooleanStateStacks already issue GL calls via setEnabled(); non-boolean stacks are pure data
         // containers, so we must explicitly drive GL here.
-        applyRestoredState(mask);
+        applyRestoredState(mask, blendSnapshotted);
+
+        if ((mask & GL11.GL_COLOR_BUFFER_BIT) != 0
+                && (blendSrcRgbBeforeRestore != blendState.getSrcRgb()
+                || blendDstRgbBeforeRestore != blendState.getDstRgb()
+                || blendSrcAlphaBeforeRestore != blendState.getSrcAlpha()
+                || blendDstAlphaBeforeRestore != blendState.getDstAlpha())) {
+            postBlendFuncChange(
+                    blendState.getSrcRgb(),
+                    blendState.getDstRgb(),
+                    blendState.getSrcAlpha(),
+                    blendState.getDstAlpha());
+        }
 
         // Stack restoration bypasses enableTexture/disableTexture, so replay changed 2D texture states
         // after every tracked and driver state has reached its final value.
@@ -3425,17 +3535,29 @@ public class GLStateManager {
     /**
      * After popping GLSM stacks, apply restored state to the GL driver.
      */
-    private static void applyRestoredState(int mask) {
+    private static boolean isDepthColorOverridden() {
+        final DeferredDepthColorHandler dch = GLSMHooks.depthColorHandler;
+        return dch != null && dch.isOverrideHeld();
+    }
+
+    private static void applyRestoredState(int mask, boolean blendSnapshotted) {
         if ((mask & GL11.GL_DEPTH_BUFFER_BIT) != 0) {
             RENDER_BACKEND.depthFunc(depthState.getFunc());
-            RENDER_BACKEND.depthMask(depthState.isMaskEnabled());
+            if (!isDepthColorOverridden()) {
+                RENDER_BACKEND.depthMask(depthState.isMaskEnabled());
+            }
             RENDER_BACKEND.clearDepth(depthState.getClearValue());
         }
         if ((mask & GL11.GL_COLOR_BUFFER_BIT) != 0) {
-            RENDER_BACKEND.blendFuncSeparate(blendState.getSrcRgb(), blendState.getDstRgb(), blendState.getSrcAlpha(), blendState.getDstAlpha());
+            final DeferredBlendHandler restoreBlendHandler = GLSMHooks.blendHandler;
+            if (restoreBlendHandler == null || !restoreBlendHandler.isOverrideHeld()) {
+                RENDER_BACKEND.blendFuncSeparate(blendState.getSrcRgb(), blendState.getDstRgb(), blendState.getSrcAlpha(), blendState.getDstAlpha());
+            }
             RENDER_BACKEND.blendEquationSeparate(blendState.getEquationRgb(), blendState.getEquationAlpha());
             RENDER_BACKEND.blendColor(blendState.getBlendColorR(), blendState.getBlendColorG(), blendState.getBlendColorB(), blendState.getBlendColorA());
-            RENDER_BACKEND.colorMask(colorMask.red, colorMask.green, colorMask.blue, colorMask.alpha);
+            if (!isDepthColorOverridden()) {
+                RENDER_BACKEND.colorMask(colorMask.red, colorMask.green, colorMask.blue, colorMask.alpha);
+            }
             RENDER_BACKEND.clearColor(clearColor.getRed(), clearColor.getGreen(), clearColor.getBlue(), clearColor.getAlpha());
             // Draw buffer is per-framebuffer state; only restore on the default framebuffer
             if (drawFramebuffer == 0) {
@@ -3495,6 +3617,7 @@ public class GLStateManager {
             if (ShaderManager.getNormalGeneration() != savedNormalGen[depth]) ShaderManager.bumpNormalGeneration();
             if (ShaderManager.getTexCoordGeneration() != savedTexCoordGen[depth]) ShaderManager.bumpTexCoordGeneration();
         }
+        postVanillaBlendChangeIfMoved(blendSnapshotted);
     }
 
     public static void glClear(int mask) {
@@ -4494,10 +4617,17 @@ public class GLStateManager {
             if (GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
                 GLSMHooks.programChangeEvent.previousProgram = prev;
                 GLSMHooks.programChangeEvent.newProgram = 0;
+                GLSMHooks.programChangeEvent.postBind = false;
                 GLSMHooks.PROGRAM_CHANGE.post(GLSMHooks.programChangeEvent);
             }
             recordGpuCommand(GpuCommandType.PROGRAM_USE, program, 0);
             ffp.activate();
+            if (GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
+                GLSMHooks.programChangeEvent.previousProgram = prev;
+                GLSMHooks.programChangeEvent.newProgram = 0;
+                GLSMHooks.programChangeEvent.postBind = true;
+                GLSMHooks.PROGRAM_CHANGE.post(GLSMHooks.programChangeEvent);
+            }
             return;
         }
 
@@ -4515,6 +4645,7 @@ public class GLStateManager {
             if (GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
                 GLSMHooks.programChangeEvent.previousProgram = prev;
                 GLSMHooks.programChangeEvent.newProgram = program;
+                GLSMHooks.programChangeEvent.postBind = false;
                 GLSMHooks.PROGRAM_CHANGE.post(GLSMHooks.programChangeEvent);
             }
             if (initConfig != null && initConfig.isLwjglDebug()) {
@@ -4524,6 +4655,12 @@ public class GLStateManager {
             recordGpuCommand(GpuCommandType.PROGRAM_USE, program, 0);
             RENDER_BACKEND.useProgram(program);
             CompatUniformManager.onUseProgram(program);
+            if (GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
+                GLSMHooks.programChangeEvent.previousProgram = prev;
+                GLSMHooks.programChangeEvent.newProgram = program;
+                GLSMHooks.programChangeEvent.postBind = true;
+                GLSMHooks.PROGRAM_CHANGE.post(GLSMHooks.programChangeEvent);
+            }
         }
     }
 
