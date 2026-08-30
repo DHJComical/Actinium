@@ -145,4 +145,8 @@ dependencies {
     // Botania CEU (issue: held items render flat white because its RenderWorldLastEvent handlers leave
     // GL_TEXTURE_2D disabled in the GLSM cache; the conditional botania mixin restores it)
     modImplementation 'curse.maven:botania-ceu-1179448:8706250'
+
+    // Scannable 1.6.3.26 (issue #94: its scanner overlay rendering conflicts with the Actinium render
+    // pipeline -- see-through terrain without shaders, white ghosting with shaders; needs runtime repro)
+    modImplementation 'curse.maven:scannable-266784:3146549'
 }
