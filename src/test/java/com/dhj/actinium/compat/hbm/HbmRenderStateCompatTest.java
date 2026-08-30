@@ -16,14 +16,20 @@ class HbmRenderStateCompatTest {
     @Test
     void mapsHbmGuiScopeToEquivalentGlsmGroups() {
         assertEquals(GL11.GL_ENABLE_BIT | GL11.GL_TEXTURE_BIT | GL11.GL_COLOR_BUFFER_BIT
-                | GL11.GL_LIGHTING_BIT,
+                | GL11.GL_CURRENT_BIT | GL11.GL_LIGHTING_BIT,
             HbmRenderStateCompat.toGlMask(0x46000));
+    }
+
+    @Test
+    void mapsHbmColorScopeToCurrentColorState() {
+        assertEquals(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_CURRENT_BIT | GL11.GL_LIGHTING_BIT,
+            HbmRenderStateCompat.toGlMask(0x04000));
     }
 
     @Test
     void expandsHbmAllBitsBeforeMapping() {
         assertEquals(GL11.GL_ENABLE_BIT | GL11.GL_LIGHTING_BIT | GL11.GL_TEXTURE_BIT
-                | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_POLYGON_BIT
+                | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_CURRENT_BIT | GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_POLYGON_BIT
                 | GL11.GL_FOG_BIT,
             HbmRenderStateCompat.toGlMask(0xFFFFF));
     }

@@ -11,6 +11,7 @@ import org.lwjgl.opengl.GL15;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACKEND;
 
@@ -186,6 +187,8 @@ public final class ImmediateModeRecorder {
     private static int nonPositionCount;
     private static final int[] nonPositionIndices = new int[NUM_ATTRIBS - 1];
     private static int positionReaderIndex = -1;
+    private static final AtomicInteger INVALID_READ_LOG_COUNT = new AtomicInteger();
+    private static final int INVALID_READ_LOG_LIMIT = 64;
 
     static {
         for (int i = 0; i < NUM_ATTRIBS; i++) {
@@ -404,16 +407,52 @@ public final class ImmediateModeRecorder {
         for (int i = 0; i < nonPositionCount; i++) {
             final AttribReader r = readers[nonPositionIndices[i]];
             final int base = r.baseOffset + vertexIndex * r.stride;
+            if (!canRead(r, vertexIndex)) {
+                logInvalidRead(r, vertexIndex, base);
+                continue;
+            }
             emitAttrib(t, r, base);
         }
 
         if (positionReaderIndex >= 0) {
             final AttribReader r = readers[positionReaderIndex];
             final int base = r.baseOffset + vertexIndex * r.stride;
+            if (!canRead(r, vertexIndex)) {
+                logInvalidRead(r, vertexIndex, base);
+                return;
+            }
             t.addVertex(
                 r.attrib.readComponent(r.data, base, 0),
                 r.attrib.readComponent(r.data, base, 1),
                 (r.size >= 3) ? r.attrib.readComponent(r.data, base, 2) : 0.0f);
+        }
+    }
+
+    private static boolean canRead(AttribReader reader, int vertexIndex) {
+        if (reader.data == null || reader.size <= 0 || reader.stride < 0 || vertexIndex < 0) {
+            return false;
+        }
+
+        final long base = reader.baseOffset + (long) vertexIndex * reader.stride;
+        final long end = base + (long) reader.size * reader.attrib.typeSizeBytes();
+        return base >= 0 && end >= base && end <= reader.data.capacity();
+    }
+
+    private static void logInvalidRead(AttribReader reader, int vertexIndex, int base) {
+        final int logNumber = INVALID_READ_LOG_COUNT.incrementAndGet();
+        if (logNumber <= INVALID_READ_LOG_LIMIT) {
+            GLStateManager.LOGGER.warn(
+                "[ImmediateModeRecorder] Skipping out-of-bounds vertex attribute read #{} location={} vertex={} "
+                    + "base={} capacity={} size={} type=0x{} stride={} vbo={}",
+                logNumber,
+                reader.loc,
+                vertexIndex,
+                base,
+                reader.data == null ? -1 : reader.data.capacity(),
+                reader.size,
+                Integer.toHexString(reader.attrib.type),
+                reader.stride,
+                reader.attrib.vboId);
         }
     }
 

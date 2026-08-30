@@ -64,7 +64,11 @@ public final class HbmRenderStateCompat {
         if ((normalizedMask & HBM_ENABLE_BIT) != 0) glMask |= GL11.GL_ENABLE_BIT;
         if ((normalizedMask & HBM_LIGHTING_BIT) != 0) glMask |= GL11.GL_LIGHTING_BIT;
         if ((normalizedMask & HBM_TEXTURE_BIT) != 0) glMask |= GL11.GL_TEXTURE_BIT;
-        if ((normalizedMask & HBM_COLOR_BUFFER_BIT) != 0) glMask |= GL11.GL_COLOR_BUFFER_BIT;
+        // HBM's color snapshot also contains the current RGBA vertex color. Vanilla OpenGL keeps
+        // that state in GL_CURRENT_BIT, so include it or HBM color changes leak into later draws.
+        if ((normalizedMask & HBM_COLOR_BUFFER_BIT) != 0) {
+            glMask |= GL11.GL_COLOR_BUFFER_BIT | GL11.GL_CURRENT_BIT;
+        }
         if ((normalizedMask & HBM_DEPTH_BUFFER_BIT) != 0) glMask |= GL11.GL_DEPTH_BUFFER_BIT;
         if ((normalizedMask & HBM_POLYGON_BIT) != 0) glMask |= GL11.GL_POLYGON_BIT;
         if ((normalizedMask & HBM_FOG_BIT) != 0) glMask |= GL11.GL_FOG_BIT;

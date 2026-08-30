@@ -41,6 +41,7 @@ import com.gtnewhorizons.angelica.glsm.stacks.MatrixModeStack;
 import com.gtnewhorizons.angelica.glsm.stacks.PointStateStack;
 import com.gtnewhorizons.angelica.glsm.stacks.PolygonStateStack;
 import com.gtnewhorizons.angelica.glsm.stacks.StencilStateStack;
+import com.gtnewhorizons.angelica.glsm.stacks.TextureUnitBooleanStateStack;
 import com.gtnewhorizons.angelica.glsm.stacks.ViewPortStateStack;
 import com.gtnewhorizons.angelica.glsm.states.ClipPlaneState;
 import com.gtnewhorizons.angelica.glsm.states.Color4;
@@ -2127,11 +2128,7 @@ public class GLStateManager {
             }
         }
         final int textureUnit = getActiveTextureUnit();
-        if (GLSMHooks.TEXTURE_UNIT_STATE.hasListeners()) {
-            GLSMHooks.textureUnitStateEvent.unit = textureUnit;
-            GLSMHooks.textureUnitStateEvent.enabled = true;
-            GLSMHooks.TEXTURE_UNIT_STATE.post(GLSMHooks.textureUnitStateEvent);
-        }
+        postTextureUnitState(textureUnit, true);
         textures.getTextureUnitStates(textureUnit).enable();
     }
 
@@ -2144,12 +2141,18 @@ public class GLStateManager {
             }
         }
         final int textureUnit = getActiveTextureUnit();
-        if (GLSMHooks.TEXTURE_UNIT_STATE.hasListeners()) {
-            GLSMHooks.textureUnitStateEvent.unit = textureUnit;
-            GLSMHooks.textureUnitStateEvent.enabled = false;
-            GLSMHooks.TEXTURE_UNIT_STATE.post(GLSMHooks.textureUnitStateEvent);
-        }
+        postTextureUnitState(textureUnit, false);
         textures.getTextureUnitStates(textureUnit).disable();
+    }
+
+    private static void postTextureUnitState(int textureUnit, boolean enabled) {
+        if (!GLSMHooks.TEXTURE_UNIT_STATE.hasListeners()) {
+            return;
+        }
+        GLSMHooks.textureUnitStateEvent.unit = textureUnit;
+        GLSMHooks.textureUnitStateEvent.target = GL11.GL_TEXTURE_2D;
+        GLSMHooks.textureUnitStateEvent.enabled = enabled;
+        GLSMHooks.TEXTURE_UNIT_STATE.post(GLSMHooks.textureUnitStateEvent);
     }
 
     private static final String PIXELTRANSFER_MSG = "glPixelTransfer is not available in GL 3.3 core profile.";
@@ -3380,8 +3383,22 @@ public class GLStateManager {
         // First: restore BooleanStateStack states that were actually modified (fast path)
         // These use lazy copy-on-write with global depth tracking
         final List<IStateStack<?>> modified = modifiedAtDepth[attribDepth];
+        IntArrayList restoredTextureUnits = null;
         for (int i = 0; i < modified.size(); i++) {
-            modified.get(i).popDepth();
+            final IStateStack<?> stack = modified.get(i);
+            if (stack instanceof TextureUnitBooleanStateStack textureState
+                && textureState == textures.getTextureUnitStates(textureState.getUnitIndex())) {
+                final boolean enabledBeforeRestore = textureState.isEnabled();
+                stack.popDepth();
+                if (enabledBeforeRestore != textureState.isEnabled()) {
+                    if (restoredTextureUnits == null) {
+                        restoredTextureUnits = new IntArrayList();
+                    }
+                    restoredTextureUnits.add(textureState.getUnitIndex());
+                }
+            } else {
+                stack.popDepth();
+            }
         }
         modified.clear();
 
@@ -3394,6 +3411,15 @@ public class GLStateManager {
         // Third: apply restored state to the GL driver. BooleanStateStacks already issue GL calls via setEnabled(); non-boolean stacks are pure data
         // containers, so we must explicitly drive GL here.
         applyRestoredState(mask);
+
+        // Stack restoration bypasses enableTexture/disableTexture, so replay changed 2D texture states
+        // after every tracked and driver state has reached its final value.
+        if (restoredTextureUnits != null) {
+            for (int i = 0; i < restoredTextureUnits.size(); i++) {
+                final int textureUnit = restoredTextureUnits.getInt(i);
+                postTextureUnitState(textureUnit, textures.getTextureUnitStates(textureUnit).isEnabled());
+            }
+        }
     }
 
     /**
