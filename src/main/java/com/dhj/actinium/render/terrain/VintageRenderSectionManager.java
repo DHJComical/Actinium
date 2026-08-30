@@ -31,6 +31,7 @@ import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.embeddedt.embeddium.api.shader.ShaderProvider;
 import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
+import com.dhj.actinium.compat.fluxloading.FluxLoadingCompat;
 import com.dhj.actinium.world.WorldSlice;
 import com.dhj.actinium.world.cloned.ChunkRenderContext;
 import com.dhj.actinium.world.cloned.ClonedChunkSectionCache;
@@ -151,6 +152,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     public void updateChunks(boolean updateImmediately) {
         this.sectionCache.cleanup();
         super.updateChunks(updateImmediately);
+        FluxLoadingCompat.onRenderSectionManagerUpdateChunks();
     }
 
     /**

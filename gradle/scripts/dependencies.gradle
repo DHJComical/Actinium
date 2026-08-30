@@ -145,4 +145,8 @@ dependencies {
     // Botania CEU (issue: held items render flat white because its RenderWorldLastEvent handlers leave
     // GL_TEXTURE_2D disabled in the GLSM cache; the conditional botania mixin restores it)
     modImplementation 'curse.maven:botania-ceu-1179448:8706250'
+
+    // FluxLoading 1.4.1 (issue #102: re-entering a world leaves its loading screen image stuck
+    // instead of fading out; dev-verifies the loading screen overlay compat)
+    modImplementation 'curse.maven:fluxloading-1207328:7601634'
 }
