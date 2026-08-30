@@ -165,20 +165,17 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
     @Override
     public void setupTerrain(Viewport viewport, CameraState cameraState, int frame, boolean spectator, boolean updateChunksImmediately) {
         super.setupTerrain(viewport, cameraState, frame, spectator, updateChunksImmediately);
-
-        if (this.renderSectionManager.isInShadowPass() && ShaderProviderHolder.isActive()) {
-            collectTileEntitiesForShadow();
-            RenderDebugHooksHolder.logShadowTerrainLayer(
-                "culling",
-                "fogOcclusion=false,occlusionCulling=false",
-                this.renderSectionManager.getVisibleChunkCount()
-            );
-        }
     }
 
     @Override
     public void setupShadowTerrain(Viewport playerViewport, Viewport shadowViewport, CameraState cameraState, int frame, boolean spectator) {
         super.setupShadowTerrain(playerViewport, shadowViewport, cameraState, frame, spectator);
+        collectTileEntitiesForShadow();
+        RenderDebugHooksHolder.logShadowTerrainLayer(
+            "culling",
+            "fogOcclusion=false,occlusionCulling=false",
+            this.renderSectionManager.getVisibleChunkCount()
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -329,4 +326,3 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         return ChunkMeshFormats.COMPACT;
     }
 }
-
