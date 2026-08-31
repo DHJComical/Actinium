@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-08-20。
+最后更新：2026-08-31。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -8,6 +8,17 @@
 
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
+
+> 2026-08-31 追加：Photon v1.3b 水面不生效（水面保持原版贴图、仅余微弱反光）的修复——
+> 根因不在水面渲染路径，而在 block.properties 的版本条件求值：Photon 把全部 modern 方块映射
+> 放在 `#if MC_VERSION >= 11300` 段内，`#else`（1.12 段）为空；`IdMap#hasLegacySection` 此前
+> 只要见到 MC_VERSION 条件的 `#else` 分支就判定包内含 legacy 段，于是以真实 MC_VERSION=11202
+> 交给 jcpp 求值，modern 映射段被整体剔除，方块 ID 映射表为空（`block-meta-map present=false`、
+> 全部方块 `shaderBlockId=-1`），`mc_Entity` 全部失效，水面因此不被识别为 `MATERIAL_WATER`。
+> 修复后 `#else` 分支必须含实际映射行才判 legacy 段（空 fallback 的包如 Photon 继续走
+> MC_VERSION=260101 的 modern 伪装路径 + legacy 名展平）；Complementary 的 `#elif >= 10800`
+> 实质段路径不受影响。验证：dev 运行，`block-meta-map present=true`、水面采样
+> `blockId=10001`（water 与 flowing_water 双映射），水面效果正常（用户实机确认）。
 
 > 2026-08-24 追加：改 mipmap 后地形方块概率性消失（无光影与光影下均出现）的修复——见下方
 > [mipmap 与地形渲染](#mipmap-与地形渲染)。根因有两点：(1) terrain shader 用三参数 `texture()`
@@ -54,6 +65,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Bliss                              | 2.1.2         | 已验证  | 开启、世界渲染、Distant Horizons LOD、地形、实体、方块实体、水、天空、天气、阴影、手部、GUI、重载   | -         | `28d976d`   |
 | iterationT                         | 3.2.0         | 已验证  | 开启、世界渲染、Distant Horizons LOD、地形、实体、方块实体、水、天空、天气、阴影、手部、GUI、重载   | -         | `30c7ffb`   |
 | iterationRP                        | 0.7.7 / 0.8.7 | 已验证  | 开启、世界渲染、Distant Horizons LOD、地形、实体、方块实体、水、天空、天气、阴影、手部、GUI、重载   | -         | `28d976d`   |
+| Photon                             | v1.3b         | 部分    | 开启、世界渲染、地形、水（2026-08-31 水面修复后）、GUI                                     | 阴影/实体/维度切换/重载等场景待补充验证；选项菜单部分元素缺失（GTAO 等 profile 项告警，与水面无关） | `fix/photon-water-surface` |
 | SEUS PTGI HRR                      | Test 2.1      | 无法启用 | -                                                              | 光影包不能成功开启 | `f261611`   |
 
 ## 模组与环境
