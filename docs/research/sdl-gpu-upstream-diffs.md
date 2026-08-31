@@ -2,12 +2,12 @@
 
 > 状态：进行中（2026-08-15）；**GLFW 适配部分已于 2026-08-31 撤除**（见条目内
 > 「2026-08-31」标注，撤除详情见
-> `docs/research/sdl-gpu-cleanroom-glfw-compat.md`）。本文档逐条记录 Actinium 的
-> `sdl-gpu` 模块相对 Angelica 上游（`D:\Code\Angelica\sdl-gpu`，运行于
-> lwjgl3ify/GTNH 环境）的**代码差异及其理由**。多数差异源于运行环境不同
-> （lwjgl3ify vs Cleanroom/lwjglxx），与 GLFW 窗口兼容层（见
-> `docs/research/sdl-gpu-cleanroom-glfw-compat.md`）互为补充；部分改动（如
-> persistent-buffer 同步）与窗口无关，是后端本身的修复，应长期保留。
+> `docs/research/sdl-gpu-cleanroom-glfw-compat.md`）；**上游 #2025（SDL presenter
+> fixes and frame pacer adjustments，`b2f597a7`）已于 2026-08-31 同步**。本文档
+> 逐条记录 Actinium 的 `sdl-gpu` 模块相对 Angelica 上游（`D:\Code\Angelica`，
+> 运行于 lwjgl3ify/GTNH 环境）的**代码差异及其理由**。多数差异源于运行环境不同
+> （lwjgl3ify vs Cleanroom/lwjglxx）；部分改动（如 persistent-buffer 同步）与
+> 窗口无关，是后端本身的修复，应长期保留。
 >
 > **当前状态**：SDL GPU 后端未注册进 `RenderBackend` service 文件（启用路径断开），
 > 模块源码与测试保留。
@@ -164,6 +164,37 @@
   `@Invoker` 直调 `mouseClicked`（绕过 Forge `MouseClickedEvent` 吞点击）。
   Cleanroom 的 lwjglxx 事件时序下 vanilla 循环 + Forge 事件门会丢点击。
   **2026-08-31：整个 mixin 已删除。**
+
+## 上游同步状态（2026-08-31）
+
+移植快照已包含上游 #1994–#2009 的全部内容；在其后上游仅合入
+#2025（`b2f597a7`，SDL presenter fixes and frame pacer adjustments），已同步：
+
+- `FrameManager`：swapchain acquire 改为每进程一次的
+  `checkAcquireOnWindowThread()`（deobf 下 fail-fast，
+  `DISABLE_SDL_PRESENTER_THREAD` 可关闭）；`presentFinalTarget` 重构出
+  `presentSplash`（`SDL_FLIP_VERTICAL`）与统一 `present(...)` 入口；
+  `presentOnWindowThread` 带 flipMode；`presenter` 字段 volatile。
+- `SDLGPURenderBackend`：splash teardown 延迟到下一帧 `onFrameBegin`
+  （`splashTeardownPending` + `finishSplash()`，teardown 时
+  `tryDispatch(force=true)` + `presenter.drain()`）；`presenter` /
+  `splashTarget` volatile；`handleMakeCurrent` / `handleSwapBuffers` 使用局部
+  快照；`lastFrameGateNanos/EndNanos` 删除 `isEngaged()` 门控。
+- `Presenter`：删除 `isEngaged()`（splash 门控由 present 路径自身处理），
+  `requestPresent` 增加 flipMode。
+- `SplashDispatcher.tryDispatch`：增加 `force` 参数（teardown 绕过节流）。
+- `glsm/SystemProperties`：`DUMP_SHADERS` 常量改为 `dumpShaders()` 方法 +
+  `isDeobf()` 公开（sdl-gpu 的 ShaderManager / MslCrossCompile /
+  DxbcCrossCompile 引用同步更新）。
+- `glsm/Tracy`：后端 ABI 哨兵检查（`sectionEnter`）+ `init()` 的
+  `LinkageError` 捕获，旧版 native 后端不再拖垮进程。
+- `SdlFramePlots`：删除 `sdl.gateUs` plot（上游移除）。
+- `PresenterTest`：采用上游版本（4 参 `requestPresent` + 新增 splash present
+  走窗口线程的覆盖）。
+
+**未同步**（均为 lwjgl3ify 专属或当前不可达，重接时按上游 HEAD 重写）：
+`SDLGPULWJGLService` 的 query 计时重构与 `isOfferedAsAvailable` 优先级门控、
+`SDLGPUGate` 的 lwjgl3ify 事件接线（`DisplayEvents` / `MainThreadExec`）。
 
 ## 撤除 / 回归建议（2026-08-31 已执行）
 
