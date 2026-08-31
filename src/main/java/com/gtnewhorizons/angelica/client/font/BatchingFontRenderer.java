@@ -166,11 +166,6 @@ public class BatchingFontRenderer {
 
 
     private static boolean hasCurrentGlContext() {
-        // SDL GPU mode creates a GLFW_NO_API window and presents through the SDL GPU backend,
-        // so there is no GL context to query; the backend itself is the current render target.
-        if (com.gtnewhorizons.angelica.sdlgpu.SDLGPUGate.isEngaged()) {
-            return true;
-        }
         final boolean current = GLFW.glfwGetCurrentContext() != 0L;
         if (!current) {
             LOGGER.error("Font rendering attempted without a current OpenGL context on thread {}", Thread.currentThread().getName());

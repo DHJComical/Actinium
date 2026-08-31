@@ -1,11 +1,35 @@
 # SDL GPU 后端的 Cleanroom GLFW 兼容层（撤除清单）
 
-> 状态：进行中（2026-08-15）。本文档记录 Actinium 为在 Cleanroom Loader 上运行
-> Angelica 的 `sdl-gpu` 后端而添加的 **GLFW 窗口兼容代码**。这些代码是为绕过
+> 状态：**已撤除（2026-08-31）**。本文档记录 Actinium 曾为在 Cleanroom Loader 上
+> 运行 Angelica 的 `sdl-gpu` 后端而添加的 **GLFW 窗口兼容代码**。这些代码是为绕过
 > Cleanroom 的 lwjglxx 窗口创建而写的**临时适配**，**未必符合上游 Angelica 的
-> 代码规范**（大量反射、事件队列节流、handleInput 接管等）。当 Cleanroom 把窗口
-> 换成原生 SDL 窗口（不再强制 GLFW+GL context）后，应**撤掉或大幅简化**本文档
-> 列出的兼容层。
+> 代码规范**（大量反射、事件队列节流、handleInput 接管等）。全文保留作为历史
+> 记录与未来重接（Cleanroom 提供原生 SDL 窗口后）的参考。
+
+## 撤除结果（2026-08-31）
+
+按本文档清单与撤除计划执行，**GLFW 窗口兼容层已全部移除**：
+
+- **已删除**：`SDLGPUDisplayBridge` 的 Display 镜像 / 自建 GLFW 回调 /
+  `flushPendingMove` / `initializeLwjglxInput` / `safeDisplayDestroy`（文件收缩回
+  上游 Angelica 形态，仅保留 drawable 安装与 SDL drawable 判断）；`SDLGPUGate` 的
+  `createSDLGPUDisplay` / `fallBackToGL` / `rememberIcons`（Gate 收缩为设备探测与
+  可用性入口）；`MixinMinecraft` 的 `sdlUpdateDisplay` / `sdlDisplayDestroy` /
+  vsync 推送；`MixinGuiScreenSDLInput`、`MixinDisplayWindowCompat`、
+  `MixinNetHandlerPlayClientJoinGame` 三个 mixin；`MixinMinecraftCoreProfileDisplay`
+  与 `MixinSplashProgress` 的 SDL 接线；`LWJGLServiceProvider` 的 `USE_SDL_GPU`
+  分支；`BatchingFontRenderer` 的无 GL context 分支；`runClientSdl` 任务与 SDL
+  JVM 参数；调试期临时改动（自动 F3、第三方 mod compile-only、validation 参数、
+  `getLimitFramerate` 放宽）。
+- **启用路径已断开**：`SDLGPURenderBackend` 已从 `META-INF/services/...RenderBackend`
+  中移除，后端选择永远不会命中 SDL；`sdl-gpu` 模块源码与测试完整保留（编译、嵌入
+  jar、测试照常），`Device.claimPlatformWindow` / `SDL_ShowWindow` / finalTarget
+  修复 / persistent 写入通知 / GLSL 保留字兜底等架构性修复全部保留。
+- **重接入口**（CRL 原生 SDL 窗口就绪后）：把 `SDLGPURenderBackend` 加回
+  `META-INF/services/com.gtnewhorizons.angelica.glsm.backend.RenderBackend`；在
+  窗口创建路径认领 CRL 的 SDL 窗口句柄（`Device.claimWindow`）；恢复帧内
+  present 驱动（参考 `SDLGPUDisplayBridge.present()`）。上游参考实现见
+  Angelica `SDLGPUGate`（lwjgl3ify `DisplayEvents` 路径）。
 
 ## 背景
 

@@ -7,34 +7,22 @@ import com.gtnewhorizons.angelica.sdlgpu.device.Device;
 import com.gtnewhorizons.angelica.sdlgpu.shader.ShaderManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.lwjgl.glfw.GLFW;
-import org.lwjgl.glfw.GLFWNativeWin32;
-import org.lwjgl.glfw.GLFWNativeX11;
-import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.sdl.SDLLog;
-import org.lwjgl.system.Platform;
 import org.lwjglx.Sys;
-import org.lwjglx.input.Mouse;
-import org.lwjglx.opengl.ContextAttribs;
-import org.lwjglx.opengl.Display;
-import org.lwjglx.opengl.PixelFormat;
 import org.taumc.glsl.grammar.GLSLParser;
 
-import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
 /**
- * Gate for taking over the game window with the SDL GPU backend.
+ * Gate owning the SDL GPU device lifecycle and availability probing.
  *
- * <p>Unlike the upstream lwjgl3ify environment (which exposes DisplayEvents and can suppress GL
- * context creation), Cleanroom's lwjglxx always creates a GLFW window with a GL context. The
- * bridge therefore lets lwjglxx create the window normally and then claims it for SDL GPU:
- * the GLFW window handle is wrapped via {@code SDL_CreateWindowFrom} (using the platform handle
- * obtained from GLFW) and claimed with {@code SDL_ClaimWindowForGPUDevice}. The unused GL context
- * stays attached to the window but is never made current again once the SDL backend is engaged.</p>
- *
- * <p>TODO(sdl-gpu): macOS needs the Metal layer property on the wrapped window before claim;
- * currently only Windows and Linux are wired up.</p>
+ * <p>The window takeover path is currently removed: Cleanroom's lwjglxx always creates a GLFW
+ * window with a GL context, which a GPU device cannot claim ({@code VK_ERROR_NATIVE_WINDOW_IN_USE_KHR}),
+ * and the interim workaround (building a {@code GLFW_NO_API} window and mirroring lwjglxx's
+ * {@code Display} state with hand-installed GLFW callbacks) was reverted. The backend is therefore
+ * not registered in the {@code RenderBackend} service file. Re-wiring the backend requires a window
+ * source Cleanroom actually controls (a native SDL window) whose handle can be wrapped and claimed
+ * through {@link Device#claimWindow} before the backend presents.</p>
  */
 public final class SDLGPUGate {
 
@@ -45,14 +33,6 @@ public final class SDLGPUGate {
     private static Device device;
 
     private static volatile Boolean deviceReady;
-    private static volatile boolean engaged;
-    private static volatile boolean disarmed;
-    private static volatile Throwable initFailure;
-    private static ByteBuffer[] windowIcons;
-
-    public static void rememberIcons(ByteBuffer[] icons) {
-        windowIcons = icons;
-    }
 
     public static synchronized Device device() {
         if (device == null) device = new Device();
@@ -90,10 +70,6 @@ public final class SDLGPUGate {
         return ok;
     }
 
-    public static boolean isEngaged() {
-        return engaged;
-    }
-
     public static boolean isActive() {
         if (!isSDLGPUAvailable()) return false;
         final RenderBackend rb = BackendManager.RENDER_BACKEND;
@@ -122,78 +98,6 @@ public final class SDLGPUGate {
 
     public static Consumer<Object> sdlGpuPreSwapchainInvalidatingCallback() {
         return change -> BackendManager.RENDER_BACKEND.onPreSwapchainInvalidatingChange(change);
-    }
-
-    public static boolean createSDLGPUDisplay(Object format, Object attribs) {
-        if (!isDeviceReady()) return false;
-
-        initFailure = null;
-        disarmed = false;
-
-        try {
-            // A GL context on the window would prevent Vulkan/D3D12 from claiming it
-            // (VK_ERROR_NATIVE_WINDOW_IN_USE_KHR), so create the window ourselves without one and
-            // mirror the state into lwjglxx's Display for Minecraft's Display.* queries.
-            // Create the window at the size Minecraft already believes it is (displayWidth/Height),
-            // so the framebuffer, viewport and final blit all match the window. Falling back to the
-            // primary monitor's video mode only when Minecraft has no size of its own yet.
-            final net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
-            final int mcWidth = mc != null ? mc.displayWidth : 0;
-            final int mcHeight = mc != null ? mc.displayHeight : 0;
-            final long monitor = GLFW.glfwGetPrimaryMonitor();
-            final GLFWVidMode vidMode = monitor == 0 ? null : GLFW.glfwGetVideoMode(monitor);
-            final int width = mcWidth > 0 ? mcWidth : (vidMode == null ? 1280 : vidMode.width());
-            final int height = mcHeight > 0 ? mcHeight : (vidMode == null ? 720 : vidMode.height());
-            LOG.info("[SDL] Creating SDL GPU window at Minecraft's expected size {}x{} (Minecraft.displayWidth/Height={}x{}, vidMode={}x{})", width, height, mcWidth, mcHeight, vidMode == null ? -1 : vidMode.width(), vidMode == null ? -1 : vidMode.height());
-            final long glfwWindow = SDLGPUDisplayBridge.createWindowNoGlContext(width, height, "Cleanroom");
-            if (glfwWindow == 0) {
-                throw new IllegalStateException("glfwCreateWindow failed");
-            }
-            SDLGPUDisplayBridge.adoptWindow(glfwWindow, width, height, "Cleanroom");
-
-            final long platformHandle;
-            switch (Platform.get()) {
-                case WINDOWS -> platformHandle = GLFWNativeWin32.glfwGetWin32Window(glfwWindow);
-                case LINUX -> platformHandle = GLFWNativeX11.glfwGetX11Window(glfwWindow);
-                default -> throw new IllegalStateException(
-                    "SDL GPU window claim not implemented for " + Platform.get());
-            }
-            if (platformHandle == 0) {
-                throw new IllegalStateException("GLFW returned no platform handle for the window");
-            }
-            device().claimPlatformWindow(platformHandle);
-            engaged = true;
-            // SplashProgress creates a SharedDrawable from Display.getDrawable() right after
-            // window creation; install the SDL drawable so that path does not see null.
-            SDLGPUDisplayBridge.ensureDrawableInstalled();
-            BackendManager.RENDER_BACKEND.onPostWindowCreate(glfwWindow);
-        } catch (Throwable t) {
-            initFailure = t;
-            LOG.error("SDL GPU could not take the window", t);
-            return false;
-        }
-        return engaged;
-    }
-
-    public static void fallBackToGL() {
-        // The upstream lwjgl3ify LWJGL-service integration (SDLGPULWJGLService) does not exist in
-        // the Cleanroom/lwjglxx environment; the SDL backend is only reachable through BackendManager.
-        disarmed = true;
-        engaged = false;
-        deviceReady = false;
-
-        device().destroyDevice();
-        resetSdlLogging();
-
-        Mouse.setGrabbed(false);
-
-        if (Display.isCreated()) {
-            Display.destroy();
-        }
-        Display.isCloseRequested();
-        if (windowIcons != null) {
-            Display.setIcon(windowIcons);
-        }
     }
 
     private static void resetSdlLogging() {

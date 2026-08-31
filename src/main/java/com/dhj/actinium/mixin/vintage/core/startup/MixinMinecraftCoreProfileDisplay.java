@@ -3,8 +3,6 @@ package com.dhj.actinium.mixin.vintage.core.startup;
 import com.dhj.actinium.debug.ActiniumStartupDebugConfig;
 import com.dhj.actinium.debug.CoreProfileContextAttributes;
 import com.dhj.actinium.debug.OpenGlVersion;
-import com.gtnewhorizons.angelica.config.SystemProperties;
-import com.gtnewhorizons.angelica.sdlgpu.SDLGPUGate;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.ForgeHooksClient;
 import net.minecraftforge.common.ForgeEarlyConfig;
@@ -50,24 +48,6 @@ public abstract class MixinMinecraftCoreProfileDisplay {
 
     @Unique
     private void celeritas$createCoreProfileDisplayInner(CallbackInfo ci) throws LWJGLException {
-        // SDL GPU backend: hand the window over to SDLGPUGate (lwjglxx creates the GLFW window,
-        // then SDL wraps the platform handle and claims it for the GPU device). The GL context
-        // lwjglxx creates is never used for rendering once the SDL backend is engaged.
-        if (SystemProperties.USE_SDL_GPU && SDLGPUGate.isSDLGPUAvailable()) {
-            // SDLGPUGate expects the lwjglxx (org.lwjglx.opengl) pixel format / attribs types.
-            final org.lwjglx.opengl.PixelFormat sdlFormat =
-                new org.lwjglx.opengl.PixelFormat().withDepthBits(24).withStencilBits(8);
-            if (SDLGPUGate.createSDLGPUDisplay(sdlFormat, new org.lwjglx.opengl.ContextAttribs(4, 6))) {
-                // Cleanroom's setWindowStyle/taskbar hooks resolve the window through the GL
-                // context, which does not exist on the GLFW_NO_API window; the SDL backend manages
-                // presentation itself, so skip those hooks here.
-                ForgeHooksClient.initializeWindowsInformation();
-                ci.cancel();
-                return;
-            }
-            celeritas$LOGGER.warn("SDL GPU display handover failed; falling back to the core-profile GL path");
-        }
-
         Display.setResizable(true);
         Display.setTitle("Cleanroom");
 

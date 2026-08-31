@@ -3,7 +3,6 @@ package com.dhj.actinium.mixin.vintage.core.startup;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.recording.ImmediateModeRecorder;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
-import com.gtnewhorizons.angelica.sdlgpu.SDLGPUGate;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
@@ -12,7 +11,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -38,28 +36,6 @@ public class MixinSplashProgress {
     @Inject(method = "start", at = @At("HEAD"))
     private static void celeritas$initSplashTessellator(CallbackInfo ci) {
         ImmediateModeRecorder.initSplashTessellator();
-    }
-
-    /**
-     * The FML splash renders through a GL shared context, which cannot exist on the SDL backend's
-     * {@code GLFW_NO_API} window. The SDL backend presents its own splash, so disable the FML
-     * splash screen entirely while the SDL backend is active.
-     */
-    @Redirect(
-        method = "start",
-        at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraftforge/fml/client/SplashProgress;getBool(Ljava/lang/String;Z)Z",
-            ordinal = 0
-        )
-    )
-    private static boolean celeritas$sdlDisableSplash(String key, boolean def) {
-        // The first getBool call in start() reads the "enabled" flag; the SDL backend presents its
-        // own splash on a GLFW_NO_API window, so force it off while the SDL backend is active.
-        if (SDLGPUGate.isActive() && "enabled".equals(key)) {
-            return false;
-        }
-        return def;
     }
 
     @Inject(method = "finish", at = @At("RETURN"))

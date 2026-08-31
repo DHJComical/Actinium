@@ -1,21 +1,26 @@
 # sdl-gpu 相对 Angelica 上游的修改清单
 
-> 状态：进行中（2026-08-15）。本文档逐条记录 Actinium 的 `sdl-gpu` 模块相对
-> Angelica 上游（`D:\Code\Angelica\sdl-gpu`，运行于 lwjgl3ify/GTNH 环境）的**代码
-> 差异及其理由**。多数差异源于运行环境不同（lwjgl3ify vs Cleanroom/lwjglxx），
-> 与 GLFW 窗口兼容层（见
+> 状态：进行中（2026-08-15）；**GLFW 适配部分已于 2026-08-31 撤除**（见条目内
+> 「2026-08-31」标注，撤除详情见
+> `docs/research/sdl-gpu-cleanroom-glfw-compat.md`）。本文档逐条记录 Actinium 的
+> `sdl-gpu` 模块相对 Angelica 上游（`D:\Code\Angelica\sdl-gpu`，运行于
+> lwjgl3ify/GTNH 环境）的**代码差异及其理由**。多数差异源于运行环境不同
+> （lwjgl3ify vs Cleanroom/lwjglxx），与 GLFW 窗口兼容层（见
 > `docs/research/sdl-gpu-cleanroom-glfw-compat.md`）互为补充；部分改动（如
 > persistent-buffer 同步）与窗口无关，是后端本身的修复，应长期保留。
+>
+> **当前状态**：SDL GPU 后端未注册进 `RenderBackend` service 文件（启用路径断开），
+> 模块源码与测试保留。
 
 ## 环境差异总览
 
 | 方面 | Angelica 上游（lwjgl3ify） | Actinium（Cleanroom/lwjglxx） |
 |---|---|---|
-| 窗口创建 | `DisplayEvents.setCreateGLContext(false)` 抑制 GL context，正常 `Display.create` | lwjglxx 无该 API，**总是**创建 GLFW+GL context 窗口；SDL 无法认领 → 自建 GLFW_NO_API 窗口 |
-| SDL 窗口包装 | `SDL_CreateWindowFrom`（绑定提供） | lwjgl-sdl 3.4.1 **无** `SDL_CreateWindowFrom` → `SDL_CreateWindowWithProperties` + `SDL_WINDOW_EXTERNAL` |
+| 窗口创建 | `DisplayEvents.setCreateGLContext(false)` 抑制 GL context，正常 `Display.create` | lwjglxx 无该 API，**总是**创建 GLFW+GL context 窗口；SDL 无法认领 → 曾自建 GLFW_NO_API 窗口（**2026-08-31 撤除**，当前后端未接线） |
+| SDL 窗口包装 | `SDL_CreateWindowFrom`（绑定提供） | lwjgl-sdl 3.4.1 **无** `SDL_CreateWindowFrom` → `SDL_CreateWindowWithProperties` + `SDL_WINDOW_EXTERNAL`（`Device.claimPlatformWindow` 保留，调用方已随适配撤除） |
 | SDL 视频初始化 | lwjgl3ify 窗口后端初始化 | 需自行 `SDL_InitSubSystem(SDL_INIT_VIDEO)` |
-| Display 静态状态 | lwjgl3ify 维持 | 需 VarHandle 镜像 lwjglxx `Display` 字段 |
-| 输入回调/队列 | lwjgl3ify 注册 GLFW 回调 | lwjglxx 在 `Display.create()` 里注册，被绕过后需自建回调 + 补 poll |
+| Display 静态状态 | lwjgl3ify 维持 | 曾需 VarHandle 镜像 lwjglxx `Display` 字段（**2026-08-31 撤除**） |
+| 输入回调/队列 | lwjgl3ify 注册 GLFW 回调 | 曾需自建回调 + 补 poll（**2026-08-31 撤除**） |
 | 窗口线程执行器 | `MainStartOnFirstThread`（retrofuturabootstrap） | 无该依赖 → `Runnable::run`（内联） |
 | GLCapabilities 注入 | `GLCapabilitiesOverride.set`（lwjgl3ify） | `Lwjgl3GLCapabilitiesShim.installOnCurrentThread`（自建 shim） |
 | swapchain 失效事件 | `DisplayEvents.addPreSwapchainInvalidatingChangeListener` | 无事件总线（TODO 注释），回调挂接缺失 |
@@ -23,6 +28,10 @@
 ## 修改清单
 
 ### 1. `SDLGPUGate` —— 窗口接管改为自建 GLFW_NO_API 窗口
+
+> **2026-08-31：已撤除。** Gate 收缩为设备探测与可用性入口
+> （`device()` / `probe()` / `isActive()` / prewarm 等），`createSDLGPUDisplay` /
+> `fallBackToGL` / `rememberIcons` 及其状态机已删除。以下为历史记录。
 
 - 上游：`registerListeners()` + `DisplayEvents.setCreateGLContext(false)` +
   `Display.create(...)` 正常走 lwjgl3ify 窗口创建，随后用 SDL 认领。
@@ -37,6 +46,10 @@
 - macOS 未接线（TODO 注释：Metal layer property）。
 
 ### 2. `SDLGPUDisplayBridge`（新增文件）—— lwjglxx 兼容桥
+
+> **2026-08-31：lwjglxx 适配部分已撤除**，文件收缩回上游形态（VarHandle 安装
+> `Display.drawable` 为 `SDLDrawable`、`present()` / `releaseRenderThread()` /
+> SDL drawable 判断）。以下 1-4 项为历史记录。
 
 - 上游无此文件（lwjgl3ify 环境 Display 状态与输入天然一致）。
 - Actinium 职责：
@@ -60,7 +73,8 @@
 - 新增 `claimPlatformWindow(long)`：`SDL_CreateProperties` + `SDL_WINDOW_EXTERNAL`
   属性 + `SDL_CreateWindowWithProperties` 包装平台句柄，再 `claimWindow`；
   新增 `sdlWindowHandle` 字段。替代上游的 `SDL_CreateWindowFrom`（lwjgl-sdl
-  3.4.1 绑定缺失）。
+  3.4.1 绑定缺失）。**2026-08-31：实现保留，但其唯一调用方（Gate 自建窗口路径）
+  已随适配撤除，重接窗口路径时复用。**
 
 ### 4. `SDLDrawable` —— 无 GL context 的 drawable
 
@@ -81,13 +95,16 @@
 - 理由：SDL GPU 模式下 fabricate 的 GLCapabilities 只有 SENTINEL 函数指针，任何
   走真实 GL 的调用都会崩溃；统一直连后端最稳妥。
 - `LWJGLServiceProvider`（`src/lwjglCommon`）在 `USE_SDL_GPU` 时反射实例化
-  `SDLGPULWJGLService`，否则用真实 GL 的 `LWJGL3Service`。
+  `SDLGPULWJGLService`，否则用真实 GL 的 `LWJGL3Service`。**2026-08-31：该
+  `USE_SDL_GPU` 分支已随 GLFW 适配撤除，`SDLGPULWJGLService` 文件保留但当前
+  不可达。**
 
 ### 6. `SDLGPURenderBackend` —— 环境适配 + 后端修复
 
 - `isActive()`：上游检查 `isEngaged()`；Actinium 不检查——后端选择发生在窗口
   创建之前（`BackendManager` 在 `GLStateManager` 类初始化时加载），`isEngaged()`
-  此时必为 false。窗口认领在 `MixinMinecraft` 的 createDisplay 钩子里进行。
+  此时必为 false。窗口认领曾在 `MixinMinecraft` 的 createDisplay 钩子里进行
+  （**2026-08-31 随 GLFW 适配撤除**，`isAvailable()` 注释已同步更新）。
 - swapchain 失效监听：上游 `DisplayEvents.addPreSwapchainInvalidatingChangeListener`
   → Actinium 仅留 TODO（lwjglxx 无事件总线），`onPreSwapchainInvalidatingChange`
   的调用方缺失。
@@ -141,19 +158,21 @@
 ### 10. `MixinMinecraft` 帧钩子 / `MixinGuiScreenSDLInput`
 
 - 帧钩子（`onFrameBegin`/`onFrameEnd` 挂 `runGameLoop` 的 `updateDisplay` 调用前后）
-  对齐 Angelica 的 `MixinMinecraft_FrameHook`；`updateDisplay` 在 SDL 模式下替换为
-  事件泵（细节见 GLFW 兼容层文档）。
+  对齐 Angelica 的 `MixinMinecraft_FrameHook`，**保留**；`updateDisplay` 曾在 SDL
+  模式下替换为事件泵（**2026-08-31 已撤除**，还原 vanilla swap 路径）。
 - `MixinGuiScreenSDLInput`：SDL 路径下接管 `GuiScreen.handleInput`，按钮事件经
   `@Invoker` 直调 `mouseClicked`（绕过 Forge `MouseClickedEvent` 吞点击）。
   Cleanroom 的 lwjglxx 事件时序下 vanilla 循环 + Forge 事件门会丢点击。
+  **2026-08-31：整个 mixin 已删除。**
 
-## 撤除 / 回归建议
+## 撤除 / 回归建议（2026-08-31 已执行）
 
-- **CRL 换原生 SDL 窗口后应消失**的差异：1-5（窗口创建/Display 桥/输入/执行器/
-  capabilities shim）→ 见 `sdl-gpu-cleanroom-glfw-compat.md` 的撤除计划。
-- **应长期保留**：6 的 `blitNamedFramebuffer` finalTarget 修复、**6 的
-  `unmapBuffer` persistent 生命周期修复与 `releasePersistentStaging` 幂等**、
-  8（GLSL 保留字）、9（persistent 写入通知）、7（dropped 细分诊断）、6 的
-  `isActive()` 时序注释。
-- 回归验证清单：主菜单显示、鼠标/键盘、点击切换界面、窗口 resize、进入世界
-  渲染、`glBlitFramebuffer`（FBO0→finalTarget）路径。
+- GLFW 窗口适配差异（窗口创建 / Display 桥 / 输入回调）已撤除，后端选择已断开；
+  执行结果见 `sdl-gpu-cleanroom-glfw-compat.md` 的「撤除结果」节。
+- **已保留**：6 的 `blitNamedFramebuffer` finalTarget 修复、6 的 `unmapBuffer`
+  persistent 生命周期修复与 `releasePersistentStaging` 幂等、8（GLSL 保留字）、
+  9（persistent 写入通知）、7（dropped 细分诊断）、6 的 `isActive()` 时序语义、
+  `Device` 的 `SDL_InitSubSystem` 与 `claimPlatformWindow` 实现、
+  `Lwjgl3GLCapabilitiesShim`、`SDLDrawable`。
+- 重接后回归验证清单：主菜单显示、鼠标/键盘、点击切换界面、窗口 resize、进入
+  世界渲染、`glBlitFramebuffer`（FBO0→finalTarget）路径。

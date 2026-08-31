@@ -480,8 +480,10 @@ public class SDLGPURenderBackend extends RenderBackend {
     @Override public boolean isAvailable() {
         // isEngaged() is not checked here: backend selection runs before the window is created
         // (BackendManager loads during GLStateManager class initialization), so the gate is the
-        // SDL GPU availability probe + the USE_SDL_GPU flag. Window claiming happens later in
-        // MixinMinecraftCoreProfileDisplay via SDLGPUGate.createSDLGPUDisplay.
+        // SDL GPU availability probe + the USE_SDL_GPU flag. The backend is currently not listed
+        // in the RenderBackend service file: the GLFW window workaround this environment needed
+        // for claiming a window was reverted, and re-enabling selection requires a window source
+        // a GPU device can claim (a native SDL window) wired through SDLGPUGate.
         return SystemProperties.USE_SDL_GPU && SDLGPUGate.isSDLGPUAvailable();
     }
 
