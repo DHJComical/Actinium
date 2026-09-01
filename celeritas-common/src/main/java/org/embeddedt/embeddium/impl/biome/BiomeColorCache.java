@@ -83,6 +83,39 @@ public abstract class BiomeColorCache<BIOME, RESOLVER> {
 
     protected abstract int resolveColor(RESOLVER resolver, BIOME biome, int relativeX, int relativeY, int relativeZ);
 
+    /**
+     * Controls whether the color post-processing hook {@link #postProcessColor} should run over each populated
+     * slice. Returns {@code false} by default, so caches which do not need positional color adjustments skip
+     * the extra pass entirely.
+     *
+     * @return {@code true} to post-process the cached colors of every populated slice, {@code false} otherwise
+     */
+    protected boolean shouldPostProcessColors() {
+        return false;
+    }
+
+    /**
+     * Applies a positional adjustment to a biome color after biome blending (including box blur) has finished.
+     * This hook allows the host mod to adjust cached colors based on their world position, e.g. to implement
+     * biome color noise.
+     *
+     * <p>The returned color is cached in the color buffer and reused across mesh rebuilds, so this function
+     * must be a pure function of its arguments and must not depend on mutable external state.</p>
+     *
+     * <p>The hook runs for both the blurred path and the fast path where an entire slice resolved to a single
+     * uniform color (which skips blurring). This is the reason it is applied after the blur step.</p>
+     *
+     * @param resolver the color resolver the slice is currently populated for
+     * @param worldX   the world-space X coordinate of the color being adjusted
+     * @param worldY   the world-space Y coordinate of the color being adjusted
+     * @param worldZ   the world-space Z coordinate of the color being adjusted
+     * @param color    the blended (or directly resolved, if no blur was applied) ARGB color
+     * @return the adjusted color to store in the cache
+     */
+    protected int postProcessColor(RESOLVER resolver, int worldX, int worldY, int worldZ, int color) {
+        return color;
+    }
+
     private void updateColorBuffers(int relY, RESOLVER resolver, Slice slice) {
         int worldY = this.minY + relY;
 
@@ -115,6 +148,16 @@ public abstract class BiomeColorCache<BIOME, RESOLVER> {
         // Skip blurring if all the values are the same anyway
         if (!uniqueColor && this.blendRadius > 0) {
             BoxBlur.blur(slice.buffer, this.tempColorBuffer, this.blendRadius);
+        }
+
+        if (this.shouldPostProcessColors()) {
+            for (int worldZ = this.minZ; worldZ <= this.maxZ; worldZ++) {
+                for (int worldX = this.minX; worldX <= this.maxX; worldX++) {
+                    int relativeX = worldX - this.minX;
+                    int relativeZ = worldZ - this.minZ;
+                    slice.buffer.set(relativeX, relativeZ, this.postProcessColor(resolver, worldX, worldY, worldZ, slice.buffer.get(relativeX, relativeZ)));
+                }
+            }
         }
 
         slice.lastPopulateStamp = this.populateStamp;

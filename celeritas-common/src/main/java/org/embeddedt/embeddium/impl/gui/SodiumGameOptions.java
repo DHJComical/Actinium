@@ -113,6 +113,14 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
         public int chunkFadeInDuration = 0;
 
         public int legacyBiomeBlendRadius = 0;
+
+        // Biome color position noise (issue #56, inspired by Ambient Environment). Applied after
+        // biome blending so the per-position variation survives blend averaging, with a
+        // multiplicative factor of 1 +/- intensity so the result stays centered on the mean.
+        public boolean useBiomeColorNoise = true;
+        public float biomeColorNoiseGrassIntensity = 0.08F;
+        public float biomeColorNoiseFoliageIntensity = 0.08F;
+        public float biomeColorNoiseWaterIntensity = 0.08F;
     }
 
     public static class NotificationSettings {
