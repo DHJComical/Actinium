@@ -236,6 +236,18 @@ class CompatShaderTransformerTest {
         assertFalse(hasIdentifier(transformed, "gl_FogFragCoord"), transformed);
         assertFalse(hasIdentifier(transformed, "bpFogFragCoord"), transformed);
         assertFalse(hasIdentifier(transformed, "texture2D"), transformed);
+
+        // Forge's ShaderManager resolves these uniforms by name at runtime; dropping or
+        // renaming any of them silently breaks the portal surface (a missing "sampler"
+        // uniform left the remote view unsampled in production).
+        assertTrue(hasIdentifier(transformed, "sampler"), transformed);
+        assertTrue(hasIdentifier(transformed, "screenSize"), transformed);
+        assertTrue(hasIdentifier(transformed, "fogDensity"), transformed);
+        assertTrue(hasIdentifier(transformed, "fogColor"), transformed);
+        assertTrue(hasIdentifier(transformed, "opacity"), transformed);
+        // The declaration alone is not enough: the sampler must stay in use inside main,
+        // otherwise the compiler deactivates the uniform and the runtime lookup fails.
+        assertOrdered(transformed, "uniform sampler2D sampler", "void main", "sampler");
     }
 
     /** Identifier-level check: comments preserved in the preamble must not trip the assertions. */
