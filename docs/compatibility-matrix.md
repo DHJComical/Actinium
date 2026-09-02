@@ -55,6 +55,14 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > [docs/compat/oldresearch.md](compat/oldresearch.md)。dev 人工回归确认研究笔记 GUI 不再卡死，
 > 优化后约 500+ FPS，与背包界面同量级；研究树视觉回归仍待补充。
 
+> 2026-09-02 追加：BetterPortals Refitted 0.4.1 末地传送门无看穿效果（洞口只见星野贴图）+
+> 视觉位置低约一格 + 修复后星野被拉成竖直条纹的修复——见下方 [模组与环境](#模组与环境) 的
+> BetterPortals Refitted 行与 [docs/compat/betterportals.md](compat/betterportals.md)。
+> 三层根因叠加：compat shader 预处理器条件求值 bug 致 `render_portal` 的 `sampler` 失活；
+> `TileEntityEndPortalRendererIrisMixin` 无条件劫持使 BPR 合成 TE 的星野叠加失去原版
+> blend 钩子语义；glsm texgen 顶点着色器的逐分量写入模式被 NVIDIA 驱动 DCE 掉
+> `u_TexGenEyePlaneS`。
+
 ## 光影包
 
 | 光影包                                | 版本            | 状态   | 已验证范围                                                          | 已知缺口      | Actinium 基线 |
@@ -95,6 +103,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | AgriCraft | 部分 | `ModdedBlockRenderCompat` 使用共享 renderer 锁保护 crop 缓存 | 与 XU2 相同的异步第三方缓存访问模式已加入兼容层；dev 运行验证待补，详见 [docs/compat/extrautils2.md](compat/extrautils2.md) |
 | Kirino Engine（Cleanroom 内建） | 部分（Headless） | early 配置 + `IMixinConfigPlugin` 门控，钉死 `isEnableRenderDelegate()` 为 false（`MixinKirinoConfigHub`） | Kirino Graphics 模式会整体替换 `EntityRenderer#renderWorld`，使 Actinium 全部渲染注入点失效；共存的唯一路径是 Kirino Headless 模式：本兼容层强制其渲染委托关闭、保留 ECS/分析运行时，Actinium 独掌渲染管线。Cleanroom 0.6.7-alpha（kirino epoch-1.a5）dev 运行通过（early 配置注册、headless installer、兼容层日志、渲染循环正常），详见 [docs/compat/kirino.md](compat/kirino.md) |
 | Scannable | 已验证 | 条件 Mixin（接管 `ProxyOptiFine` 探针，扫描波走其 overlay 路径） | 1.6.3.26（266784:3146549）：使用扫描器后无光影透视 / 光影全白拖影的根因是其 INJECT 路径换装主 FBO 深度 attachment（Actinium 下 `Framebuffer.depthBuffer` 为 0，"恢复"即卸下深度）；已引导其走 OptiFine 式 overlay 渲染路径，详见 [docs/compat/scannable.md](compat/scannable.md)；dev 运行验证通过（无光影透视与光影全白均消失、扫描波区域正确；相邻结果合并为聚类大框为 Scannable 固有设计） |
+| BetterPortals Refitted | 部分 | 无侵入（`EndPortalRenderPolicy` 放行无 world 的合成 TESR 调用走 glsm FFP/texgen 模拟）+ glsm texgen 着色器驱动兼容修复 | 0.4.1：末地传送门看穿失效/星野条纹已修复（三层根因见 [docs/compat/betterportals.md](compat/betterportals.md)）；无光影场景看穿+星野+淡出+位置实机确认正常；**已知缺口：光影开启后传送门进入视角即严重卡顿且地形整体消失（待修复）** |
 
 ## 验证记录模板
 
