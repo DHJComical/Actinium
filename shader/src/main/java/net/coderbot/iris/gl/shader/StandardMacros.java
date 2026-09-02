@@ -45,10 +45,19 @@ public class StandardMacros {
 
     private static String makeActiniumVersion()
     {
+        return formatActiniumVersion(Tags.VERSION);
+    }
+
+    /**
+     * Encodes a version string (e.g. "alpha-0.0.5-da83c59") into a numeric macro value.
+     * Package-visible for testing.
+     */
+    static String formatActiniumVersion(String version)
+    {
         // The version may carry a non-numeric prefix (e.g. "alpha-0.0.1-2dc019e") and the
         // build appends a git sha, so locate the first dotted numeric triplet instead of
         // assuming the string starts with digits.
-        String[] parts = Tags.VERSION.split("[.-]");
+        String[] parts = version.split("[.-]");
         int numericStart = -1;
         for (int i = 0; i < parts.length; i++) {
             if (!parts[i].isEmpty() && parts[i].chars().allMatch(Character::isDigit)) {
@@ -76,7 +85,13 @@ public class StandardMacros {
                     sub = Integer.parseInt(num);
             }
         }
-        return String.format("%d%02d%02d%03d", major, minor, patch, sub);
+        String encoded = String.format("%d%02d%02d%03d", major, minor, patch, sub);
+        // jcpp lexes macro values as C constants: a multi-digit value starting with '0' is
+        // treated as octal, and an 8/9 digit then raises a LexerException that fails the whole
+        // shader pack load (production: alpha-0.0.5-da83c59 -> "000058359"). Strip the leading
+        // zeros; the numeric value is unchanged.
+        String stripped = encoded.replaceFirst("^0+", "");
+        return stripped.isEmpty() ? "0" : stripped;
     }
 
 	public static Iterable<StringPair> createStandardEnvironmentDefines() {
