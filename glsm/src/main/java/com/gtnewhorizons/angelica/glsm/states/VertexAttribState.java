@@ -1,5 +1,7 @@
 package com.gtnewhorizons.angelica.glsm.states;
 
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 import org.lwjgl.opengl.GL11;
@@ -123,6 +125,25 @@ public class VertexAttribState {
     public static boolean hasAnyClientSideEnabledAttrib() {
         return clientSideEnabledCount > 0;
     }
+
+    /**
+     * Computes the FFP vertex-format flags for a draw fed by client-side arrays, from the
+     * attributes actually enabled on the current VAO. This is the authoritative source for
+     * such draws: the format-based flag cache in ShaderManager only reflects the last
+     * buffer-state setup (e.g. a VBO format) and can describe attributes a client-array
+     * draw does not provide, which would make the FFP shader read unset attribute values
+     * (e.g. a black default vertex color for a POSITION-only draw such as the legacy
+     * end portal TESR).
+     */
+    public static int currentClientArrayVertexFlags() {
+        int flags = 0;
+        if (get(Usage.COLOR.getAttributeLocation()).enabled) flags |= VertexFlags.COLOR_BIT;
+        if (get(Usage.NORMAL.getAttributeLocation()).enabled) flags |= VertexFlags.NORMAL_BIT;
+        if (get(Usage.PRIMARY_UV.getAttributeLocation()).enabled) flags |= VertexFlags.TEXTURE_BIT;
+        if (get(Usage.SECONDARY_UV.getAttributeLocation()).enabled) flags |= VertexFlags.BRIGHTNESS_BIT;
+        return flags;
+    }
+
     public static class Attrib {
         public boolean enabled;
         public int size;
