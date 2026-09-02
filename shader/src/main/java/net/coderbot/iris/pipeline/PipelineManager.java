@@ -32,11 +32,12 @@ public class PipelineManager {
 	}
 
 	public WorldRenderingPipeline preparePipeline(String currentDimension) {
-		// Detect dimension change and do full teardown/recreation
+		// Portal-style mods (e.g. BetterPortals) legitimately render another dimension within the
+		// same frame, so a dimension flip is not necessarily a world-load event: keep every
+		// dimension's pipeline cached and just switch to it. All pipelines are still torn down
+		// together on shaderpack reload / world unload via destroyPipeline().
 		if (lastPreparedDimension != null && !lastPreparedDimension.equals(currentDimension)) {
 			GlFlightRecording.dimensionChange(lastPreparedDimension, currentDimension);
-			Iris.logger.info("Dimension changed from '{}' to '{}', reloading pipeline", lastPreparedDimension, currentDimension);
-			destroyPipeline();
 		}
 		lastPreparedDimension = currentDimension;
 
