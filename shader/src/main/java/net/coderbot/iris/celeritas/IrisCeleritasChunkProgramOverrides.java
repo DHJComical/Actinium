@@ -129,6 +129,10 @@ public class IrisCeleritasChunkProgramOverrides {
             deleteShaders();
         }
 
+        // Drop programs whose dimension pipeline has been evicted or destroyed since the last
+        // lookup; their GL objects would otherwise leak until the next full shader reload.
+        programsPerPipeline.keySet().removeIf(candidate -> !Iris.getPipelineManager().isPipelineCached(candidate));
+
         final WorldRenderingPipeline worldPipeline = Iris.getPipelineManager().getPipelineNullable();
         if (worldPipeline == null) {
             return null;
