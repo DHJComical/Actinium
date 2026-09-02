@@ -45,7 +45,8 @@ class MixinLateTest {
                 "mixins.actinium.cofhcore.json",
                 "mixins.actinium.oldresearch.json",
                 "mixins.actinium.botania.json",
-                "mixins.actinium.hbm.json"
+                "mixins.actinium.hbm.json",
+                "mixins.actinium.scannable.json"
             ),
             Set.copyOf(MixinLate.configsFor(modId -> true))
         );

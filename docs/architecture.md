@@ -163,7 +163,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 - **`world/`**：`WorldSlice`（世界状态切片，离线程拷贝 blockState/biome/light）、
   `EmptyBlockAccess`。
-- **`world/biome/`**：`BiomeColorCache`（生物群系颜色缓存）。
+- **`world/biome/`**：`BiomeColorCache`（生物群系颜色缓存，override 基类 `postProcessColor` hook
+  在 blur 后按世界坐标注入 `BiomeColorNoise` 位置噪声）。
 - **`world/cloned/`**：`ActiniumBlockAccess`、`ChunkRenderContext`、`ClonedChunkSection`、
   `ClonedChunkSectionCache` —— 克隆区块段数据，供离线构建线程使用（依赖 `compat/fluidlogged`）。
 

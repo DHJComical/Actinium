@@ -179,7 +179,7 @@ public class ShaderManager {
         // COLOR_BIT) into it without a matching VAO attribute, which makes the shader read
         // default (0,0,0,1) for the missing attribute and render black. Derive from the
         // currently bound VAO's actual attribute enablement instead.
-        preDraw(VertexAttribState.deriveVertexFlags());
+        preDraw(VertexAttribState.currentClientArrayVertexFlags());
     }
 
     private void updateVariant(boolean hasColor, boolean hasNormal, boolean hasTexCoord, boolean hasLightmap) {
@@ -260,7 +260,7 @@ public class ShaderManager {
             // VAO like HBM-CE's OBJ models): do not keep whatever flags a previous draw left
             // behind, derive them from the VAO's actual attributes so a later raw draw cannot
             // pick up leaked COLOR_BIT/NORMAL_BIT and render black.
-            currentVertexFlags = VertexAttribState.deriveVertexFlags();
+            currentVertexFlags = VertexAttribState.currentClientArrayVertexFlags();
         }
     }
 

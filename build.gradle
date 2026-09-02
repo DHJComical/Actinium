@@ -1,3 +1,4 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.jetbrains.gradle.ext.Gradle
 
 plugins {
@@ -95,6 +96,10 @@ java {
 configurations {
     contain
     implementation.extendsFrom(contain)
+    // External classes bundled into the mod jar body under the shared shadow namespace, mirroring
+    // the upstream Celeritas distribution layout. Kept separate from implementation so the plain
+    // namespace jars stay on the compile/dev classpath for third-party mods that need them.
+    shadowBundle
     modCompileOnly
     compileOnly.extendsFrom(modCompileOnly)
     modRuntimeOnly
@@ -281,6 +286,35 @@ def actiniumProjectAccessTransformer = propertyBool('use_access_transformer')
     ? rootProject.projectDir.toPath().resolve("src/main/resources/${propertyString('access_transformer_locations')}").toFile()
     : null
 
+/**
+ * Dev-runtime image of the mod in the same shadow layout as the production jar: merged module
+ * classes plus the shadow bundle classes relocated under
+ * org.embeddedt.embeddium.impl.shadow.joml. The client and server runs swap the raw source-set
+ * outputs and the plain joml jar for this artifact so mixin field descriptors seen at dev runtime
+ * match the production distribution. The plain joml jar itself stays on the run classpath for
+ * third-party mods that still speak org.joml.
+ */
+def devShadowJar = tasks.register('devShadowJar', ShadowJar) {
+    group = 'build'
+    description = 'Builds the shadow-layout dev runtime jar consumed by the client and server runs.'
+    archiveBaseName.set('Actinium-dev')
+    archiveClassifier.set('')
+    archiveVersion.set('')
+    destinationDirectory.set(layout.buildDirectory.dir('dev-libs'))
+    configurations.set([project.configurations.shadowBundle])
+    from(sourceSets.main.output)
+    relocate('org.joml', 'org.embeddedt.embeddium.impl.shadow.joml')
+    mergeServiceFiles()
+    // Deliberately no manifest inheritance from the jar task: that manifest carries the
+    // FMLCorePlugin / FMLCorePluginContainsFMLMod entries the production jar needs, but at dev time
+    // the coremod is already provided through unimined's fml.coreMods.load system property. Letting
+    // them surface on a plain classpath jar makes FML's classpath scan treat this jar as a coremod
+    // container, which parent-delegates its package (class loader exclusion) and splits classes
+    // like MixinLate across the app class loader and the LaunchClassLoader (ClassCastException on
+    // the mixinbooter ILateMixinLoader cast).
+    manifest.attributes('Implementation-Version': finalVersion)
+}
+
 def remapCompatBridgeJar
 
 unimined.minecraft {
@@ -304,12 +338,32 @@ unimined.minecraft {
                 jvmArgs += extraArgs.split('\\s+').toList()
             }
 
+            // Swap the raw module outputs for the shadow-layout dev jar so the dev runtime carries
+            // the same relocated joml descriptors as the production distribution. The swap happens
+            // on the -Dcrl.dev.extrapath channel below, NOT on the JavaExec classpath: mod classes
+            // must stay invisible to the app class loader (exactly like production, where the mod
+            // jar is not on java.class.path). Keeping the jar on the JavaExec classpath lets the
+            // app loader serve Actinium classes as a parent-delegation fallback and splits classes
+            // like MixinLate across the app loader and the LaunchClassLoader (ClassCastException on
+            // the mixinbooter ILateMixinLoader cast).
+            def originalRunClasspath = classpath
+            classpath = files(provider {
+                def rawModuleOutputs = sourceSets.main.output.files
+                originalRunClasspath.files.findAll { file ->
+                    !rawModuleOutputs.contains(file)
+                }
+            })
+
             // Unimined omits source output paths here when a clean build has not created their directories yet.
+            // The raw module outputs must not reach Cleanroom either: they would expose unrelocated
+            // joml descriptors next to the shadowed ones, so the dev shadow jar replaces them here.
             def extraPathArgument = '-Dcrl.dev.extrapath='
+            def rawModuleOutputPaths = project.sourceSets.main.output.files.collect { it.absolutePath } as Set
             def extraPaths = new LinkedHashSet<String>()
-            extraPaths.addAll(project.sourceSets.main.output.files.collect { it.absolutePath })
+            extraPaths.add(devShadowJar.get().archiveFile.get().asFile.absolutePath)
             jvmArgs.findAll { it.toString().startsWith(extraPathArgument) }.each { argument ->
-                extraPaths.addAll(argument.toString().substring(extraPathArgument.length()).tokenize(File.pathSeparator))
+                extraPaths.addAll(argument.toString().substring(extraPathArgument.length()).tokenize(File.pathSeparator)
+                        .findAll { path -> !rawModuleOutputPaths.contains(path) })
             }
             jvmArgs = jvmArgs.findAll { !it.toString().startsWith(extraPathArgument) }
             jvmArgs += "${extraPathArgument}${extraPaths.join(File.pathSeparator)}"
@@ -326,6 +380,10 @@ unimined.minecraft {
         mixinRemap {
             enableBaseMixin()
             enableMixinExtra()
+        }
+        // Thin intermediate: the distributed jar is the shadowRemapJar output.
+        asJar {
+            archiveClassifier.set('thin')
         }
     }
 
@@ -350,6 +408,25 @@ unimined.minecraft {
 }
 
 def compatBridgeRemapOutput = remapCompatBridgeJar.flatMap { it.archiveFile }
+
+/**
+ * Production mod jar in the upstream Celeritas distribution layout: the remapped thin jar merged
+ * with the shadow bundle classes, with joml relocated under
+ * org.embeddedt.embeddium.impl.shadow.joml so mixin field descriptors match the layout upstream
+ * Celeritas addons bind against. The ContainedDeps joml jar inherited from the thin jar stays
+ * nested for third-party mods that still consume plain org.joml.
+ */
+def shadowRemapJar = tasks.register('shadowRemapJar', ShadowJar) {
+    group = 'build'
+    description = 'Builds the production mod jar with the upstream shadow layout (relocated joml).'
+    dependsOn tasks.named('remapJar')
+    archiveClassifier.set('')
+    configurations.set([project.configurations.shadowBundle])
+    from(zipTree(tasks.named('remapJar').get().archiveFile))
+    relocate('org.joml', 'org.embeddedt.embeddium.impl.shadow.joml')
+    mergeServiceFiles()
+    manifest.inheritFrom(tasks.named('jar').get().manifest)
+}
 
 /**
  * Chunk Animator's dev-environment coremod (MCPNames) reads ./../mcp/methods.csv and
@@ -414,15 +491,18 @@ def prepareCompatBridgeRun = tasks.register('prepareCompatBridgeRun') {
 
 tasks.named('preRunClient').configure {
     dependsOn tasks.named('classes')
+    dependsOn devShadowJar
     dependsOn prepareCompatBridgeRun
     dependsOn prepareChunkAnimatorMcpMappings
 }
 
 tasks.named('preRunServer').configure {
     dependsOn tasks.named('classes')
+    dependsOn devShadowJar
 }
 
 tasks.named('assemble').configure {
+    dependsOn shadowRemapJar
     dependsOn remapCompatBridgeJar
     dependsOn compatBridgeSourcesJar
 }
@@ -619,13 +699,13 @@ tasks.named('processResources').configure {
     from('THIRD_PARTY_NOTICES.md', 'LICENSE-REESES-SODIUM-OPTIONS.md')
 }
 
-def verifyRemapJar = tasks.register('verifyRemapJar') {
-    dependsOn tasks.named('remapJar')
-    def remapOutput = tasks.named('remapJar').flatMap { it.archiveFile }
-    inputs.file(remapOutput)
+def verifyDistributedJar = tasks.register('verifyDistributedJar') {
+    dependsOn tasks.named('shadowRemapJar')
+    def shadowOutput = tasks.named('shadowRemapJar').flatMap { it.archiveFile }
+    inputs.file(shadowOutput)
 
     doLast {
-        def archive = zipTree(remapOutput.get().asFile)
+        def archive = zipTree(shadowOutput.get().asFile)
         def requiredEntries = [
             'META-INF/MANIFEST.MF',
             'THIRD_PARTY_NOTICES.md',
@@ -634,6 +714,8 @@ def verifyRemapJar = tasks.register('verifyRemapJar') {
             'com/gtnewhorizons/angelica/glsm/GLStateManager.class',
             'net/coderbot/iris/Iris.class',
             'org/embeddedt/embeddium/impl/render/chunk/RenderSectionManager.class',
+            'org/embeddedt/embeddium/impl/shadow/joml/Vector3f.class',
+            'joml-1.10.5.jar',
             'mixins.actinium.iris.json',
             'mixins.actinium.vintage.json',
             'META-INF/services/com.gtnewhorizons.angelica.glsm.backend.RenderBackend'
@@ -641,24 +723,30 @@ def verifyRemapJar = tasks.register('verifyRemapJar') {
 
         requiredEntries.each { entry ->
             if (archive.matching { include entry }.isEmpty()) {
-                throw new GradleException("Remapped mod jar is missing required entry: ${entry}")
+                throw new GradleException("Distributed mod jar is missing required entry: ${entry}")
             }
         }
 
-        def manifest = new java.util.jar.JarFile(remapOutput.get().asFile).withCloseable {
+        // The shadow layout only holds relocated joml classes in the jar body; plain org.joml is
+        // provided to third-party mods by the nested ContainedDeps jar instead.
+        if (!archive.matching { include 'org/joml/**/*.class' }.isEmpty()) {
+            throw new GradleException('Distributed mod jar leaks plain org.joml classes into the jar body')
+        }
+
+        def manifest = new java.util.jar.JarFile(shadowOutput.get().asFile).withCloseable {
             it.manifest.mainAttributes
         }
         if (manifest.getValue('FMLCorePlugin') != propertyString('coremod_plugin_class_name')) {
-            throw new GradleException('Remapped mod jar has an invalid FMLCorePlugin manifest entry')
+            throw new GradleException('Distributed mod jar has an invalid FMLCorePlugin manifest entry')
         }
         if (manifest.getValue('FMLAT') != propertyString('access_transformer_locations').tokenize('/\\').last()) {
-            throw new GradleException('Remapped mod jar has an invalid FMLAT manifest entry')
+            throw new GradleException('Distributed mod jar has an invalid FMLAT manifest entry')
         }
 
-        new java.util.jar.JarFile(remapOutput.get().asFile).withCloseable { jar ->
+        new java.util.jar.JarFile(shadowOutput.get().asFile).withCloseable { jar ->
             def metadataEntry = jar.getEntry('mcmod.info')
             if (metadataEntry == null) {
-                throw new GradleException('Remapped mod jar is missing mcmod.info')
+                throw new GradleException('Distributed mod jar is missing mcmod.info')
             }
             def metadata = new groovy.json.JsonSlurper().parse(jar.getInputStream(metadataEntry))
             def mod = metadata[0]
@@ -669,10 +757,10 @@ def verifyRemapJar = tasks.register('verifyRemapJar') {
                     || mod.url != propertyString('mod_url')
                     || mod.updateJSON != propertyString('mod_update_json')
                     || mod.logoFile != propertyString('mod_logo_path')) {
-                throw new GradleException('Remapped mod jar metadata does not match Gradle mod metadata properties')
+                throw new GradleException('Distributed mod jar metadata does not match Gradle mod metadata properties')
             }
             if (!mod.logoFile.isEmpty() && jar.getEntry(mod.logoFile) == null) {
-                throw new GradleException("Remapped mod jar is missing configured logo: ${mod.logoFile}")
+                throw new GradleException("Distributed mod jar is missing configured logo: ${mod.logoFile}")
             }
         }
     }
@@ -740,7 +828,7 @@ def verifyModuleBoundaries = tasks.register('verifyModuleBoundaries') {
 }
 
 tasks.named('check').configure {
-    dependsOn verifyRemapJar
+    dependsOn verifyDistributedJar
     dependsOn verifyCompatBridgeJar
     dependsOn verifyModuleBoundaries
 }

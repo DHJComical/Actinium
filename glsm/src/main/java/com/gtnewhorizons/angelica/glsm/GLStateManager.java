@@ -2362,7 +2362,7 @@ public class GLStateManager {
             return;
         }
         prepareWideLineEmulation(mode);
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("byte-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_BYTE, -1L);
@@ -2380,7 +2380,7 @@ public class GLStateManager {
             return;
         }
         prepareWideLineEmulation(mode);
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("int-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_INT, -1L);
@@ -2402,7 +2402,7 @@ public class GLStateManager {
             return;
         }
         prepareWideLineEmulation(mode);
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("short-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_SHORT, -1L);
@@ -2424,7 +2424,7 @@ public class GLStateManager {
             return;
         }
         prepareWideLineEmulation(mode);
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("typed-byte-buffer", mode, count, type, -1L);
@@ -2460,7 +2460,7 @@ public class GLStateManager {
             return;
         }
         prepareWideLineEmulation(mode);
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawElements("ebo-offset", mode, indices_count, type, indices_buffer_offset);
@@ -2487,28 +2487,28 @@ public class GLStateManager {
     }
 
     public static void glMultiDrawElementsIndirect(int mode, int type, long indirect, int drawcount, int stride) {
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, drawcount);
         RENDER_BACKEND.multiDrawElementsIndirect(mode, type, indirect, drawcount, stride);
     }
 
     public static void glMultiDrawElementsBaseVertex(int mode, long pCount, int type, long pIndices, int drawcount, long pBaseVertex) {
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, drawcount);
         RENDER_BACKEND.multiDrawElementsBaseVertex(mode, pCount, type, pIndices, drawcount, pBaseVertex);
     }
 
     public static void glDrawElementsBaseVertex(int mode, int count, int type, long indices, int basevertex) {
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, count);
         RENDER_BACKEND.drawElementsBaseVertex(mode, count, type, indices, basevertex);
     }
 
     public static void glDrawElementsInstanced(int mode, int count, int type, long indices, int primcount) {
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, count);
         RENDER_BACKEND.drawElementsInstanced(mode, count, type, indices, primcount);
@@ -2516,7 +2516,7 @@ public class GLStateManager {
 
     public static void glDrawArraysInstanced(int mode, int first, int count, int primcount) {
         prepareWideLineEmulation(mode);
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         recordGpuCommand(GpuCommandType.DRAW_ARRAYS, mode, count);
         if (mode == GL11.GL_QUADS) {
@@ -2527,6 +2527,23 @@ public class GLStateManager {
             RENDER_BACKEND.drawArraysInstanced(GL11.GL_TRIANGLE_FAN, first, count, primcount);
         } else {
             RENDER_BACKEND.drawArraysInstanced(mode, first, count, primcount);
+        }
+    }
+
+    /**
+     * Selects the FFP variant before a raw draw call. Draws fed by client-side arrays derive
+     * the vertex format from the actually enabled attributes (see
+     * {@link VertexAttribState#currentClientArrayVertexFlags()}): the cached currentVertexFlags
+     * only reflects the last buffer-state setup and may describe attributes this draw does not
+     * provide, making the FFP shader read unset attribute values (e.g. a black default vertex
+     * color for a POSITION-only draw such as the legacy end portal TESR).
+     */
+    private static void preDrawFFP() {
+        final ShaderManager ffp = ShaderManager.getInstance();
+        if (VertexAttribState.hasAnyClientSideEnabledAttrib()) {
+            ffp.preDraw(VertexAttribState.currentClientArrayVertexFlags());
+        } else {
+            ffp.preDraw();
         }
     }
 
@@ -2610,7 +2627,7 @@ public class GLStateManager {
             return;
         }
         prepareWideLineEmulation(mode);
-        ShaderManager.getInstance().preDraw();
+        preDrawFFP();
         prepareClientArrays();
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawArrays("draw-arrays", mode, first, count);

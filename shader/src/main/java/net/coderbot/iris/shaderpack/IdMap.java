@@ -116,27 +116,65 @@ public class IdMap {
         }
 
         Deque<Boolean> mcVersionConditionals = new ArrayDeque<>();
-        for (String line : rawBlockProperties.split("\\R")) {
-            String trimmed = line.trim();
+        String[] lines = rawBlockProperties.split("\\R");
+        for (int i = 0; i < lines.length; i++) {
+            String trimmed = lines[i].trim();
             if (!trimmed.startsWith("#")) {
                 continue;
             }
 
             String directive = trimmed.substring(1).trim();
             if (directive.startsWith("if ") || directive.startsWith("ifdef ") || directive.startsWith("ifndef ")) {
-                mcVersionConditionals.push(MC_VERSION_CONDITIONAL_PATTERN.matcher(line).find());
+                mcVersionConditionals.push(MC_VERSION_CONDITIONAL_PATTERN.matcher(lines[i]).find());
             } else if (directive.startsWith("elif ")) {
                 if (!mcVersionConditionals.isEmpty()
-                        && (mcVersionConditionals.peek() || MC_VERSION_CONDITIONAL_PATTERN.matcher(line).find())) {
+                        && (mcVersionConditionals.peek() || MC_VERSION_CONDITIONAL_PATTERN.matcher(lines[i]).find())) {
                     return true;
                 }
             } else if (directive.startsWith("else")) {
-                if (!mcVersionConditionals.isEmpty() && mcVersionConditionals.peek()) {
+                // An MC_VERSION conditional whose fallback branch carries actual mappings (e.g.
+                // Complementary's 1.8-1.12 numeric-ID section) requires legacy evaluation on 1.12.2.
+                // Photon v1.3b instead ships an EMPTY 1.12 #else section: with legacy evaluation the
+                // jcpp preprocessor would strip the whole modern mapping section and leave the ID map
+                // empty, so those packs must stay on the modern path (forced MC_VERSION 260101).
+                if (!mcVersionConditionals.isEmpty() && mcVersionConditionals.peek()
+                        && hasSubstantiveLines(lines, i)) {
                     return true;
                 }
             } else if (directive.startsWith("endif")) {
                 if (!mcVersionConditionals.isEmpty()) {
                     mcVersionConditionals.pop();
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Scans forward from an {@code #else} line to its matching {@code #endif} and reports whether the
+     * branch body contains any substantive properties line. Comment lines ({@code #...}) and blank
+     * lines are ignored; nested conditionals inside the branch are tracked so the scan stops at the
+     * right boundary.
+     */
+    private static boolean hasSubstantiveLines(String[] lines, int elseIndex) {
+        int depth = 1;
+        for (int i = elseIndex + 1; i < lines.length; i++) {
+            String trimmed = lines[i].trim();
+            if (!trimmed.startsWith("#")) {
+                if (!trimmed.isEmpty()) {
+                    return true;
+                }
+                continue;
+            }
+
+            String directive = trimmed.substring(1).trim();
+            if (directive.startsWith("if ") || directive.startsWith("ifdef ") || directive.startsWith("ifndef ")) {
+                depth++;
+            } else if (directive.startsWith("endif")) {
+                depth--;
+                if (depth == 0) {
+                    return false;
                 }
             }
         }

@@ -29,9 +29,14 @@ public class NativeImageBackedNoiseTexture extends DynamicTexture {
 
 	@Override
     public void updateDynamicTexture() {
+        // DynamicTexture's upload path (TextureUtil.uploadTextureSub) resets the
+        // filtering to GL_NEAREST, which turns the per-pixel random noise into harsh
+        // pixel stripes when sampled (Sildur-style water waves show as crossing
+        // straight lines). Re-apply linear filtering after the upload so the noise
+        // interpolates into smooth ripples.
+        super.updateDynamicTexture();
         GLStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GLStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
-        super.updateDynamicTexture();
     }
 
 }

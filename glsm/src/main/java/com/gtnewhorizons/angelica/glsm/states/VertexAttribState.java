@@ -139,27 +139,26 @@ public class VertexAttribState {
     }
 
     /**
-     * Derives the FFP shader vertex-flag mask from the currently bound VAO's enabled
-     * vertex attributes.
-     *
-     * <p>Used by the FFP shader pipeline when drawing through the raw GL draw entry points
-     * (glDrawElements/glDrawArrays and friends). Those paths must not reuse the globally
-     * tracked {@code currentVertexFlags} from a previous draw: third-party mods (e.g. HBM-CE)
-     * upload OBJ models into VAOs while client-side state calls ({@code glEnableClientState})
-     * leak {@code COLOR_BIT} and friends into the global flags without a matching VAO attribute,
-     * so the shader ends up declaring attributes the VAO does not provide and reads the default
-     * (0,0,0,1) — rendering black. Deriving from the per-VAO attribute enablement is always
-     * consistent with the real GL state.</p>
+     * Computes the FFP vertex-format flags from the attributes actually enabled on the
+     * currently bound VAO. This is the authoritative source both for draws fed by
+     * client-side arrays and for the raw GL draw entry points (glDrawElements/glDrawArrays
+     * and friends): the format-based flag cache in ShaderManager only reflects the last
+     * buffer-state setup (e.g. a VBO format), and client-state calls during third-party
+     * model uploads (e.g. HBM-CE's glEnableClientState) can leak COLOR_BIT and friends into
+     * the global flags without a matching VAO attribute. Either way the FFP shader would
+     * declare attributes the draw does not provide and read the default (0,0,0,1) — a
+     * POSITION-only draw such as the legacy end portal TESR renders black. Deriving from
+     * the per-VAO attribute enablement is always consistent with the real GL state.
      */
-    public static int deriveVertexFlags() {
+    public static int currentClientArrayVertexFlags() {
         if (current == null) {
             return 0;
         }
         int flags = 0;
-        if (current[Usage.COLOR.getAttributeLocation()].enabled) flags |= VertexFlags.COLOR_BIT;
-        if (current[Usage.PRIMARY_UV.getAttributeLocation()].enabled) flags |= VertexFlags.TEXTURE_BIT;
-        if (current[Usage.SECONDARY_UV.getAttributeLocation()].enabled) flags |= VertexFlags.BRIGHTNESS_BIT;
-        if (current[Usage.NORMAL.getAttributeLocation()].enabled) flags |= VertexFlags.NORMAL_BIT;
+        if (get(Usage.COLOR.getAttributeLocation()).enabled) flags |= VertexFlags.COLOR_BIT;
+        if (get(Usage.NORMAL.getAttributeLocation()).enabled) flags |= VertexFlags.NORMAL_BIT;
+        if (get(Usage.PRIMARY_UV.getAttributeLocation()).enabled) flags |= VertexFlags.TEXTURE_BIT;
+        if (get(Usage.SECONDARY_UV.getAttributeLocation()).enabled) flags |= VertexFlags.BRIGHTNESS_BIT;
         return flags;
     }
 

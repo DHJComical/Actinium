@@ -10,6 +10,7 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.EnumSkyBlock;
+import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldType;
 import net.minecraft.world.biome.Biome;
@@ -25,6 +26,7 @@ import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.biome.BiomeColorCache;
+import com.dhj.actinium.world.biome.BiomeColorNoise;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
 import com.dhj.actinium.world.cloned.ChunkRenderContext;
 import com.dhj.actinium.world.cloned.ClonedChunkSection;
@@ -441,7 +443,9 @@ public class WorldSlice implements ActiniumBlockAccess {
     @Override
     public int getBlockTint(BlockPos pos, BiomeColorHelper.ColorResolver resolver) {
         if(!blockBoxContains(this.volume, pos.getX(), pos.getY(), pos.getZ())) {
-            return resolver.getColorAtPos(Biomes.PLAINS, pos);
+            // Same noise treatment as the cached path so out-of-volume queries stay consistent.
+            return BiomeColorNoise.applyForResolver(resolver, pos.getX(), pos.getY(), pos.getZ(),
+                    resolver.getColorAtPos(Biomes.PLAINS, pos));
         }
 
         return this.biomeColorCache.getColor(resolver, pos.getX(), pos.getY(), pos.getZ());

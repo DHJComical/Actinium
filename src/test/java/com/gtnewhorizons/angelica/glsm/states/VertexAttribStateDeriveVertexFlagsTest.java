@@ -13,7 +13,7 @@ import java.nio.ByteOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Verifies that {@link VertexAttribState#deriveVertexFlags()} derives the FFP shader
+ * Verifies that {@link VertexAttribState#currentClientArrayVertexFlags()} derives the FFP shader
  * vertex-flag mask from the currently bound VAO's enabled attributes.
  *
  * <p>The FFP shader pipeline uses this mask for raw GL draw entry points
@@ -44,7 +44,7 @@ class VertexAttribStateDeriveVertexFlagsTest {
     @Test
     void freshVAOderivesNoFlags() {
         VertexAttribState.onBindVertexArray(1);
-        assertEquals(0, VertexAttribState.deriveVertexFlags());
+        assertEquals(0, VertexAttribState.currentClientArrayVertexFlags());
     }
 
     /**
@@ -59,7 +59,7 @@ class VertexAttribStateDeriveVertexFlagsTest {
         setEnabled(Usage.PRIMARY_UV.getAttributeLocation(), true);
         setEnabled(Usage.NORMAL.getAttributeLocation(), true);
 
-        int flags = VertexAttribState.deriveVertexFlags();
+        int flags = VertexAttribState.currentClientArrayVertexFlags();
         assertEquals(VertexFlags.TEXTURE_BIT | VertexFlags.NORMAL_BIT, flags,
             "mask must not include COLOR_BIT when the VAO has no color attribute");
     }
@@ -75,7 +75,7 @@ class VertexAttribStateDeriveVertexFlagsTest {
         setEnabled(Usage.PRIMARY_UV.getAttributeLocation(), true);
         setEnabled(Usage.COLOR.getAttributeLocation(), true);
 
-        int flags = VertexAttribState.deriveVertexFlags();
+        int flags = VertexAttribState.currentClientArrayVertexFlags();
         assertEquals(VertexFlags.TEXTURE_BIT | VertexFlags.COLOR_BIT, flags,
             "mask must include COLOR_BIT when the VAO has a color attribute");
     }
@@ -90,10 +90,10 @@ class VertexAttribStateDeriveVertexFlagsTest {
         VertexAttribState.onBindVertexArray(1);
         setEnabled(Usage.POSITION.getAttributeLocation(), true);
         setEnabled(Usage.SECONDARY_UV.getAttributeLocation(), true);
-        assertEquals(VertexFlags.BRIGHTNESS_BIT, VertexAttribState.deriveVertexFlags());
+        assertEquals(VertexFlags.BRIGHTNESS_BIT, VertexAttribState.currentClientArrayVertexFlags());
 
         VertexAttribState.onBindVertexArray(2);
-        assertEquals(0, VertexAttribState.deriveVertexFlags(),
+        assertEquals(0, VertexAttribState.currentClientArrayVertexFlags(),
             "binding a different VAO must not keep the previous VAO's brightness bit");
     }
 
@@ -106,10 +106,10 @@ class VertexAttribStateDeriveVertexFlagsTest {
     void disablingAttribDropsItsBit() {
         VertexAttribState.onBindVertexArray(1);
         setEnabled(Usage.COLOR.getAttributeLocation(), true);
-        assertEquals(VertexFlags.COLOR_BIT, VertexAttribState.deriveVertexFlags());
+        assertEquals(VertexFlags.COLOR_BIT, VertexAttribState.currentClientArrayVertexFlags());
 
         setEnabled(Usage.COLOR.getAttributeLocation(), false);
-        assertEquals(0, VertexAttribState.deriveVertexFlags());
+        assertEquals(0, VertexAttribState.currentClientArrayVertexFlags());
     }
 
     /**
