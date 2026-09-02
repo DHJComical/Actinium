@@ -473,6 +473,61 @@ public class OcclusionCuller {
         return viewport.isBoxVisible((chunkX << 4) + 8, (chunkY << 4) + 8, (chunkZ << 4) + 8, CHUNK_SECTION_SIZE);
     }
 
+    // --------------------------------------------------------------------------------------------------------
+    // Legacy object-node API — HBM-CE compatibility seam.
+    //
+    // HBM-CE's MixinOcclusionCuller (hbm.mod.mixin.json) applies MixinExtras @WrapOperation injections
+    // against the pre-lattice upstream OcclusionCuller API: it wraps the isWithinFrustum(Viewport,
+    // OcclusionNode) calls inside isSectionVisible and tryVisitNode (require=2 total) and the
+    // isWithinRenderDistance(CameraTransform, OcclusionNode, float) call inside isSectionVisible
+    // (require=1), expanding the culling bounds for its chunk-spanning machines. Actinium's
+    // lattice-based search never uses object nodes, so the members below are never invoked by the
+    // render path; they exist purely as injection targets. Without them the critical injections fail,
+    // poison this class, and break world loading with a NoClassDefFoundError inside the join task
+    // (issue #47).
+
+    /**
+     * Legacy frustum test operating on an object node — HBM-CE injection target.
+     */
+    public static boolean isWithinFrustum(Viewport viewport, OcclusionNode section) {
+        return viewport.isBoxVisible(section.getOriginX() + 8, section.getOriginY() + 8, section.getOriginZ() + 8, CHUNK_SECTION_SIZE);
+    }
+
+    /**
+     * Legacy render-distance test operating on an object node — HBM-CE injection target.
+     */
+    private static boolean isWithinRenderDistance(CameraTransform camera, OcclusionNode section, float maxDistance) {
+        int ox = section.getOriginX() - camera.intX;
+        int oy = section.getOriginY() - camera.intY;
+        int oz = section.getOriginZ() - camera.intZ;
+
+        float dx = nearestToZero(ox, ox + 16) - camera.fracX;
+        float dy = nearestToZero(oy, oy + 16) - camera.fracY;
+        float dz = nearestToZero(oz, oz + 16) - camera.fracZ;
+
+        return ((((dx * dx) + (dz * dz)) < (maxDistance * maxDistance)) && (Math.abs(dy) < maxDistance));
+    }
+
+    /**
+     * Legacy per-section visibility test — HBM-CE injection target. Never called by Actinium's
+     * render path.
+     */
+    @SuppressWarnings("unused")
+    private static boolean isSectionVisible(OcclusionNode section, Viewport viewport, float maxDistance) {
+        return isWithinRenderDistance(viewport.getTransform(), section, maxDistance) && isWithinFrustum(viewport, section);
+    }
+
+    /**
+     * Legacy node visit — HBM-CE injection target providing the second wrapped
+     * isWithinFrustum(Viewport, OcclusionNode) call site. Never called by Actinium's render path.
+     */
+    @SuppressWarnings("unused")
+    private static void tryVisitNode(Viewport viewport, OcclusionNode section) {
+        if (section == null || !isWithinFrustum(viewport, section)) {
+            return;
+        }
+    }
+
     /**
      * Choose the search seed. A loaded in-world camera section is processed
      * inline; an out-of-height or unloaded camera is handled by scanning a

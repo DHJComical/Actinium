@@ -21,7 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class VertexAttribStateTest {
 
-    private static final ByteBuffer VERTEX_DATA = ByteBuffer.allocate(256);
+    // Must be a direct (native) buffer: VertexAttribState.set captures the client pointer's
+    // native address via MemoryUtilities, which has no valid address for a heap buffer.
+    private static final ByteBuffer VERTEX_DATA = ByteBuffer.allocateDirect(256);
 
     @BeforeEach
     void resetState() {

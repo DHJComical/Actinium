@@ -198,7 +198,17 @@ public abstract class RenderSectionManager {
      * per-frame camera bookkeeping.
      */
     public void update(Viewport positionedViewport, int frame, boolean spectator) {
-        this.updateCameraPosition(positionedViewport);
+        // HBM-CE compatibility seam. MixinRenderSectionManager (hbm.mod.mixin.json) applies
+        // @Redirect injections on this exact method body that rewrite the CameraTransform
+        // x/y/z getfields below to its unsafe accessors (CeleritasCameraTransformAccess).
+        // The reads must stay inline here — delegating to updateCameraPosition() leaves the
+        // redirector with zero scanned targets and the mixin application aborts with a
+        // Critical injection error, poisoning this class (NoClassDefFoundError during mod
+        // construction). updateCameraPosition is kept for the shadow pass, which HBM-CE
+        // does not redirect. See HbmCameraRedirectContractTest.
+        this.lastCameraPosition = positionedViewport.getBlockCoord();
+        var transform = positionedViewport.getTransform();
+        this.cameraPosition = new Vector3d(transform.x, transform.y, transform.z);
 
         if (this.shadowPassRanThisFrame) {
             // The shadow pass searched for this frame if the graph was dirty then. Any needsUpdate raised by
@@ -237,6 +247,10 @@ public abstract class RenderSectionManager {
                 this.getSearchDistance(), lightVector, this.getTargetQueueSize());
     }
 
+    /**
+     * Shadow-pass camera bookkeeping. Not shared with {@link #update} any more: HBM-CE's
+     * redirector must find the CameraTransform getfields inside {@code update}'s own body.
+     */
     private void updateCameraPosition(Viewport positionedViewport) {
         this.lastCameraPosition = positionedViewport.getBlockCoord();
         var transform = positionedViewport.getTransform();

@@ -2,6 +2,7 @@ package com.gtnewhorizons.angelica.glsm.states;
 
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
+import com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 import org.lwjgl.opengl.GL11;
@@ -82,7 +83,7 @@ public class VertexAttribState {
         a.stride = stride;
         a.offset = 0;
         a.vboId = vboId;
-        a.clientPointer = (vboId == 0) ? pointer : null;
+        a.clientPointer = (vboId == 0 && pointer != null) ? captureClientPointer(pointer) : null;
         final boolean now = a.isClientSide();
         if (was != now) clientSideEnabledCount += now ? 1 : -1;
     }
@@ -98,6 +99,17 @@ public class VertexAttribState {
 
     public static Attrib get(int index) {
         return current[index];
+    }
+
+    /**
+     * Captures the native pointer address without treating the Java buffer limit as its GL
+     * allocation boundary. HBM reuses a BufferBuilder allocation and changes its limit between
+     * uploads; OpenGL client pointers remain valid for the allocation range.
+     */
+    private static ByteBuffer captureClientPointer(ByteBuffer pointer) {
+        final int position = pointer.position();
+        final int capacity = pointer.capacity() - position;
+        return MemoryUtilities.memByteBuffer(MemoryUtilities.memAddress(pointer), capacity);
     }
 
 
@@ -127,15 +139,21 @@ public class VertexAttribState {
     }
 
     /**
-     * Computes the FFP vertex-format flags for a draw fed by client-side arrays, from the
-     * attributes actually enabled on the current VAO. This is the authoritative source for
-     * such draws: the format-based flag cache in ShaderManager only reflects the last
-     * buffer-state setup (e.g. a VBO format) and can describe attributes a client-array
-     * draw does not provide, which would make the FFP shader read unset attribute values
-     * (e.g. a black default vertex color for a POSITION-only draw such as the legacy
-     * end portal TESR).
+     * Computes the FFP vertex-format flags from the attributes actually enabled on the
+     * currently bound VAO. This is the authoritative source both for draws fed by
+     * client-side arrays and for the raw GL draw entry points (glDrawElements/glDrawArrays
+     * and friends): the format-based flag cache in ShaderManager only reflects the last
+     * buffer-state setup (e.g. a VBO format), and client-state calls during third-party
+     * model uploads (e.g. HBM-CE's glEnableClientState) can leak COLOR_BIT and friends into
+     * the global flags without a matching VAO attribute. Either way the FFP shader would
+     * declare attributes the draw does not provide and read the default (0,0,0,1) — a
+     * POSITION-only draw such as the legacy end portal TESR renders black. Deriving from
+     * the per-VAO attribute enablement is always consistent with the real GL state.
      */
     public static int currentClientArrayVertexFlags() {
+        if (current == null) {
+            return 0;
+        }
         int flags = 0;
         if (get(Usage.COLOR.getAttributeLocation()).enabled) flags |= VertexFlags.COLOR_BIT;
         if (get(Usage.NORMAL.getAttributeLocation()).enabled) flags |= VertexFlags.NORMAL_BIT;
