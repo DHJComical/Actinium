@@ -142,19 +142,30 @@ class TerrainRenderPassTest {
         );
     }
 
-    @ParameterizedTest(name = "{0} shadow={1} writes depth={2}")
+    @ParameterizedTest(name = "{0} shadow={3} writes depth={4}")
     @MethodSource("depthWritePolicies")
-    void appliesDepthWritePolicy(String name, boolean shadowPass, boolean expected) {
-        TerrainRenderPass pass = pass(name, expected, shadowPass, false);
+    void appliesDepthWritePolicy(
+            String name,
+            TerrainRenderPass.Semantic semantic,
+            boolean reverseOrder,
+            boolean writesDepth,
+            boolean shadowPass,
+            boolean expected
+    ) {
+        TerrainRenderPass pass = pass(name, writesDepth, reverseOrder, false, semantic);
 
         assertEquals(expected, IrisCeleritasChunkShaderInterface.shouldWriteDepth(pass, shadowPass));
     }
 
     private static Stream<Arguments> depthWritePolicies() {
         return Stream.of(
-                Arguments.of("translucent", false, false),
-                Arguments.of("water", false, true),
-                Arguments.of("shadow translucent", true, true)
+                // Mirror VintageRenderPassConfigurationBuilder: the translucent pass carries the
+                // fixed-function depth policy (writesDepth=true), and the Iris main pass must still
+                // suppress depth writes so TESR fluids behind glass stay visible (#58).
+                Arguments.of("translucent", TerrainRenderPass.Semantic.TRANSLUCENT, true, true, false, false),
+                Arguments.of("water", TerrainRenderPass.Semantic.WATER, true, true, false, true),
+                Arguments.of("solid", TerrainRenderPass.Semantic.SOLID, false, true, false, true),
+                Arguments.of("shadow translucent", TerrainRenderPass.Semantic.TRANSLUCENT, true, true, true, true)
         );
     }
 

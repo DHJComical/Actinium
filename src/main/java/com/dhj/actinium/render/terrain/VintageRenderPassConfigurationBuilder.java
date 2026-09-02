@@ -87,7 +87,14 @@ public class VintageRenderPassConfigurationBuilder {
                 .fragmentDiscard(false)
                 .useReverseOrder(true)
                 .semantic(TerrainRenderPass.Semantic.TRANSLUCENT)
-                .writesDepth(true)
+                // Vanilla 1.12.2 wraps the whole translucent stage (terrain plus the pass-1
+                // tile-entity re-render such as EnderIO tank fluid) in depthMask(false), see
+                // EntityRenderer around lines 1539/1564. Writing depth here makes translucent
+                // terrain (e.g. the tank glass) occlude pass-1 TESR geometry drawn afterwards,
+                // which hid EnderIO tank fluid on both the fixed-function and shader paths (#58).
+                // The earlier flip to true (64b9c32/da83c59) rested on the incorrect premise
+                // that vanilla keeps the depth mask on for translucent terrain.
+                .writesDepth(false)
                 .useTranslucencySorting(ActiniumRuntime.options().performance.useTranslucentFaceSorting)
                 .build();
 
