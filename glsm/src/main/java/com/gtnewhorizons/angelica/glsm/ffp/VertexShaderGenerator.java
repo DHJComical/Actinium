@@ -363,25 +363,26 @@ public final class VertexShaderGenerator {
      */
     private static void emitTexGenCoordGeneration(StringBuilder sb, VertexKey key) {
         sb.append("  // TexGen coordinate generation\n");
-        sb.append("  vec4 texGenCoord = vec4(0.0, 0.0, 0.0, 1.0);\n");
-
-        emitTexGenComponent(sb, key.texGenModeS(), "s", "S", key);
-        emitTexGenComponent(sb, key.texGenModeT(), "t", "T", key);
-        emitTexGenComponent(sb, key.texGenModeR(), "r", "R", key);
-        emitTexGenComponent(sb, key.texGenModeQ(), "q", "Q", key);
+        // Single-expression constructor: per-component writes to a pre-initialized vec4 let
+        // some drivers (NVIDIA) dead-code-eliminate the uniform feeding a lone component
+        // (observed: u_TexGenEyePlaneS dropped while T/R survive, breaking end-portal texgen).
+        sb.append("  vec4 texGenCoord = vec4(")
+            .append(texGenComponentExpr(key.texGenModeS(), "S")).append(", ")
+            .append(texGenComponentExpr(key.texGenModeT(), "T")).append(", ")
+            .append(texGenComponentExpr(key.texGenModeR(), "R")).append(", ")
+            .append(texGenComponentExpr(key.texGenModeQ(), "Q")).append(");\n");
 
         // Always apply texture matrix when texgen is active (forced on in VertexKey)
         sb.append("  v_TexCoord0 = u_TextureMatrix0 * texGenCoord;\n");
     }
 
-    private static void emitTexGenComponent(StringBuilder sb, int mode, String swizzle, String coordName, VertexKey key) {
-        switch (mode) {
-            case VertexKey.TG_OBJ_LINEAR ->
-                sb.append("  texGenCoord.").append(swizzle).append(" = dot(pos4, u_TexGenObjPlane").append(coordName).append(");\n");
-            case VertexKey.TG_EYE_LINEAR ->
-                sb.append("  texGenCoord.").append(swizzle).append(" = dot(eyePos, u_TexGenEyePlane").append(coordName).append(");\n");
-            // TG_NONE: keep default (0 for s/t/r, 1 for q) — already set in texGenCoord init
-        }
+    private static String texGenComponentExpr(int mode, String coordName) {
+        return switch (mode) {
+            case VertexKey.TG_OBJ_LINEAR -> "dot(pos4, u_TexGenObjPlane" + coordName + ")";
+            case VertexKey.TG_EYE_LINEAR -> "dot(eyePos, u_TexGenEyePlane" + coordName + ")";
+            // TG_NONE: default (0 for s/t/r, 1 for q) — matches the old texGenCoord init
+            default -> "Q".equals(coordName) ? "1.0" : "0.0";
+        };
     }
 
     private static boolean texGenNeedsEyePos(VertexKey key) {

@@ -35,6 +35,9 @@ dependencies {
 
     implementation 'org.joml:joml:1.10.5'
     contain 'org.joml:joml:1.10.5'
+    // Same joml artifact bundled into the jar body and relocated under the shadow namespace by the
+    // shadowRemapJar / devShadowJar tasks (upstream Celeritas distribution layout).
+    shadowBundle 'org.joml:joml:1.10.5'
     compileOnly 'it.unimi.dsi:fastutil:8.5.18'
     compileOnly "org.ow2.asm:asm:${asmVersion}"
     compileOnly "org.ow2.asm:asm-commons:${asmVersion}"

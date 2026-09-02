@@ -13,6 +13,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
@@ -20,8 +21,13 @@ import java.util.function.Function;
 
 public class PipelineManager {
 
+	private static final long IDLE_PIPELINE_TIMEOUT_NS = 30_000_000_000L;
+	private static final long EVICTION_SCAN_INTERVAL_NS = 1_000_000_000L;
+
 	private final Function<String, WorldRenderingPipeline> pipelineFactory;
 	private final Map<String, WorldRenderingPipeline> pipelinesPerDimension = new HashMap<>();
+	private final Map<String, Long> pipelineLastUsedNs = new HashMap<>();
+	private long lastEvictionScanNs;
 	private WorldRenderingPipeline pipeline = new FixedFunctionWorldRenderingPipeline();
 	private String lastPreparedDimension = null;
     @Getter
@@ -32,11 +38,17 @@ public class PipelineManager {
 	}
 
 	public WorldRenderingPipeline preparePipeline(String currentDimension) {
-		// Detect dimension change and do full teardown/recreation
+		// Portal-style mods (e.g. BetterPortals) legitimately render another dimension within the
+		// same frame, so a dimension flip is not necessarily a world-load event: keep every
+		// dimension's pipeline cached and just switch to it. Pipelines of dimensions that stop
+		// being rendered (portal gone, dimension left behind) are destroyed once they have been
+		// idle for IDLE_PIPELINE_TIMEOUT_NS so their render targets and programs are reclaimed;
+		// shaderpack reload / world unload still tears down everything via destroyPipeline().
+		long nowNs = System.nanoTime();
+		evictIdlePipelines(currentDimension, nowNs);
+
 		if (lastPreparedDimension != null && !lastPreparedDimension.equals(currentDimension)) {
 			GlFlightRecording.dimensionChange(lastPreparedDimension, currentDimension);
-			Iris.logger.info("Dimension changed from '{}' to '{}', reloading pipeline", lastPreparedDimension, currentDimension);
-			destroyPipeline();
 		}
 		lastPreparedDimension = currentDimension;
 
@@ -53,8 +65,46 @@ public class PipelineManager {
 		} else {
 			pipeline = pipelinesPerDimension.get(currentDimension);
 		}
+		pipelineLastUsedNs.put(currentDimension, nowNs);
 
 		return pipeline;
+	}
+
+	private void evictIdlePipelines(String activeDimension, long nowNs) {
+		if (nowNs - lastEvictionScanNs < EVICTION_SCAN_INTERVAL_NS) {
+			return;
+		}
+		lastEvictionScanNs = nowNs;
+
+		Iterator<Entry<String, WorldRenderingPipeline>> iterator = pipelinesPerDimension.entrySet().iterator();
+		while (iterator.hasNext()) {
+			Entry<String, WorldRenderingPipeline> entry = iterator.next();
+			String dimensionName = entry.getKey();
+			if (dimensionName.equals(activeDimension)) {
+				continue;
+			}
+			Long lastUsedNs = pipelineLastUsedNs.get(dimensionName);
+			if (lastUsedNs != null && nowNs - lastUsedNs <= IDLE_PIPELINE_TIMEOUT_NS) {
+				continue;
+			}
+
+			GlFlightRecording.beginPipelineDestroy(dimensionName);
+			Iris.logger.info("Destroying idle pipeline for dimension '{}'", dimensionName);
+			resetTextureState();
+			entry.getValue().destroy();
+			MinecraftFramebufferHelper.restoreMainFramebuffer(true);
+			GlFlightRecording.endPipelineDestroy(dimensionName);
+			iterator.remove();
+			pipelineLastUsedNs.remove(dimensionName);
+		}
+	}
+
+	/**
+	 * Returns whether the given pipeline is still held by the per-dimension cache. The terrain
+	 * shader provider uses this to drop programs whose pipeline has been evicted or destroyed.
+	 */
+	public boolean isPipelineCached(WorldRenderingPipeline candidate) {
+		return pipelinesPerDimension.containsValue(candidate);
 	}
 
 	@Nullable
@@ -91,6 +141,7 @@ public class PipelineManager {
 		}
 
 		pipelinesPerDimension.clear();
+		pipelineLastUsedNs.clear();
 		pipeline = null;
 		lastPreparedDimension = null;
 		versionCounterForSodiumShaderReload++;
