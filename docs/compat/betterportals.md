@@ -1,7 +1,6 @@
 # BetterPortals Refitted 兼容性说明
 
-兼容状态：**部分**（无光影场景看穿 + 星野正常；光影开启后传送门进入视角会导致严重卡顿
-且地形整体消失，待修复）
+兼容状态：**已验证**（无光影与光影（BSL）场景下穿看 + 星野 + 淡出 + 换维度均正常）
 最后更新：2026-09-02
 
 ## 模组信息
@@ -78,14 +77,44 @@ vec4 texGenCoord = vec4(dot(eyePos, u_TexGenEyePlaneS), dot(eyePos, u_TexGenEyeP
 y+0.75）。看穿失败时洞口唯一可见的就是这层星野，于是表现为「整体低一格」；看穿恢复后
 该错觉随之消失。
 
+### 4. 光影下的两个叠加缺陷（2026-09-02 定位修复）
+
+**管线重载风暴**：BPR 的看穿视图是**顺序**渲染（先 renderDeps 末地视图、换
+`mc.world`+`mc.framebufferMc` 后再 renderSelf 主世界），同一帧内维度名往返切换。
+`PipelineManager.preparePipeline` 此前把维度切换当世界卸载处理——每次切换
+destroyPipeline() 再重建，每帧两次，且每次重建杀 celeritas worker 线程，导致地形永远
+来不及重建（现象：门进入视角即 5 fps、主世界地形全部消失，日志 `Dimension changed …
+reloading pipeline` 每帧刷屏）。
+
+修复：`preparePipeline` 改为 `pipelinesPerDimension` 缓存切换（维度间翻零成本），
+地形 program 缓存同步改为按管线实例分键
+（`IrisCeleritasChunkProgramOverrides.programsPerPipeline`），`MinecraftFramebufferHelper`
+动态读 `mc.getFramebuffer()` 使 Iris 合成自动写入 BPR 换入的传送门 FBO——两个世界各自
+获得完整光影效果。EntityRenderer 注入点守卫回退为纯深度 `RenderWorldRecursionGuard`
+（真嵌套防御，顺序双 pass 不再触发跳过）。
+
+**星野叠加层被旁路**：光影下实体渲染阶段 Iris 的 gbuffers program 已绑定，glsm 按设计
+对外部 program 让位（`ShaderManager.preDraw` 提前 return），原版 TESR 的 texgen FFP
+仿真永远不执行，Iris program 按实体属性格式误读 `POSITION_COLOR` 顶点流 → 星野几乎
+不可见且随视角转动闪烁。
+
+修复：无 world 合成 TE 在光影下改走替代渲染器（`EndPortalRenderer`，CPU 烘焙投影 UV +
+实体兼容顶点格式，本就为光影设计）；BPR 的淡出钩子（`shouldRenderFace` 首调里
+`blendFunc(CONSTANT_ALPHA,…)` + 裸 `glBlendColor(0,0,0,opacity)`）完整复刻——检测到
+CONSTANT_ALPHA 因子对即认定钩子触发，从真实 GL 状态读回常量 alpha（该裸调用绕过 glsm
+跟踪），按「CONSTANT_ALPHA ≡ SRC_ALPHA + 首层顶点 alpha=opacity」折入第 0 层顶点
+alpha，后续叠加层保持全强度并跳过 precompose（单层合成无法只淡出 sky 层）。无光影路径
+与真实传送门行为零改动。
+
 ## 验证记录
 
 - 环境：实例 `crl_t/1.12.2-Cleanroom`（HMCL 布局）、Cleanroom + forgelin-continuous、
   存档 `新的世界`、传送门 `(-337,70,290)`、NVIDIA RTX 5070 Laptop（驱动 610.74）。
 - 无光影：看穿（洞内可见末地黑曜石柱）+ 星野旋涡形状 + 淡出 + 位置均正常（用户实机确认，
   构建 `alpha-0.0.6-c7f3d45-portalfix6`）。
-- **光影（MakeUp / BSL）：传送门进入视角即出现严重卡顿且地形整体消失（2026-09-02 实机），
-  指向放行后的原版 TESR 路径与光影管线（program/状态归属）冲突，待单独排查修复。**
+- 光影（BSL）：看穿与主世界各自带光影效果、帧数与地形正常（构建
+  `alpha-0.0.6-1bae36f-portalfix10`）；星野叠加层可见、转动视角无闪烁、淡出正常、换维度
+  正常（构建 `alpha-0.0.6-1bae36f-portalfix12`，2026-09-02 用户实机确认）。
 - 不装 BPR 的原版传送门/折跃门回归待补。
 
 ## 注意事项
