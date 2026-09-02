@@ -91,7 +91,8 @@ reloading pipeline` 每帧刷屏）。
 （`IrisCeleritasChunkProgramOverrides.programsPerPipeline`），`MinecraftFramebufferHelper`
 动态读 `mc.getFramebuffer()` 使 Iris 合成自动写入 BPR 换入的传送门 FBO——两个世界各自
 获得完整光影效果。EntityRenderer 注入点守卫回退为纯深度 `RenderWorldRecursionGuard`
-（真嵌套防御，顺序双 pass 不再触发跳过）。
+（真嵌套防御，顺序双 pass 不再触发跳过）。缓存的维度管线在停止渲染闲置 30 秒后自动
+销毁回收（含地形 program 惰性清理），显存不随门/维度数量累积。
 
 **星野叠加层被旁路**：光影下实体渲染阶段 Iris 的 gbuffers program 已绑定，glsm 按设计
 对外部 program 让位（`ShaderManager.preDraw` 提前 return），原版 TESR 的 texgen FFP
