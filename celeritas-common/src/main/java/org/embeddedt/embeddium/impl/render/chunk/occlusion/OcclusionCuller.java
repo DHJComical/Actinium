@@ -427,23 +427,23 @@ public class OcclusionCuller {
 
     /**
      * Test the search's render-distance shape against a section bounding box.
-     * Horizontal distance is circular in X/Z, while vertical distance is
-     * tested independently so tall searches do not use a spherical cutoff.
+     * The distance is a horizontal circle in X/Z only; the vertical axis is
+     * not distance-culled at all, matching vanilla 1.12 behaviour. Mods such
+     * as Depths Update can extend the world height, so a fixed vertical
+     * cutoff would wrongly drop in-bounds terrain below or above the camera.
      */
     static boolean isWithinRenderDistance(CameraTransform camera, int chunkX, int chunkY, int chunkZ, float maxDistance) {
         // Origin point of the chunk's bounding box in view space.
         int ox = (chunkX << 4) - camera.intX;
-        int oy = (chunkY << 4) - camera.intY;
         int oz = (chunkZ << 4) - camera.intZ;
 
         // Closest point within the bounding box to the camera at (0, 0, 0).
         // Testing the closest point avoids rejecting a section whose near face
         // is within range even when its origin is farther away.
         float dx = nearestToZero(ox, ox + 16) - camera.fracX;
-        float dy = nearestToZero(oy, oy + 16) - camera.fracY;
         float dz = nearestToZero(oz, oz + 16) - camera.fracZ;
 
-        return ((((dx * dx) + (dz * dz)) < (maxDistance * maxDistance)) && (Math.abs(dy) < maxDistance));
+        return ((dx * dx) + (dz * dz)) < (maxDistance * maxDistance);
     }
 
     @SuppressWarnings("ManualMinMaxCalculation")

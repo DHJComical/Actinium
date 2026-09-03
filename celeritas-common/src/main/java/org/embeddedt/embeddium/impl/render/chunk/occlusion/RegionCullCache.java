@@ -70,7 +70,7 @@ final class RegionCullCache {
      * subsequent classifications.
      *
      * @param viewport current camera and frustum
-     * @param searchDistance maximum horizontal/vertical render distance
+     * @param searchDistance maximum horizontal render distance
      * @param numRegions exclusive upper bound of the dense region ids that
      *                    may be passed to {@link #classify}
      */
@@ -132,6 +132,12 @@ final class RegionCullCache {
      * Compute conservative region bounds. Distance is rejected first when the
      * nearest possible section point is too far away; otherwise the padded
      * region box is classified against the camera frustum.
+     *
+     * <p>The distance test is a horizontal circle in X/Z only, matching
+     * {@link OcclusionCuller#isWithinRenderDistance(CameraTransform, int, int, int, float)}:
+     * there is no vertical cutoff, so regions far below or above the camera
+     * stay in range (vanilla 1.12 behaviour; the world height may be extended
+     * by mods such as Depths Update).
      */
     private int compute(int regionOriginX, int regionOriginY, int regionOriginZ) {
         final CameraTransform t = this.camera;
@@ -142,29 +148,26 @@ final class RegionCullCache {
         final int az = regionOriginZ - t.intZ, bz = az + REGION_BLOCK_LENGTH;
 
         // Signed range of the nearest-point distance component for all member
-        // section boxes along each axis.
+        // section boxes along each horizontal axis.
         final float loX = nearestToZero(ax, ax + 16) - t.fracX;
         final float hiX = nearestToZero(bx - 16, bx) - t.fracX;
-        final float loY = nearestToZero(ay, ay + 16) - t.fracY;
-        final float hiY = nearestToZero(by - 16, by) - t.fracY;
         final float loZ = nearestToZero(az, az + 16) - t.fracZ;
         final float hiZ = nearestToZero(bz - 16, bz) - t.fracZ;
 
         // Upper bound on every member's absolute distance component.
         final float farX = maxAbs(loX, hiX) + DISTANCE_EPSILON;
-        final float farY = maxAbs(loY, hiY) + DISTANCE_EPSILON;
         final float farZ = maxAbs(loZ, hiZ) + DISTANCE_EPSILON;
 
         // Lower bound on every member's absolute distance component.
         final float nearX = Math.max(0.0f, minAbs(loX, hiX) - DISTANCE_EPSILON);
-        final float nearY = Math.max(0.0f, minAbs(loY, hiY) - DISTANCE_EPSILON);
         final float nearZ = Math.max(0.0f, minAbs(loZ, hiZ) - DISTANCE_EPSILON);
 
         final float maxDistanceSq = maxDistance * maxDistance;
 
-        // If even the nearest possible point fails the distance test, every
-        // section is out of range and the frustum need not be queried.
-        boolean distanceOut = ((nearX * nearX) + (nearZ * nearZ)) >= maxDistanceSq || nearY >= maxDistance;
+        // If even the nearest possible point fails the horizontal distance
+        // test, every section is out of range and the frustum need not be
+        // queried.
+        boolean distanceOut = ((nearX * nearX) + (nearZ * nearZ)) >= maxDistanceSq;
 
         if (distanceOut) {
             return OUTSIDE;
@@ -172,7 +175,7 @@ final class RegionCullCache {
 
         // Only claim a conclusive pass when the farthest possible point is
         // still strictly inside the distance bounds.
-        boolean distanceIn = ((farX * farX) + (farZ * farZ)) < maxDistanceSq && farY < maxDistance;
+        boolean distanceIn = ((farX * farX) + (farZ * farZ)) < maxDistanceSq;
 
         int result = this.viewport.intersectCameraRelativeBox(
                 (ax - t.fracX) - FRUSTUM_PAD,
