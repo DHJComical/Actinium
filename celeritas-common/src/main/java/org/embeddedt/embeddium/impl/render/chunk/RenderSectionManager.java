@@ -4,6 +4,8 @@ import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.*;
 import lombok.Getter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.common.util.TimeUtil;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
@@ -64,6 +66,8 @@ public abstract class RenderSectionManager {
      */
     protected static final boolean CONTINUOUSLY_REMESH_WORLD = false;
 
+    private static final Logger LOGGER = LogManager.getLogger(RenderSectionManager.class);
+
     private final ChunkBuilder builder;
 
     private final Thread renderThread = Thread.currentThread();
@@ -96,6 +100,10 @@ public abstract class RenderSectionManager {
 
     @Nullable
     protected final RenderListManager shadowRenderListManager;
+
+    // Normalizes the two external frame counters (terrain pass and shadow pass) into one strictly
+    // increasing sequence; every frame number archived or compared by this manager comes from it.
+    private final SectionFrameClock frameClock = new SectionFrameClock();
 
     // Set by the shadow pass, which precedes the terrain pass in a frame and submits both searches. The terrain
     // pass of the same frame then skips re-running the search.
@@ -198,6 +206,10 @@ public abstract class RenderSectionManager {
      * per-frame camera bookkeeping.
      */
     public void update(Viewport positionedViewport, int frame, boolean spectator) {
+        // The terrain and shadow passes hand in independent frame counters (the shadow counter
+        // restarts on pipeline rebuild); normalize to one monotonic sequence before any use.
+        frame = this.frameClock.next(frame);
+
         // HBM-CE compatibility seam. MixinRenderSectionManager (hbm.mod.mixin.json) applies
         // @Redirect injections on this exact method body that rewrite the CameraTransform
         // x/y/z getfields below to its unsafe accessors (CeleritasCameraTransformAccess).
@@ -229,6 +241,9 @@ public abstract class RenderSectionManager {
         if (this.shadowRenderListManager == null) {
             throw new IllegalStateException("No shadow pass configured");
         }
+
+        // Same normalization as update(): both passes share the monotonic frame sequence.
+        frame = this.frameClock.next(frame);
 
         this.updateCameraPosition(playerViewport);
         this.shadowPassRanThisFrame = true;
@@ -615,17 +630,22 @@ public abstract class RenderSectionManager {
                 this.updateTranslucencyInfo(result.render, buildResult.meshes);
             }
 
-            var job = result.render.getBuildCancellationToken();
-
-            // Only clear the token if this result belongs to the most recently submitted build.
-            // A stale result from an earlier submission must not clear the token for a newer
-            // in-flight job, which is identified by a higher lastSubmittedFrame.
-            if (job != null && result.buildTime >= result.render.getLastSubmittedFrame()) {
-                result.render.setBuildCancellationToken(null);
-            }
+            releaseBuildCancellationToken(result);
 
             result.render.setLastBuiltFrame(result.buildTime);
             this.sectionMetricsTracker.updateSectionBuildDuration(result.render, holder.executionTimeNanos());
+        }
+    }
+
+    /**
+     * Releases the section's build cancellation token when {@code output} belongs to the latest
+     * submission. A stale result from an earlier submission must not clear the token of a newer
+     * in-flight job, which is identified by a higher {@code lastSubmittedFrame}.
+     */
+    private static void releaseBuildCancellationToken(ChunkTaskOutput output) {
+        var job = output.render.getBuildCancellationToken();
+        if (job != null && output.buildTime >= output.render.getLastSubmittedFrame()) {
+            output.render.setBuildCancellationToken(null);
         }
     }
 
@@ -666,10 +686,20 @@ public abstract class RenderSectionManager {
 
         for (var holder : outputs) {
             var output = holder.output();
-            if (output.render.isDisposed()
-                    || output.render.getLastBuiltFrame() > output.buildTime
+            if (output.render.isDisposed()) {
+                releaseBuildCancellationToken(output);
+                continue;
+            }
+            if (output.render.getLastBuiltFrame() > output.buildTime
                     || (output instanceof ChunkBuildOutput buildOutput
                         && output.render.getLastSubmittedBuildFrame() > buildOutput.buildTime)) {
+                // Dropped results never reach processChunkBuildResults, so the token release has to
+                // happen here; skipping it pinned the section's buildInFlight bit and made the graph
+                // search skip the section permanently.
+                LOGGER.warn("Discarding stale chunk build result for section [{}, {}, {}]: buildTime={}, lastBuiltFrame={}, lastSubmittedFrame={}",
+                        output.render.getChunkX(), output.render.getChunkY(), output.render.getChunkZ(),
+                        output.buildTime, output.render.getLastBuiltFrame(), output.render.getLastSubmittedFrame());
+                releaseBuildCancellationToken(output);
                 continue;
             }
 
