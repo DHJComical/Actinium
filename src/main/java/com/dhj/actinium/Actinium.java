@@ -3,6 +3,7 @@ package com.dhj.actinium;
 import com.dhj.actinium.compat.chunkanimator.ChunkAnimatorCompat;
 import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
+import com.dhj.actinium.compat.MissingModelCompat;
 import com.dhj.actinium.compat.kirino.KirinoCompat;
 import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
 import com.dhj.actinium.command.TogglePassCommand;
@@ -28,6 +29,7 @@ import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
+import net.minecraft.client.resources.IReloadableResourceManager;
 import net.minecraft.launchwrapper.Launch;
 import net.minecraftforge.client.ClientCommandHandler;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
@@ -174,6 +176,9 @@ public class Actinium {
         }
         ChunkAnimatorCompat.install();
         KirinoCompat.install();
+
+        ((IReloadableResourceManager) Minecraft.getMinecraft().getResourceManager())
+                .registerReloadListener(resourceManager -> MissingModelCompat.onResourceManagerReload());
 
         if ((Boolean) Launch.blackboard.get("fml.deobfuscatedEnvironment")) {
             ClientCommandHandler.instance.registerCommand(new TogglePassCommand());

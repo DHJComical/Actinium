@@ -2,6 +2,7 @@ package net.coderbot.iris.pipeline;
 
 import net.coderbot.iris.debug.flight.GlFlightRecording;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import lombok.Getter;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.gl.framebuffer.MinecraftFramebufferHelper;
@@ -35,6 +36,16 @@ public class PipelineManager {
 
 	public PipelineManager(Function<String, WorldRenderingPipeline> pipelineFactory) {
 		this.pipelineFactory = pipelineFactory;
+		updateGlsmHookConsumers();
+	}
+
+	/**
+	 * Only a DeferredWorldRenderingPipeline consumes the GLSM blend/program events with observable
+	 * side effects; while fixed-function rendering is active the per-call snapshot/post work in
+	 * GLStateManager is skipped entirely.
+	 */
+	private void updateGlsmHookConsumers() {
+		GLSMHooks.consumersActive = pipeline instanceof DeferredWorldRenderingPipeline;
 	}
 
 	public WorldRenderingPipeline preparePipeline(String currentDimension) {
@@ -67,6 +78,7 @@ public class PipelineManager {
 		}
 		pipelineLastUsedNs.put(currentDimension, nowNs);
 
+		updateGlsmHookConsumers();
 		return pipeline;
 	}
 
@@ -145,6 +157,7 @@ public class PipelineManager {
 		pipeline = null;
 		lastPreparedDimension = null;
 		versionCounterForSodiumShaderReload++;
+		updateGlsmHookConsumers();
 
 		// The lazy version-counter cleanup in the terrain shader provider only runs while
 		// shaders are enabled; delete the chunk programs here so disabling shaders does not
