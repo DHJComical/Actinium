@@ -1295,13 +1295,13 @@ public class GLStateManager {
     }
 
     private static void postVanillaBlendChange() {
-        if (GLSMHooks.VANILLA_BLEND_CHANGE.hasListeners()) {
+        if (GLSMHooks.hasActiveConsumers() && GLSMHooks.VANILLA_BLEND_CHANGE.hasListeners()) {
             GLSMHooks.VANILLA_BLEND_CHANGE.post(GLSMHooks.vanillaBlendChangeEvent);
         }
     }
 
     private static boolean snapshotVanillaBlendFunc() {
-        if (!GLSMHooks.VANILLA_BLEND_CHANGE.hasListeners()) {
+        if (!GLSMHooks.hasActiveConsumers() || !GLSMHooks.VANILLA_BLEND_CHANGE.hasListeners()) {
             return false;
         }
         blendState.readEffective(vanillaBlendBefore);
@@ -4631,7 +4631,7 @@ public class GLStateManager {
             if (caching) {
                 activeProgram = 0; // Track that FFP was requested
             }
-            if (GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
+            if (GLSMHooks.hasActiveConsumers() && GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
                 GLSMHooks.programChangeEvent.previousProgram = prev;
                 GLSMHooks.programChangeEvent.newProgram = 0;
                 GLSMHooks.programChangeEvent.postBind = false;
@@ -4639,7 +4639,7 @@ public class GLStateManager {
             }
             recordGpuCommand(GpuCommandType.PROGRAM_USE, program, 0);
             ffp.activate();
-            if (GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
+            if (GLSMHooks.hasActiveConsumers() && GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
                 GLSMHooks.programChangeEvent.previousProgram = prev;
                 GLSMHooks.programChangeEvent.newProgram = 0;
                 GLSMHooks.programChangeEvent.postBind = true;
@@ -4659,7 +4659,7 @@ public class GLStateManager {
             if (caching) {
                 activeProgram = program;
             }
-            if (GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
+            if (GLSMHooks.hasActiveConsumers() && GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
                 GLSMHooks.programChangeEvent.previousProgram = prev;
                 GLSMHooks.programChangeEvent.newProgram = program;
                 GLSMHooks.programChangeEvent.postBind = false;
@@ -4672,7 +4672,7 @@ public class GLStateManager {
             recordGpuCommand(GpuCommandType.PROGRAM_USE, program, 0);
             RENDER_BACKEND.useProgram(program);
             CompatUniformManager.onUseProgram(program);
-            if (GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
+            if (GLSMHooks.hasActiveConsumers() && GLSMHooks.PROGRAM_CHANGE.hasListeners()) {
                 GLSMHooks.programChangeEvent.previousProgram = prev;
                 GLSMHooks.programChangeEvent.newProgram = program;
                 GLSMHooks.programChangeEvent.postBind = true;

@@ -18,6 +18,22 @@ public final class GLSMHooks {
     /** Optional host-owned observer for diagnostics at the native draw boundary. */
     public static DrawCallObserver drawCallObserver;
 
+    /** Escape hatch: -Dactinium.glsmHooksAlwaysActive=true forces the consumer gate on. */
+    private static final boolean ALWAYS_ACTIVE = Boolean.getBoolean("actinium.glsmHooksAlwaysActive");
+
+    /**
+     * Cheap gate for per-call snapshot/event work in GLStateManager hot paths. Written by the
+     * pipeline host (Iris PipelineManager): true while a consumer with observable side effects
+     * (a DeferredWorldRenderingPipeline) is active, false otherwise. Defaults to true so behavior
+     * is unchanged when no host maintains it.
+     */
+    public static volatile boolean consumersActive = true;
+
+    /** Whether hook consumers may act on events, i.e. snapshots and event posts must run. */
+    public static boolean hasActiveConsumers() {
+        return ALWAYS_ACTIVE || consumersActive;
+    }
+
     public static final EventBus<TextureBindEvent> TEXTURE_BIND = EventBus.create(TextureBindEvent.class);
     public static final EventBus<TextureDeleteEvent> TEXTURE_DELETE = EventBus.create(TextureDeleteEvent.class);
     public static final EventBus<TextureUnitStateEvent> TEXTURE_UNIT_STATE = EventBus.create(TextureUnitStateEvent.class);
