@@ -126,6 +126,8 @@ public class GLStateManager {
 
     public static final Logger LOGGER = LogManager.getLogger("GLSM");
     private static final boolean DEBUG_DRAW_LOGS = Boolean.getBoolean("actinium.glsm.verboseDrawLogs");
+    /** Escape hatch: -Dactinium.glsmFullClientArrayUpload=true restores whole-allocation uploads per draw. */
+    private static final boolean FULL_CLIENT_ARRAY_UPLOAD = Boolean.getBoolean("actinium.glsmFullClientArrayUpload");
 
     // Thread Checking - must be early in static init order so isMainThread() works for state initialization
     @Getter private static final Thread MainThread = Thread.currentThread();
@@ -434,6 +436,7 @@ public class GLStateManager {
     private static int clientArraysVBO = 0;
     private static int clientArraysVBOCapacity = 0;
     private static final int[] clientArraysVBOOffsets = new int[VertexAttribState.MAX_ATTRIBS];
+    private static final int[] clientArraysVBOUploadLengths = new int[VertexAttribState.MAX_ATTRIBS];
     private static int boundPixelUnpackBuffer;
     private static int boundPixelPackBuffer;
     private static final Int2IntOpenHashMap vaoEboMap = new Int2IntOpenHashMap();
@@ -2517,7 +2520,7 @@ public class GLStateManager {
     public static void glDrawArraysInstanced(int mode, int first, int count, int primcount) {
         prepareWideLineEmulation(mode);
         preDrawFFP();
-        prepareClientArrays();
+        prepareClientArrays(first, count);
         recordGpuCommand(GpuCommandType.DRAW_ARRAYS, mode, count);
         if (mode == GL11.GL_QUADS) {
             QuadConverter.drawQuadsAsTrianglesInstanced(first, count, primcount);
@@ -2548,10 +2551,14 @@ public class GLStateManager {
     }
 
     private static void prepareClientArrays() {
+        prepareClientArrays(0, -1);
+    }
+
+    private static void prepareClientArrays(int first, int count) {
         final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
         final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.GL_PREPARE_CLIENT_ARRAYS) : 0L;
         if (ShaderManager.getInstance().isEnabled() && VertexAttribState.hasAnyClientSideEnabledAttrib()) {
-            uploadClientArraysToVBO();
+            uploadClientArraysToVBO(first, count);
         }
         if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.GL_PREPARE_CLIENT_ARRAYS, perfStart);
@@ -2559,19 +2566,27 @@ public class GLStateManager {
     }
 
     /**
-     * If any enabled vertex attribute uses a client-side pointer (no VBO), upload all such
-     * attribs into a shared stream VBO so the draw succeeds under core profile.
+     * If any enabled vertex attribute uses a client-side pointer (no VBO), upload such attribs
+     * into a shared stream VBO so the draw succeeds under core profile. When the draw's vertex
+     * range [first, first + count) is known (count >= 0), each attrib is narrowed to the bytes
+     * that range can actually read; the captured client pointer spans the whole underlying
+     * allocation, which can be megabytes larger than one draw needs. Indexed draws with an
+     * unknown maximum index pass count = -1 and keep the full-allocation upload.
      */
-    private static void uploadClientArraysToVBO() {
+    private static void uploadClientArraysToVBO(int first, int count) {
         final boolean perfDebugEnabled = GLSMPerfDebug.isEnabled();
         final long perfStart = perfDebugEnabled ? GLSMPerfDebug.begin(GLSMPerfDebug.Stage.GL_CLIENT_ARRAY_UPLOAD) : 0L;
+        final boolean fullUpload = FULL_CLIENT_ARRAY_UPLOAD || count < 0;
         int totalBytes = 0;
         for (int i = 0; i < VertexAttribState.MAX_ATTRIBS; i++) {
             clientArraysVBOOffsets[i] = -1;
             final VertexAttribState.Attrib a = VertexAttribState.get(i);
             if (!a.enabled || a.clientPointer == null) continue;
+            final int uploadLength = fullUpload ? a.clientPointer.remaining()
+                : VertexAttribState.computeUploadLength(a, first, count);
+            clientArraysVBOUploadLengths[i] = uploadLength;
             clientArraysVBOOffsets[i] = totalBytes;
-            totalBytes += a.clientPointer.remaining();
+            totalBytes += uploadLength;
         }
         if (totalBytes == 0) {
             if (perfDebugEnabled) {
@@ -2600,13 +2615,16 @@ public class GLStateManager {
         for (int i = 0; i < VertexAttribState.MAX_ATTRIBS; i++) {
             if (clientArraysVBOOffsets[i] < 0) continue;
             final VertexAttribState.Attrib a = VertexAttribState.get(i);
-            RENDER_BACKEND.bufferSubData(GL15.GL_ARRAY_BUFFER, clientArraysVBOOffsets[i], a.clientPointer.duplicate());
+            final ByteBuffer slice = a.clientPointer.duplicate();
+            slice.limit(slice.position() + clientArraysVBOUploadLengths[i]);
+            RENDER_BACKEND.bufferSubData(GL15.GL_ARRAY_BUFFER, clientArraysVBOOffsets[i], slice);
             RENDER_BACKEND.vertexAttribPointer(i, a.size, a.type, a.normalized, a.stride, (long) clientArraysVBOOffsets[i]);
         }
 
         glBindBuffer(GL15.GL_ARRAY_BUFFER, savedVBO);
         if (perfDebugEnabled) {
             GLSMPerfDebug.end(GLSMPerfDebug.Stage.GL_CLIENT_ARRAY_UPLOAD, perfStart);
+            GLSMPerfDebug.countClientArrayUpload(totalBytes);
         }
     }
 
@@ -2628,7 +2646,7 @@ public class GLStateManager {
         }
         prepareWideLineEmulation(mode);
         preDrawFFP();
-        prepareClientArrays();
+        prepareClientArrays(first, count);
         if (DEBUG_DRAW_LOGS) {
             GLSMDebug.logDrawArrays("draw-arrays", mode, first, count);
         }
