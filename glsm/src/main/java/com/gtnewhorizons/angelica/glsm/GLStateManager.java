@@ -927,6 +927,38 @@ public class GLStateManager {
         };
     }
 
+    /**
+     * Whether the pname is an enable capability tracked by {@link #glIsEnabled}. Compatibility
+     * GL allows querying enable caps through glGetInteger/glGetFloat, but the core-profile
+     * backend rejects them; legacy mods (e.g. OreLib OpenGlState, issue #41) query caps this
+     * way, so the glGet* variants answer from tracked state instead of forwarding.
+     */
+    private static boolean isEnableCap(int pname) {
+        return switch (pname) {
+            case GL11.GL_ALPHA_TEST, GL11.GL_AUTO_NORMAL, GL11.GL_BLEND, GL11.GL_COLOR_MATERIAL,
+                    GL11.GL_COLOR_LOGIC_OP, GL11.GL_CULL_FACE, GL11.GL_DEPTH_TEST, GL11.GL_DITHER,
+                    GL11.GL_FOG, GL11.GL_INDEX_LOGIC_OP, GL11.GL_LIGHTING, GL11.GL_LIGHT0,
+                    GL11.GL_LIGHT1, GL11.GL_LIGHT2, GL11.GL_LIGHT3, GL11.GL_LIGHT4, GL11.GL_LIGHT5,
+                    GL11.GL_LIGHT6, GL11.GL_LIGHT7, GL11.GL_LINE_SMOOTH, GL11.GL_LINE_STIPPLE,
+                    GL11.GL_MAP1_COLOR_4, GL11.GL_MAP1_INDEX, GL11.GL_MAP1_NORMAL,
+                    GL11.GL_MAP1_TEXTURE_COORD_1, GL11.GL_MAP1_TEXTURE_COORD_2,
+                    GL11.GL_MAP1_TEXTURE_COORD_3, GL11.GL_MAP1_TEXTURE_COORD_4,
+                    GL11.GL_MAP1_VERTEX_3, GL11.GL_MAP1_VERTEX_4, GL11.GL_MAP2_COLOR_4,
+                    GL11.GL_MAP2_INDEX, GL11.GL_MAP2_NORMAL, GL11.GL_MAP2_TEXTURE_COORD_1,
+                    GL11.GL_MAP2_TEXTURE_COORD_2, GL11.GL_MAP2_TEXTURE_COORD_3,
+                    GL11.GL_MAP2_TEXTURE_COORD_4, GL11.GL_MAP2_VERTEX_3, GL11.GL_MAP2_VERTEX_4,
+                    GL13.GL_MULTISAMPLE, GL11.GL_NORMALIZE, GL11.GL_POINT_SMOOTH,
+                    GL11.GL_POLYGON_OFFSET_POINT, GL11.GL_POLYGON_OFFSET_LINE,
+                    GL11.GL_POLYGON_OFFSET_FILL, GL11.GL_POLYGON_SMOOTH, GL11.GL_POLYGON_STIPPLE,
+                    GL12.GL_RESCALE_NORMAL, GL13.GL_SAMPLE_ALPHA_TO_COVERAGE,
+                    GL13.GL_SAMPLE_ALPHA_TO_ONE, GL13.GL_SAMPLE_COVERAGE, GL11.GL_SCISSOR_TEST,
+                    GL11.GL_STENCIL_TEST, GL11.GL_TEXTURE_1D, GL11.GL_TEXTURE_2D,
+                    GL12.GL_TEXTURE_3D, GL11.GL_TEXTURE_GEN_S, GL11.GL_TEXTURE_GEN_T,
+                    GL11.GL_TEXTURE_GEN_R, GL11.GL_TEXTURE_GEN_Q -> true;
+            default -> false;
+        };
+    }
+
     public static boolean glGetBoolean(int pname) {
         if (shouldBypassCache()) {
             return RENDER_BACKEND.getBoolean(pname);
@@ -1039,6 +1071,10 @@ public class GLStateManager {
             return RENDER_BACKEND.getInteger(pname);
         }
 
+        if (isEnableCap(pname)) {
+            return glIsEnabled(pname) ? GL11.GL_TRUE : GL11.GL_FALSE;
+        }
+
         return switch (pname) {
             case GL11.GL_ALPHA_TEST_FUNC -> alphaState.getFunction();
             case GL11.GL_DEPTH_FUNC -> depthState.getFunc();
@@ -1063,6 +1099,11 @@ public class GLStateManager {
             case GL14.GL_BLEND_SRC_RGB -> blendState.getSrcRgb();
             case GL14.GL_BLEND_EQUATION -> blendState.getEquationRgb();
             case GL20.GL_BLEND_EQUATION_ALPHA -> blendState.getEquationAlpha();
+
+            // Legacy blend-factor aliases (GL_BLEND_SRC/GL_BLEND_DST) differ from the GL14 RGB
+            // tokens and are rejected by the core-profile backend; map to the RGB factors.
+            case GL11.GL_BLEND_SRC -> blendState.getSrcRgb();
+            case GL11.GL_BLEND_DST -> blendState.getDstRgb();
 
             case GL11.GL_LOGIC_OP_MODE -> logicOpMode.getValue();
             case GL11.GL_DRAW_BUFFER -> drawBuffer.getValue();
@@ -1214,6 +1255,10 @@ public class GLStateManager {
     }
 
     public static float glGetFloat(int pname) {
+        if (isEnableCap(pname)) {
+            return glIsEnabled(pname) ? 1.0F : 0.0F;
+        }
+
         return switch (pname) {
             case GL11.GL_ALPHA_TEST_REF -> alphaState.getReference();
             case GL11.GL_FOG_DENSITY -> fogState.getDensity();
@@ -2238,6 +2283,20 @@ public class GLStateManager {
         final int textureUnit = getActiveTextureUnit();
         postTextureUnitState(textureUnit, false);
         textures.getTextureUnitStates(textureUnit).disable();
+    }
+
+    /**
+     * Force-syncs a texture unit's GL_TEXTURE_2D enable state and notifies TEXTURE_UNIT_STATE
+     * listeners. For render paths that restore captured state (e.g. DeferredDrawBatcher) where
+     * setting the state directly would silently desync Iris pipeline input tracking (issue #41).
+     */
+    public static void setTexture2DEnabled(int textureUnit, boolean enabled) {
+        final TextureUnitBooleanStateStack state = textures.getTextureUnitStates(textureUnit);
+        if (!shouldBypassCache() && state.isEnabled() == enabled) {
+            return;
+        }
+        postTextureUnitState(textureUnit, enabled);
+        state.setEnabled(enabled);
     }
 
     private static void postTextureUnitState(int textureUnit, boolean enabled) {

@@ -302,6 +302,12 @@ public class TessellatorStreamingDrawer {
             packed);
         }
         GLStateManager.prepareWideLineEmulation(drawMode);
+        if (DEBUG_STREAMING_DRAWS) {
+            final int activeProgram = GLStateManager.getActiveProgram();
+            if (activeProgram != 0) {
+                GLSMDebug.logDrawOnActiveProgram("stream", drawMode, flags, vertexCount, activeProgram);
+            }
+        }
         final long preDrawStart = perfSampled ? GLSMPerfDebug.now() : 0L;
         ShaderManager.getInstance().preDraw(flags);
         if (perfSampled) {

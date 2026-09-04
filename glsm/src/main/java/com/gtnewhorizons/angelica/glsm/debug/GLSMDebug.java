@@ -21,6 +21,7 @@ import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memGetInt;
 public final class GLSMDebug {
     private static final Logger LOGGER = LogManager.getLogger("GLSMDebug");
     private static final boolean ENABLE_VERBOSE_DRAW_LOGS = Boolean.getBoolean("actinium.glsm.verboseDrawLogs");
+    private static final boolean ENABLE_GL_DEBUG_SYS_PROP = Boolean.getBoolean("actinium.glDebug");
     private static final long OPTION_REFRESH_NS = 500_000_000L;
     private static final int STREAM_LIMIT = 128;
     private static final int QUAD_LIMIT = 512;
@@ -29,6 +30,7 @@ public final class GLSMDebug {
     private static final int CLIENT_ARRAY_LIMIT = 64;
     private static final int BUFFER_BUILDER_LIMIT = 512;
     private static final int VERTEX_BUFFER_LIMIT = 256;
+    private static final int PROGRAM_DRAW_LIMIT = 1024;
 
     private static final AtomicInteger streamCount = new AtomicInteger();
     private static final AtomicInteger quadCount = new AtomicInteger();
@@ -37,6 +39,7 @@ public final class GLSMDebug {
     private static final AtomicInteger clientArrayCount = new AtomicInteger();
     private static final AtomicInteger bufferBuilderCount = new AtomicInteger();
     private static final AtomicInteger vertexBufferCount = new AtomicInteger();
+    private static final AtomicInteger programDrawCount = new AtomicInteger();
 
     private static long lastOptionRefresh;
     private static boolean cachedEnabled;
@@ -255,6 +258,26 @@ public final class GLSMDebug {
             format);
     }
 
+    /**
+     * Logs an immediate-mode/streaming draw that lands on a non-zero (shader pipeline) program.
+     * Used to diagnose mod content (e.g. Dynamic Surroundings popoffs) rendering through Iris passes.
+     */
+    public static void logDrawOnActiveProgram(String path, int drawMode, int flags, int vertexCount, int program) {
+        if (!shouldLogWorldRender()) return;
+        final int count = programDrawCount.incrementAndGet();
+        if (count > PROGRAM_DRAW_LIMIT) return;
+
+        LOGGER.info(
+            "program-draw #{} path={} program={} mode={} flags=0x{} vertices={} attribs=[{}]",
+            count,
+            path,
+            program,
+            drawModeName(drawMode),
+            Integer.toHexString(flags),
+            vertexCount,
+            attributeSummary());
+    }
+
     public static boolean forceOrphanStreaming() {
         return isEnabled();
     }
@@ -280,7 +303,7 @@ public final class GLSMDebug {
     }
 
     private static boolean shouldLogWorldRender() {
-        return ENABLE_VERBOSE_DRAW_LOGS && isEnabled() && "Client thread".equals(Thread.currentThread().getName()) && isWorldLoaded();
+        return ENABLE_VERBOSE_DRAW_LOGS && (isEnabled() || ENABLE_GL_DEBUG_SYS_PROP) && "Client thread".equals(Thread.currentThread().getName()) && isWorldLoaded();
     }
 
     private static boolean isWorldLoaded() {
