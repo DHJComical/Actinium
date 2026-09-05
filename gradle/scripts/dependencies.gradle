@@ -162,4 +162,8 @@ dependencies {
     // Scannable 1.6.3.26 (issue #94: its scanner overlay rendering conflicts with the Actinium render
     // pipeline -- see-through terrain without shaders, white ghosting with shaders; needs runtime repro)
     modImplementation 'curse.maven:scannable-266784:3146549'
+
+    // FluxLoading 1.4.1 (issue #102: re-entering a world leaves its loading screen image stuck
+    // instead of fading out; dev-verifies the loading screen overlay compat)
+    modImplementation 'curse.maven:fluxloading-1207328:7601634'
 }
