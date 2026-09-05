@@ -3,11 +3,16 @@ package com.gtnewhorizons.angelica.glsm;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.Token;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.taumc.glsl.ShaderParser;
 import org.taumc.glsl.grammar.GLSLLexer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -250,6 +255,162 @@ class CompatShaderTransformerTest {
         assertOrdered(transformed, "uniform sampler2D sampler", "void main", "sampler");
     }
 
+    @Test
+    void chocolateQuestRepouredSphereFragmentShaderTransformsToCoreProfile() {
+        // CQR ships these shaders with CRLF line endings; .gitattributes normalizes test
+        // resources to LF, so the CRLF form is constructed explicitly.
+        String source = """
+            #version 110
+
+            uniform samplerCube cubemap;
+            uniform vec4 color;
+            uniform bool useTexture;
+
+            void main() {
+              if (useTexture) {
+                gl_FragColor = textureCube(cubemap, gl_TexCoord[0].stp) * color;
+              } else {
+                gl_FragColor = color;
+              }
+            }
+            """.replace("\n", "\r\n");
+
+        String transformed = CompatShaderTransformer.transform(source, true);
+        ShaderInspection inspection = inspectShader(transformed);
+
+        assertEquals(0, inspection.preprocessorSyntaxErrors, transformed);
+        assertEquals(0, inspection.shaderSyntaxErrors, transformed);
+        assertFalse(transformed.contains("<missing"), transformed);
+
+        // textureCube is renamed to the core texture() builtin before parsing; the grammar
+        // lexes it as a keyword token and silently recovers from it in call position otherwise.
+        assertFalse(hasIdentifier(transformed, "textureCube"), transformed);
+        assertCall(transformed, "texture", "cubemap");
+
+        // The mod's own uniforms must stay declared before main; a recovered broken AST used to
+        // displace them into the function body, which the driver then rejected.
+        assertOrdered(transformed, "uniform vec4 color", "uniform bool useTexture", "void main");
+
+        assertFalse(hasIdentifier(transformed, "gl_FragColor"), transformed);
+        assertTrue(hasIdentifier(transformed, "actinium_FragData0"), transformed);
+        assertFalse(hasIdentifier(transformed, "gl_TexCoord"), transformed);
+        assertTrue(hasIdentifier(transformed, "actinium_TexCoord0"), transformed);
+    }
+
+    @Test
+    void chocolateQuestRepouredSphereVertexShaderTransformsToCoreProfile() {
+        String source = """
+            #version 110
+
+            void main() {
+              gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * gl_Vertex;
+              gl_TexCoord[0].stp = gl_Vertex.xyz;
+            }
+            """.replace("\n", "\r\n");
+
+        String transformed = CompatShaderTransformer.transform(source, false);
+        ShaderInspection inspection = inspectShader(transformed);
+
+        assertEquals(0, inspection.preprocessorSyntaxErrors, transformed);
+        assertEquals(0, inspection.shaderSyntaxErrors, transformed);
+        assertFalse(transformed.contains("<missing"), transformed);
+
+        assertTrue(hasIdentifier(transformed, "actinium_ProjectionMatrix"), transformed);
+        assertTrue(hasIdentifier(transformed, "actinium_ModelViewMatrix"), transformed);
+        assertTrue(hasIdentifier(transformed, "actinium_Vertex"), transformed);
+        assertTrue(hasIdentifier(transformed, "actinium_TexCoord0"), transformed);
+        assertFalse(hasIdentifier(transformed, "gl_ProjectionMatrix"), transformed);
+        assertFalse(hasIdentifier(transformed, "gl_ModelViewMatrix"), transformed);
+        assertFalse(hasIdentifier(transformed, "gl_Vertex"), transformed);
+        assertFalse(hasIdentifier(transformed, "gl_TexCoord"), transformed);
+    }
+
+    static Stream<Arguments> parseBreakingTextureFunctions() {
+        // The grammar lexes these legacy builtins as keyword tokens but rejects them in
+        // function-call position; each must be renamed to texture() before parsing.
+        // Samplers stay undeclared: the check is syntactic (grammar has no semantic analysis).
+        return Stream.of(
+            Arguments.of("texture1D", "tex", "0.0"),
+            Arguments.of("textureCube", "cubemap", "vec3(0.0)"),
+            Arguments.of("texture2DRect", "rectTex", "vec2(0.0)"),
+            Arguments.of("texture1DArray", "arrayTex", "vec2(0.0)"),
+            Arguments.of("texture2DArray", "arrayTex", "vec3(0.0)"),
+            Arguments.of("textureCubeArray", "cubeArrayTex", "vec4(0.0)")
+        );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("parseBreakingTextureFunctions")
+    void parseBreakingLegacyTextureFunctionsAreRenamedBeforeParsing(String functionName, String samplerName, String argument) {
+        String source = "#version 110\n\nvoid main() {\n    gl_FragColor = "
+            + functionName + "(" + samplerName + ", " + argument + ");\n}\n";
+
+        String transformed = CompatShaderTransformer.transform(source, true);
+        ShaderInspection inspection = inspectShader(transformed);
+
+        assertEquals(0, inspection.preprocessorSyntaxErrors, transformed);
+        assertEquals(0, inspection.shaderSyntaxErrors, transformed);
+        assertFalse(hasIdentifier(transformed, functionName), transformed);
+        assertCall(transformed, "texture", samplerName);
+    }
+
+    @Test
+    void syntacticallyInvalidShaderFallsBackToVersionFixup() {
+        // Missing semicolon: ANTLR recovers silently, so without a fail-fast check the
+        // transformer would emit broken GLSL that the driver rejects (the CQR crash mode).
+        String source = """
+            #version 110
+
+            void main() {
+                gl_FragColor = vec4(1.0)
+            }
+            """;
+
+        String transformed = CompatShaderTransformer.transform(source, true);
+
+        assertEquals(source.replace("#version 110", "#version 330 core"), transformed);
+    }
+
+    @Test
+    void legacyTextureFunctionAloneTriggersTransformation() {
+        // No gl_* builtins here: the legacy texture call itself must engage the transform,
+        // otherwise the unrenamed builtin leaks unchanged to the core-profile driver.
+        String source = "#version 110\n\nvoid main() {\n    vec4 c = textureCube(cubemap, vec3(0.0));\n}\n";
+
+        String transformed = CompatShaderTransformer.transform(source, true);
+        ShaderInspection inspection = inspectShader(transformed);
+
+        assertEquals(0, inspection.preprocessorSyntaxErrors, transformed);
+        assertEquals(0, inspection.shaderSyntaxErrors, transformed);
+        assertTrue(transformed.contains("#version 330 core"), transformed);
+        assertFalse(hasIdentifier(transformed, "textureCube"), transformed);
+        assertCall(transformed, "texture", "cubemap");
+    }
+
+    @Test
+    void shadow1DFamilyIsWrappedAndRenamedLikeShadow2D() {
+        String source = """
+            #version 110
+
+            void main() {
+                float a = shadow1D(shadowMap, vec3(0.0)).x;
+                float b = shadow2DProj(shadowMap2, vec4(0.0)).x;
+            }
+            """;
+
+        String transformed = CompatShaderTransformer.transform(source, true);
+        ShaderInspection inspection = inspectShader(transformed);
+
+        assertEquals(0, inspection.preprocessorSyntaxErrors, transformed);
+        assertEquals(0, inspection.shaderSyntaxErrors, transformed);
+        assertFalse(hasIdentifier(transformed, "shadow1D"), transformed);
+        assertFalse(hasIdentifier(transformed, "shadow2DProj"), transformed);
+        // Legacy shadow lookups return vec4; the core texture/textureProj equivalents return
+        // float, so the transformer must keep the vec4 wrapping around the renamed call.
+        assertTrue(Pattern.compile("vec4\\s*\\(\\s*texture\\s*\\(").matcher(transformed).find(), transformed);
+        assertTrue(Pattern.compile("vec4\\s*\\(\\s*textureProj\\s*\\(").matcher(transformed).find(), transformed);
+    }
+
     /** Identifier-level check: comments preserved in the preamble must not trip the assertions. */
     private static boolean hasIdentifier(String source, String name) {
         GLSLLexer lexer = new GLSLLexer(CharStreams.fromString(source));
@@ -286,6 +447,14 @@ class CompatShaderTransformerTest {
     private static ShaderInspection inspectShader(String source) {
         ShaderParser.ParsedShader shader = ShaderParser.parseShader(source);
         return new ShaderInspection(shader.preParser().getNumberOfSyntaxErrors(), shader.parser().getNumberOfSyntaxErrors());
+    }
+
+    private static void assertCall(String source, String functionName, String firstArgument) {
+        Pattern callPattern = Pattern.compile(
+            "\\b" + Pattern.quote(functionName) + "\\s*\\(\\s*" + Pattern.quote(firstArgument) + "\\b");
+        assertTrue(
+            callPattern.matcher(source).find(),
+            "Expected call " + functionName + "(" + firstArgument + ", ...) in:\n" + source);
     }
 
     private static void assertOrdered(String source, String... fragments) {
