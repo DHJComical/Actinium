@@ -384,27 +384,13 @@ public class ShadowRenderer {
 					RenderingState.INSTANCE.getModelViewMatrix(), projView,
 					shadowLightVectorCache, boxCuller, distanceCuller);
 				return holder.setInfo(safeZoneFrustum, distanceInfo, cullingInfo);
-			} else {
-				// Legacy perspective shadow packs (fov != null) have no fixed depth range, so the planes are omitted.
-				float depthNear = Float.NaN, depthFar = Float.NaN;
-				if (this.fov == null) {
-					depthNear = this.resolvedNearPlane();
-					depthFar = this.resolvedFarPlane();
-				}
-				cachedAdvancedFrustum.init(RenderingState.INSTANCE.getModelViewMatrix(), projView, shadowLightVectorCache, boxCuller, depthNear, depthFar, intervalSize);
-				return holder.setInfo(cachedAdvancedFrustum, distanceInfo, cullingInfo);
-			}
+		} else {
+			cachedAdvancedFrustum.init(RenderingState.INSTANCE.getModelViewMatrix(), projView, shadowLightVectorCache, boxCuller);
+			return holder.setInfo(cachedAdvancedFrustum, distanceInfo, cullingInfo);
+		}
 		}
 
 		return holder;
-	}
-
-	private float resolvedNearPlane() {
-		return this.nearPlane < 0 ? -DHCompat.getRenderDistance() : this.nearPlane;
-	}
-
-	private float resolvedFarPlane() {
-		return this.farPlane < 0 ? DHCompat.getRenderDistance() : this.farPlane;
 	}
 
 	private FrustumHolder createEntityShadowFrustum(float renderMultiplier, FrustumHolder holder) {
