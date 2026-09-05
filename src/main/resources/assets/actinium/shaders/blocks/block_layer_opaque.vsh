@@ -5,6 +5,9 @@
 #import <actinium:include/chunk_matrices.glsl>
 #import <actinium:include/chunk_material.glsl>
 
+// Avoid z-fighting between the solid and cutout copies of this program
+invariant gl_Position;
+
 out vec4 v_Color;
 out vec2 v_TexCoord;
 #ifdef USE_BILINEAR_CORRECTION
