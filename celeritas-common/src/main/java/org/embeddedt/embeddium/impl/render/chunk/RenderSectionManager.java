@@ -31,6 +31,7 @@ import org.embeddedt.embeddium.impl.render.chunk.metrics.RenderSectionMetricsTra
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
 import org.embeddedt.embeddium.impl.render.chunk.region.RenderRegion;
 import org.embeddedt.embeddium.impl.render.chunk.region.RenderRegionManager;
+import org.embeddedt.embeddium.impl.render.chunk.fog.FogService;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
@@ -43,6 +44,7 @@ import org.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer
 import org.embeddedt.embeddium.impl.util.suppliers.ExpiringSupplier;
 import org.jetbrains.annotations.MustBeInvokedByOverriders;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4fc;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
@@ -227,7 +229,7 @@ public abstract class RenderSectionManager {
             // build results between the two passes carries over to the next frame.
             this.shadowPassRanThisFrame = false;
         } else {
-            this.createTerrainRenderList(positionedViewport, frame, spectator);
+            this.createTerrainRenderList(positionedViewport, null, frame, spectator);
         }
 
         this.checkTranslucencyChange();
@@ -249,7 +251,7 @@ public abstract class RenderSectionManager {
         this.shadowPassRanThisFrame = true;
 
         if (this.renderListManager.isNeedsUpdate()) {
-            this.createTerrainRenderList(playerViewport, frame, spectator);
+            this.createTerrainRenderList(playerViewport, null, frame, spectator);
         }
 
         Vector3fc lightVector = null;
@@ -259,7 +261,7 @@ public abstract class RenderSectionManager {
         }
 
         this.shadowRenderListManager.startShadowGraphUpdate(shadowViewport, frame, this.regions.getRegionIdsLength(),
-                this.getSearchDistance(), lightVector, this.getTargetQueueSize());
+                this.getSearchDistance(null), lightVector, this.getTargetQueueSize());
     }
 
     /**
@@ -363,8 +365,8 @@ public abstract class RenderSectionManager {
         return true;
     }
 
-    private void createTerrainRenderList(Viewport viewport, int frame, boolean spectator) {
-        final var searchDistance = this.getSearchDistance();
+    private void createTerrainRenderList(Viewport viewport, @Nullable Matrix4fc projectionMatrix, int frame, boolean spectator) {
+        final var searchDistance = this.getSearchDistance(projectionMatrix);
         final var useOcclusionCulling = this.shouldUseOcclusionCulling(viewport, spectator);
 
         this.renderListManager.startGraphUpdate(viewport, frame, this.regions.getRegionIdsLength(),
@@ -381,11 +383,11 @@ public abstract class RenderSectionManager {
 
     protected abstract boolean useFogOcclusion();
 
-    private float getSearchDistance() {
+    private float getSearchDistance(@Nullable Matrix4fc projectionMatrix) {
         float distance;
 
         if (this.useFogOcclusion()) {
-            distance = this.getEffectiveRenderDistance();
+            distance = this.getEffectiveRenderDistance(projectionMatrix);
         } else {
             distance = this.getRenderDistance();
         }
@@ -967,10 +969,11 @@ public abstract class RenderSectionManager {
         return false;
     }
 
-    private float getEffectiveRenderDistance() {
+    private float getEffectiveRenderDistance(@Nullable Matrix4fc projectionMatrix) {
         var color = ChunkShaderFogComponent.FOG_SERVICE.getFogColor();
         var alpha = color[3];
         var distance = ChunkShaderFogComponent.FOG_SERVICE.getFogCutoff();
+        var shape = ChunkShaderFogComponent.FOG_SERVICE.getFogShapeIndex();
 
         var renderDistance = this.getRenderDistance();
 
@@ -979,7 +982,57 @@ public abstract class RenderSectionManager {
             return renderDistance;
         }
 
+        if (shape == FogService.FOG_SHAPE_PLANAR) {
+            // The cullers measure the cylindrical distance max(|xz|, |y|) from the camera, which for spherical and
+            // cylindrical fog is never larger than the distance the shader fogs by, so the cutoff can be used
+            // as-is. Planar fog instead measures depth along the view axis, which is *smaller* than that distance,
+            // so the cutoff has to be scaled up to the worst case before the cullers can use it.
+            var secant = getMaximumFrustumSecant(projectionMatrix);
+
+            if (secant == 0.0f) {
+                // Not a projection we can bound the view cone of; assume fog can hide nothing.
+                return renderDistance;
+            }
+
+            distance *= secant;
+        }
+
         return Math.min(renderDistance, distance + 0.5f);
+    }
+
+    /**
+     * Computes the largest factor by which a point inside the view frustum can be farther from the camera than its
+     * depth along the view axis.
+     *
+     * <p>Computing from the projection rather than from the game's setting keeps this correct
+     * under dynamic FOV, spyglasses, aspect ratio changes, temporal jitter, and any mod which alters the
+     * projection.</p>
+     */
+    private static float getMaximumFrustumSecant(@Nullable Matrix4fc projectionMatrix) {
+        if (projectionMatrix == null) {
+            return 0.0f;
+        }
+
+        // A perspective projection divides by -z (m23 = -1 before any scaling). An orthographic one (used by the
+        // shadow pass) leaves w untouched, has no apex, and therefore no bounded view cone.
+        float w = Math.abs(projectionMatrix.m23());
+
+        if (w == 0.0f) {
+            return 0.0f;
+        }
+
+        float tanX = (w + Math.abs(projectionMatrix.m20())) / Math.abs(projectionMatrix.m00());
+        float tanY = (w + Math.abs(projectionMatrix.m21())) / Math.abs(projectionMatrix.m11());
+
+        float secant = (float) Math.sqrt(1.0 + (tanX * tanX) + (tanY * tanY));
+
+        // Rejects a degenerate projection (a zero or NaN term anywhere above lands here) rather than letting it
+        // poison the search distance.
+        if (!(secant >= 1.0f) || !Float.isFinite(secant)) {
+            return 0.0f;
+        }
+
+        return secant;
     }
 
     private float getRenderDistance() {

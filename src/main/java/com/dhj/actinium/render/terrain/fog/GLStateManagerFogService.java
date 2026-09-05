@@ -26,7 +26,9 @@ public class GLStateManagerFogService implements FogService {
 
     @Override
     public int getFogShapeIndex() {
-        return 0;
+        // Vanilla fog distances on 1.12.2 are measured against the eye plane (depth along the view axis),
+        // which matches the planar shape rather than the spherical distance the shader defaults to.
+        return FogService.FOG_SHAPE_PLANAR;
     }
 
     @Override
