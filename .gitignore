@@ -43,3 +43,4 @@ gradle-app.setting
 
 # Mesa EGL/GLES DLLs for the (deferred) JMH GL benchmark harness; not committed.
 celeritas-common/jmh-natives/
+/.tools/

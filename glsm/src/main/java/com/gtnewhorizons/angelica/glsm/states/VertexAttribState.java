@@ -1,5 +1,8 @@
 package com.gtnewhorizons.angelica.glsm.states;
 
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
+import com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 import org.lwjgl.opengl.GL11;
@@ -80,7 +83,7 @@ public class VertexAttribState {
         a.stride = stride;
         a.offset = 0;
         a.vboId = vboId;
-        a.clientPointer = (vboId == 0) ? pointer : null;
+        a.clientPointer = (vboId == 0 && pointer != null) ? captureClientPointer(pointer) : null;
         final boolean now = a.isClientSide();
         if (was != now) clientSideEnabledCount += now ? 1 : -1;
     }
@@ -96,6 +99,36 @@ public class VertexAttribState {
 
     public static Attrib get(int index) {
         return current[index];
+    }
+
+    /**
+     * Computes how many leading bytes of {@code a.clientPointer} a draw over vertices
+     * [first, first + count) can actually read. The captured pointer deliberately spans the
+     * whole underlying allocation (mods like HBM-CE mutate the Java limit after setting the
+     * pointer), so the Java limit is never consulted; only the draw's first/count may narrow
+     * the range. The last read byte of the final vertex is (first + count - 1) * stride +
+     * vertexSize - 1, which stays correct even for stride smaller than the vertex size.
+     * Negative strides read backwards from the pointer, so they fall back to the full
+     * captured range. The result is always clamped to the captured allocation.
+     */
+    public static int computeUploadLength(Attrib a, int first, int count) {
+        final int remaining = a.clientPointer.remaining();
+        if (count <= 0) return 0;
+        if (a.stride < 0) return remaining;
+        final int stride = a.stride > 0 ? a.stride : a.size * a.typeSizeBytes();
+        final long lastByteExclusive = (long) (first + count - 1) * stride + (long) a.size * a.typeSizeBytes();
+        return (int) Math.min(remaining, lastByteExclusive);
+    }
+
+    /**
+     * Captures the native pointer address without treating the Java buffer limit as its GL
+     * allocation boundary. HBM reuses a BufferBuilder allocation and changes its limit between
+     * uploads; OpenGL client pointers remain valid for the allocation range.
+     */
+    private static ByteBuffer captureClientPointer(ByteBuffer pointer) {
+        final int position = pointer.position();
+        final int capacity = pointer.capacity() - position;
+        return MemoryUtilities.memByteBuffer(MemoryUtilities.memAddress(pointer), capacity);
     }
 
 
@@ -123,6 +156,31 @@ public class VertexAttribState {
     public static boolean hasAnyClientSideEnabledAttrib() {
         return clientSideEnabledCount > 0;
     }
+
+    /**
+     * Computes the FFP vertex-format flags from the attributes actually enabled on the
+     * currently bound VAO. This is the authoritative source both for draws fed by
+     * client-side arrays and for the raw GL draw entry points (glDrawElements/glDrawArrays
+     * and friends): the format-based flag cache in ShaderManager only reflects the last
+     * buffer-state setup (e.g. a VBO format), and client-state calls during third-party
+     * model uploads (e.g. HBM-CE's glEnableClientState) can leak COLOR_BIT and friends into
+     * the global flags without a matching VAO attribute. Either way the FFP shader would
+     * declare attributes the draw does not provide and read the default (0,0,0,1) — a
+     * POSITION-only draw such as the legacy end portal TESR renders black. Deriving from
+     * the per-VAO attribute enablement is always consistent with the real GL state.
+     */
+    public static int currentClientArrayVertexFlags() {
+        if (current == null) {
+            return 0;
+        }
+        int flags = 0;
+        if (get(Usage.COLOR.getAttributeLocation()).enabled) flags |= VertexFlags.COLOR_BIT;
+        if (get(Usage.NORMAL.getAttributeLocation()).enabled) flags |= VertexFlags.NORMAL_BIT;
+        if (get(Usage.PRIMARY_UV.getAttributeLocation()).enabled) flags |= VertexFlags.TEXTURE_BIT;
+        if (get(Usage.SECONDARY_UV.getAttributeLocation()).enabled) flags |= VertexFlags.BRIGHTNESS_BIT;
+        return flags;
+    }
+
     public static class Attrib {
         public boolean enabled;
         public int size;

@@ -4,6 +4,8 @@ import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.*;
 import lombok.Getter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.common.util.TimeUtil;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
@@ -64,6 +66,8 @@ public abstract class RenderSectionManager {
      */
     protected static final boolean CONTINUOUSLY_REMESH_WORLD = false;
 
+    private static final Logger LOGGER = LogManager.getLogger(RenderSectionManager.class);
+
     private final ChunkBuilder builder;
 
     private final Thread renderThread = Thread.currentThread();
@@ -96,6 +100,10 @@ public abstract class RenderSectionManager {
 
     @Nullable
     protected final RenderListManager shadowRenderListManager;
+
+    // Normalizes the two external frame counters (terrain pass and shadow pass) into one strictly
+    // increasing sequence; every frame number archived or compared by this manager comes from it.
+    private final SectionFrameClock frameClock = new SectionFrameClock();
 
     // Set by the shadow pass, which precedes the terrain pass in a frame and submits both searches. The terrain
     // pass of the same frame then skips re-running the search.
@@ -198,7 +206,21 @@ public abstract class RenderSectionManager {
      * per-frame camera bookkeeping.
      */
     public void update(Viewport positionedViewport, int frame, boolean spectator) {
-        this.updateCameraPosition(positionedViewport);
+        // The terrain and shadow passes hand in independent frame counters (the shadow counter
+        // restarts on pipeline rebuild); normalize to one monotonic sequence before any use.
+        frame = this.frameClock.next(frame);
+
+        // HBM-CE compatibility seam. MixinRenderSectionManager (hbm.mod.mixin.json) applies
+        // @Redirect injections on this exact method body that rewrite the CameraTransform
+        // x/y/z getfields below to its unsafe accessors (CeleritasCameraTransformAccess).
+        // The reads must stay inline here — delegating to updateCameraPosition() leaves the
+        // redirector with zero scanned targets and the mixin application aborts with a
+        // Critical injection error, poisoning this class (NoClassDefFoundError during mod
+        // construction). updateCameraPosition is kept for the shadow pass, which HBM-CE
+        // does not redirect. See HbmCameraRedirectContractTest.
+        this.lastCameraPosition = positionedViewport.getBlockCoord();
+        var transform = positionedViewport.getTransform();
+        this.cameraPosition = new Vector3d(transform.x, transform.y, transform.z);
 
         if (this.shadowPassRanThisFrame) {
             // The shadow pass searched for this frame if the graph was dirty then. Any needsUpdate raised by
@@ -220,6 +242,9 @@ public abstract class RenderSectionManager {
             throw new IllegalStateException("No shadow pass configured");
         }
 
+        // Same normalization as update(): both passes share the monotonic frame sequence.
+        frame = this.frameClock.next(frame);
+
         this.updateCameraPosition(playerViewport);
         this.shadowPassRanThisFrame = true;
 
@@ -237,6 +262,10 @@ public abstract class RenderSectionManager {
                 this.getSearchDistance(), lightVector, this.getTargetQueueSize());
     }
 
+    /**
+     * Shadow-pass camera bookkeeping. Not shared with {@link #update} any more: HBM-CE's
+     * redirector must find the CameraTransform getfields inside {@code update}'s own body.
+     */
     private void updateCameraPosition(Viewport positionedViewport) {
         this.lastCameraPosition = positionedViewport.getBlockCoord();
         var transform = positionedViewport.getTransform();
@@ -269,8 +298,6 @@ public abstract class RenderSectionManager {
     private void scheduleTranslucencyUpdates(int camSectionX, int camSectionY, int camSectionZ) {
         var renderListManager = this.getCurrentRenderListManager();
         var rebuildLists = renderListManager.getRebuildLists().byUpdateType();
-        var sortRebuildList = rebuildLists.get(ChunkUpdateType.SORT);
-        var importantSortRebuildList = rebuildLists.get(ChunkUpdateType.IMPORTANT_SORT);
         var allowImportant = allowImportantRebuilds();
         var translucentPass = this.renderPassConfiguration.defaultTranslucentMaterial().pass;
         if (!this.hasTranslucencySortedSections()) {
@@ -317,8 +344,8 @@ public abstract class RenderSectionManager {
 
                 if (cameraChangedSection || section.isAlignedWithSectionOnGrid(camSectionX, camSectionY, camSectionZ)) {
                     section.setPendingUpdate(update);
-                    // Inject it into the rebuild lists
-                    (update == ChunkUpdateType.IMPORTANT_SORT ? importantSortRebuildList : sortRebuildList).add(section);
+                    // Inject it into the appropriate list
+                    rebuildLists.get(update).add(section);
 
                     section.lastCameraX = cameraPosition.x;
                     section.lastCameraY = cameraPosition.y;
@@ -478,10 +505,25 @@ public abstract class RenderSectionManager {
      * Inject sections that requested a rebuild between graph updates into the appropriate rebuild lists.
      */
     private void promoteInterimRebuildList() {
-        var rebuildLists = this.getCurrentRenderListManager().getRebuildLists().byUpdateType();
-        for (var section : this.sectionsRequestingUpdate) {
-            rebuildLists.get(section.getPendingUpdate()).add(section);
+        if (this.sectionsRequestingUpdate.isEmpty()) {
+            return;
         }
+
+        var rebuildLists = this.getCurrentRenderListManager().getRebuildLists().byUpdateType();
+        boolean graphUpdatePending = this.getCurrentRenderListManager().isNeedsUpdate();
+
+        for (var section : this.sectionsRequestingUpdate) {
+            var updateType = section.getPendingUpdate();
+            if (updateType == null) {
+                // should never happen, but be defensive
+                continue;
+            }
+            if (!graphUpdatePending || updateType.isImportant()) {
+                rebuildLists.get(updateType).add(section);
+            }
+        }
+
+        this.sectionsRequestingUpdate.clear();
     }
 
     public void updateChunks(boolean updateImmediately) {
@@ -497,13 +539,7 @@ public abstract class RenderSectionManager {
             this.builder.tickSchedulingBudget();
         }
 
-        // Promotion of the interim rebuild list is not required if a graph update is requested, as the graph
-        // generates a new rebuild list anyway
-        if (!this.renderListManager.isNeedsUpdate() && !sectionsRequestingUpdate.isEmpty()) {
-            this.promoteInterimRebuildList();
-        }
-
-        this.sectionsRequestingUpdate.clear();
+        this.promoteInterimRebuildList();
 
         if (!rebuildListHasUpdates()) {
             // Nothing was dispatched, so the workers cannot have been starved for lack of budget.
@@ -594,17 +630,22 @@ public abstract class RenderSectionManager {
                 this.updateTranslucencyInfo(result.render, buildResult.meshes);
             }
 
-            var job = result.render.getBuildCancellationToken();
-
-            // Only clear the token if this result belongs to the most recently submitted build.
-            // A stale result from an earlier submission must not clear the token for a newer
-            // in-flight job, which is identified by a higher lastSubmittedFrame.
-            if (job != null && result.buildTime >= result.render.getLastSubmittedFrame()) {
-                result.render.setBuildCancellationToken(null);
-            }
+            releaseBuildCancellationToken(result);
 
             result.render.setLastBuiltFrame(result.buildTime);
             this.sectionMetricsTracker.updateSectionBuildDuration(result.render, holder.executionTimeNanos());
+        }
+    }
+
+    /**
+     * Releases the section's build cancellation token when {@code output} belongs to the latest
+     * submission. A stale result from an earlier submission must not clear the token of a newer
+     * in-flight job, which is identified by a higher {@code lastSubmittedFrame}.
+     */
+    private static void releaseBuildCancellationToken(ChunkTaskOutput output) {
+        var job = output.render.getBuildCancellationToken();
+        if (job != null && output.buildTime >= output.render.getLastSubmittedFrame()) {
+            output.render.setBuildCancellationToken(null);
         }
     }
 
@@ -645,10 +686,20 @@ public abstract class RenderSectionManager {
 
         for (var holder : outputs) {
             var output = holder.output();
-            if (output.render.isDisposed()
-                    || output.render.getLastBuiltFrame() > output.buildTime
+            if (output.render.isDisposed()) {
+                releaseBuildCancellationToken(output);
+                continue;
+            }
+            if (output.render.getLastBuiltFrame() > output.buildTime
                     || (output instanceof ChunkBuildOutput buildOutput
                         && output.render.getLastSubmittedBuildFrame() > buildOutput.buildTime)) {
+                // Dropped results never reach processChunkBuildResults, so the token release has to
+                // happen here; skipping it pinned the section's buildInFlight bit and made the graph
+                // search skip the section permanently.
+                LOGGER.warn("Discarding stale chunk build result for section [{}, {}, {}]: buildTime={}, lastBuiltFrame={}, lastSubmittedFrame={}",
+                        output.render.getChunkX(), output.render.getChunkY(), output.render.getChunkZ(),
+                        output.buildTime, output.render.getLastBuiltFrame(), output.render.getLastSubmittedFrame());
+                releaseBuildCancellationToken(output);
                 continue;
             }
 
@@ -873,7 +924,12 @@ public abstract class RenderSectionManager {
             }
 
             if (section.requestUpdate(pendingUpdate) || cancelledInFlightBuild) {
-                if (!this.getCurrentRenderListManager().isNeedsUpdate() && this.sectionsRequestingUpdate.size() < this.builder.getSchedulingBudget()) {
+                // Check importance using the section's new update type, as it may not be exactly what we requested
+                important = section.getPendingUpdate().isImportant();
+
+                if (important ||
+                        (!this.getCurrentRenderListManager().isNeedsUpdate() &&
+                            this.sectionsRequestingUpdate.size() < this.builder.getSchedulingBudget())) {
                     this.sectionsRequestingUpdate.add(section);
                 } else {
                     this.markGraphDirty();

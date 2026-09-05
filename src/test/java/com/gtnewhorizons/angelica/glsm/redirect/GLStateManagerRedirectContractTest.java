@@ -53,6 +53,25 @@ class GLStateManagerRedirectContractTest {
     }
 
     @Test
+    void glRotatefFloatFormExists() throws IOException {
+        assertTrue(
+            methodDescriptors("glRotatef").contains("(FFFF)V"),
+            "GLStateManager must expose glRotatef(float, float, float, float), the redirect target "
+                + "for vanilla GlStateManager.rotate(float, float, float, float)"
+        );
+    }
+
+    @Test
+    void glRotatefDoubleAngleFormExists() throws IOException {
+        assertTrue(
+            methodDescriptors("glRotatef").contains("(DFFF)V"),
+            "GLStateManager must expose glRotatef(double, float, float, float): the GL redirector "
+                + "rewrites NTM-CE's GlStateManager.rotate(double, float, float, float) call to it "
+                + "while preserving the (DFFF)V descriptor (issue #64)"
+        );
+    }
+
+    @Test
     void outlineModeMethodsExistForVanillaGlowRendering() throws IOException {
         assertTrue(
             methodDescriptors("enableOutlineMode").contains("(I)V"),

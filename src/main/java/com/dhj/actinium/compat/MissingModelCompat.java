@@ -26,6 +26,19 @@ public final class MissingModelCompat {
     }
 
     /**
+     * Cached vanilla missing-model reference. Resolving it walks a four-deep getter chain through
+     * the block renderer dispatcher, which runs per block render during chunk mesh building; the
+     * reference itself only changes on resource reload, which clears the cache through
+     * {@link #onResourceManagerReload()}. Volatile because chunk meshes are built on worker threads.
+     */
+    private static volatile IBakedModel cachedMissingModel;
+
+    /** Drops the cached missing-model reference so the next check re-resolves it. */
+    public static void onResourceManagerReload() {
+        cachedMissingModel = null;
+    }
+
+    /**
      * Binary name of Forge's {@code FancyMissingModel.BakedModel}. The class is package-private,
      * so its name is matched instead of using {@code instanceof}; it ships with Minecraft Forge.
      */
@@ -55,8 +68,12 @@ public final class MissingModelCompat {
      * fancy label variant) and must not be rendered from a chunk build worker thread.
      */
     public static boolean isMissingModel(IBakedModel model) {
-        IBakedModel missingModel = Minecraft.getMinecraft().getBlockRendererDispatcher()
-                .getBlockModelShapes().getModelManager().getMissingModel();
+        IBakedModel missingModel = cachedMissingModel;
+        if (missingModel == null) {
+            missingModel = Minecraft.getMinecraft().getBlockRendererDispatcher()
+                    .getBlockModelShapes().getModelManager().getMissingModel();
+            cachedMissingModel = missingModel;
+        }
         return isMissingModel(model, missingModel);
     }
 

@@ -14,6 +14,7 @@ import net.minecraft.world.chunk.NibbleArray;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.structure.StructureBoundingBox;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
+import org.jetbrains.annotations.Nullable;
 import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
 import com.dhj.actinium.compat.fluidlogged.FluidStateStorage;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
@@ -32,7 +33,11 @@ public class ClonedChunkSection {
 
     private final Biome[] biomeData;
 
-    private byte[][] lightData;
+    // Light arrays are copied eagerly while this section is being cloned on the main thread.
+    // Chunk-builder workers read them while the light engine keeps mutating the live
+    // NibbleArrays, and a torn read bakes transient darkness into the mesh (e.g. water and
+    // fluidlogged quads turning black after a burst of relighting).
+    private final NibbleArray[] lightData = new NibbleArray[EnumSkyBlock.values().length];
 
     private long lastUsedTimestamp = Long.MAX_VALUE;
 
@@ -56,6 +61,8 @@ public class ClonedChunkSection {
         }
 
         this.data = section;
+        this.lightData[EnumSkyBlock.BLOCK.ordinal()] = copyLightArray(section.getBlockLight());
+        this.lightData[EnumSkyBlock.SKY.ordinal()] = copyLightArray(section.getSkyLight());
         if (FluidloggedCompat.IS_LOADED) {
             this.fluidData = new FluidStateStorage(chunk, y << 4);
         } else {
@@ -115,8 +122,12 @@ public class ClonedChunkSection {
     }
 
     public int getLightLevel(int x, int y, int z, EnumSkyBlock type) {
-        NibbleArray lightArray = type == EnumSkyBlock.BLOCK ? this.data.getBlockLight() : this.data.getSkyLight();
+        NibbleArray lightArray = this.lightData[type.ordinal()];
         return lightArray != null ? lightArray.get(x, y, z) : type.defaultLightValue;
+    }
+
+    private static NibbleArray copyLightArray(@Nullable NibbleArray source) {
+        return source == null ? null : new NibbleArray(source.getData().clone());
     }
 
     private static ExtendedBlockStorage getChunkSection(World world, Chunk chunk, int y) {

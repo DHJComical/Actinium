@@ -165,20 +165,17 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
     @Override
     public void setupTerrain(Viewport viewport, CameraState cameraState, int frame, boolean spectator, boolean updateChunksImmediately) {
         super.setupTerrain(viewport, cameraState, frame, spectator, updateChunksImmediately);
-
-        if (this.renderSectionManager.isInShadowPass() && ShaderProviderHolder.isActive()) {
-            collectTileEntitiesForShadow();
-            RenderDebugHooksHolder.logShadowTerrainLayer(
-                "culling",
-                "fogOcclusion=false,occlusionCulling=false",
-                this.renderSectionManager.getVisibleChunkCount()
-            );
-        }
     }
 
     @Override
     public void setupShadowTerrain(Viewport playerViewport, Viewport shadowViewport, CameraState cameraState, int frame, boolean spectator) {
         super.setupShadowTerrain(playerViewport, shadowViewport, cameraState, frame, spectator);
+        collectTileEntitiesForShadow();
+        RenderDebugHooksHolder.logShadowTerrainLayer(
+            "culling",
+            "fogOcclusion=false,occlusionCulling=false",
+            this.renderSectionManager.getVisibleChunkCount()
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -268,11 +265,21 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
     @Override
     public int renderBlockEntities(TileEntityRenderContext tileEntityRenderContext) {
         int pass = MinecraftForgeClient.getRenderPass();
-        TileEntityRendererDispatcher.instance.preDrawBatch();
+        // TESRs (e.g. HBM-CE machines) are not disciplined about GL state; guard the batch so
+        // leaked depth/blend/texture state cannot reach the translucent pass or the HUD.
+        TileEntityGlStateGuard.push();
         try {
-            return super.renderBlockEntities(tileEntityRenderContext);
+            TileEntityRendererDispatcher.instance.preDrawBatch();
+            try {
+                return super.renderBlockEntities(tileEntityRenderContext);
+            } finally {
+                // TESRs leak GL state during the render loop; flush the FastTESR batch with
+                // the clean entry state (see TileEntityGlStateGuard.restoreForBatch).
+                TileEntityGlStateGuard.restoreForBatch();
+                TileEntityRendererDispatcher.instance.drawBatch(pass);
+            }
         } finally {
-            TileEntityRendererDispatcher.instance.drawBatch(pass);
+            TileEntityGlStateGuard.pop();
         }
     }
 
@@ -319,4 +326,3 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         return ChunkMeshFormats.COMPACT;
     }
 }
-

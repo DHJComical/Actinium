@@ -35,6 +35,9 @@ dependencies {
 
     implementation 'org.joml:joml:1.10.5'
     contain 'org.joml:joml:1.10.5'
+    // Same joml artifact bundled into the jar body and relocated under the shadow namespace by the
+    // shadowRemapJar / devShadowJar tasks (upstream Celeritas distribution layout).
+    shadowBundle 'org.joml:joml:1.10.5'
     compileOnly 'it.unimi.dsi:fastutil:8.5.18'
     compileOnly "org.ow2.asm:asm:${asmVersion}"
     compileOnly "org.ow2.asm:asm-commons:${asmVersion}"
@@ -145,6 +148,20 @@ dependencies {
     // Botania CEU (issue: held items render flat white because its RenderWorldLastEvent handlers leave
     // GL_TEXTURE_2D disabled in the GLSM cache; the conditional botania mixin restores it)
     modImplementation 'curse.maven:botania-ceu-1179448:8706250'
+
+    // HBM's Nuclear Tech Mod Community Edition (issue #64: glRotatef(DFFF) redirect target;
+    // issue #47: its celeritas compat mixins target the rewritten renderer — dev-verifies the
+    // DefaultChunkRenderer fillCommandBuffer seam). Depends on CTM.
+    modImplementation "curse.maven:ctm-267602:2915363"
+    modImplementation "curse.maven:hbm-nuclear-tech-mod-community-edition-1312314:8330665"
+
+    // ArchitectureCraft 1.12-3.108 TridenMC (issue #101: its blocks are invisible / sawbench hits
+    // FancyMissingModel inside the fast chunk meshing path; dev-verifies the shape rendering compat)
+    modImplementation 'curse.maven:architecturecraft-tridev-277631:4344128'
+
+    // Scannable 1.6.3.26 (issue #94: its scanner overlay rendering conflicts with the Actinium render
+    // pipeline -- see-through terrain without shaders, white ghosting with shaders; needs runtime repro)
+    modImplementation 'curse.maven:scannable-266784:3146549'
 
     // FluxLoading 1.4.1 (issue #102: re-entering a world leaves its loading screen image stuck
     // instead of fading out; dev-verifies the loading screen overlay compat)

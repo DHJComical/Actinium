@@ -30,26 +30,29 @@ public class PropertiesPreprocessor {
 		final Map<String, String> stringValues = getStringValues(shaderPackOptions);
 
 		try (Preprocessor pp = new Preprocessor()) {
-			// Install a listener before adding macros: jcpp throws LexerException for lexer warnings
-			// (e.g. "Decimal constant starts with 0, but not octal") only when no listener is set.
-			// Shader packs such as Complementary Unbound r5.8.1 trigger such warnings in macro values,
-			// and Iris treats a LexerException here as a fatal pack load failure, breaking shader
-			// toggling. With a listener installed the warning is logged and processing continues.
-			pp.setListener(new PropertiesCommentListener());
-
+			// jcpp lexes macro values inside addMacro through an internal lexer source that has
+			// no listener attached, so lexer warnings (e.g. "Decimal constant starts with 0, but
+			// not octal") throw LexerException from addMacro itself; the preprocessor listener is
+			// never consulted there. A single bad define must not fail the whole pack load
+			// (production: ACTINIUM_VERSION=000058359 from version alpha-0.0.5-da83c59), so the
+			// offending macro is skipped with a warning and processing continues.
 			for (String value : booleanValues) {
 				pp.addMacro(value);
 			}
 
 			for (StringPair envDefine : environmentDefines) {
-				pp.addMacro(envDefine.getKey(), envDefine.getValue());
+				try {
+					pp.addMacro(envDefine.getKey(), envDefine.getValue());
+				} catch (LexerException e) {
+					Iris.logger.warn("Skipping environment define {}={}: {}", envDefine.getKey(), envDefine.getValue(), e.getMessage());
+				}
 			}
 
 			stringValues.forEach((name, value) -> {
 				try {
 					pp.addMacro(name, value);
 				} catch (LexerException e) {
-					e.printStackTrace();
+					Iris.logger.warn("Skipping string option macro {}={}: {}", name, value, e.getMessage());
 				}
 			});
 
@@ -67,16 +70,15 @@ public class PropertiesPreprocessor {
 		}
 
 		final Preprocessor preprocessor = new Preprocessor();
-		// See the comment in the other preprocessSource overload: without a listener, jcpp turns lexer
-		// warnings into LexerExceptions, which must not be fatal for shader pack properties.
-		preprocessor.setListener(new PropertiesCommentListener());
 
-		try {
-			for (StringPair envDefine : environmentDefines) {
+		// See the comment in the other preprocessSource overload: addMacro throws on lexer
+		// warnings regardless of any listener, so skip the offending macro instead of failing.
+		for (StringPair envDefine : environmentDefines) {
+			try {
 				preprocessor.addMacro(envDefine.getKey(), envDefine.getValue());
+			} catch (LexerException e) {
+				Iris.logger.warn("Skipping environment define {}={}: {}", envDefine.getKey(), envDefine.getValue(), e.getMessage());
 			}
-		} catch (LexerException e) {
-			e.printStackTrace();
 		}
 
 		return process(preprocessor, source);

@@ -6,7 +6,11 @@ import org.junit.jupiter.api.Test;
 import org.taumc.glsl.ShaderParser;
 import org.taumc.glsl.grammar.GLSLLexer;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CompatShaderTransformerTest {
@@ -101,7 +105,7 @@ class CompatShaderTransformerTest {
     }
 
     @Test
-    void conditionalGlslRemainsBetweenItsDirectives() {
+    void conditionalGlslSelectsTheTakenBranchUnderEvaluation() {
         String source = """
             #ifdef USE_PORTAL_COLOR
             varying vec4 portalColor;
@@ -110,22 +114,18 @@ class CompatShaderTransformerTest {
             #endif
 
             void main() {
-                gl_FragColor = portalColor;
+                gl_FragColor = fallbackColor;
             }
             """;
 
         String transformed = CompatShaderTransformer.transform(source, true);
 
-        assertEquals("#version 330 core\n" + source, transformed);
-        assertOrdered(
-            transformed,
-            "#ifdef USE_PORTAL_COLOR",
-            "varying vec4 portalColor",
-            "#else",
-            "varying vec4 fallbackColor",
-            "#endif",
-            "void main"
-        );
+        // USE_PORTAL_COLOR is undefined, so the #else branch is kept (and transformed) while the
+        // dead branch is dropped; previously this shader fell back to version-fixup-only output
+        // that could not compile under core profile.
+        assertFalse(transformed.contains("portalColor"), transformed);
+        assertTrue(transformed.contains("fallbackColor"), transformed);
+        assertTrue(transformed.contains("actinium_FragData0"), transformed);
     }
 
     @Test
@@ -204,6 +204,72 @@ class CompatShaderTransformerTest {
             "((color) * 0.5)",
             "void main"
         );
+    }
+
+    @Test
+    void betterPortalsPortalVertexShaderTransformsToCoreProfile() {
+        String transformed = CompatShaderTransformer.transform(
+            resource("/compat_shaders/betterportals_render_portal.vsh"), false);
+
+        // The taken desktop branch's FFP builtins are replaced by Actinium uniforms/attributes.
+        assertTrue(hasIdentifier(transformed, "actinium_ModelViewMatrix"), transformed);
+        assertTrue(hasIdentifier(transformed, "actinium_ProjectionMatrix"), transformed);
+        assertTrue(hasIdentifier(transformed, "actinium_Vertex"), transformed);
+        assertTrue(hasIdentifier(transformed, "actinium_FogFragCoord"), transformed);
+        assertFalse(hasIdentifier(transformed, "gl_ModelViewMatrix"), transformed);
+        assertFalse(hasIdentifier(transformed, "gl_Vertex"), transformed);
+
+        // The GLES-only branch is dropped: no explicit ESSL attribute/uniform path may leak in.
+        assertFalse(hasIdentifier(transformed, "bpModelViewMatrix"), transformed);
+        assertFalse(hasIdentifier(transformed, "Position"), transformed);
+
+        // BP_SKIP_FIXED_CLIP resolves to 1 at the target version, so the gl_ClipVertex assignment
+        // (which has no core-profile equivalent) is excluded by the shader's own guard.
+        assertFalse(hasIdentifier(transformed, "gl_ClipVertex"), transformed);
+    }
+
+    @Test
+    void betterPortalsPortalFragmentShaderTransformsToCoreProfile() {
+        String transformed = CompatShaderTransformer.transform(
+            resource("/compat_shaders/betterportals_render_portal.fsh"), true);
+
+        assertFalse(hasIdentifier(transformed, "gl_FogFragCoord"), transformed);
+        assertFalse(hasIdentifier(transformed, "bpFogFragCoord"), transformed);
+        assertFalse(hasIdentifier(transformed, "texture2D"), transformed);
+
+        // Forge's ShaderManager resolves these uniforms by name at runtime; dropping or
+        // renaming any of them silently breaks the portal surface (a missing "sampler"
+        // uniform left the remote view unsampled in production).
+        assertTrue(hasIdentifier(transformed, "sampler"), transformed);
+        assertTrue(hasIdentifier(transformed, "screenSize"), transformed);
+        assertTrue(hasIdentifier(transformed, "fogDensity"), transformed);
+        assertTrue(hasIdentifier(transformed, "fogColor"), transformed);
+        assertTrue(hasIdentifier(transformed, "opacity"), transformed);
+        // The declaration alone is not enough: the sampler must stay in use inside main,
+        // otherwise the compiler deactivates the uniform and the runtime lookup fails.
+        assertOrdered(transformed, "uniform sampler2D sampler", "void main", "sampler");
+    }
+
+    /** Identifier-level check: comments preserved in the preamble must not trip the assertions. */
+    private static boolean hasIdentifier(String source, String name) {
+        GLSLLexer lexer = new GLSLLexer(CharStreams.fromString(source));
+        for (Token token = lexer.nextToken(); token.getType() != Token.EOF; token = lexer.nextToken()) {
+            if (token.getType() == GLSLLexer.IDENTIFIER && name.equals(token.getText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String resource(String name) {
+        try (var stream = CompatShaderTransformerTest.class.getResourceAsStream(name)) {
+            if (stream == null) {
+                throw new IllegalStateException("Missing test resource: " + name);
+            }
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read test resource: " + name, e);
+        }
     }
 
     private static int countTokens(String source, int tokenType) {

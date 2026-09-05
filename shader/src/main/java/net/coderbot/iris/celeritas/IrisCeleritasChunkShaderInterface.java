@@ -159,7 +159,13 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
     }
 
     public static boolean shouldWriteDepth(TerrainRenderPass pass, boolean shadowPass) {
-        return shadowPass || pass.writesDepth();
+        // The main translucent pass must never write depth: under shaders, block entities render
+        // after translucent terrain, so glass windows (EnderIO fluid tanks, issue #58) writing
+        // depth would occlude the TESR fluid behind them. The pass's writesDepth flag carries the
+        // shaderless (fixed-function) policy, where vanilla keeps the mask on and TESRs draw first;
+        // the Iris path therefore applies the per-semantic override itself instead of deferring to
+        // the flag. Water keeps writing depth so stacked water sorts correctly (#79).
+        return shadowPass || (pass.writesDepth() && pass.semantic() != TerrainRenderPass.Semantic.TRANSLUCENT);
     }
 
     @Override

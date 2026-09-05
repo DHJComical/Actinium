@@ -1,10 +1,13 @@
 package com.gtnewhorizons.angelica.iris;
 
 import com.gtnewhorizons.angelica.client.rendering.TextureTracker;
+import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredAlphaHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredBlendHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredDepthColorHandler;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
+import com.gtnewhorizons.angelica.glsm.hooks.VanillaBooleanLayer;
+import com.gtnewhorizons.angelica.glsm.hooks.VanillaStateLayer;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.debug.IrisGlDebug;
@@ -27,6 +30,8 @@ public final class IrisGLSMBridge {
     private static Runnable fogEndListener;
     private static Runnable fogDensityListener;
     private static boolean registered;
+    private static boolean inputsDeferred;
+    private static boolean blendDeferred;
 
     static {
         StateUpdateNotifiers.blendFuncNotifier = listener -> blendFuncListener = listener;
@@ -37,6 +42,51 @@ public final class IrisGLSMBridge {
     }
 
     private IrisGLSMBridge() {
+    }
+
+    private static VanillaBooleanLayer gated(VanillaBooleanLayer layer) {
+        return new VanillaBooleanLayer() {
+            @Override
+            public boolean isOverrideHeld() {
+                return Iris.enabled && layer.isOverrideHeld();
+            }
+
+            @Override
+            public boolean getVanilla() {
+                return layer.getVanilla();
+            }
+
+            @Override
+            public void setVanilla(boolean enabled) {
+                layer.setVanilla(enabled);
+            }
+        };
+    }
+
+    private static <T> VanillaStateLayer<T> gated(VanillaStateLayer<T> layer) {
+        return new VanillaStateLayer<>() {
+            @Override
+            public boolean isOverrideHeld() {
+                return Iris.enabled && layer.isOverrideHeld();
+            }
+
+            @Override
+            public void readVanilla(T into) {
+                layer.readVanilla(into);
+            }
+
+            @Override
+            public void writeVanilla(T from) {
+                layer.writeVanilla(from);
+            }
+        };
+    }
+
+    private static void refreshBlendCondition() {
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        if (pipeline instanceof DeferredWorldRenderingPipeline deferredPipeline) {
+            deferredPipeline.onVanillaBlendChanged();
+        }
     }
 
     public static void register() {
@@ -56,6 +106,11 @@ public final class IrisGLSMBridge {
             }
 
             @Override
+            public boolean isOverrideHeld() {
+                return Iris.enabled && BlendModeStorage.isOverrideHeld();
+            }
+
+            @Override
             public void deferBlendModeToggle(boolean enabled) {
                 BlendModeStorage.deferBlendModeToggle(enabled);
             }
@@ -70,6 +125,13 @@ public final class IrisGLSMBridge {
                 BlendModeStorage.flushDeferredBlend();
             }
         };
+
+        GLStateManager.getBlendMode().setVanillaLayer(gated(BlendModeStorage.ENABLE_LAYER));
+        GLStateManager.getBlendState().setVanillaLayer(gated(BlendModeStorage.FUNC_LAYER));
+        GLStateManager.getAlphaTest().setVanillaLayer(gated(AlphaTestStorage.ENABLE_LAYER));
+        GLStateManager.getAlphaState().setVanillaLayer(gated(AlphaTestStorage.FUNC_LAYER));
+        GLStateManager.getDepthState().setVanillaLayer(gated(DepthColorStorage.DEPTH_LAYER));
+        GLStateManager.getColorMask().setVanillaLayer(gated(DepthColorStorage.COLOR_LAYER));
 
         GLSMHooks.alphaHandler = new DeferredAlphaHandler() {
             @Override
@@ -92,6 +154,11 @@ public final class IrisGLSMBridge {
             @Override
             public boolean isDepthColorLocked() {
                 return Iris.enabled && DepthColorStorage.isDepthColorLocked();
+            }
+
+            @Override
+            public boolean isOverrideHeld() {
+                return Iris.enabled && DepthColorStorage.isOverrideHeld();
             }
 
             @Override
@@ -167,13 +234,17 @@ public final class IrisGLSMBridge {
                             event.unit,
                             event.target,
                             event.enabled,
-                            com.gtnewhorizons.angelica.glsm.GLStateManager.getActiveTextureUnit(),
+                            GLStateManager.getActiveTextureUnit(),
                             StateTracker.INSTANCE.albedoSampler,
                             StateTracker.INSTANCE.lightmapSampler
                     );
                 }
             }
 
+            if (updatePipeline && GLStateManager.isForeignDraw()) {
+                inputsDeferred = true;
+                return;
+            }
             if (updatePipeline) {
                 if (IrisGlDebug.shouldLogTextureUnitEvents() && IrisGlDebug.shouldLogGlsmEvent("pipeline-input-update", 16)) {
                     IrisGlDebug.logDebugInfo("pipeline-input-update albedo={} lightmap={}", StateTracker.INSTANCE.albedoSampler, StateTracker.INSTANCE.lightmapSampler);
@@ -182,10 +253,46 @@ public final class IrisGLSMBridge {
             }
         });
 
-        GLSMHooks.PROGRAM_CHANGE.addListener(event -> ProgramUniforms.clearActiveUniforms());
+        GLSMHooks.VANILLA_BLEND_CHANGE.addListener(event -> {
+            if (!Iris.enabled) {
+                return;
+            }
+            if (GLStateManager.isForeignDraw()) {
+                blendDeferred = true;
+                return;
+            }
+            refreshBlendCondition();
+        });
+
+        GLSMHooks.FOREIGN_DRAW_END.addListener(event -> {
+            if (!Iris.enabled) {
+                return;
+            }
+            if (inputsDeferred) {
+                inputsDeferred = false;
+                Iris.getPipelineManager().getPipeline().ifPresent(pipeline -> pipeline.setInputs(StateTracker.INSTANCE.getInputs()));
+            }
+            if (blendDeferred) {
+                blendDeferred = false;
+                refreshBlendCondition();
+            }
+            WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+            if (pipeline instanceof DeferredWorldRenderingPipeline deferredPipeline) {
+                deferredPipeline.restorePassAfterForeignDraw();
+            }
+        });
+
+        GLSMHooks.PROGRAM_CHANGE.addListener(event -> {
+            if (Iris.enabled && !event.postBind) {
+                ProgramUniforms.clearActiveUniforms();
+            }
+        });
 
         GLSMHooks.PROGRAM_CHANGE.addListener(event -> {
             if (!Iris.enabled) {
+                return;
+            }
+            if (event.postBind) {
                 return;
             }
 
@@ -210,25 +317,9 @@ public final class IrisGLSMBridge {
                 return;
             }
             int activePassProgramId = deferredPipeline.getActivePassProgramId();
-            if (activePassProgramId == -1) {
-                IrisGlDebug.logProgramOverrideDecision(
-                        "program-change-no-pass",
-                        deferredPipeline.getPhase().name(),
-                        event.previousProgram,
-                        event.newProgram,
-                        -1,
-                        true,
-                        ImmediateState.isRenderingLevel,
-                        DepthColorStorage.isOwnedProgram(event.newProgram),
-                        false,
-                        false
-                );
-                return;
-            }
-
-            boolean renderingLevel = ImmediateState.isRenderingLevel;
             boolean ownedProgram = DepthColorStorage.isOwnedProgram(event.newProgram);
-            if (!renderingLevel || ownedProgram) {
+            DepthColorStorage.unlockDepthColor();
+            if (event.newProgram == 0 || ownedProgram) {
                 IrisGlDebug.logProgramOverrideDecision(
                         "program-change-unlock-depth-color",
                         deferredPipeline.getPhase().name(),
@@ -236,12 +327,11 @@ public final class IrisGLSMBridge {
                         event.newProgram,
                         activePassProgramId,
                         true,
-                        renderingLevel,
+                        ImmediateState.isRenderingLevel,
                         ownedProgram,
                         true,
                         false
                 );
-                DepthColorStorage.unlockDepthColor();
             } else {
                 IrisGlDebug.logProgramOverrideDecision(
                         "program-change-mod-override",
@@ -250,13 +340,30 @@ public final class IrisGLSMBridge {
                         event.newProgram,
                         activePassProgramId,
                         true,
-                        true,
+                        ImmediateState.isRenderingLevel,
                         false,
                         false,
                         true
                 );
                 deferredPipeline.onModProgramOverride();
             }
+        });
+
+        GLSMHooks.PROGRAM_CHANGE.addListener(event -> {
+            if (!Iris.enabled || !event.postBind) {
+                return;
+            }
+
+            WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+            if (!(pipeline instanceof DeferredWorldRenderingPipeline deferredPipeline)
+                || !deferredPipeline.shouldOverrideShaders()) {
+                return;
+            }
+
+            if (GLStateManager.isForeignDraw()) {
+                return;
+            }
+            deferredPipeline.restorePassAfterModProgram(event.newProgram);
         });
     }
 }

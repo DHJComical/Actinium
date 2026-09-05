@@ -22,6 +22,7 @@ import net.coderbot.iris.gbuffer_overrides.matching.InputAvailability;
 import net.coderbot.iris.gbuffer_overrides.matching.ProgramTable;
 import net.coderbot.iris.gbuffer_overrides.matching.RenderCondition;
 import net.coderbot.iris.gbuffer_overrides.matching.SpecialCondition;
+import net.coderbot.iris.gbuffer_overrides.matching.TranslucentBlendMatcher;
 import net.coderbot.iris.gbuffer_overrides.state.RenderTargetStateListener;
 import net.coderbot.iris.gl.blending.AlphaTestOverride;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
@@ -118,9 +119,6 @@ import java.util.function.Supplier;
  * Encapsulates the compiled shader program objects for the currently loaded shaderpack.
  */
 public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, RenderTargetStateListener  {
-    private final static int SRC_ALPHA = 770;
-    private final static int ONE_MINUS_SRC_ALPHA = 771;
-    private final static int ONE = 1;
 	private final RenderTargets renderTargets;
 
 	@Nullable
@@ -199,13 +197,17 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	private final CloudSetting dhCloudSetting;
 
 	private Pass current = null;
-
 	private WorldRenderingPhase overridePhase = null;
 	private WorldRenderingPhase phase = WorldRenderingPhase.NONE;
 	private boolean isBeforeTranslucent;
 	private boolean isRenderingShadow = false;
 	private InputAvailability inputs = new InputAvailability(false, false);
 	private SpecialCondition special = null;
+	private boolean refreshingPass;
+	private boolean modProgramOverrode;
+	private int programBeforeModOverride = -1;
+	private boolean matchingBlend;
+	private boolean drivingProgram;
 
 	private boolean shouldBindPBR;
 	private int currentNormalTexture;
@@ -783,21 +785,11 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			case TERRAIN_SOLID, TERRAIN_CUTOUT, TERRAIN_CUTOUT_MIPPED:
 				return RenderCondition.TERRAIN_OPAQUE;
 			case ENTITIES:
-                if (GLStateManager.getBlendState().getSrcRgb() == SRC_ALPHA &&
-                    GLStateManager.getBlendState().getSrcAlpha() == ONE_MINUS_SRC_ALPHA &&
-                    GLStateManager.getBlendState().getDstRgb() == ONE &&
-                    GLStateManager.getBlendState().getDstAlpha() == ONE_MINUS_SRC_ALPHA)
-                {
-					return RenderCondition.ENTITIES_TRANSLUCENT;
-				} else {
-					return RenderCondition.ENTITIES;
-				}
+				return TranslucentBlendMatcher.matchesCurrentState()
+					? RenderCondition.ENTITIES_TRANSLUCENT : RenderCondition.ENTITIES;
 			case BLOCK_ENTITIES:
-				if (GLStateManager.getBlendState().getSrcRgb() == SRC_ALPHA &&
-					GLStateManager.getBlendState().getDstRgb() == ONE_MINUS_SRC_ALPHA) {
-					return RenderCondition.BLOCK_ENTITIES_TRANSLUCENT;
-				}
-				return RenderCondition.BLOCK_ENTITIES;
+				return TranslucentBlendMatcher.matchesCurrentState()
+					? RenderCondition.BLOCK_ENTITIES_TRANSLUCENT : RenderCondition.BLOCK_ENTITIES;
 			case DESTROY:
 				return RenderCondition.DESTROY;
 			case HAND_SOLID:
@@ -831,6 +823,10 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	 * Called when a mod overrides the GL program away from the active Iris pass
 	 */
 	public void onModProgramOverride() {
+		if (current != null) {
+			modProgramOverrode = true;
+			programBeforeModOverride = getActivePassProgramId();
+		}
 		IrisGlDebug.logModProgramOverride(
 			"on-mod-program-override",
 			getPhase().name(),
@@ -844,6 +840,65 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			getActivePassProgramId()
 		);
 		current = null;
+	}
+
+	/** Restores the current Iris pass after a foreign renderer has returned control. */
+	public void restorePassAfterModProgram(int newProgram) {
+		if (refreshingPass || drivingProgram || !modProgramOverrode) {
+			return;
+		}
+		if (newProgram != 0 && newProgram != programBeforeModOverride) {
+			return;
+		}
+		restorePassAfterForeignDraw();
+	}
+
+	/** Reapplies the active Iris pass after a renderer that may have changed raw GL state. */
+	public void restorePassAfterForeignDraw() {
+		if (refreshingPass || drivingProgram
+			|| !isRenderingWorld
+			|| isRenderingFullScreenPass
+			|| isPostChain
+			|| (!isMainBound && !isRenderingShadow)) {
+			return;
+		}
+
+		refreshingPass = true;
+		try {
+			if (current != null) {
+				drivingProgram = true;
+				try {
+					current.use();
+				} finally {
+					drivingProgram = false;
+				}
+			} else {
+				matchPass();
+			}
+		} finally {
+			modProgramOverrode = false;
+			programBeforeModOverride = -1;
+			refreshingPass = false;
+		}
+	}
+
+	/** Re-evaluates entity translucency after vanilla changes blend state. */
+	public void onVanillaBlendChanged() {
+		if (matchingBlend || drivingProgram || refreshingPass) {
+			return;
+		}
+
+		final WorldRenderingPhase activePhase = getPhase();
+		if (activePhase != WorldRenderingPhase.ENTITIES && activePhase != WorldRenderingPhase.BLOCK_ENTITIES) {
+			return;
+		}
+
+		matchingBlend = true;
+		try {
+			matchPass();
+		} finally {
+			matchingBlend = false;
+		}
 	}
 
 	private void matchPass() {
@@ -861,7 +916,6 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 		
 		final RenderCondition condition = getCondition(getPhase());
 		final Pass matched = table.match(condition, inputs);
-		
 		beginPass(matched);
         IrisGlDebug.logPipelineMatch(
                 "match-pass",
@@ -878,22 +932,25 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 	public void beginPass(Pass pass) {
         WorldRenderingPhase activePhase = getPhase();
         int previousProgram = getActivePassProgramId();
-		int nextProgram = pass != null && pass.getProgram() != null ? pass.getProgram().getProgramId() : -1;
+		int nextProgram = pass != null && pass.getProgram() != null ? pass.getProgram().getProgramId() : 0;
 
 		if (current == pass) {
-			if (IrisGlDebug.shouldCaptureGlState()) {
-				int currentProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-				if (currentProgram != nextProgram) {
+			int currentProgram = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+			if (currentProgram != nextProgram) {
+				drivingProgram = true;
+				try {
 					if (pass != null) {
 						pass.use();
 					} else {
 						Program.unbind();
 					}
-					if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
-						IrisGlDebug.logPassBind("begin-pass-rebind", activePhase.name(), currentProgram, nextProgram);
-					}
-					return;
+				} finally {
+					drivingProgram = false;
 				}
+				if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
+					IrisGlDebug.logPassBind("begin-pass-rebind", activePhase.name(), currentProgram, nextProgram);
+				}
+				return;
 			}
             if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
                 IrisGlDebug.logPassBind("begin-pass-reuse", activePhase.name(), previousProgram, nextProgram);
@@ -901,16 +958,21 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 			return;
 		}
 
-		if (current != null) {
-			current.stopUsing();
-		}
+		drivingProgram = true;
+		try {
+			if (current != null) {
+				current.stopUsing();
+			}
 
-		current = pass;
+			current = pass;
 
-		if (pass != null) {
-			pass.use();
-		} else {
-			Program.unbind();
+			if (pass != null) {
+				pass.use();
+			} else {
+				Program.unbind();
+			}
+		} finally {
+			drivingProgram = false;
 		}
 
         if (activePhase == WorldRenderingPhase.ENTITIES || activePhase == WorldRenderingPhase.BLOCK_ENTITIES || isRenderingShadow) {
@@ -920,10 +982,15 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 	@Override
 	public void restoreActivePass() {
-		if (current != null) {
-			current.use();
-		} else {
-			matchPass();
+		drivingProgram = true;
+		try {
+			if (current != null) {
+				current.use();
+			} else {
+				matchPass();
+			}
+		} finally {
+			drivingProgram = false;
 		}
 	}
 
@@ -1238,6 +1305,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline, R
 
 			if (program != null) {
 				program.use();
+			} else {
+				Program.unbind();
 			}
 
 			DeferredWorldRenderingPipeline.this.customUniforms.push(this);

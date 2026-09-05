@@ -112,6 +112,64 @@ public class ChunkTracker implements ClientChunkEventListener {
         this.updateNeighbors(x, z);
     }
 
+    /**
+     * Reconciles the tracked state with the chunks actually loaded by the world.
+     *
+     * The normal load/unload event stream can miss transitions (e.g. chunk data written to a
+     * chunk the tracker never saw load, or mods mutating the world's chunk map directly),
+     * which leaves the tracker permanently out of sync with no way to recover: affected chunks
+     * never satisfy the neighbor-readiness gate and are never published to subscribers. This
+     * method diffs the tracked set against the world's authoritative loaded set and replays
+     * the difference through the regular event methods, so neighbor-readiness gating and
+     * subscription notifications behave exactly as if the events had arrived normally.
+     *
+     * @param actuallyLoadedChunkKeys packed coordinates of the chunks currently loaded in the
+     *                                world; not modified by this method
+     */
+    public synchronized void reconcile(LongSet actuallyLoadedChunkKeys) {
+        int unknown = this.chunkStatus.defaultReturnValue();
+
+        // Collect the diff first: replaying the events mutates chunkStatus, which must not
+        // happen while either set is being iterated.
+        LongList missingFromTracker = null;
+        var loadedIterator = actuallyLoadedChunkKeys.iterator();
+        while (loadedIterator.hasNext()) {
+            long key = loadedIterator.nextLong();
+            if (this.chunkStatus.get(key) == unknown) {
+                if (missingFromTracker == null) {
+                    missingFromTracker = new LongArrayList();
+                }
+                missingFromTracker.add(key);
+            }
+        }
+
+        LongList missingFromWorld = null;
+        var trackedIterator = this.chunkStatus.keySet().iterator();
+        while (trackedIterator.hasNext()) {
+            long key = trackedIterator.nextLong();
+            if (!actuallyLoadedChunkKeys.contains(key)) {
+                if (missingFromWorld == null) {
+                    missingFromWorld = new LongArrayList();
+                }
+                missingFromWorld.add(key);
+            }
+        }
+
+        if (missingFromTracker != null) {
+            for (int i = 0; i < missingFromTracker.size(); i++) {
+                long key = missingFromTracker.getLong(i);
+                this.onChunkStatusAdded(PositionUtil.unpackChunkX(key), PositionUtil.unpackChunkZ(key), ChunkStatus.FLAG_ALL);
+            }
+        }
+
+        if (missingFromWorld != null) {
+            for (int i = 0; i < missingFromWorld.size(); i++) {
+                long key = missingFromWorld.getLong(i);
+                this.onChunkStatusRemoved(PositionUtil.unpackChunkX(key), PositionUtil.unpackChunkZ(key), ChunkStatus.FLAG_ALL);
+            }
+        }
+    }
+
     private void updateNeighbors(int x, int z) {
         int r = this.requiredNeighborRadius;
         for (int ox = -r; ox <= r; ox++) {

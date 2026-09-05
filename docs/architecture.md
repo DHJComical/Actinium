@@ -99,7 +99,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   - `mixin/features/iris`（含 `startup/`）：约 35 个 Iris 兼容注入
     （实体、粒子、渲染器、纹理地图接入与启动期纹理注入）。
   - `mixin/mod/`：按模组分组的 conditional 注入 —— `betterfoliage`、`ccl`、`dh`（7 个）、
-    `gibbed`、`ichunutil`、`lumenized`、`revoui`、`voxelmap`（3 类，小地图兼容）；
+    `gibbed`、`hbm`（2 类，机器状态与世界光照兼容）、`ichunutil`、`lumenized`、`revoui`、
+    `voxelmap`（3 类，小地图兼容）；
     `stellarcore` 为空目录（规划占位）。
   - `mixin/vintage/`：原版 1.12.2 注入分支 —— `core`（Minecraft/RenderGlobal/Tessellator/
     纹理上传）、`core/collections`、`core/crash`（SplashProgress）、`core/frustum`、
@@ -125,6 +126,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 - **`compat/fluidlogged/`**：`FluidloggedCompat`、`FluidStateStorage`、`FluidloggedBlockAccess`
   —— 流体方块状态存取，供区块克隆离线读取。
 - **`compat/gibbed/`**：`ActiniumModelRenderer` —— Gibbed 尸块渲染模型扩展。
+- **`compat/hbm/`**：`HbmRenderStateCompat` —— HBM attribute scope 到 GLSM 状态栈的映射，
+  以及方块实体世界 lightmap 同步（配 `mixin/mod/hbm`）。
 - **`compat/ichunutil/`**：`PortalViewportFactory` / `PortalViewportProvider` /
   `PortalChunkRenderMatrices` / `PortalRenderState` / `WorldBoxVisibility`
   —— 传送门视口与渲染状态管理。
@@ -160,7 +163,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 - **`world/`**：`WorldSlice`（世界状态切片，离线程拷贝 blockState/biome/light）、
   `EmptyBlockAccess`。
-- **`world/biome/`**：`BiomeColorCache`（生物群系颜色缓存）。
+- **`world/biome/`**：`BiomeColorCache`（生物群系颜色缓存，override 基类 `postProcessColor` hook
+  在 blur 后按世界坐标注入 `BiomeColorNoise` 位置噪声）。
 - **`world/cloned/`**：`ActiniumBlockAccess`、`ChunkRenderContext`、`ClonedChunkSection`、
   `ClonedChunkSectionCache` —— 克隆区块段数据，供离线构建线程使用（依赖 `compat/fluidlogged`）。
 
@@ -421,7 +425,7 @@ LWJGL 后端（并入本子项目）：
 
 ## Mixin 配置清单
 
-`src/main/resources/` 下 10 个配置 + 1 个门控声明：
+`src/main/resources/` 下的 early/conditional 配置与 1 个门控声明：
 
 | 配置 | 阶段 | 用途 |
 | --- | --- | --- |
@@ -434,6 +438,7 @@ LWJGL 后端（并入本子项目）：
 | `mixins.actinium.revoui.json` | late/conditional（neofontrender_ui_enhancements） | `mixin/mod/revoui` 3 类 |
 | `mixins.actinium.betterfoliage.json` | late/conditional（betterfoliage） | `MixinChunkBuilderMeshingTaskBetterFoliage` |
 | `mixins.actinium.ccl.json` | late/conditional（codechickenlib） | `MixinGlStateTracker` |
+| `mixins.actinium.hbm.json` | late/conditional（hbm） | `MixinRenderUtil`、`MixinTileEntityRendererDispatcherLightmap` |
 | `mixins.actinium.voxelmap.json` | late/conditional（voxelmap） | `mixin/mod/voxelmap` 3 类（GLUtils/GLShim/renderMap，小地图 CPU 路径与 HudCaching alpha 保护） |
 
 门控映射在 `mixins.actinium.conditions.properties`（mixin loader 不认 json 自定义字段），

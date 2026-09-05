@@ -12,6 +12,7 @@ public final class GLSMPerfDebug {
     private static final long REPORT_INTERVAL_NS = 1_000_000_000L;
     private static final int SAMPLE_MASK = 255;
     private static final int MAX_BUFFERBUILDER_SOURCE_LINES = 12;
+    private static final int MAX_CLIENT_ARRAY_STACK_LINES = 12;
     private static final String ENABLED_OVERRIDE = System.getProperty("actinium.glsmPerfDebug");
     private static volatile boolean enabled = resolveEnabled(ENABLED_OVERRIDE, false);
 
@@ -71,6 +72,7 @@ public final class GLSMPerfDebug {
     private static final int[] sourceCounts = new int[Source.values().length];
     private static final Map<String, Integer> bufferBuilderSourceCounts = new HashMap<>();
     private static final Map<String, Integer> bufferBuilderStackSamples = new HashMap<>();
+    private static final Map<String, Integer> clientArrayStackSamples = new HashMap<>();
     private static long fenceReclaimedBytes;
     private static int fenceReclaimedRegions;
     private static int fenceQueuePeak;
@@ -110,6 +112,7 @@ public final class GLSMPerfDebug {
         Arrays.fill(sourceCounts, 0);
         bufferBuilderSourceCounts.clear();
         bufferBuilderStackSamples.clear();
+        clientArrayStackSamples.clear();
         fenceReclaimedBytes = 0L;
         fenceReclaimedRegions = 0;
         fenceQueuePeak = 0;
@@ -147,6 +150,20 @@ public final class GLSMPerfDebug {
         if ((observed & SAMPLE_MASK) == 0) {
             final String stackKey = sourceKey + "/" + findBufferBuilderCaller() + "/vertices~" + bucketVertexCount(vertexCount);
             bufferBuilderStackSamples.put(stackKey, bufferBuilderStackSamples.getOrDefault(stackKey, 0) + 1);
+        }
+    }
+
+    /**
+     * Attributes a client-array VBO upload to its draw-call origin. Sampled at the same cadence
+     * as the stage timer; the key carries the first non-glsm caller and a power-of-two bucket of
+     * the uploaded byte total, so the periodic report shows who drives large uploads.
+     */
+    public static void countClientArrayUpload(int totalBytes) {
+        if (!isEnabled()) return;
+        final int observed = observedCounts[Stage.GL_CLIENT_ARRAY_UPLOAD.ordinal()];
+        if ((observed & SAMPLE_MASK) == 0) {
+            final String stackKey = findClientArrayCaller() + "/bytes~" + bucketVertexCount(totalBytes);
+            clientArrayStackSamples.put(stackKey, clientArrayStackSamples.getOrDefault(stackKey, 0) + 1);
         }
     }
 
@@ -228,6 +245,7 @@ public final class GLSMPerfDebug {
         }
         appendTopEntries(sb, "bufferbuilder.source", bufferBuilderSourceCounts, MAX_BUFFERBUILDER_SOURCE_LINES);
         appendTopEntries(sb, "bufferbuilder.stackSample", bufferBuilderStackSamples, MAX_BUFFERBUILDER_SOURCE_LINES);
+        appendTopEntries(sb, "clientArray.stackSample", clientArrayStackSamples, MAX_CLIENT_ARRAY_STACK_LINES);
         if (fenceReclaimedRegions != 0 || fenceQueuePeak != 0) {
             sb.append(" stream.fence[")
                 .append("reclaimedRegions=").append(fenceReclaimedRegions)
@@ -296,6 +314,28 @@ public final class GLSMPerfDebug {
         return (className.equals("net.minecraft.client.renderer.Tessellator")
             || className.equals("net.minecraft.client.renderer.WorldVertexBufferUploader"))
             && (methodName.equals("draw") || methodName.startsWith("handler$"));
+    }
+
+    /**
+     * Like {@link #findBufferBuilderCaller()} but additionally skips all glsm frames: the
+     * client-array upload is triggered from GLStateManager draw entry points, so the first
+     * interesting frame is the Minecraft/mod code that issued the draw.
+     */
+    private static String findClientArrayCaller() {
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        for (StackTraceElement element : stack) {
+            String className = element.getClassName();
+            if (className.startsWith("com.gtnewhorizons.angelica.glsm.")
+                || className.startsWith("com.dhj.actinium.render.")
+                || className.startsWith("com.dhj.actinium.mixin.vintage.core.")
+                || className.startsWith("org.taumc.celeritas.impl.render.")
+                || className.startsWith("org.taumc.celeritas.mixin.core.")
+                || className.equals("java.lang.Thread")) {
+                continue;
+            }
+            return shortenClassName(className) + "#" + element.getMethodName();
+        }
+        return "unknown";
     }
 
     private static String shortenClassName(String className) {
