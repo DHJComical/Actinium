@@ -81,6 +81,22 @@ texelFetch2D、textureSize2D）解析均正常，此前已走 post-parse 的
   方式加载：直接往 mods/ 丢生产 jar 会因 dev 命名空间（MCP 名）与其 mixin refmap
   （SRG 名）不匹配而在 WorldServerMixin 阶段失败，与本修复无关。
 
+## 次生问题：进世界时 Server thread 纹理加载导致 JVM abort（已修复）
+
+CQR 在 `FMLServerStartingEvent`（**Server thread**，无 GL 上下文）重载自定义纹理集
+（`TextureSetManager` → `CTResourcepack` → `TextureManager.loadTexture`）。原版 LWJGL2
+下这些调用不触碰 GL（纹理上传是惰性的），但 Actinium 的
+`MixinTextureManagerDebugLabels`（调试命名注入）在 `loadTexture` RETURN 处提前调用
+`getGlTextureId()`，触发 `glGenTextures`；LWJGL3 对无上下文线程的 GL 调用**直接 abort
+JVM**（`No context is current ... The JVM will abort execution`）。
+
+修复：`GLStateManager` 新增 `hasContext()`（当前线程是否有 GL 上下文），mixin 在无
+上下文时直接跳过——纹理在渲染线程首次使用时惰性上传，与原版行为一致。
+
+dev 实机验证：进入世界时 Server thread 日志
+`[cqrepoured]: Successfully loaded texture set: TavernTS! / textureSetPreset!`，
+进程无 abort，正常关机退出。
+
 ## 注意事项
 
 - 无已知遗留缺口：转换触发条件（`needsTransformation`/`COMPAT_BUILTINS`）已随修复补上

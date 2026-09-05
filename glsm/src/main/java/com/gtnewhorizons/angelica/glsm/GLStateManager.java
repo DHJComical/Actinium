@@ -3493,6 +3493,15 @@ public class GLStateManager {
         return DisplayListManager.isRecording();
     }
 
+    /**
+     * True when a GL context is current on the calling thread. Off-thread GL calls are
+     * tolerated by LWJGL2 but abort the JVM under LWJGL3, so callers touching GL from
+     * potentially context-less threads (e.g. the integrated server thread) must check this.
+     */
+    public static boolean hasContext() {
+        return RENDER_BACKEND.hasContext();
+    }
+
     public static int getRecordingDisplayListId() {
         return DisplayListManager.getRecordingListId();
     }
