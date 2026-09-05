@@ -94,6 +94,12 @@ dependencies {
     modRuntimeOnly "curse.maven:celeritas-extra-1451214:8362538"
     modRuntimeOnly "curse.maven:celeritasleafculling-1449111:7550650"
 
+    // issue #123: CQR boot crash (compat shader transform); remapped through unimined so its
+    // mixin refmap resolves in the dev namespace. geckolib/reachfix are CQR requiredMods.
+    modRuntimeOnly 'maven.modrinth:chocolate-quest-repoured:2.8.0B'
+    modRuntimeOnly 'maven.modrinth:geckolib:PePYVhnE'  // geckolib-forge-1.12.2-3.0.31
+    modRuntimeOnly 'maven.modrinth:reach-fix:yREinuec'  // ReachFix-1.12.2-1.1.3
+
     modCompileOnly 'curse.maven:chunk-animator-236484:3850023'
 
     modImplementation "curse.maven:ichunutil-229060:2801262"  // dev-verifies mixins.actinium.ichunutil.json (issue #39)

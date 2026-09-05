@@ -16,14 +16,35 @@ public class GlslTransformUtils {
         Map.entry("texture3D", "texture"),
         Map.entry("texture2DLod", "textureLod"),
         Map.entry("texture3DLod", "textureLod"),
+        Map.entry("texture1DLod", "textureLod"),
+        Map.entry("textureCubeLod", "textureLod"),
+        Map.entry("texture1DArrayLod", "textureLod"),
+        Map.entry("texture2DArrayLod", "textureLod"),
         Map.entry("texture2DProj", "textureProj"),
         Map.entry("texture3DProj", "textureProj"),
+        Map.entry("texture1DProj", "textureProj"),
+        Map.entry("texture2DRectProj", "textureProj"),
         Map.entry("texture2DGrad", "textureGrad"),
         Map.entry("texture2DGradARB", "textureGrad"),
         Map.entry("texture3DGrad", "textureGrad"),
         Map.entry("texelFetch2D", "texelFetch"),
         Map.entry("texelFetch3D", "texelFetch"),
         Map.entry("textureSize2D", "textureSize")
+    );
+
+    /**
+     * Legacy texture builtins that the grammar lexes as keyword tokens but never accepts in
+     * function-call position, so ANTLR silently recovers and the transformer would emit broken
+     * GLSL. All of them map to the core {@code texture} builtin and are renamed pre-parse; their
+     * Proj/Lod variants parse fine and are handled by {@link #TEXTURE_RENAMES} instead.
+     */
+    private static final List<ReservedWordRename> PRE_PARSE_TEXTURE_RENAMES = List.of(
+        new ReservedWordRename(Pattern.compile("\\btexture1D\\b"), "texture"),
+        new ReservedWordRename(Pattern.compile("\\btextureCube\\b"), "texture"),
+        new ReservedWordRename(Pattern.compile("\\btexture2DRect\\b"), "texture"),
+        new ReservedWordRename(Pattern.compile("\\btexture1DArray\\b"), "texture"),
+        new ReservedWordRename(Pattern.compile("\\btexture2DArray\\b"), "texture"),
+        new ReservedWordRename(Pattern.compile("\\btextureCubeArray\\b"), "texture")
     );
 
     private static final Pattern TEXTURE_PATTERN = Pattern.compile("\\btexture\\s*\\(|(\\btexture\\b)");
@@ -50,6 +71,18 @@ public class GlslTransformUtils {
         }
         matcher.appendTail(builder);
         return builder.toString();
+    }
+
+    /**
+     * Rename legacy texture builtins the parser rejects in call position to the core
+     * {@code texture} builtin. Must run after {@link #replaceTexture} so the {@code texture}
+     * calls introduced here are not mistaken for texture-as-variable usage.
+     */
+    public static String renameParseBreakingTextureFunctions(String source) {
+        for (var rename : PRE_PARSE_TEXTURE_RENAMES) {
+            source = rename.pattern().matcher(source).replaceAll(rename.replacement());
+        }
+        return source;
     }
 
     public static String renameReservedWords(String source, int targetVersion) {

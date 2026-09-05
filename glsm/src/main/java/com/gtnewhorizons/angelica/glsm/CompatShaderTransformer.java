@@ -34,11 +34,12 @@ import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACK
  *   <li>Matrix builtin replacement (gl_ModelViewMatrix, gl_ProjectionMatrix, etc.)</li>
  *   <li>Vertex attribute replacement (gl_Vertex, gl_Color, gl_MultiTexCoord0/1, gl_Normal)</li>
  *   <li>gl_TexCoord[N] varying array → per-index in/out declarations</li>
- *   <li>Texture function renames (texture2D → texture, etc.)</li>
+ *   <li>Texture function renames (texture2D → texture, etc.), including pre-parse renames for
+ *   the legacy builtins the grammar rejects in call position (textureCube, texture1D, …)</li>
  *   <li>Fragment output handling (gl_FragColor → layout-qualified out declarations)</li>
  *   <li>Fog builtins (gl_Fog, gl_FogFragCoord)</li>
  *   <li>gl_FrontColor → local variable in vertex shaders</li>
- *   <li>shadow2D/shadow2DLod → texture/textureLod with vec4 wrapping</li>
+ *   <li>shadow1D/shadow2D family → texture/textureLod/textureProj with vec4 wrapping</li>
  *   <li>Version upgrade to 330 core minimum</li>
  *   <li>Reserved word pre-parse renaming (texture-as-variable, sample, etc.)</li>
  * </ul>
@@ -68,7 +69,7 @@ public class CompatShaderTransformer {
         "gl_FragColor", "gl_Fog", "gl_FrontColor", "gl_Color",
         "gl_Vertex", "gl_MultiTexCoord", "gl_TexCoord", "gl_Normal", "ftransform",
         "texture2D", "texture3D", "texelFetch2D", "texelFetch3D", "textureSize2D",
-        "shadow2D", "gl_FrontLightModelProduct",
+        "shadow2D", "texture1D", "textureCube", "shadow1D", "gl_FrontLightModelProduct",
         "gl_LightSource", "gl_FrontMaterial"
     );
 
@@ -159,9 +160,19 @@ public class CompatShaderTransformer {
 
         // Pre-parse reserved word renaming — prevents ANTLR parse failures
         source = GlslTransformUtils.replaceTexture(source);
+        source = GlslTransformUtils.renameParseBreakingTextureFunctions(source);
         source = GlslTransformUtils.renameReservedWords(source, targetVersion);
 
         final ShaderParser.ParsedShader parsedShader = ShaderParser.parseShader(source);
+        if (parsedShader.preParser().getNumberOfSyntaxErrors() > 0
+                || parsedShader.parser().getNumberOfSyntaxErrors() > 0) {
+            // ANTLR recovers from syntax errors silently; transforming the recovered tree emits
+            // broken GLSL that the driver then rejects. Fail fast so transform() falls back to
+            // version fixup instead.
+            throw new IllegalStateException("GLSL parse failed (shader: "
+                    + parsedShader.parser().getNumberOfSyntaxErrors() + " syntax errors, preprocessor: "
+                    + parsedShader.preParser().getNumberOfSyntaxErrors() + ")");
+        }
         final Transformer transformer = new Transformer(parsedShader.full());
 
         injectMatrixUniforms(transformer);
@@ -236,6 +247,10 @@ public class CompatShaderTransformer {
 
         transformer.renameAndWrapShadow("shadow2D", "texture");
         transformer.renameAndWrapShadow("shadow2DLod", "textureLod");
+        transformer.renameAndWrapShadow("shadow1D", "texture");
+        transformer.renameAndWrapShadow("shadow1DProj", "textureProj");
+        transformer.renameAndWrapShadow("shadow2DProj", "textureProj");
+        transformer.renameAndWrapShadow("shadow1DLod", "textureLod");
 
         final String versionDirective = "#version " + targetVersion + " core\n";
         final String preprocessor = separatedSource.preprocessor().trim();
