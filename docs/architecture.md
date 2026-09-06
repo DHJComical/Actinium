@@ -151,7 +151,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   `VanillaVertexBufferRenderer`、`ProjectiveTexCoordBuffer/Writer`、`GuiGlStateBoundary`、
   `RevoScreenEffectsGradient`。
 - **`render/vertex/`**：`BufferBuilder` 写入热路径的直接内存化 —— `DirectBufferAddress`
-  （`sun.misc.Unsafe` 持有与 `Buffer#address` 读取的唯一入口）、`FastVertexLayout` +
+  （共享 `sun.misc.Unsafe` 的唯一持有点；buffer 地址解析复用 GTNHLib
+  `MemoryUtilities.memAddress0`）、`FastVertexLayout` +
   `FastVertexLayoutCalculator`（每格式预计算的元素偏移与跳 PADDING 推进环，状态挂在
   `VertexFormat` 上而非共享的 element 实例）、`VertexWriter` 接口与按元素类型的
   预构建单例（`Byte/Short/Int/FloatVertexWriter` + `VertexWriters` 工厂），由

@@ -1,41 +1,36 @@
 package com.dhj.actinium.render.vertex;
 
+import com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 /**
- * Resolves the native memory address of direct {@link ByteBuffer} instances.
+ * Resolves the native memory address of direct {@link ByteBuffer} instances and holds the
+ * shared {@code Unsafe} for the vertex package.
  *
  * <p>Motivation: the vertex write hot path performs absolute stores straight into the
  * staging buffer of {@code BufferBuilder} to avoid the per-call index and bounds work of
- * {@code ByteBuffer.putXxx}. The {@code java.nio.Buffer#address} field carries that address
- * but has no public accessor; the FFM {@code MemorySegment} view of an existing buffer is
- * unavailable under {@code --release 21}. Reading the field offset through
- * {@code sun.misc.Unsafe#objectFieldOffset} is therefore the only entry point. The single
- * reflective lookup of {@code sun.misc.Unsafe#theUnsafe} is part of that same grant: there
- * is no non-reflective way to obtain the {@code Unsafe} instance from application code.
+ * {@code ByteBuffer.putXxx}. The address itself comes from GTNHLib
+ * {@code MemoryUtilities#memAddress0}, the same non-reflective entry point the other
+ * raw-memory paths in this codebase already use. The single reflective lookup of
+ * {@code sun.misc.Unsafe#theUnsafe} remains because no in-repo facility exposes an
+ * {@code Unsafe} instance and the FFM API is unavailable under {@code --release 21};
+ * all raw stores of the vertex writers route through this holder so
+ * {@code sun.misc.Unsafe} is referenced from exactly one place.
  */
 public final class DirectBufferAddress {
-    /**
-     * Shared {@code Unsafe} instance for the vertex package. All raw stores of the
-     * vertex writers route through this holder so {@code sun.misc.Unsafe} is referenced
-     * from exactly one place.
-     */
+    /** Shared {@code Unsafe} instance consumed by the vertex writer singletons. */
     static final Unsafe UNSAFE;
-    private static final long ADDRESS_FIELD_OFFSET;
 
     static {
         try {
             Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
             theUnsafe.setAccessible(true);
             UNSAFE = (Unsafe) theUnsafe.get(null);
-            Field address = Buffer.class.getDeclaredField("address");
-            ADDRESS_FIELD_OFFSET = UNSAFE.objectFieldOffset(address);
         } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError("java.nio.Buffer#address is not reachable: " + e);
+            throw new ExceptionInInitializerError("sun.misc.Unsafe is not reachable: " + e);
         }
     }
 
@@ -53,7 +48,7 @@ public final class DirectBufferAddress {
         if (!buffer.isDirect()) {
             throw new IllegalArgumentException("Vertex staging buffer must be direct");
         }
-        long address = UNSAFE.getLong(buffer, ADDRESS_FIELD_OFFSET);
+        long address = MemoryUtilities.memAddress0(buffer);
         if (address == 0) {
             throw new IllegalStateException("Direct vertex staging buffer has no native address");
         }

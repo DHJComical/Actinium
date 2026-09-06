@@ -92,27 +92,32 @@ public abstract class BufferBuilderMixin implements BufferBuilderExtension, Proj
     }
 
     /**
-     * Returns the byte offset of the active element inside the current vertex, reading
-     * the pre-computed layout of the active format.
+     * Computes the absolute byte offset of the active element and validates the pending
+     * write against the staging buffer limit, reproducing the original bounds semantics:
+     * the original methods bounds-check every absolute store, whose contiguous span ends
+     * at offset + componentCount * type size. One range check per attribute write keeps
+     * that guarantee on the raw-address path, failing before any partial data lands in
+     * the buffer.
+     *
+     * <p>An out-of-range cursor means the active format changed without a reset that
+     * re-aligns the cursor; the mismatch is reported here before any store is attempted.
      */
     @Unique
-    private int actinium$elementOffset() {
-        return ((FastVertexLayout) (Object) this.vertexFormat).actinium$offsets()[this.vertexFormatIndex];
-    }
-
-    /**
-     * Ensures a write of the given size fits into the staging buffer limit. The original
-     * write methods validate every absolute store against the limit; one range check per
-     * attribute write keeps that guarantee on the raw-address path, failing before any
-     * partial data lands in the buffer.
-     */
-    @Unique
-    private void actinium$checkWritable(int offset, int size) {
-        int limit = this.byteBuffer.limit();
-        if (offset + size > limit) {
-            throw new IndexOutOfBoundsException(
-                "Vertex write [" + offset + ", " + (offset + size) + ") exceeds buffer limit " + limit);
+    private int actinium$writeOffset(int componentCount) {
+        int[] offsets = ((FastVertexLayout) (Object) this.vertexFormat).actinium$offsets();
+        int index = this.vertexFormatIndex;
+        if (index < 0 || index >= offsets.length) {
+            throw new IllegalStateException(
+                "BufferBuilder element cursor " + index + " is out of sync with format " + this.vertexFormat);
         }
+        int offset = this.vertexCount * this.vertexFormat.getSize() + offsets[index];
+        int end = offset + componentCount * this.vertexFormatElement.getType().getSize();
+        int limit = this.byteBuffer.limit();
+        if (end > limit) {
+            throw new IndexOutOfBoundsException(
+                "Vertex write [" + offset + ", " + end + ") exceeds buffer limit " + limit);
+        }
+        return offset;
     }
 
     @Inject(method = "begin", at = @At("HEAD"))
@@ -153,10 +158,9 @@ public abstract class BufferBuilderMixin implements BufferBuilderExtension, Proj
      */
     @Overwrite
     public BufferBuilder pos(double x, double y, double z) {
-        int i = this.vertexCount * this.vertexFormat.getSize() + this.actinium$elementOffset();
-        this.actinium$checkWritable(i, 12);
         VertexWriters.forType(this.vertexFormatElement.getType()).writePosition(
-            this.actinium$bufferAddress + i, x, y, z, this.xOffset, this.yOffset, this.zOffset);
+            this.actinium$bufferAddress + this.actinium$writeOffset(3),
+            x, y, z, this.xOffset, this.yOffset, this.zOffset);
         this.actinium$nextVertexFormatIndex();
         return (BufferBuilder) (Object) this;
     }
@@ -174,10 +178,8 @@ public abstract class BufferBuilderMixin implements BufferBuilderExtension, Proj
         if (this.noColor) {
             return (BufferBuilder) (Object) this;
         }
-        int i = this.vertexCount * this.vertexFormat.getSize() + this.actinium$elementOffset();
-        this.actinium$checkWritable(i, 16);
         VertexWriters.forType(this.vertexFormatElement.getType()).writeColor(
-            this.actinium$bufferAddress + i, red, green, blue, alpha);
+            this.actinium$bufferAddress + this.actinium$writeOffset(4), red, green, blue, alpha);
         this.actinium$nextVertexFormatIndex();
         return (BufferBuilder) (Object) this;
     }
@@ -188,10 +190,8 @@ public abstract class BufferBuilderMixin implements BufferBuilderExtension, Proj
      */
     @Overwrite
     public BufferBuilder tex(double u, double v) {
-        int i = this.vertexCount * this.vertexFormat.getSize() + this.actinium$elementOffset();
-        this.actinium$checkWritable(i, 8);
         VertexWriters.forType(this.vertexFormatElement.getType()).writeTexCoord(
-            this.actinium$bufferAddress + i, u, v);
+            this.actinium$bufferAddress + this.actinium$writeOffset(2), u, v);
         this.actinium$nextVertexFormatIndex();
         return (BufferBuilder) (Object) this;
     }
@@ -202,10 +202,8 @@ public abstract class BufferBuilderMixin implements BufferBuilderExtension, Proj
      */
     @Overwrite
     public BufferBuilder normal(float x, float y, float z) {
-        int i = this.vertexCount * this.vertexFormat.getSize() + this.actinium$elementOffset();
-        this.actinium$checkWritable(i, 12);
         VertexWriters.forType(this.vertexFormatElement.getType()).writeNormal(
-            this.actinium$bufferAddress + i, x, y, z);
+            this.actinium$bufferAddress + this.actinium$writeOffset(3), x, y, z);
         this.actinium$nextVertexFormatIndex();
         return (BufferBuilder) (Object) this;
     }
@@ -217,10 +215,8 @@ public abstract class BufferBuilderMixin implements BufferBuilderExtension, Proj
      */
     @Overwrite
     public BufferBuilder lightmap(int skyLight, int blockLight) {
-        int i = this.vertexCount * this.vertexFormat.getSize() + this.actinium$elementOffset();
-        this.actinium$checkWritable(i, 8);
         VertexWriters.forType(this.vertexFormatElement.getType()).writeLightmap(
-            this.actinium$bufferAddress + i, skyLight, blockLight);
+            this.actinium$bufferAddress + this.actinium$writeOffset(2), skyLight, blockLight);
         this.actinium$nextVertexFormatIndex();
         return (BufferBuilder) (Object) this;
     }
