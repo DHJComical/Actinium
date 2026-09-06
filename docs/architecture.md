@@ -1,6 +1,6 @@
 # Actinium 架构说明
 
-最后更新：2026-08-27。
+最后更新：2026-09-06。
 
 ## 概述
 
@@ -96,6 +96,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 - **`mixins/`（复数，装载器）**：`MixinEarly`、`MixinLate` —— early/late 配置注册与条件门控。
 - **`mixin/`（单数，注入类本体）**：
   - `mixin/core/terrain`：`BufferBuilderMixin`（经 iris.json 注册）。
+  - `mixin/core/vertex`：`MixinVertexFormat`（经 iris.json 注册）——在 `addElement`/`clear`
+    时重建挂在格式上的预计算布局数组。
   - `mixin/features/iris`（含 `startup/`）：约 35 个 Iris 兼容注入
     （实体、粒子、渲染器、纹理地图接入与启动期纹理注入）。
   - `mixin/mod/`：按模组分组的 conditional 注入 —— `betterfoliage`、`ccl`、`dh`（7 个）、
@@ -148,6 +150,12 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   `FastLitItemDisplayListCache`、`BufferBuilderStreamingDrawer`、`VanillaBufferBuilderRenderer` /
   `VanillaVertexBufferRenderer`、`ProjectiveTexCoordBuffer/Writer`、`GuiGlStateBoundary`、
   `RevoScreenEffectsGradient`。
+- **`render/vertex/`**：`BufferBuilder` 写入热路径的直接内存化 —— `DirectBufferAddress`
+  （`sun.misc.Unsafe` 持有与 `Buffer#address` 读取的唯一入口）、`FastVertexLayout` +
+  `FastVertexLayoutCalculator`（每格式预计算的元素偏移与跳 PADDING 推进环，状态挂在
+  `VertexFormat` 上而非共享的 element 实例）、`VertexWriter` 接口与按元素类型的
+  预构建单例（`Byte/Short/Int/FloatVertexWriter` + `VertexWriters` 工厂），由
+  `BufferBuilderMixin` 的 overwrite 消费。
 - **`render/entity/`**：`EntityGatherer` —— 按两个 pass 收集待渲染实体。
 - **`render/frustum/`**：`IClippingHelper` —— 裁剪辅助接口（配 `mixin/vintage/core/frustum`）。
 - **`render/terrain/`**：`ActiniumWorldRenderer`（`SimpleWorldRenderer` 扩展，区块渲染主入口，
@@ -430,7 +438,7 @@ LWJGL 后端（并入本子项目）：
 | 配置 | 阶段 | 用途 |
 | --- | --- | --- |
 | `mixins.actinium.vintage.json` | early（MixinEarly） | 原版注入全量：`mixin/vintage` 下 60+ 类 |
-| `mixins.actinium.iris.json` | early（MixinEarly） | `mixin/core/terrain.BufferBuilderMixin` + `mixin/features/iris` 全部（含 startup） |
+| `mixins.actinium.iris.json` | early（MixinEarly） | `mixin/core/terrain.BufferBuilderMixin` + `mixin/core/vertex.MixinVertexFormat` + `mixin/features/iris` 全部（含 startup） |
 | `mixins.actinium.dh.json` | late/conditional（mod: distanthorizons） | `mixin/mod/dh` 7 类 |
 | `mixins.actinium.gibbed.json` | late/conditional（gibbed） | `BasicGibMixin` |
 | `mixins.actinium.ichunutil.json` | late/conditional（ichunutil） | `mixin/mod/ichunutil` 3 类 |
