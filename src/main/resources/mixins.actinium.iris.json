@@ -9,6 +9,7 @@
   "server": [],
   "client": [
     "core.terrain.BufferBuilderMixin",
+    "core.vertex.MixinVertexFormat",
     "features.iris.ActiveRenderInfoIrisMixin",
     "features.iris.EntityRendererIrisMixin",
     "features.iris.FramebufferIrisMixin",
