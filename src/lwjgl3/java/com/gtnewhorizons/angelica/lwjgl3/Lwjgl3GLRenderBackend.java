@@ -2,6 +2,8 @@ package com.gtnewhorizons.angelica.lwjgl3;
 
 import com.gtnewhorizons.angelica.glsm.backend.DebugMessageHandler;
 import com.gtnewhorizons.angelica.glsm.backend.RenderBackend;
+import org.lwjgl.glfw.GLFWDropCallback;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.ARBClearTexture;
 import org.lwjgl.opengl.EXTDirectStateAccess;
 import org.lwjgl.opengl.GL;
@@ -30,6 +32,10 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.ShortBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * LWJGL3 GL implementation of {@link RenderBackend}.
@@ -41,6 +47,14 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
     private GLDebugMessageCallback debugCallback;
     private boolean debugOutputActive;
 
+    // GLFW delivers drop events from the main thread's glfwPollEvents, but queue them anyway
+    // so pollDroppedFiles stays safe even if polling ever moves off the consuming thread.
+    private GLFWDropCallback dropCallback;
+    // Preserve whatever callback owned the window before us (e.g. from the loader's Display shim).
+    private GLFWDropCallback previousDropCallback;
+    private long dropWindow;
+    private final ConcurrentLinkedQueue<String> droppedFiles = new ConcurrentLinkedQueue<>();
+
     @Override
     public void init() {
         caps = GL.getCapabilities();
@@ -48,7 +62,66 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
 
     @Override
     public void shutdown() {
-        // no-op
+        stopFileDrop();
+    }
+
+    @Override
+    public boolean supportsFileDrop() {
+        return true;
+    }
+
+    @Override
+    public void startFileDrop() {
+        if (dropCallback != null) {
+            return;
+        }
+
+        final long window = GLFW.glfwGetCurrentContext();
+        if (window == 0L) {
+            throw new IllegalStateException("Cannot watch file drops without a current GLFW window");
+        }
+
+        dropWindow = window;
+        dropCallback = GLFWDropCallback.create((win, count, names) -> {
+            for (int i = 0; i < count; i++) {
+                final String path = GLFWDropCallback.getName(names, i);
+                if (path != null && !path.isEmpty()) {
+                    droppedFiles.add(path);
+                }
+            }
+        });
+        previousDropCallback = GLFW.glfwSetDropCallback(window, dropCallback);
+    }
+
+    @Override
+    public void stopFileDrop() {
+        if (dropCallback == null) {
+            return;
+        }
+
+        if (dropWindow != 0L) {
+            // Restore the previous owner's callback instead of leaving the window without one.
+            GLFW.glfwSetDropCallback(dropWindow, previousDropCallback);
+            previousDropCallback = null;
+        }
+        dropWindow = 0L;
+        dropCallback.free();
+        dropCallback = null;
+        droppedFiles.clear();
+    }
+
+    @Override
+    public List<String> pollDroppedFiles() {
+        if (droppedFiles.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        final List<String> out = new ArrayList<>();
+        String path;
+        while ((path = droppedFiles.poll()) != null) {
+            out.add(path);
+        }
+        return out;
     }
 
     @Override

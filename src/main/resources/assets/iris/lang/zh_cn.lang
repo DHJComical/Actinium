@@ -59,3 +59,4 @@ pack.iris.select.title=选择
 pack.iris.configure.title=配置
 label.iris.true=开启
 label.iris.false=关闭
+pack.iris.list.label=+ 拖放光影包文件到窗口即可添加

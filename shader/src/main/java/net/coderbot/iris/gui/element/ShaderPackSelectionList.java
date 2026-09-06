@@ -10,6 +10,8 @@ import net.coderbot.iris.gui.element.shaderselection.TopButtonRowEntry;
 import net.coderbot.iris.gui.screen.ShaderPackScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.util.text.TextFormatting;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -82,6 +84,8 @@ public class ShaderPackSelectionList extends IrisGuiSlot {
             addPackEntry(index, name);
         }
 
+        // Cleanroom always runs on the LWJGL3 backend, so drag & drop is always available (issue #122)
+        addLabelEntries(TextFormatting.GRAY.toString() + TextFormatting.ITALIC + I18n.format("pack.iris.list.label"));
     }
 
     public void addPackEntry(int index, String name) {

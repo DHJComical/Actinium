@@ -8,6 +8,8 @@ import java.nio.DoubleBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Abstract rendering backend.
@@ -24,6 +26,22 @@ public abstract class RenderBackend {
 
     /** Higher priority backends are preferred. */
     public int getPriority() { return 0; }
+
+    /**
+     * Window-level file drag & drop support (issue #122): the shader pack selection screen
+     * enables watching while open, then drains paths via {@link #pollDroppedFiles()} each frame.
+     * Backends without a window event system simply keep the no-op defaults.
+     */
+    public boolean supportsFileDrop() { return false; }
+
+    /** Starts queueing dropped file paths. Must be idempotent. */
+    public void startFileDrop() {}
+
+    /** Stops queueing dropped file paths and releases any native callback. Must be idempotent. */
+    public void stopFileDrop() {}
+
+    /** Returns the file paths dropped on the window since the last call, on the calling (main) thread. */
+    public List<String> pollDroppedFiles() { return Collections.emptyList(); }
 
     public abstract int getMinGLSLVersion();
 

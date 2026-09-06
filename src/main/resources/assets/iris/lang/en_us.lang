@@ -59,3 +59,4 @@ pack.iris.select.title=Select
 pack.iris.configure.title=Configure
 label.iris.true=On
 label.iris.false=Off
+pack.iris.list.label=+ Drag and Drop Shader Packs to add

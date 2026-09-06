@@ -59,3 +59,4 @@ pack.iris.select.title=Выбрать
 pack.iris.configure.title=Настроить
 label.iris.true=Вкл
 label.iris.false=Выкл
+pack.iris.list.label=+ Перетащите файлы шейдерпаков в окно, чтобы добавить их
