@@ -137,6 +137,21 @@ public final class ChunkBuildBuffers {
         return new BuiltSectionMeshParts(mergedBuffer, mergedIndexBuffer, TranslucentQuadAnalyzer.SortState.compacted(sortState), vertexRanges);
     }
 
+    /**
+     * Drops the per-task scratch state while keeping the off-heap vertex buffers allocated, so the
+     * next build task reuses their capacity instead of re-growing from the initial size. The write
+     * positions of the retained buffers are reset by {@link #init} when the next task begins.
+     */
+    public void resetForTask() {
+        this.sectionIndex = 0;
+        this.renderData = null;
+    }
+
+    /**
+     * Frees the retained off-heap vertex buffers for good. This is only called when the owning
+     * context is discarded; the reclaim queue of {@link NativeBuffer} remains the backstop for
+     * contexts that are dropped without ever reaching this point.
+     */
     public void destroy() {
         this.sectionIndex = 0;
         this.renderData = null;

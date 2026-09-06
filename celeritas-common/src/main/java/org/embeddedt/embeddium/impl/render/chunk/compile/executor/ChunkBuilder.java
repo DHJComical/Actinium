@@ -178,12 +178,17 @@ public class ChunkBuilder {
     private void shutdownThreads() {
         LOGGER.info("Stopping worker threads");
 
-        // Wait for every remaining thread to terminate
+        // Wait for every remaining thread to terminate, then free the off-heap buffers the
+        // contexts kept across tasks. Threads are dead by this point, so no build can touch them.
         for (WorkerThread thread : this.threads) {
             this.managedBlocker.managedBlock(() -> !thread.isAlive());
+            thread.embeddium$getGlobalContext().destroy();
         }
 
         this.threads.clear();
+
+        // The main-thread context runs builds when no worker threads exist (and while stealing tasks).
+        this.localContext.destroy();
     }
 
     public <TASK extends ChunkBuilderTask<OUTPUT>, OUTPUT> ChunkJobTyped<TASK, OUTPUT> scheduleTask(TASK task, boolean important,

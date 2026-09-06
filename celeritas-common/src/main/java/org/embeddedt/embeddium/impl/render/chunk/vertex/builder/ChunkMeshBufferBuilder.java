@@ -1,11 +1,13 @@
 package org.embeddedt.embeddium.impl.render.chunk.vertex.builder;
 
+import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
 import org.jetbrains.annotations.Nullable;
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 public class ChunkMeshBufferBuilder {
     private final ChunkVertexEncoder encoder;
@@ -14,9 +16,15 @@ public class ChunkMeshBufferBuilder {
     private final int initialCapacity;
     private final TranslucentQuadAnalyzer analyzer;
 
-    private ByteBuffer buffer;
+    // Off-heap scratch storage retained across build tasks; only destroy() hands the block back
+    // to the OS, while start() just resets the write position so the next task reuses the capacity.
+    @Nullable
+    private NativeBuffer buffer;
+    // Cached view over the native block, refreshed whenever the block is allocated or enlarged.
+    // Its position stays at zero so absolute address computation remains valid.
+    @Nullable
+    private ByteBuffer directBuffer;
     private int count;
-    private int capacity;
     private int sectionIndex;
 
     public ChunkMeshBufferBuilder(ChunkVertexEncoder encoder, int stride, int initialCapacity, boolean collectSortState) {
@@ -24,8 +32,8 @@ public class ChunkMeshBufferBuilder {
         this.stride = stride;
 
         this.buffer = null;
+        this.directBuffer = null;
 
-        this.capacity = 0;
         this.initialCapacity = initialCapacity;
 
         this.analyzer = collectSortState ? new TranslucentQuadAnalyzer() : null;
@@ -39,11 +47,11 @@ public class ChunkMeshBufferBuilder {
         var vertexStart = this.count * this.stride;
         var vertexSize = vertices.length * this.stride;
 
-        if (vertexStart + vertexSize >= this.capacity) {
+        if (this.directBuffer == null || vertexStart + vertexSize >= this.directBuffer.capacity()) {
             this.grow(vertexSize);
         }
 
-        long ptr = LWJGL.memAddress(this.buffer, vertexStart);
+        long ptr = LWJGL.memAddress(this.directBuffer, vertexStart);
 
         if (this.analyzer != null) {
             for (ChunkVertexEncoder.Vertex vertex : vertices) {
@@ -88,12 +96,19 @@ public class ChunkMeshBufferBuilder {
 
     private void grow(int bytesNeeded) {
         // Grow by a factor of 2, or by however many bytes more we need, whichever is larger.
-        int newCapacity = Math.max(this.capacity * 2, this.capacity + bytesNeeded);
+        int currentCapacity = this.directBuffer != null ? this.directBuffer.capacity() : 0;
+        int newCapacity = Math.max(currentCapacity * 2, currentCapacity + bytesNeeded);
         // Ensure we allocate at least initialCapacity bytes
         newCapacity = Math.max(newCapacity, this.initialCapacity);
 
-        this.buffer = LWJGL.memRealloc(this.buffer, newCapacity);
-        this.capacity = newCapacity;
+        if (this.buffer == null) {
+            this.buffer = new NativeBuffer(newCapacity);
+        } else {
+            // Retains the previously written bytes; ensureCapacity never shrinks.
+            this.buffer.ensureCapacity(newCapacity);
+        }
+
+        this.directBuffer = this.buffer.getDirectBuffer();
     }
 
     public void start(int sectionIndex) {
@@ -115,13 +130,17 @@ public class ChunkMeshBufferBuilder {
         }
     }
 
+    /**
+     * Frees the retained off-heap block. This is only invoked when the owning build context is
+     * discarded (executor shutdown); per-task cleanup keeps the block allocated so the next build
+     * reuses its capacity.
+     */
     public void destroy() {
         if (this.buffer != null) {
-            LWJGL.memFree(this.buffer);
+            this.buffer.free();
+            this.buffer = null;
+            this.directBuffer = null;
         }
-
-        this.buffer = null;
-        this.capacity = 0;
 
         this.resetSortState();
     }
@@ -135,11 +154,13 @@ public class ChunkMeshBufferBuilder {
             throw new IllegalStateException("No vertex data in buffer");
         }
 
-        return LWJGL.memSlice(this.buffer, 0, this.stride * this.count);
+        var direct = Objects.requireNonNull(this.directBuffer, "Buffer has not been allocated");
+        direct.limit(this.stride * this.count);
+
+        return direct.slice();
     }
 
     public int count() {
         return this.count;
     }
 }
-

@@ -25,14 +25,19 @@ public class NativeBuffer {
 
     private static long ALLOCATED = 0L;
 
-    private final BufferReference ref;
+    // Re-assigned by ensureCapacity when the native block is swapped for a larger one.
+    private BufferReference ref;
+    // Keeps the mapping between this buffer and its current native block discoverable when the
+    // block is swapped out by ensureCapacity, so the reclaim queue always tracks the live block.
+    private final PhantomReference<NativeBuffer> reclaimHandle;
 
     public static boolean ENABLE_MEMORY_TRACING = false;
 
     public NativeBuffer(int capacity) {
         this.ref = allocate(capacity);
+        this.reclaimHandle = new PhantomReference<>(this, RECLAIM_QUEUE);
 
-        ACTIVE_BUFFERS.put(new PhantomReference<>(this, RECLAIM_QUEUE), this.ref);
+        ACTIVE_BUFFERS.put(this.reclaimHandle, this.ref);
     }
 
     public static NativeBuffer copy(ByteBuffer src) {
@@ -49,6 +54,34 @@ public class NativeBuffer {
 
     public void free() {
         deallocate(this.ref);
+    }
+
+    /**
+     * Ensures the buffer can hold at least the given number of bytes, copying the existing
+     * contents into the enlarged block. The buffer is never shrunk: when the current capacity
+     * already covers the request this is a no-op, so scratch buffers can be reused across work
+     * units without paying for repeated allocation and copy cycles.
+     */
+    public void ensureCapacity(int capacity) {
+        this.ref.checkFreed();
+
+        if (capacity <= this.ref.length) {
+            return;
+        }
+
+        BufferReference replacement = allocate(capacity);
+
+        LWJGL.memCopy(this.getDirectBuffer(), LWJGL.memByteBuffer(replacement.address, replacement.length));
+
+        BufferReference previous = this.ref;
+        deallocate(previous);
+        this.ref = replacement;
+
+        // The reclaim queue entry must follow the live block; the handle is guaranteed to be
+        // registered since this instance is still strongly reachable here.
+        if (ACTIVE_BUFFERS.replace(this.reclaimHandle, replacement) != previous) {
+            throw new IllegalStateException("NativeBuffer reclaim entry went missing while growing the buffer");
+        }
     }
 
     public int getLength() {
