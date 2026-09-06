@@ -200,12 +200,6 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
         CrashReportCategory.addBlockInfo(crashReportSection, pos, state);
 
         crashReportSection.addCrashSection("Chunk section", this.render);
-        /*
-        if (this.renderContext != null) {
-            crashReportSection.addCrashSection("Render context volume", this.renderContext.getVolume());
-        }
-
-         */
 
         return new ReportedException(report);
     }
