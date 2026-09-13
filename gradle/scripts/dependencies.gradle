@@ -182,4 +182,9 @@ dependencies {
     // FluxLoading 1.4.1 (issue #102: re-entering a world leaves its loading screen image stuck
     // instead of fading out; dev-verifies the loading screen overlay compat)
     modImplementation 'curse.maven:fluxloading-1207328:7601634'
+
+    // LittleTiles 1.5.87 + CreativeCore 1.10.71 (issue #133: non-full LittleTiles blocks are
+    // invisible under the fast chunk pipeline; dev-verifies the rendering compat)
+    modImplementation 'curse.maven:creativecore-257814:4722163'
+    modImplementation 'curse.maven:littletiles-257818:5180387'
 }
