@@ -5,6 +5,7 @@
   "target": "@env(DEFAULT)",
   "minVersion": "0.8.5",
   "compatibilityLevel": "JAVA_8",
+  "plugin": "com.dhj.actinium.mixins.IrisMixinConfigPlugin",
   "mixins": [],
   "server": [],
   "client": [
@@ -29,6 +30,7 @@
     "features.iris.ModelBoxAccessor",
     "features.iris.ModelRendererIrisMixin",
     "features.iris.ParticleItemPickupIrisMixin",
+    "features.iris.ParticleManagerCullingMixin",
     "features.iris.ParticleManagerIrisMixin",
     "features.iris.RenderDragonIrisMixin",
     "features.iris.RenderEntityItemIrisMixin",

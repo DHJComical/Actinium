@@ -5,32 +5,22 @@ import net.coderbot.iris.Iris;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
-import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleManager;
-import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.entity.Entity;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.math.AxisAlignedBB;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 
 @Mixin(ParticleManager.class)
 public class ParticleManagerIrisMixin {
-    @Unique
-    private Viewport actinium$cullingViewport;
-
     @Unique
     private WorldRenderingPhase actinium$previousParticlePhase;
 
     @Inject(method = "renderParticles", at = @At("HEAD"))
     private void actinium$beginParticles(Entity entityIn, float partialTicks, CallbackInfo ci) {
-        this.actinium$setupCullingViewport();
         this.actinium$beginParticlePhase();
     }
 
@@ -42,7 +32,6 @@ public class ParticleManagerIrisMixin {
 
     @Inject(method = "renderLitParticles", at = @At("HEAD"))
     private void actinium$beginLitParticles(Entity entityIn, float partialTicks, CallbackInfo ci) {
-        this.actinium$setupCullingViewport();
         this.actinium$beginParticlePhase();
     }
 
@@ -85,48 +74,6 @@ public class ParticleManagerIrisMixin {
     private void actinium$skipFirstParticleDepthMask(boolean flag) {
     }
 
-    @Redirect(
-        method = "renderParticles",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/Particle;renderParticle(Lnet/minecraft/client/renderer/BufferBuilder;Lnet/minecraft/entity/Entity;FFFFFF)V")
-    )
-    private void actinium$cullParticle(
-        Particle particle,
-        BufferBuilder buffer,
-        Entity entityIn,
-        float partialTicks,
-        float rotationX,
-        float rotationZ,
-        float rotationYZ,
-        float rotationXY,
-        float rotationXZ
-    ) {
-        this.actinium$renderParticleIfVisible(particle, buffer, entityIn, partialTicks, rotationX, rotationZ, rotationYZ, rotationXY, rotationXZ);
-    }
-
-    @Redirect(
-        method = "renderLitParticles",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/Particle;renderParticle(Lnet/minecraft/client/renderer/BufferBuilder;Lnet/minecraft/entity/Entity;FFFFFF)V")
-    )
-    private void actinium$cullLitParticle(
-        Particle particle,
-        BufferBuilder buffer,
-        Entity entityIn,
-        float partialTicks,
-        float rotationX,
-        float rotationZ,
-        float rotationYZ,
-        float rotationXY,
-        float rotationXZ
-    ) {
-        this.actinium$renderParticleIfVisible(particle, buffer, entityIn, partialTicks, rotationX, rotationZ, rotationYZ, rotationXY, rotationXZ);
-    }
-
-    @Unique
-    private void actinium$setupCullingViewport() {
-        ActiniumWorldRenderer renderer = ActiniumWorldRenderer.instanceNullable();
-        this.actinium$cullingViewport = renderer != null ? renderer.getLastViewport() : null;
-    }
-
     @Unique
     private void actinium$beginParticlePhase() {
         if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
@@ -156,27 +103,6 @@ public class ParticleManagerIrisMixin {
         }
 
         this.actinium$previousParticlePhase = null;
-    }
-
-    @Unique
-    private void actinium$renderParticleIfVisible(
-        Particle particle,
-        BufferBuilder buffer,
-        Entity entityIn,
-        float partialTicks,
-        float rotationX,
-        float rotationZ,
-        float rotationYZ,
-        float rotationXY,
-        float rotationXZ
-    ) {
-        AxisAlignedBB box = particle.getBoundingBox();
-        if (this.actinium$cullingViewport == null
-                || box == null
-                || box == TileEntity.INFINITE_EXTENT_AABB
-                || this.actinium$cullingViewport.isBoxVisible(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ)) {
-            particle.renderParticle(buffer, entityIn, partialTicks, rotationX, rotationZ, rotationYZ, rotationXY, rotationXZ);
-        }
     }
 }
 
