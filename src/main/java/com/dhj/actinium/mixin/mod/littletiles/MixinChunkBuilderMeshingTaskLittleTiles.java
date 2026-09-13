@@ -5,10 +5,7 @@ import com.dhj.actinium.render.terrain.compile.VintageChunkBuildContext;
 import com.dhj.actinium.render.terrain.compile.task.ChunkBuilderMeshingTask;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.tileentity.TileEntity;
 import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
-import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -41,9 +38,7 @@ public abstract class MixinChunkBuilderMeshingTaskLittleTiles {
             ChunkBuildBuffers buffers,
             Operation<Void> original
     ) {
-        MinecraftBuiltRenderSectionData<TextureAtlasSprite, TileEntity> renderData =
-                (MinecraftBuiltRenderSectionData<TextureAtlasSprite, TileEntity>) buffers.getSectionContextBundle();
-        LittleTilesCompat.appendSectionGeometry(instance, renderData.globalBlockEntities, renderData.culledBlockEntities);
+        LittleTilesCompat.appendSectionGeometry(instance);
         original.call(instance, buffers);
     }
 }
