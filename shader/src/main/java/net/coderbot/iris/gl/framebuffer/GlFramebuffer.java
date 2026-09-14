@@ -20,6 +20,7 @@ public class GlFramebuffer extends GlResource {
 	private final int maxDrawBuffers;
 	private final int maxColorAttachments;
 	private boolean hasDepthAttachment;
+	private boolean depthAttachmentManagedExternally;
 
 	public GlFramebuffer() {
 		super(RenderSystem.createFramebuffer());
@@ -94,6 +95,14 @@ public class GlFramebuffer extends GlResource {
 
 	public boolean hasDepthAttachment() {
 		return hasDepthAttachment;
+	}
+
+	public void setDepthAttachmentManagedExternally(boolean managedExternally) {
+		this.depthAttachmentManagedExternally = managedExternally;
+	}
+
+	public boolean isDepthAttachmentManagedExternally() {
+		return depthAttachmentManagedExternally;
 	}
 
 	public void bind() {
