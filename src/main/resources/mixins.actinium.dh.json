@@ -14,7 +14,8 @@
     "MixinConfig",
     "MixinDependencySetup",
     "MixinLodRenderer",
-    "MixinRenderUtil"
+    "MixinRenderUtil",
+    "InvokerGlDhMetaRenderer"
   ],
   "injectors": {
     "defaultRequire": 1

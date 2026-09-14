@@ -254,6 +254,10 @@ public class Actinium {
             strings.add(kirinoStatus);
         }
 
+        if (Loader.isModLoaded("distanthorizons")) {
+            DistantHorizonsCompat.appendDebugStrings(strings);
+        }
+
         for (int i = 0; i < strings.size(); i++) {
             String str = strings.get(i);
 

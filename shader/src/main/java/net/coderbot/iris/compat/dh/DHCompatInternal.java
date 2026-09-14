@@ -265,6 +265,22 @@ public class DHCompatInternal {
         return storedDepthTex;
     }
 
+    /**
+     * The Minecraft depth-buffer version this instance last rebuilt its depth copy for;
+     * compared against the live framebuffer version to spot missed resize refreshes.
+     */
+    public int getCachedDepthBufferVersion() {
+        return cachedVersion;
+    }
+
+    /**
+     * Whether the next translucent pass must reseed its depth copy from the DH terrain
+     * framebuffer instead of incrementally copying the stored DH depth texture.
+     */
+    public boolean isTranslucentDepthDirty() {
+        return translucentDepthDirty;
+    }
+
     public void copyTranslucents(int width, int height) {
         if (translucentDepthDirty) {
             translucentDepthDirty = false;

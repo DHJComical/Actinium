@@ -3,6 +3,8 @@ package com.dhj.actinium.compat.dh;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import com.seibel.distanthorizons.api.DhApi;
+import com.seibel.distanthorizons.common.render.openGl.GlDhMetaRenderer;
+import com.seibel.distanthorizons.common.render.openGl.glObject.texture.GlDhDepthTexture;
 import com.seibel.distanthorizons.common.wrappers.world.ClientLevelWrapper;
 import com.seibel.distanthorizons.common.wrappers.DependencySetup;
 import com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftRenderWrapper;
@@ -20,17 +22,22 @@ import com.seibel.distanthorizons.core.wrapperInterfaces.world.IClientLevelWrapp
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompatInternal;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
+import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.shader.Framebuffer;
 import net.minecraftforge.fml.common.Loader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL32;
+import com.dhj.actinium.mixin.mod.dh.InvokerGlDhMetaRenderer;
 import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
+
+import java.util.List;
 
 public final class DistantHorizonsCompat {
     private static final Logger LOGGER = LogManager.getLogger("ActiniumDHCompat");
@@ -40,6 +47,7 @@ public final class DistantHorizonsCompat {
     private static boolean warnedRenderFailure;
     private static boolean warnedLightmapSyncFailure;
     private static boolean warnedFogColorSyncFailure;
+    private static boolean warnedDebugStringFailure;
     private static String lastDiagnosticSignature = "";
     private static long lastDiagnosticLogTimeMs;
 
@@ -126,6 +134,60 @@ public final class DistantHorizonsCompat {
         } catch (Throwable t) {
             logRenderFailure("render Distant Horizons deferred LODs", t);
         }
+    }
+
+    /**
+     * Appends the live Minecraft/DH/Iris render-target state to the F3 debug overlay, so resize
+     * desyncs (stale depth texture ids, mismatched dimensions) are directly visible in-game.
+     * Pure field reads: no GL calls, safe to run every frame.
+     */
+    public static void appendDebugStrings(List<String> strings) {
+        try {
+            strings.add(buildResizeDebugLine());
+            String irisLine = buildIrisResizeDebugLine();
+            if (irisLine != null) {
+                strings.add(irisLine);
+            }
+        } catch (Throwable t) {
+            if (!warnedDebugStringFailure) {
+                warnedDebugStringFailure = true;
+                LOGGER.warn("Failed to build Distant Horizons debug overlay state", t);
+            }
+        }
+    }
+
+    private static String buildResizeDebugLine() {
+        Framebuffer mcFramebuffer = Minecraft.getMinecraft().getFramebuffer();
+        IRenderTargetExt mcFramebufferExt = (IRenderTargetExt) mcFramebuffer;
+        InvokerGlDhMetaRenderer metaRenderer = (InvokerGlDhMetaRenderer) GlDhMetaRenderer.INSTANCE;
+        GlDhDepthTexture dhDepthTexture = metaRenderer.actinium$getDepthTexture();
+        return "DH resize: mc " + mcFramebuffer.framebufferWidth + "x" + mcFramebuffer.framebufferHeight
+            + " d" + mcFramebufferExt.iris$getDepthTextureId() + "/v" + mcFramebufferExt.iris$getDepthBufferVersion()
+            + " | dh " + metaRenderer.actinium$getTextureWidth() + "x" + metaRenderer.actinium$getTextureHeight()
+            + " tex" + (dhDepthTexture != null ? dhDepthTexture.getTextureId() : -1)
+            + " act" + GlDhMetaRenderer.INSTANCE.getActiveDepthTextureId();
+    }
+
+    private static String buildIrisResizeDebugLine() {
+        if (!Iris.enabled) {
+            return null;
+        }
+
+        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+        if (pipeline == null || pipeline.getDHCompat() == null) {
+            return null;
+        }
+
+        DHCompatInternal dhCompat = pipeline.getDHCompat().getInstance();
+        if (dhCompat == null) {
+            return null;
+        }
+
+        return "DH iris: v" + dhCompat.getCachedDepthBufferVersion()
+            + " stored" + dhCompat.getStoredDepthTex()
+            + " nt" + dhCompat.getDepthTexNoTranslucent()
+            + " dirty=" + dhCompat.isTranslucentDepthDirty()
+            + " ovr=" + dhCompat.shouldOverride;
     }
 
     private static boolean prepareLodState(WorldClient world, double partialTicks, boolean deferred) {
