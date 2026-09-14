@@ -231,7 +231,7 @@ public abstract class BufferBuilderMixin implements BufferBuilderExtension, Proj
      * instead of writing into undefined slots.
      */
     @Overwrite
-    private void nextVertexFormatIndex() {
+    public void nextVertexFormatIndex() {
         int[] nextIndices = ((FastVertexLayout) (Object) this.vertexFormat).actinium$nextIndices();
         int index = this.vertexFormatIndex;
         if (index < 0 || index >= nextIndices.length) {
