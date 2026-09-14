@@ -221,7 +221,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
      * @author JellySquid
      */
     @Overwrite
-    private void markBlocksForUpdate(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean important) {
+    public void markBlocksForUpdate(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean important) {
         this.renderer.scheduleRebuildForBlockArea(minX, minY, minZ, maxX, maxY, maxZ, important);
     }
 
