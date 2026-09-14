@@ -55,7 +55,7 @@ To run the automated tests and pre-release structure checks:
 .\gradlew.bat check --no-daemon
 ```
 
-Install `build/libs/Actinium-<version>.jar` in a compatible Cleanroom instance. The `-sources.jar` file is for development, and the unremapped `-all.jar` is not a runtime mod. The Celeritas compatibility bridge built alongside the main mod produces its own `celeritas-compat-bridge-<version>.jar`.
+Install `build/libs/Actinium-<version>.jar` in a compatible Cleanroom instance. The `-sources.jar` file is for development. The Celeritas compatibility bridge built alongside the main mod produces its own `celeritas-compat-bridge-<version>.jar`.
 
 The jar version is derived from the git state at build time: an exact tag on HEAD wins; otherwise the base version from `gradle.properties` is used with the current commit's git sha appended (e.g. `2.4.0-dev-2dc019e`). It can be overridden explicitly with `-Pversion=...`.
 

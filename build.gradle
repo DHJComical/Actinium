@@ -428,6 +428,12 @@ def shadowRemapJar = tasks.register('shadowRemapJar', ShadowJar) {
     manifest.inheritFrom(tasks.named('jar').get().manifest)
 }
 
+// The Shadow plugin's default shadowJar produces an unremapped -all.jar that the project
+// does not distribute; the production artifact is shadowRemapJar.
+tasks.named('shadowJar') {
+    enabled = false
+}
+
 /**
  * Chunk Animator's dev-environment coremod (MCPNames) reads ./../mcp/methods.csv and
  * ./../mcp/fields.csv relative to the client run directory and crashes at class init when they

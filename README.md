@@ -55,7 +55,7 @@ MakeUp、BSL、Complementary 等光影包是开发过程中的重要验证目标
 .\gradlew.bat check --no-daemon
 ```
 
-可安装的模组文件是 `build/libs/Actinium-<version>.jar`。`-sources.jar` 仅供开发使用，未重映射的 `-all.jar` 不是运行时模组。随主模组一起构建的 Celeritas 兼容桥生成独立的 `celeritas-compat-bridge-<version>.jar`。
+可安装的模组文件是 `build/libs/Actinium-<version>.jar`。`-sources.jar` 仅供开发使用。随主模组一起构建的 Celeritas 兼容桥生成独立的 `celeritas-compat-bridge-<version>.jar`。
 
 jar 版本号由构建时的 git 状态推导：HEAD 上有 tag 时使用 tag；没有 tag 时使用 `gradle.properties` 中的基础版本并追加当前提交的 git sha（如 `2.4.0-dev-2dc019e`）；也可以用 `-Pversion=...` 显式覆盖。
 
