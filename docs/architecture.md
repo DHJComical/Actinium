@@ -16,8 +16,6 @@ Minecraft 1.12.2 / Cleanroom Loader。目标是在旧版客户端引入现代化
 - `glsm/`：OpenGL 状态跟踪、重定向、固定管线模拟与调试设施。
 - `GTNHLib/`：渲染原语库（tessellator / VBO / VAO / 后处理 / 顶点格式）。
 
-另有独立打包的 `compatBridge`（`celeritas-compat-bridge.jar`），伪装旧 Celeritas mod id 供 addon 兼容。
-
 ## 构建模型
 
 ### 子项目依赖方向
@@ -36,11 +34,6 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 - 根项目通过 `mergeEmbeddedLibraryClasses` 把四个子项目输出 Sync 合并进主 jar
   （`DuplicatesStrategy.FAIL`），`remapJar` 生成可安装的 SRG 产物。
-- `compatBridge` 是根项目独立 source set（`src/compatBridge/`），编译期依赖主源码、
-  celeritas-common 与 embeddium API，单独产出 `celeritas-compat-bridge.jar`（独立 remap、
-  独立 mixin 配置 `celeritas-compat-bridge.mixin.json`），由 `prepareCompatBridgeRun`
-  安装进 dev 运行目录。
-- 主模组**不引用** compatBridge 任何类；桥单向依赖主模组（`required-after:actinium`）。
 
 开发约束：
 
@@ -48,7 +41,7 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   跨边界行为通过 bridge、provider 或小接口注入（约定见 `docs/bridges.md`）。
 - 新增 render pass 必须明确 framebuffer、program、texture unit、viewport 与混合/深度状态归属。
 - 新增 Mixin 必须加入 `MixinConfigurationTest` 覆盖的配置文件。
-- 发布前运行 `build`；`check` 会验证自动化测试及 remap jar 结构（含 compatBridge）。
+- 发布前运行 `build`；`check` 会验证自动化测试及 remap jar 结构。
 
 ## 初始化链路
 
@@ -142,9 +135,9 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 - **`compat/rfp2/`**：空目录（规划占位）。
 - **`compat/voxelmap/`**：`VoxelMapCompat` —— VoxelMap 小地图兼容桥（CPU 纹理路径
   强制、mipmap 回退判定、跨 mixin 共享的 scissor 活动标志，配 `mixin/mod/voxelmap`）。
-- **`compat/sodium/`**：Embeddium/钠配置引导与旧扩展点适配 —— `ActiniumConfigBootstrap`、
+- **`compat/sodium/`**：Embeddium/钠配置引导与选项扩展收集 —— `ActiniumConfigBootstrap`、
   `ActiniumApplyActions(Impl)`、`ActiniumFlagHook`、`LegacyExtensionEntryPoint` /
-  `LegacyOptionAdapter` / `LegacyOptionPageProvider`、`OptionGUIConstructionBridge`。
+  `LegacyOptionAdapter`、`OptionGUIConstructionBridge`。
 
 ### 渲染
 
@@ -195,10 +188,6 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   `ShadowMatrixAccess`（依赖 glsm 的 `InternalShadowRenderingState`）。
 - **`texture/`**：`SpriteExtension`、`TextureMapExtension` —— 精灵/纹理地图扩展
   （动画帧、mipmap、上传数据访问）。
-
-根项目另有 `src/main/java/org/taumc/celeritas/`（`CeleritasRuntime`、`CeleritasRuntimeOptions`、
-`core/CeleritasLoadingPlugin`、`impl/loader/common/ModLogoUtil` 等），是当前 celeritas 命名
-兼容层，委托 `ActiniumRuntime`；与 compatBridge 同包名但分属两个 jar。
 
 ## shader/ 子项目（Iris 风格光影管线）
 
@@ -399,43 +388,6 @@ LWJGL 后端（并入本子项目）：
   的字体字形参数 mixin 注入接口）。
 - `client/model/`：空目录。
 
-## compatBridge（Celeritas 兼容桥，`org.taumc.celeritas`）
-
-独立 jar（`celeritas-compat-bridge.jar`），`mcmod.info` 中 `modid: "celeritas"`、
-主类 `CeleritasVintage`（`@Mod`，`clientSideOnly`，`required-after:actinium`，版本手工管理）。
-提供旧 Celeritas 2.4.0 API，使旧 addon 的 mod id 依赖检查与注入目标继续有效。
-
-- **根包**：`CeleritasVintage` —— 桥入口，构造阶段调用 `CeleritasLegacyEventBridge.install()`。
-- **`api/`**：旧版公开 API 镜像 —— `OptionGUIConstructionEvent`、
-  `OptionGroupConstructionEvent`、`OptionPageConstructionEvent`；`eventbus/`
-  （`EmbeddiumEvent`、`EventHandlerRegistrar`）；`options/binding/`（`OptionBinding`/
-  `GenericBinding`）；`options/control/`（`Control`、`ControlElement`、
-  `Slider/Cycling/TickBoxControl`、`ControlValueFormatter`）；`options/structure/`
-  （`Option`/`OptionGroup`/`OptionPage`/`OptionStorage`/`OptionImpl`/`OptionIdentifier`/
-  `OptionFlag`/`OptionImpact`/`StandardOptions`）。
-- **`compat/`**（桥接层）：`CeleritasLegacyEventBridge`（旧事件 → 主模组选项系统）、
-  `LegacyEventDispatcher`、`Legacy*/Current*` 各 Mapper（新旧模型互转）、
-  `Option/Group/Page/Storage/Control/Identifier` 等 Model 数据类、`LegacyRendererFactory`/
-  `LegacyRendererAccess`/`LegacyOptionGroupView`/`LegacyOptionPageView`、`InstallOnce`、
-  `BridgeDispatchGuard`（防止桥内模型构造回流到旧监听器）。
-- **`compat/mixin/`**：4 个 mixin（`celeritas-compat-bridge.mixin.json`，priority 1500）——
-  `CeleritasTileEntityRendererDispatcherMixin`（恢复旧六参 TE render ABI）、
-  `LegacyRendererAccessMixin`、`LegacyRendererConstructionMixin`、`LegacyWorldSliceMixin`。
-- **`impl/`**：`gui/MinecraftOptionsStorage`（旧存储门面）、
-  `render/terrain/compile/pipeline`（`VintageBlockRenderer`、`ActiniumVintageBlockRenderer`
-  —— 注意：桥内 renderBlock 编排及其私有成员是 Celeritas 2.4.0 兼容契约的一部分，
-  第三方 addon（celeritasleafculling 的 VintageBlockRendererMixin）会 @Shadow 其私有
-  字段与 renderQuadList，并 redirect renderBlock 内部的 renderQuadList 调用点，
-  因此编排不可收缩为纯转发别名；易漂移的渲染决策（如流体材质路由）经主实现共享
-  helper（`VintageBlockRenderer#resolveRenderMaterial`）保持单份实现，契约由
-  `CeleritasCompatBridgeJarTest#legacyRendererRetainsThirdPartyMixinBindingContract`
-  锁定）、
-  `world/cloned`（`CeleritasBlockAccess` 旧名接口）。
-
-桥通过 `com.dhj.actinium.*`（`ActiniumRuntime`、`compat.sodium.LegacyOptionPageProvider`/
-`OptionGUIConstructionBridge`、`render.terrain.compile.*` 的 `VintageBlockRenderer`/
-`LightDataCache` 等）与 `org.embeddedt.embeddium.*` API 接线。
-
 ## Mixin 配置清单
 
 `src/main/resources/` 下的 early/conditional 配置与 1 个门控声明：
@@ -512,7 +464,8 @@ Mixin 组织约定：
 - Fluidlogged API：world slice 中的 fluid state 快照与渲染。
 - Gibbed：模型渲染快速路径及条件 Mixin。
 - ModernUI 和若干 HUD/地图模组：GUI scale 或编译期兼容接口。
-- Celeritas addon：经 compatBridge 提供旧 mod id 与 API 镜像。
+- Celeritas 系 addon：直接适配 Actinium 主实现（选项 API 位于 `org.embeddedt.embeddium.api`，
+  renderer 绑定面由 `VintageBlockRendererBindingContractTest` 锁定）。
 
 兼容代码应由模组存在性检查保护。引用外部类的 Mixin 必须放在 late/conditional 配置中，
 避免未安装对应模组时触发类加载。
@@ -530,8 +483,7 @@ Mixin 组织约定：
 - 嵌入第三方源码的测试命名空间：`com.gtnewhorizons.angelica.*`（glsm：shader/uniform
   兼容、ffp 生成器、GPU 诊断、streaming）、`org.embeddedt.embeddium.*`（选项/区块渲染）、
   `net.coderbot.iris.*` 与
-  `net.irisshaders.iris.*`（shaderpack 解析、pipeline transform、uniforms、阴影）、
-  `org.taumc.celeritas.*`（Celeritas 兼容层/选项桥）。
+  `net.irisshaders.iris.*`（shaderpack 解析、pipeline transform、uniforms、阴影）。
 - `net/minecraft/client/renderer/culling/ClippingHelperImpl.java` 为测试用 stub。
 
 普通单元测试适合覆盖属性解析、GLSL 变换、ID 映射、fallback 和打包契约。

@@ -102,7 +102,7 @@ OptionTooltipController、action 5 个）、`client/gui/widget/*`（6）、
 `PreviousScreenHolder`、入口 mixin `MixinGuiOptions`（拦截视频设置按钮 id 101 切屏，
 RSO 关闭时放行原版 `GuiVideoSettings`）、
 `com.dhj.actinium.compat.sodium`（ActiniumOptionHost / ActiniumOptionPages /
-ActiniumApplyActions / OptionGUIConstructionBridge / LegacyOptionPageProvider）、
+ActiniumApplyActions / OptionGUIConstructionBridge）、
 `net.irisshaders.iris.compat.sodium.IrisConfigEntryPoint`（embeddium 化并接入内置页面）。
 
 ## 视觉保真保障

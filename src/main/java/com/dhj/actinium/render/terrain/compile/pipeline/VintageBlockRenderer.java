@@ -103,8 +103,7 @@ public class VintageBlockRenderer {
     /**
      * Resolves the terrain material for one block render pass. Translucent water and lava are
      * routed to the dedicated fluid material so they keep depth writes without forcing ordinary
-     * translucent terrain into the fluid pass (#79). The compat-bridge renderer inherits this
-     * decision so both render paths cannot drift apart again.
+     * translucent terrain into the fluid pass (#79).
      */
     protected Material resolveRenderMaterial(ChunkBuildBuffers buffers, IBlockState state, BlockRenderLayer layer) {
         boolean isFluid = state.getMaterial() == WATER || state.getMaterial() == LAVA;

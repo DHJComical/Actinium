@@ -24,13 +24,6 @@ setDefaultProperty 'generate_sources_jar', true, true
 setDefaultProperty 'generate_javadocs_jar', true, false
 setDefaultProperty 'minecraft_username', true, 'Developer'
 setDefaultProperty 'extra_jvm_args', false, ''
-setDefaultProperty 'bridge_mod_name', true, 'Celeritas Compatibility Bridge'
-setDefaultProperty 'bridge_mod_description', true, 'Legacy celeritas mod id bridge bundled with Actinium for Celeritas addon compatibility.'
-setDefaultProperty 'bridge_mod_authors', true, 'DHJComical, embeddedt'
-setDefaultProperty 'bridge_mod_credits', true, 'Actinium'
-setDefaultProperty 'bridge_mod_url', true, 'https://github.com/DHJComical/Actinium'
-setDefaultProperty 'bridge_mod_update_json', false, ''
-setDefaultProperty 'bridge_mod_logo_path', true, 'assets/celeritas/textures/gui/icon.png'
 
 def cliProjectProperties = gradle.startParameter.projectProperties
 
@@ -132,94 +125,6 @@ def mergeEmbeddedLibraryClasses = tasks.register('mergeEmbeddedLibraryClasses', 
     }
 }
 
-sourceSets {
-    compatBridge {
-        java.setSrcDirs(['src/compatBridge/java'])
-        resources.setSrcDirs(['src/compatBridge/resources'])
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        compileClasspath += project(':celeritas-common').sourceSets.main.output
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += output + compileClasspath
-    }
-    test {
-        compileClasspath += sourceSets.compatBridge.output
-        runtimeClasspath += sourceSets.compatBridge.output
-    }
-    main {
-        java {
-        }
-    }
-}
-
-tasks.named('compileCompatBridgeJava', JavaCompile).configure {
-    dependsOn tasks.named('compileJava')
-    classpath = sourceSets.main.compileClasspath + sourceSets.main.output
-    sourceCompatibility = targetCompatibility = '21'
-}
-
-tasks.named('processCompatBridgeResources').configure {
-    def bridgeResourceProperties = [
-        minecraft_version       : '1.12.2',
-        mod_version             : finalVersion,
-        bridge_mod_name         : propertyString('bridge_mod_name'),
-        bridge_mod_description  : propertyString('bridge_mod_description'),
-        bridge_mod_authors_json : groovy.json.JsonOutput.toJson(
-            propertyStringList('bridge_mod_authors', ',').collect { it.trim() }
-        ),
-        bridge_mod_credits      : propertyString('bridge_mod_credits'),
-        bridge_mod_url          : propertyString('bridge_mod_url'),
-        bridge_mod_update_json  : propertyString('bridge_mod_update_json'),
-        bridge_mod_logo_path    : propertyString('bridge_mod_logo_path')
-    ]
-
-    inputs.properties(bridgeResourceProperties)
-    filteringCharset = 'UTF-8'
-
-    filesMatching('mcmod.info') {
-        expand(bridgeResourceProperties)
-        filter { line ->
-            bridgeResourceProperties.inject(line) { acc, entry ->
-                if (entry.key == 'bridge_mod_authors_json') {
-                    acc = acc
-                            .replace("\"{{ ${entry.key} }}\"", entry.value)
-                            .replace("\"{{${entry.key}}}\"", entry.value)
-                }
-                acc.replace("{{ ${entry.key} }}", entry.value).replace("{{${entry.key}}}", entry.value)
-            }
-        }
-    }
-}
-
-def compatBridgeJar = tasks.register('compatBridgeJar', Jar) {
-    group = 'build'
-    description = 'Builds the development-named legacy Celeritas compatibility bridge jar.'
-    archiveBaseName.set('celeritas-compat-bridge')
-    archiveVersion.set(project.version.toString())
-    destinationDirectory.set(layout.buildDirectory.dir('dev-libs'))
-    from sourceSets.compatBridge.output
-    manifest {
-        attributes(
-                'ModType': 'CRL',
-                'MixinConfigs': 'celeritas-compat-bridge.mixin.json'
-        )
-    }
-    dependsOn tasks.named('compatBridgeClasses')
-}
-
-def compatBridgeSourcesJar = tasks.register('compatBridgeSourcesJar', Jar) {
-    group = 'build'
-    description = 'Builds the source archive for the legacy Celeritas compatibility bridge.'
-    archiveBaseName.set('celeritas-compat-bridge')
-    archiveVersion.set(project.version.toString())
-    archiveClassifier.set('sources')
-    destinationDirectory.set(layout.buildDirectory.dir('libs'))
-    from sourceSets.compatBridge.allSource
-}
-
-tasks.named('compileTestJava', JavaCompile).configure {
-    dependsOn tasks.named('compileCompatBridgeJava')
-}
-
 sourceSets.main.output.dir(mergedEmbeddedLibraryClassesDir, builtBy: mergeEmbeddedLibraryClasses)
 
 subprojects {
@@ -315,8 +220,6 @@ def devShadowJar = tasks.register('devShadowJar', ShadowJar) {
     manifest.attributes('Implementation-Version': finalVersion)
 }
 
-def remapCompatBridgeJar
-
 unimined.minecraft {
     version '1.12.2'
 
@@ -387,27 +290,11 @@ unimined.minecraft {
         }
     }
 
-    remapCompatBridgeJar = remap(compatBridgeJar.get(), 'remapCompatBridgeJar') {
-        group = 'build'
-        description = 'Remaps the legacy Celeritas compatibility bridge for production.'
-        asJar {
-            archiveBaseName.set('celeritas-compat-bridge')
-            archiveVersion.set(project.version.toString())
-            archiveClassifier.set('')
-        }
-        mixinRemap {
-            enableBaseMixin()
-            enableMixinExtra()
-        }
-    }
-
     mods {
         remap(configurations.modCompileOnly)
         remap(configurations.modRuntimeOnly)
     }
 }
-
-def compatBridgeRemapOutput = remapCompatBridgeJar.flatMap { it.archiveFile }
 
 /**
  * Production mod jar in the upstream Celeritas distribution layout: the remapped thin jar merged
@@ -469,36 +356,9 @@ def prepareChunkAnimatorMcpMappings = tasks.register('prepareChunkAnimatorMcpMap
     }
 }
 
-def prepareCompatBridgeRun = tasks.register('prepareCompatBridgeRun') {
-    group = 'build'
-    description = 'Installs the remapped Celeritas compatibility bridge into the client run directory.'
-    dependsOn remapCompatBridgeJar
-    inputs.file(compatBridgeRemapOutput)
-    outputs.upToDateWhen { false }
-
-    doLast {
-        def runModsDirectory = layout.projectDirectory.dir('run/client/mods').asFile
-        if (!runModsDirectory.exists() && !runModsDirectory.mkdirs()) {
-            throw new GradleException("Failed to create client mods directory: ${runModsDirectory}")
-        }
-        fileTree(runModsDirectory).matching {
-            include 'celeritas-compat-bridge-*.jar'
-        }.files.each { existingJar ->
-            if (!existingJar.delete()) {
-                throw new GradleException("Failed to remove stale compatibility bridge jar: ${existingJar}")
-            }
-        }
-        copy {
-            from compatBridgeRemapOutput
-            into runModsDirectory
-        }
-    }
-}
-
 tasks.named('preRunClient').configure {
     dependsOn tasks.named('classes')
     dependsOn devShadowJar
-    dependsOn prepareCompatBridgeRun
     dependsOn prepareChunkAnimatorMcpMappings
 }
 
@@ -509,12 +369,9 @@ tasks.named('preRunServer').configure {
 
 tasks.named('assemble').configure {
     dependsOn shadowRemapJar
-    dependsOn remapCompatBridgeJar
-    dependsOn compatBridgeSourcesJar
 }
 
 tasks.named('runClient', JavaExec).configure {
-    dependsOn prepareCompatBridgeRun
     workingDir = layout.projectDirectory.dir('run/client').asFile
     jvmArgs = jvmArgs.findAll { !it.startsWith('-Xmx') }
     maxHeapSize = '8G'
@@ -683,7 +540,6 @@ def prepareTestRunDirectory = tasks.register('prepareTestRunDirectory') {
 test {
     systemProperty 'actinium.projectRoot', rootProject.projectDir.absolutePath
     dependsOn prepareTestRunDirectory
-    dependsOn remapCompatBridgeJar
     useJUnitPlatform()
     workingDir = testRunDirectory.asFile
     javaLauncher = javaToolchains.launcherFor {
@@ -693,10 +549,6 @@ test {
         testLogging {
             showStandardStreams = true
         }
-    }
-    doFirst {
-        systemProperty 'actinium.compatBridgeJar', compatBridgeRemapOutput.get().asFile.absolutePath
-        systemProperty 'actinium.modVersion', finalVersion
     }
 }
 
@@ -772,35 +624,6 @@ def verifyDistributedJar = tasks.register('verifyDistributedJar') {
     }
 }
 
-def verifyCompatBridgeJar = tasks.register('verifyCompatBridgeJar') {
-    dependsOn tasks.named('remapCompatBridgeJar')
-    inputs.file(compatBridgeRemapOutput)
-
-    doLast {
-        new java.util.jar.JarFile(compatBridgeRemapOutput.get().asFile).withCloseable { jar ->
-            def metadataEntry = jar.getEntry('mcmod.info')
-            if (metadataEntry == null) {
-                throw new GradleException('Compatibility bridge jar is missing mcmod.info')
-            }
-            def metadata = new groovy.json.JsonSlurper().parse(jar.getInputStream(metadataEntry))
-            def bridge = metadata[0]
-            def expectedAuthors = propertyStringList('bridge_mod_authors', ',').collect { it.trim() }
-            if (bridge.name != propertyString('bridge_mod_name')
-                    || bridge.description != propertyString('bridge_mod_description')
-                    || bridge.authorList != expectedAuthors
-                    || bridge.credits != propertyString('bridge_mod_credits')
-                    || bridge.url != propertyString('bridge_mod_url')
-                    || bridge.updateJSON != propertyString('bridge_mod_update_json')
-                    || bridge.logoFile != propertyString('bridge_mod_logo_path')) {
-                throw new GradleException('Compatibility bridge jar metadata does not match Gradle bridge metadata properties')
-            }
-            if (!bridge.logoFile.isEmpty() && jar.getEntry(bridge.logoFile) == null) {
-                throw new GradleException("Compatibility bridge jar is missing configured logo: ${bridge.logoFile}")
-            }
-        }
-    }
-}
-
 def verifyModuleBoundaries = tasks.register('verifyModuleBoundaries') {
     dependsOn tasks.named('compileJava')
     dependsOn embeddedLibraryProjects.collect { it.tasks.named('classes') }
@@ -835,7 +658,6 @@ def verifyModuleBoundaries = tasks.register('verifyModuleBoundaries') {
 
 tasks.named('check').configure {
     dependsOn verifyDistributedJar
-    dependsOn verifyCompatBridgeJar
     dependsOn verifyModuleBoundaries
 }
 

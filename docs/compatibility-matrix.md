@@ -34,7 +34,8 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > 2026-08-18 追加：Depths Update（issue #68）扩展世界高度（默认 -64..320，可配 -256..512）下
 > Y 范围 0-255 之外方块不渲染的修复——见下方 [模组与环境](#模组与环境) 的 Depths Update 行。
 > 根因是渲染器硬编码 0-255 的 section 范围，且 Depths 自带的 celeritas 兼容 mixin 指向
-> 重构前的 `org.taumc.celeritas.impl.*` 类路径而不生效；修复改为从 Depths 公开 API
+> 重构前的 `org.taumc.celeritas.impl.*` 类路径而不生效（该类路径已随 2026-09-14 兼容桥移除
+> 彻底删除）；修复改为从 Depths 公开 API
 > （`DepthsUpdateAPI.getHeightInfo`）推导 section 范围，并按其 storage 布局映射读取（commit
 > `6d8fc24`，dev 实测 Y<0 与 Y>255 区域正常渲染）。
 > 
@@ -43,6 +44,13 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > 无条件强制 `glDepthMask(true)`，translucent 层里的罐体玻璃窗因此写出深度，遮挡了其后绘制的
 > TESR 液体；修复后 translucent terrain pass 在主 pass 不再写深度（与 vanilla 语义一致），
 > 阴影图 pass 与不透明 pass 保持写深度。
+
+> 2026-09-14 追加：Celeritas 兼容桥（`celeritas` mod id 与 `org.taumc.celeritas` API 镜像）已
+> 整体移除，Celeritas 系 addon 改为直接适配 Actinium 主实现（renderer 绑定面由
+> `VintageBlockRendererBindingContractTest` 锁定）。已知回归：外部已发布的 **celeritas-extra**
+> 在 mcmod.info 硬依赖 `celeritas` mod id，将拒绝加载，需其作者发布 Actinium 适配版；
+> celeritas-dynamic-lights / celeritasleafculling 的已发布版本失去选项页与 renderer 增强，
+> 但其 vanilla 注入的核心逻辑仍生效，二者本地源码的 Actinium 适配方案已立项。
 >
 > 2026-09-02 追加：上述修复曾被 #85（`da83c59`）回潮——该提交把 translucent terrain pass
 > 翻转为写深度，依据的"vanilla 半透明阶段保持写深度"前提不实：vanilla 1.12.2 将整个

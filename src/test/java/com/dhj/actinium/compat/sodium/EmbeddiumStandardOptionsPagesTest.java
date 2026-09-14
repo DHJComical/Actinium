@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Guards the RSO tab grouping: the settings pages (general/quality/
  * performance/advanced/debug) must live under the host "actinium" namespace
- * so they do not end up in the celeritas compatibility-bridge tab.
+ * so they are grouped as first-party pages rather than addon contributions.
  */
 class EmbeddiumStandardOptionsPagesTest {
     @Test

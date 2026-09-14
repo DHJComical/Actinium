@@ -55,17 +55,17 @@ MakeUp、BSL、Complementary 等光影包是开发过程中的重要验证目标
 .\gradlew.bat check --no-daemon
 ```
 
-可安装的模组文件是 `build/libs/Actinium-<version>.jar`。`-sources.jar` 仅供开发使用。随主模组一起构建的 Celeritas 兼容桥生成独立的 `celeritas-compat-bridge-<version>.jar`。
+可安装的模组文件是 `build/libs/Actinium-<version>.jar`。`-sources.jar` 仅供开发使用。
 
 jar 版本号由构建时的 git 状态推导：HEAD 上有 tag 时使用 tag；没有 tag 时使用 `gradle.properties` 中的基础版本并追加当前提交的 git sha（如 `2.4.0-dev-2dc019e`）；也可以用 `-Pversion=...` 显式覆盖。
 
 ## 模组元数据
 
-Actinium 与 Celeritas 兼容桥的 Mod List 元数据统一在 `gradle.properties` 中配置：主模组字段使用 `mod_*` 前缀（`mod_description`、`mod_url`、`mod_authors`、`mod_credits`、`mod_logo_path`），兼容桥字段使用 `bridge_mod_*` 前缀（`bridge_mod_name`、`bridge_mod_description`、`bridge_mod_authors`、`bridge_mod_credits`、`bridge_mod_url`、`bridge_mod_update_json`、`bridge_mod_logo_path`）。每次构建也可以通过 `-P` 参数覆盖，例如 `-Pmod_description=... -Pbridge_mod_name=...`。
+Actinium 的 Mod List 元数据统一在 `gradle.properties` 中配置：主模组字段使用 `mod_*` 前缀（`mod_description`、`mod_url`、`mod_authors`、`mod_credits`、`mod_logo_path`）。每次构建也可以通过 `-P` 参数覆盖，例如 `-Pmod_description=...`。
 
 ## 仓库结构
 
-- `src/`：Actinium 集成、兼容层（`src/compatBridge/`）、Mixin 和运行时资源。
+- `src/`：Actinium 集成、兼容层、Mixin 和运行时资源。
 - `shader/`：集成后的 Iris 风格光影管线。
 - `glsm/`：内嵌的 GLSM 侧集成代码。
 - `GTNHLib/`：项目使用的 GTNHLib 相关代码。

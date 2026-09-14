@@ -38,7 +38,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MixinConfigurationTest {
     private static final String MIXIN_DESCRIPTOR = Type.getDescriptor(Mixin.class);
-    private static final String BRIDGE_CONFIG = "celeritas-compat-bridge.mixin.json";
     private static final String EXPECTED_REFMAP = "mixins.actinium-refmap.json";
     private static final List<String> MAIN_CONFIGS = List.of(
         "mixins.actinium.vintage.json",
@@ -60,10 +59,7 @@ class MixinConfigurationTest {
         "mixins.actinium.scannable.json",
         "mixins.actinium.littletiles.json"
     );
-    private static final List<String> CONFIGS = Stream.concat(
-        Stream.of(BRIDGE_CONFIG),
-        MAIN_CONFIGS.stream()
-    ).toList();
+    private static final List<String> CONFIGS = MAIN_CONFIGS;
 
     @Test
     void everyDeclaredMixinClassExists() throws IOException {
@@ -100,10 +96,6 @@ class MixinConfigurationTest {
 
         assertTrue(earlyConfigs.stream().noneMatch(lateConfigs::contains),
             "A Mixin config cannot be both early and late");
-        assertFalse(earlyConfigs.contains(BRIDGE_CONFIG),
-            "The compatibility bridge is loaded through the Forge manifest, not MixinEarly");
-        assertFalse(lateConfigs.contains(BRIDGE_CONFIG),
-            "The compatibility bridge is loaded through the Forge manifest, not MixinLate");
         allLoadedConfigs.addAll(lateConfigs);
         assertEquals(Set.copyOf(MAIN_CONFIGS), allLoadedConfigs);
     }
@@ -122,19 +114,6 @@ class MixinConfigurationTest {
             assertFalse(refmap.isBlank(), configName + " must declare a non-empty refmap");
             assertEquals(EXPECTED_REFMAP, refmap, configName + " refmap");
         }
-    }
-
-    @Test
-    void bridgeConfigCarriesLoaderSpecificMetadata() throws IOException {
-        ClassLoader classLoader = MixinConfigurationTest.class.getClassLoader();
-        JsonObject config = readConfig(classLoader, BRIDGE_CONFIG);
-
-        assertEquals("0.8.7", config.get("minVersion").getAsString());
-        assertEquals("JAVA_8", config.get("compatibilityLevel").getAsString());
-        assertEquals("@env(MOD)", config.get("target").getAsString());
-        assertTrue(config.get("required").getAsBoolean());
-        assertFalse(config.has("refmap"),
-            "The compatibility bridge is loaded through the Forge manifest and must not share Actinium's refmap");
     }
 
     @Test
