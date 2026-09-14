@@ -121,6 +121,7 @@ class StandardOptionsFacadeTest {
                 StandardOptions.Option.ACTINIUM_PRODUCTION_DIAGNOSTICS, "production_diagnostics",
                 StandardOptions.Option.ACTINIUM_IGNORE_FRAMEBUFFER_ERRORS, "ignore_framebuffer_errors",
                 StandardOptions.Option.ACTINIUM_GL_DEBUG, "gl_debug",
+                StandardOptions.Option.ACTINIUM_LWJGL_DEBUG, "lwjgl_debug",
                 StandardOptions.Option.ACTINIUM_PBR_DEBUG, "pbr_debug",
                 StandardOptions.Option.ACTINIUM_CLOUD_CONTROL_DEBUG, "cloud_control_debug",
                 StandardOptions.Option.ACTINIUM_PERF_DEBUG, "perf_debug",

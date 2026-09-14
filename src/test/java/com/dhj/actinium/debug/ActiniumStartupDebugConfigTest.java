@@ -7,10 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ActiniumStartupDebugConfigTest {
     @Test
-    void resolvesLwjglDebugOnlyFromAnExplicitTrueProperty() {
-        assertTrue(ActiniumStartupDebugConfig.resolveLwjglDebug("true"));
-        assertTrue(ActiniumStartupDebugConfig.resolveLwjglDebug("TRUE"));
-        assertFalse(ActiniumStartupDebugConfig.resolveLwjglDebug("false"));
-        assertFalse(ActiniumStartupDebugConfig.resolveLwjglDebug(null));
+    void resolvesLwjglDebugFromPropertyOverrideOrConfiguredFallback() {
+        assertTrue(ActiniumStartupDebugConfig.resolveLwjglDebug("true", false));
+        assertTrue(ActiniumStartupDebugConfig.resolveLwjglDebug("TRUE", false));
+        assertFalse(ActiniumStartupDebugConfig.resolveLwjglDebug("false", true));
+        assertTrue(ActiniumStartupDebugConfig.resolveLwjglDebug(null, true));
+        assertFalse(ActiniumStartupDebugConfig.resolveLwjglDebug(null, false));
     }
 }
