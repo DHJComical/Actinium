@@ -1,9 +1,9 @@
 package com.dhj.actinium.compat.snowrealmagic;
 
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.common.Loader;
 
 /**
  * Compatibility for {@code Snow! Real Magic!} (mod id {@code snowrealmagic}).
@@ -20,7 +20,7 @@ public final class SnowRealMagicCompat {
      * The mod ID of Snow! Real Magic!.
      */
     public static final String MODID = "snowrealmagic";
-    public static final boolean IS_LOADED = Loader.isModLoaded(MODID);
+    public static final boolean IS_LOADED = Mods.SNOWREALMAGIC;
 
     private SnowRealMagicCompat() {
     }

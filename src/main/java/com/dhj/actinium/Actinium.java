@@ -17,6 +17,7 @@ import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import net.coderbot.iris.celeritas.WorldRendererCompatBridge;
 import com.gtnewhorizons.angelica.proxy.ClientProxy;
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import net.coderbot.iris.debug.IrisDebugOptions;
 import com.gtnewhorizon.gtnhlib.client.renderer.RuntimeOptionsBridge;
 import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
@@ -171,7 +172,7 @@ public class Actinium {
     @EventHandler
     public void onInit(FMLInitializationEvent event) {
         ensureDistantHorizonsBindings();
-        if (Loader.isModLoaded("neofontrender")) {
+        if (Mods.NEOFONTRENDER) {
             NeoFontRenderCompat.initialize();
         }
         ChunkAnimatorCompat.install();
@@ -194,14 +195,14 @@ public class Actinium {
     }
 
     private static void initializeDistantHorizonsCompat() {
-        if (Iris.enabled && Loader.isModLoaded("distanthorizons")) {
+        if (Iris.enabled && Mods.DISTANTHORIZONS) {
             ActiniumDHIrisCompat.registerAccessor();
             DHCompat.run();
         }
     }
 
     private static void ensureDistantHorizonsBindings() {
-        if (Loader.isModLoaded("distanthorizons")) {
+        if (Mods.DISTANTHORIZONS) {
             DistantHorizonsCompat.ensureClientBindings();
         }
     }
@@ -254,7 +255,7 @@ public class Actinium {
             strings.add(kirinoStatus);
         }
 
-        if (Loader.isModLoaded("distanthorizons")) {
+        if (Mods.DISTANTHORIZONS) {
             DistantHorizonsCompat.appendDebugStrings(strings);
         }
 

@@ -1,8 +1,8 @@
 package com.dhj.actinium.compat.neofontrender;
 
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import neofontrender.api.NeoFontRenderApi;
 import neofontrender.api.color.TextColorPaletteProvider;
-import net.minecraftforge.fml.common.Loader;
 
 /**
  * Runtime bridge to Neo Font Render when it is installed.
@@ -14,7 +14,7 @@ public final class NeoFontRenderCompat {
     }
 
     public static boolean isLoaded() {
-        return Loader.isModLoaded(MOD_ID);
+        return Mods.NEOFONTRENDER;
     }
 
     /**

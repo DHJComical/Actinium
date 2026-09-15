@@ -31,7 +31,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
-import net.minecraftforge.fml.common.Loader;
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
 import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
@@ -130,7 +130,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
      */
     @Overwrite
     public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
-        boolean renderDistantHorizonsLods = Loader.isModLoaded("distanthorizons")
+        boolean renderDistantHorizonsLods = Mods.DISTANTHORIZONS
                 && !ShadowRenderingState.areShadowsCurrentlyBeingRendered();
 
         WorldRenderingPipeline pipeline = null;
