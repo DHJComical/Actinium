@@ -3,6 +3,7 @@ package com.gtnewhorizons.angelica.lwjgl3;
 import com.gtnewhorizons.angelica.glsm.backend.DebugMessageHandler;
 import com.gtnewhorizons.angelica.glsm.backend.GlfwFileDropWatcher;
 import com.gtnewhorizons.angelica.glsm.backend.RenderBackend;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.ARBClearTexture;
 import org.lwjgl.opengl.EXTDirectStateAccess;
 import org.lwjgl.opengl.GL;
@@ -1066,6 +1067,11 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
     @Override
     public int genVertexArrays() {
         return GL30C.glGenVertexArrays();
+    }
+
+    @Override
+    public long getContextHandle() {
+        return GLFW.glfwGetCurrentContext();
     }
 
     @Override

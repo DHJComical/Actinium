@@ -100,8 +100,8 @@ dependencies {
     // renderWorldPass with BloomEffectUtil.renderBloomBlockLayer (startup crash fix)
     modCompileOnly 'curse.maven:gregtech-ce-unofficial-557242:5519022'
 
-    modRuntimeOnly "curse.maven:celeritas-dynamic-lights-1313831:8387313"
-    modRuntimeOnly "curse.maven:celeritasleafculling-1449111:7550650"
+    // modRuntimeOnly "curse.maven:celeritas-dynamic-lights-1313831:8387313"
+    // modRuntimeOnly "curse.maven:celeritasleafculling-1449111:7550650"
 
     // issue #123: CQR boot crash (compat shader transform); remapped through unimined so its
     // mixin refmap resolves in the dev namespace. geckolib/reachfix are CQR requiredMods.
@@ -186,4 +186,11 @@ dependencies {
     // invisible under the fast chunk pipeline; dev-verifies the rendering compat)
     modImplementation 'curse.maven:creativecore-257814:4722163'
     modImplementation 'curse.maven:littletiles-257818:5180387'
+
+    // Advanced Rocketry 2.0.0-17 + LibVulpes 0.4.2-25 (issue #150: RendererPrecisionAssembler /
+    // WavefrontObject.renderAll feeds 2214 GL_TRIANGLES vertices through BufferBuilderStreamingDrawer
+    // and the JVM dies with EXCEPTION_ACCESS_VIOLATION inside the NVIDIA driver's vertex copy loop;
+    // needs runtime repro)
+    modRuntimeOnly 'curse.maven:libvulpes-236541:3801015'
+    modRuntimeOnly 'curse.maven:advanced-rocketry-236542:4671856'
 }

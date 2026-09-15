@@ -3,6 +3,8 @@ package com.dhj.actinium.mixin.vintage.core.startup;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.recording.ImmediateModeRecorder;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
+import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
+import com.dhj.actinium.render.VanillaVertexBufferRenderer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
@@ -42,6 +44,15 @@ public class MixinSplashProgress {
     private static void celeritas$finishSplash(CallbackInfo ci) {
         ImmediateModeRecorder.destroySplashTessellator();
         TessellatorStreamingDrawer.destroy();
+        // Splash replacements (e.g. modernsplash's CustomSplash) can finish with the game on a
+        // different GL context than the one startup used (issue #150). Container objects (VAOs)
+        // from the startup context are invalid on the new one, while VBOs are shared and stay
+        // valid, so rebuild every VAO born on another context. No-op when nothing migrated.
+        if (GLStateManager.displayContextMigrated()) {
+            GLStateManager.recreateDefaultVertexArray();
+        }
+        VanillaVertexBufferRenderer.recreateVertexArrays();
+        BufferBuilderStreamingDrawer.recreateVertexArrays();
         GLStateManager.glBindVertexArray(0);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         GLStateManager.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
