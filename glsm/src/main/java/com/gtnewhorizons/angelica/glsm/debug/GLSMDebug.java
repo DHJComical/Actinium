@@ -303,7 +303,7 @@ public final class GLSMDebug {
     }
 
     private static boolean shouldLogWorldRender() {
-        return ENABLE_VERBOSE_DRAW_LOGS && (isEnabled() || ENABLE_GL_DEBUG_SYS_PROP) && "Client thread".equals(Thread.currentThread().getName()) && isWorldLoaded();
+        return (ENABLE_VERBOSE_DRAW_LOGS || ENABLE_GL_DEBUG_SYS_PROP || isEnabled()) && "Client thread".equals(Thread.currentThread().getName()) && isWorldLoaded();
     }
 
     private static boolean isWorldLoaded() {
