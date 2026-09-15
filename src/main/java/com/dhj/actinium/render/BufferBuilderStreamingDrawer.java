@@ -172,6 +172,27 @@ public final class BufferBuilderStreamingDrawer {
         initialized = false;
     }
 
+    /**
+     * Recreates the per-format VAOs on the current context. Splash replacements can migrate the
+     * game to a different GL context when the splash finishes (issue #150); VAOs from the
+     * previous context are invalid afterward, while the streaming VBOs are shared and stay valid.
+     */
+    public static void recreateVertexArrays() {
+        if (!initialized) {
+            return;
+        }
+        for (Map.Entry<VertexFormat, DrawState> entry : DRAW_STATES.entrySet()) {
+            final VertexFormat format = entry.getKey();
+            final DrawState state = entry.getValue();
+            if (state.orphanVao != 0 && !VanillaVertexBufferRenderer.vaoMatchesCurrentContext(state.orphanVao)) {
+                state.orphanVao = VanillaVertexBufferRenderer.createStreamingVertexArray(format, state.orphanBuffer.getBufferId());
+            }
+            if (state.persistentVao != 0 && !VanillaVertexBufferRenderer.vaoMatchesCurrentContext(state.persistentVao)) {
+                state.persistentVao = VanillaVertexBufferRenderer.createStreamingVertexArray(format, persistentBuffer.getBufferId());
+            }
+        }
+    }
+
     private static void init() {
         if (initialized) {
             return;

@@ -1039,6 +1039,11 @@ public final class Lwjgl2GLRenderBackend extends RenderBackend {
     }
 
     @Override
+    public long getContextHandle() {
+        return 0L;
+    }
+
+    @Override
     public void deleteVertexArrays(int array) {
         GL30.glDeleteVertexArrays(array);
     }

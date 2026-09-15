@@ -211,6 +211,10 @@ public class GLStateManager {
     @Getter @Setter private static Thread drawableGLHolder = MainThread;
     // Reference to DrawableGL (main display context) - works with both FML and BLS splash
     @Setter private static Drawable drawableGL = null;
+    // Context handle captured when the default VAO is created during init. Splash replacements
+    // can migrate the game to a different GL context at finish (issue #150); compared against
+    // the current handle to detect the migration. 0 when the backend has no queryable handle.
+    private static long displayContextHandle;
 
     public static boolean isCachingEnabled() {
         if (splashComplete) return true;
@@ -661,6 +665,7 @@ public class GLStateManager {
         }
 
         defaultVAO = RENDER_BACKEND.genVertexArrays();
+        displayContextHandle = RENDER_BACKEND.getContextHandle();
         RENDER_BACKEND.bindVertexArray(defaultVAO);
         boundVAO = defaultVAO;
         VertexAttribState.init(defaultVAO);
@@ -3478,6 +3483,26 @@ public class GLStateManager {
     }
 
     /**
+     * Whether the current GL context differs from the one the default VAO was created on during
+     * init (issue #150). Splash replacements can migrate the game to their own context at finish;
+     * container objects (VAOs) from the startup context are invalid afterwards, while VBOs are
+     * shared and stay valid.
+     */
+    public static boolean displayContextMigrated() {
+        return displayContextHandle != 0 && RENDER_BACKEND.getContextHandle() != displayContextHandle;
+    }
+
+    /**
+     * Recreate the default VAO on the current context and force the binding bookkeeping back in
+     * sync. Only meaningful after {@link #displayContextMigrated()} reported a migration.
+     */
+    public static void recreateDefaultVertexArray() {
+        defaultVAO = glGenVertexArrays();
+        boundVAO = -1;
+        glBindVertexArray(0);
+    }
+
+    /**
      * Mark splash as complete - enables fast path that always caches. Called when finish() permanently switches to DrawableGL for the main game loop.
      */
     public static void markSplashComplete() {
@@ -5553,7 +5578,15 @@ public class GLStateManager {
     }
 
     public static int glGenVertexArrays() {
-        return RENDER_BACKEND.genVertexArrays();
+        final int array = RENDER_BACKEND.genVertexArrays();
+        // The driver recycles ids of deleted VAOs, and the splash screen's separate GL context
+        // hands out the same numeric ids as the main context. Forget whatever this id meant
+        // before: any cached state for it describes a dead object and must not leak into the
+        // new VAO (issue #150).
+        ShaderManager.getInstance().onDeleteVertexArray(array);
+        VertexAttribState.onDeleteVertexArray(array);
+        vaoEboMap.remove(array);
+        return array;
     }
 
     public static boolean glIsVertexArray(int array) {

@@ -188,6 +188,7 @@ class StubRenderBackend extends RenderBackend {
     @Override public int getBufferParameteri(int target, int pname) { throw new UnsupportedOperationException(); }
     @Override public boolean isBuffer(int buffer) { throw new UnsupportedOperationException(); }
     @Override public int genVertexArrays() { throw new UnsupportedOperationException(); }
+    @Override public long getContextHandle() { return 0L; }
     @Override public void deleteVertexArrays(int array) { throw new UnsupportedOperationException(); }
     @Override public void bindVertexArray(int array) { throw new UnsupportedOperationException(); }
     @Override public void vertexAttribPointer(int index, int size, int type, boolean normalized, int stride, long pointer) { throw new UnsupportedOperationException(); }
