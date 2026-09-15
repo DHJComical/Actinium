@@ -284,8 +284,8 @@ public abstract class RenderBackend {
 
     /**
      * Opaque handle of the GL context current on the calling thread, used to detect display
-     * context migrations (issue #150). Constant 0 on platforms without a queryable handle
-     * (lwjgl2), which never reports a migration.
+     * context migrations (issue #150). Constant 0 on backends without a queryable handle
+     * (the test stub), which never report a migration.
      */
     public abstract long getContextHandle();
     public abstract void deleteVertexArrays(int array);

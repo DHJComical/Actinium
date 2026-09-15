@@ -26,7 +26,7 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 - `GTNHLib`：零子项目依赖，仅测试用 JUnit + LWJGL natives。
 - `glsm`：`api project(':GTNHLib')`，并把根项目 `src/lwjglCommon/java`、`src/lwjgl3/java`
-  两个 source set 直接并入 main（LWJGL2/LWJGL3 双后端抽象，Angelica 遗留）。
+  两个 source set 直接并入 main（LWJGL 服务抽象层，Angelica 遗留）。
 - `celeritas-common`：`api project(':glsm')`，无 resources。
 - `shader`：`api project(':glsm') + project(':GTNHLib') + project(':celeritas-common')`，无 resources。
 
@@ -292,8 +292,7 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   `CompatProgramUniformState(s)`（旧 GLSL/uniform 兼容，`actinium_renamed_` 前缀重命名）、
   `Feature`/`GLFeatureSet`、`FeedbackManager`、`GpuCommandDiagnostics`、`Vendor`、`GLDebug`、
   `ITessellatorData`。
-- **`backend/`**：渲染后端抽象 —— `RenderBackend`、`BackendManager`、`Lwjgl2GLRenderBackend`、
-  `DebugMessageHandler`。
+- **`backend/`**：渲染后端抽象 —— `RenderBackend`、`BackendManager`、`DebugMessageHandler`。
 - **`compat/`**：`FogHelper`（雾色状态捕获）；`compat/lwjgl/`：`AngelicaCylinder/Disk/
   PartialDisk/Sphere`（替代 LWJGL2 GLU quadric 形状）。
 - **`debug/`**：`GLSMDebug`（详细 draw 日志）、`GLSMPerfDebug` + `GLSMPerfDebugHooks`
@@ -343,8 +342,8 @@ LWJGL 后端（并入本子项目）：
   抽象、`GL11`~`GL44`/`GLExtension` 常量转发类、`DebugExtension`、`DebugMessageHandler`。
 - **`src/lwjgl3`**：LWJGL3 实现 —— `com.mitchej123.lwjgl.lwjgl3.LWJGL3Service`、
   `LWJGL3MemoryStack`、`LWJGL3DebugSupport`；`com.gtnewhorizons.angelica.lwjgl3.
-  Lwjgl3GLRenderBackend` —— glsm `RenderBackend` 的 LWJGL3 后端。两个后端经
-  `META-INF/services/...glsm.backend.RenderBackend` 注册，由 `BackendManager` ServiceLoader 选择。
+  Lwjgl3GLRenderBackend` —— glsm `RenderBackend` 的唯一实现，经
+  `META-INF/services/...glsm.backend.RenderBackend` 注册，由 `BackendManager` ServiceLoader 加载。
 
 ## GTNHLib/ 子项目（渲染原语库，`com.gtnewhorizon.gtnhlib`）
 
