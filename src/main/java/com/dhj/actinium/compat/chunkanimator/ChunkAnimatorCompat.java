@@ -1,10 +1,10 @@
 package com.dhj.actinium.compat.chunkanimator;
 
 import com.dhj.actinium.runtime.ActiniumRuntime;
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import lumien.chunkanimator.ChunkAnimator;
 import lumien.chunkanimator.handler.AnimationHandler;
 import net.minecraft.util.math.BlockPos;
-import net.minecraftforge.fml.common.Loader;
 import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProvider;
 import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProviderHolder;
 import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
@@ -48,7 +48,7 @@ public final class ChunkAnimatorCompat implements ChunkAnimationProvider {
      * handler is already constructed.
      */
     public static void install() {
-        if (!Loader.isModLoaded(MOD_ID)) {
+        if (!Mods.CHUNKANIMATOR) {
             return;
         }
 

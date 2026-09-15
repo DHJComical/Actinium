@@ -1,8 +1,8 @@
 package com.dhj.actinium.compat.architecturecraft;
 
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import net.minecraft.block.Block;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.common.Loader;
 
 /**
  * Compatibility for ArchitectureCraft (mod id {@code architecturecraft}; the TridentMC and Spocel
@@ -25,7 +25,7 @@ public final class ArchitectureCraftCompat {
      * The mod ID used by both maintained ArchitectureCraft releases.
      */
     public static final String MODID = "architecturecraft";
-    public static final boolean IS_LOADED = Loader.isModLoaded(MODID);
+    public static final boolean IS_LOADED = Mods.ARCHITECTURECRAFT;
 
     private ArchitectureCraftCompat() {
     }

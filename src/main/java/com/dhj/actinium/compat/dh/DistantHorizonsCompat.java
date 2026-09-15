@@ -2,6 +2,7 @@ package com.dhj.actinium.compat.dh;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import com.seibel.distanthorizons.api.DhApi;
 import com.seibel.distanthorizons.common.render.openGl.GlDhMetaRenderer;
 import com.seibel.distanthorizons.common.render.openGl.glObject.texture.GlDhDepthTexture;
@@ -28,7 +29,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.shader.Framebuffer;
-import net.minecraftforge.fml.common.Loader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
@@ -41,7 +41,6 @@ import java.util.List;
 
 public final class DistantHorizonsCompat {
     private static final Logger LOGGER = LogManager.getLogger("ActiniumDHCompat");
-    private static final String MODID = "distanthorizons";
 
     private static boolean loggedFirstDeferredRender;
     private static boolean warnedRenderFailure;
@@ -71,10 +70,10 @@ public final class DistantHorizonsCompat {
      * {@code IMinecraftSharedWrapper}. Safe to call repeatedly; DH's own later binding call is
      * skipped by {@code MixinDependencySetup}.
      *
-     * <p>Does not use {@code Loader}: FML's mod list (namedMods) is not populated yet during
-     * Minecraft.init's early hooks, so isModLoaded-based guards would silently skip binding
-     * creation exactly when DH's Config classes get loaded. DH presence is probed via
-     * class-loading instead.</p>
+     * <p>Does not consult {@code Loader}: this runs from Minecraft.init's early hooks, before FML's
+     * own mod list exists, so a {@code Loader}-based guard would silently skip binding creation
+     * exactly when DH's Config classes get loaded. DH presence is probed via class-loading
+     * instead.</p>
      */
     public static void ensureClientBindings() {
         try {
@@ -99,7 +98,7 @@ public final class DistantHorizonsCompat {
     }
 
     public static boolean prepareVanillaLodRender(WorldClient world, double partialTicks) {
-        if (world == null || !Loader.isModLoaded(MODID)) {
+        if (world == null || !Mods.DISTANTHORIZONS) {
             return false;
         }
 
@@ -112,7 +111,7 @@ public final class DistantHorizonsCompat {
     }
 
     public static void renderDeferredLodsForShaders(WorldClient world, double partialTicks) {
-        if (world == null || !Loader.isModLoaded(MODID)) {
+        if (world == null || !Mods.DISTANTHORIZONS) {
             return;
         }
 

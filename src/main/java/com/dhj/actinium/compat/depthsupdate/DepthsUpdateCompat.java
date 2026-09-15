@@ -1,7 +1,7 @@
 package com.dhj.actinium.compat.depthsupdate;
 
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.common.Loader;
 import sayys.depthsupdate.api.DepthsUpdateAPI;
 import sayys.depthsupdate.api.HeightInfo;
 
@@ -24,7 +24,7 @@ public final class DepthsUpdateCompat {
      * The mod ID of Depths Update.
      */
     public static final String MODID = "depthsupdate";
-    public static final boolean IS_LOADED = Loader.isModLoaded(MODID);
+    public static final boolean IS_LOADED = Mods.DEPTHSUPDATE;
 
     private static final int VANILLA_MIN_SECTION = 0;
     private static final int VANILLA_MAX_SECTION = 16;

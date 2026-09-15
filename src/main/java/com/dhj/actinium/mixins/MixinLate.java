@@ -1,8 +1,8 @@
 package com.dhj.actinium.mixins;
 
 import com.dhj.actinium.compat.MixinReEntranceLockFix;
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import net.minecraft.client.renderer.EntityRenderer;
-import net.minecraftforge.fml.common.Loader;
 import zone.rong.mixinbooter.Context;
 import zone.rong.mixinbooter.ILateMixinLoader;
 
@@ -27,7 +27,7 @@ public class MixinLate implements ILateMixinLoader {
 
     @Override
     public List<String> getMixinConfigs() {
-        return configsFor(Loader::isModLoaded);
+        return configsFor(Mods::isModPresent);
     }
 
     @Override

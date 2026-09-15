@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.vintage.fontrenderer;
 
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import com.gtnewhorizon.gtnhlib.util.font.IFontParameters;
 import com.gtnewhorizons.angelica.client.font.BatchingFontRenderer;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
@@ -9,7 +10,6 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.common.Loader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Final;
@@ -41,27 +41,22 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Unique private BatchingFontRenderer actinium$batcher;
     @Unique private TextureManager actinium$textureManager;
     @Unique private static final boolean actinium$disableBatcher = Boolean.getBoolean("actinium.disableFontBatcher");
-    @Unique private static Boolean actinium$neoFontRenderLoaded;
     @Unique private static final Logger actinium$LOGGER = LogManager.getLogger("Actinium");
+    @Unique private static final boolean actinium$neoFontRenderLoaded = actinium$resolveNeoFontRenderLoaded();
+
+    @Unique
+    private static boolean actinium$resolveNeoFontRenderLoaded() {
+        final boolean loaded = Mods.NEOFONTRENDER;
+        if (Boolean.getBoolean("actinium.fontDebug")) {
+            actinium$LOGGER.info("font-batcher-check neofontrender={} renderer={}",
+                loaded, FontRenderer.class.getName());
+        }
+        return loaded;
+    }
 
     @Unique
     private static boolean actinium$isFontBatcherDisabled() {
-        if (actinium$disableBatcher) {
-            return true;
-        }
-        // Recheck while absent: the splash FontRenderer can run before NFR finishes loading.
-        if (actinium$neoFontRenderLoaded == null || !actinium$neoFontRenderLoaded) {
-            var indexedMods = Loader.instance().getIndexedModList();
-            boolean loaded = indexedMods != null && indexedMods.containsKey("neofontrender");
-            if (Boolean.getBoolean("actinium.fontDebug")
-                && (actinium$neoFontRenderLoaded == null || loaded != actinium$neoFontRenderLoaded)) {
-                // Log only on state transitions; this check runs for every glyph otherwise.
-                actinium$LOGGER.info("font-batcher-check neofontrender={} renderer={}",
-                    loaded, FontRenderer.class.getName());
-            }
-            actinium$neoFontRenderLoaded = loaded;
-        }
-        return actinium$neoFontRenderLoaded;
+        return actinium$disableBatcher || actinium$neoFontRenderLoaded;
     }
 
     @Inject(method = "<init>", at = @At("TAIL"))
