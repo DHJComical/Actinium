@@ -42,7 +42,6 @@ class MixinConfigurationTest {
     private static final List<String> MAIN_CONFIGS = List.of(
         "mixins.actinium.vintage.json",
         "mixins.actinium.iris.json",
-        "mixins.actinium.dh.json",
         "mixins.actinium.gibbed.json",
         "mixins.actinium.ichunutil.json",
         "mixins.actinium.lumenized.json",

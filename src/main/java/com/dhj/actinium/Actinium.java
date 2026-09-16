@@ -1,7 +1,6 @@
 package com.dhj.actinium;
 
 import com.dhj.actinium.compat.chunkanimator.ChunkAnimatorCompat;
-import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.compat.MissingModelCompat;
 import com.dhj.actinium.compat.kirino.KirinoCompat;
 import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
@@ -39,7 +38,6 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLConstructionEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
-import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.embeddedt.embeddium.impl.common.util.MathUtil;
 import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
@@ -164,13 +162,7 @@ public class Actinium {
     }
 
     @EventHandler
-    public void onPreInit(FMLPreInitializationEvent event) {
-        ensureDistantHorizonsBindings();
-    }
-
-    @EventHandler
     public void onInit(FMLInitializationEvent event) {
-        ensureDistantHorizonsBindings();
         if (Mods.NEOFONTRENDER) {
             NeoFontRenderCompat.initialize();
         }
@@ -201,12 +193,6 @@ public class Actinium {
     private static void initializeDistantHorizonsCompat() {
         if (Iris.enabled && Mods.DISTANTHORIZONS) {
             DHCompat.run();
-        }
-    }
-
-    private static void ensureDistantHorizonsBindings() {
-        if (Mods.DISTANTHORIZONS) {
-            DistantHorizonsCompat.ensureClientBindings();
         }
     }
 
@@ -256,10 +242,6 @@ public class Actinium {
         String kirinoStatus = KirinoCompat.debugStatus();
         if (kirinoStatus != null) {
             strings.add(kirinoStatus);
-        }
-
-        if (Mods.DISTANTHORIZONS) {
-            DistantHorizonsCompat.appendDebugStrings(strings);
         }
 
         for (int i = 0; i < strings.size(); i++) {

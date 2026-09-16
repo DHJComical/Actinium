@@ -2,14 +2,12 @@ package com.dhj.actinium.mixin.vintage.core;
 
 import net.coderbot.iris.debug.flight.GlFlightRecording;
 import net.coderbot.iris.debug.flight.GlFlightStreamingSource;
-import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.gui.ActiniumWindowModeController;
 import com.dhj.actinium.render.BufferBuilderStreamingDrawer;
 import com.dhj.actinium.render.EndPortalCompositeRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import com.mitchej123.lwjgl.LWJGLServiceProvider;
-import com.gtnewhorizon.gtnhlib.compat.Mods;
 import net.minecraft.client.Minecraft;
 import org.embeddedt.embeddium.impl.render.frame.RenderAheadManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,14 +21,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class MixinMinecraft {
     @Unique
     private final RenderAheadManager celeritas$renderAheadManager = new RenderAheadManager();
-
-    @Inject(method = "init", at = @At("RETURN"))
-    private void actinium$prepareDistantHorizonsBindingsLate(CallbackInfo ci) {
-        // DistantHorizonsCompat loads DH classes; keep it out of the classpath when DH is absent.
-        if (Mods.DISTANTHORIZONS) {
-            DistantHorizonsCompat.ensureClientBindings();
-        }
-    }
 
     @Inject(method = "runTick", at = @At("HEAD"))
     private void preRender(CallbackInfo ci) {

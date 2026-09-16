@@ -78,7 +78,6 @@ public final class ActiniumDiagnostics {
 
     private static boolean isKeyMixin(String mixinClassName) {
         return mixinClassName.startsWith("com.dhj.actinium.mixin.features.iris.")
-            || mixinClassName.startsWith("com.dhj.actinium.mixin.mod.dh.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.mod.gibbed.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.core.terrain.")
             || mixinClassName.startsWith("com.dhj.actinium.mixin.vintage.core.");

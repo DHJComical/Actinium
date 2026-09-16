@@ -5,48 +5,44 @@
 
 ## 模组信息
 
-- Distant Horizons（modid `distanthorizons`），按兼容矩阵指定版本（3.1.2-b 等）
-- 接入方式：late/conditional Mixin（`mixins.actinium.dh.json`，`distanthorizons` 条件）
-  + API event / framebuffer / depth texture / LOD shader
+- Distant Horizons（modid `distanthorizons`），按兼容矩阵指定版本
+- 接入方式：**不注入 DH**。DH 自持 Iris 集成（`IIrisAccessor` 注册与延迟透明 LOD 开关），
+  Actinium 只通过 DH 的公开 API（`DhApi`、render proxy、override、events）与其渲染入口接线
 
 ## 机制
 
-- Mixin（7）+ Invoker（1）：`MixinClientApi`（客户端 API 接线）、`MixinConfig`、
-  `MixinDependencySetup`（依赖初始化）、`MixinFogRenderParamFactory`（雾参数）、
-  `MixinFullDataToRenderDataTransformer` / `MixinRenderUtil`（LOD 数据变换）、
-  `MixinLodRenderer`（LOD 渲染器集成）、`InvokerGlDhMetaRenderer`（LOD 元渲染器调用器）。
-- 实现（2）：`DistantHorizonsCompat`（事件/framebuffer 接线）、`DistantHorizonsIrisAccessorState`
-  （无激活光影包时把 DH 读到的 `IIrisAccessor` 过滤为 null）。
-- 访问器过滤：`MixinRenderUtil` / `MixinLodRenderer` 把 `RenderUtil` 与 `LodRenderer` 读取的
-  `IIrisAccessor` 交给 `DistantHorizonsIrisAccessorState` 过滤。DH 为 `actinium` 注册的访问器
-  **恒非 null**（与是否启用光影包无关），而 DH 仍有只判 `!= null` 的读取点（如
-  `RenderUtil.getFarClipPlaneDistanceInBlocks()`），这层过滤因此不可删。`MixinLodRenderer`
-  在含 `b15b57cf` 的 DH 上已与上游自带的 `isShaderPackInUse()` 判断等价，保留它是为了兼容旧
-  DH 以及上游判据回退时的防护。
+- Actinium 不在 DH 的类上做任何 Mixin 注入：`mixin/mod/dh`（8 个类）与 `mixins.actinium.dh.json`
+  已整体移除，`DistantHorizonsIrisAccessorState` 及其访问器过滤 Mixin 随之删除。
+- Iris 侧的 DH 接管位于 `shader` 子项目的 `net.coderbot.iris.compat.dh`：`LodRendererEvents` 通过
+  DH 的 API events 注册 Iris 的 LOD / generic override program、framebuffer 与深度纹理，
+  `DHCompatInternal` 保存相应状态。
+- `DistantHorizonsCompat`（`src/main/java/com/dhj/actinium/compat/dh/`）只做 Actinium 侧的渲染状态
+  同步（GLSM 投影/模型矩阵、雾色、lightmap），并在 Iris 的 `beginTranslucents()` 之后驱动 DH 的
+  延迟透明 LOD pass；DH 侧开关关闭时该调用是惰性的（`LodRenderer.renderTerrain` 在
+  `runningDeferredPass && !deferTransparentRendering` 时直接返回）。
 - DH 控制云与 LOD 地形渲染（`8de0eef` 起的历史提交），版本变化敏感。
 
-## Iris 访问器归属
+## 由 DH 持有的开关
 
-- `IIrisAccessor` 的注册归 Distant Horizons 所有：DH 的 1.12.2 Iris 支持（上游提交
-  `b15b57cf`，记录版本 3.2.1-b）在 `CleanroomMain.initializeModCompat()` 中检测到
-  `actinium` 已加载时，自行绑定 `cleanroom.modAccessor.IrisAccessor`。
-- Actinium 不再注册自己的访问器（原 `ActiniumDHIrisCompat` / `ActiniumDHIrisAccessor` 已移除）。
-  `ModAccessorInjector` 禁止同一接口重复绑定，且 FML 按 modid 字母序先执行 Actinium 的 `init`：
-  Actinium 抢先注册会让 DH 随后的 bind 抛 `IllegalStateException`（上游 DH 侧无重复检查）。
+- `IIrisAccessor`：DH 的 1.12.2 Iris 支持（上游提交 `b15b57cf`）在检测到 `actinium` 已加载时
+  自行绑定；Actinium 不再注册（重复绑定会触发 `ModAccessorInjector` 的 `IllegalStateException`）。
+- `renderProxy.setDeferTransparentRendering()`：由 DH 侧配置决定，Actinium 只读取、不再每帧写回。
 - 因此 Actinium 需搭配含该提交的 DH。`gradle/scripts/dependencies.gradle` 里的
-  `distant-horizons-508933:8389134`（3.2.0-b）早于该提交，升级到含 Iris 支持的版本前，
-  dev 环境不会有任何 Iris 访问器注册。
+  `distant-horizons-508933:8389134`（3.2.0-b）早于该提交，升级前 dev 环境既不会有 Iris 访问器
+  注册，也不会启用延迟 LOD。
 
-## 延迟透明 LOD 渲染（deferred transparent LODs）
+## 移除注入后回归 DH 自身行为的部分
 
-- `DhApi.Delayed.renderProxy.setDeferTransparentRendering(...)` 归 Distant Horizons 所有：Actinium 只读取
-  （`DistantHorizonsCompat.isDeferredLodRenderingEnabledForShaders()`），不再每帧写回。此前 Actinium 在两处
-  覆盖该开关——`LodRendererEvents` 的 `DhApiBeforeRenderEvent` 处理与
-  `DistantHorizonsCompat.syncDeferredLodRenderingForShaders()`——使 DH 侧的 `renderDefferedLODs` 配置失效。
-- Actinium 仍在 `MixinRenderGlobal` 中、Iris 的 `beginTranslucents()` 之后驱动
-  `ClientApi.renderDeferredLodsForShaders()`。这条驱动不能删：Actinium 用 `@Overwrite` 接管了
-  `RenderGlobal.renderBlockLayer`，且延迟 LOD 必须落在 Iris 的半透明阶段内渲染。开关关闭时该调用是惰性的
-  （`LodRenderer.renderTerrain` 在 `runningDeferredPass && !deferTransparentRendering` 时直接返回）。
+以下行为此前由 Actinium 注入 DH 实现，现在交由 DH 侧接管：
+
+- **far clip / far fade / AA**：DH 的 `RenderUtil.getFarClipPlaneDistanceInBlocks()` 与
+  `LodRenderer.renderTerrain()` 只判断 `IRIS_ACCESSOR != null`，而 DH 自注册的访问器恒非 null，
+  无光影包时也会走 Iris 分支（far clip 缩短为 `√2/2`）。建议 DH 上游改判 `isShaderPackInUse()`。
+- **启动顺序**：原 `MixinConfig` / `MixinDependencySetup` 让 Actinium 提前建立 DH 客户端绑定、
+  并让 DH 自身的绑定调用跳过；移除后 Actinium 不再提前绑定 DH 依赖。
+- **多线程 LOD 构建**：方块状态缓存查询的加锁（原 `MixinFullDataToRenderDataTransformer`）。
+- **雾色**：DH 取雾色的路径（原 `MixinFogRenderParamFactory`）。
+- **F3 覆盖层**：DH 渲染目标状态的调试行（原 `InvokerGlDhMetaRenderer`）。
 
 ## 验证记录
 
@@ -57,4 +53,5 @@
 ## 待办
 
 - [ ] DH 发布含 `b15b57cf` 的版本后升级 gradle 依赖并做一次完整回归
+- [ ] 与 DH 侧确认上节各项由 DH 接管后的实际表现（尤其 far clip 与雾色）
 - [ ] 新版本 DH 验证后更新兼容矩阵

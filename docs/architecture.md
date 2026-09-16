@@ -50,13 +50,12 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
    注册 ASM transformer（`MacDisplayForwardCompatTransformer`、Angelica EarlyRedirector）；
    追加 AngelicaLateTweaker；设 mixin 兼容到 JAVA_11。
 2. **`MixinLate`**（late 阶段）：读取 `mixins.actinium.conditions.properties` 的 mod id 门控，
-   挑选 conditional 配置加载；DH 配置入队前执行 re-entrance lock 修复（`MixinReEntranceLockFix`）。
+   挑选 conditional 配置加载。
 3. **`Actinium.onConstruct`**（`@Mod` 主类）：挂载全部第三方 bridge
    （`GLRenderDevice.VANILLA_STATE_RESETTER`、`RuntimeOptionsBridge`、`EmbeddiumRuntimeOptions`、
    `PostProcessingBridge`、`WorldRendererCompatBridge`、`IrisDebugOptions.Bridge`、
    `GLSMPerfDebugHooks`）；初始化 DH / NeoFontRender 兼容。
-4. **`onPreInit`**：Distant Horizons client bindings 注册。
-5. **`onInit`**：NeoFontRender 初始化、dev 命令注册、Iris fmlInitEvent。
+4. **`onInit`**：NeoFontRender 初始化、dev 命令注册、Iris fmlInitEvent。
 
 `ActiniumRuntime`（`runtime/` 包）在类加载时静态装载 `SodiumGameOptions` 配置与版本信息，
 失败时降级为只读默认值，是全局状态的静态持有者。
@@ -114,12 +113,11 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 ### 兼容层（业务逻辑，mixin 只做注入）
 
-- **`compat/` 根**：`MixinReEntranceLockFix` —— DH mixin 配置入队前的 re-entrance lock
+- **`compat/` 根**：`MixinReEntranceLockFix` —— late mixin 配置入队前的 re-entrance lock
   清理与类预加载修复。
 - **`compat/ccl/`**：`GlStateTrackerSnapshot` —— CCL 状态跟踪快照（配 `mixin/mod/ccl`）。
-- **`compat/dh/`**：`DistantHorizonsCompat`（DH 接入渲染桥）、`DistantHorizonsIrisAccessorState`
-  （无激活光影包时过滤 DH 读到的 Iris 访问器；`IIrisAccessor` 由 DH 自行注册，见
-  `docs/compat/dh.md`）。
+- **`compat/dh/`**：`DistantHorizonsCompat`（DH 渲染状态同步与延迟 LOD 驱动）。Actinium 不注入
+  DH：`IIrisAccessor` 注册与延迟 LOD 开关都由 DH 自行持有（见 `docs/compat/dh.md`）。
 - **`compat/fluidlogged/`**：`FluidloggedCompat`、`FluidStateStorage`、`FluidloggedBlockAccess`
   —— 流体方块状态存取，供区块克隆离线读取。
 - **`compat/gibbed/`**：`ActiniumModelRenderer` —— Gibbed 尸块渲染模型扩展。
@@ -396,7 +394,6 @@ LWJGL 后端（并入本子项目）：
 | --- | --- | --- |
 | `mixins.actinium.vintage.json` | early（MixinEarly） | 原版注入全量：`mixin/vintage` 下 60+ 类 |
 | `mixins.actinium.iris.json` | early（MixinEarly） | `mixin/core/terrain.BufferBuilderMixin` + `mixin/core/vertex.MixinVertexFormat` + `mixin/features/iris` 全部（含 startup） |
-| `mixins.actinium.dh.json` | late/conditional（mod: distanthorizons） | `mixin/mod/dh` 7 类 |
 | `mixins.actinium.gibbed.json` | late/conditional（gibbed） | `BasicGibMixin` |
 | `mixins.actinium.ichunutil.json` | late/conditional（ichunutil） | `mixin/mod/ichunutil` 3 类 |
 | `mixins.actinium.lumenized.json` | late/conditional（lumenized） | `mixin/mod/lumenized` 3 类 |

@@ -4,40 +4,28 @@ import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import com.gtnewhorizon.gtnhlib.compat.Mods;
 import com.seibel.distanthorizons.api.DhApi;
-import com.seibel.distanthorizons.common.render.openGl.GlDhMetaRenderer;
-import com.seibel.distanthorizons.common.render.openGl.glObject.texture.GlDhDepthTexture;
 import com.seibel.distanthorizons.common.wrappers.world.ClientLevelWrapper;
-import com.seibel.distanthorizons.common.wrappers.DependencySetup;
 import com.seibel.distanthorizons.common.wrappers.minecraft.MinecraftRenderWrapper;
 import com.seibel.distanthorizons.core.api.internal.ClientApi;
-import com.seibel.distanthorizons.core.api.internal.SharedApi;
-import com.seibel.distanthorizons.core.config.Config;
-import com.seibel.distanthorizons.core.level.IDhClientLevel;
-import com.seibel.distanthorizons.core.render.RenderBufferHandler;
-import com.seibel.distanthorizons.core.util.math.DhMat4f;
-import com.seibel.distanthorizons.core.world.IDhClientWorld;
 import com.seibel.distanthorizons.core.dependencyInjection.SingletonInjector;
+import com.seibel.distanthorizons.core.util.math.DhMat4f;
 import com.seibel.distanthorizons.core.wrapperInterfaces.minecraft.IMinecraftRenderWrapper;
-import com.seibel.distanthorizons.core.wrapperInterfaces.minecraft.IMinecraftSharedWrapper;
-import com.seibel.distanthorizons.core.wrapperInterfaces.world.IClientLevelWrapper;
-import net.coderbot.iris.Iris;
-import net.coderbot.iris.compat.dh.DHCompatInternal;
-import net.coderbot.iris.pipeline.WorldRenderingPipeline;
-import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.client.shader.Framebuffer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL32;
-import com.dhj.actinium.mixin.mod.dh.InvokerGlDhMetaRenderer;
 import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
 
-import java.util.List;
-
+/**
+ * Render-state bridge between Actinium's terrain pass and Distant Horizons' LOD renderer.
+ *
+ * <p>Distant Horizons owns its own Actinium/Iris integration (the {@code IIrisAccessor} binding and
+ * the deferred transparent LOD toggle); Actinium no longer injects into DH and only prepares its
+ * render state, then drives DH's deferred pass from its own {@code RenderGlobal} override.</p>
+ */
 public final class DistantHorizonsCompat {
     private static final Logger LOGGER = LogManager.getLogger("ActiniumDHCompat");
 
@@ -45,77 +33,22 @@ public final class DistantHorizonsCompat {
     private static boolean warnedRenderFailure;
     private static boolean warnedLightmapSyncFailure;
     private static boolean warnedFogColorSyncFailure;
-    private static boolean warnedDebugStringFailure;
-    private static String lastDiagnosticSignature = "";
-    private static long lastDiagnosticLogTimeMs;
 
     private DistantHorizonsCompat() {
     }
 
-    public static boolean hasClientBindings() {
-        try {
-            var bindings = SingletonInjector.INSTANCE.getAll(IMinecraftSharedWrapper.class);
-            return !bindings.isEmpty() && bindings.get(0) != null;
-        } catch (RuntimeException e) {
-            // An exception here means the DI system is not ready, not that bindings exist;
-            // returning true would silently skip binding creation and leave mcShared unset.
-            LOGGER.warn("Failed to query Distant Horizons client bindings", e);
-            return false;
-        }
-    }
-
     /**
-     * Binds the DH client wrappers before another mod can load DH config classes that require
-     * {@code IMinecraftSharedWrapper}. Safe to call repeatedly; DH's own later binding call is
-     * skipped by {@code MixinDependencySetup}.
-     *
-     * <p>Does not consult {@code Loader}: this runs from Minecraft.init's early hooks, before FML's
-     * own mod list exists, so a {@code Loader}-based guard would silently skip binding creation
-     * exactly when DH's Config classes get loaded. DH presence is probed via class-loading
-     * instead.</p>
+     * Prepares Actinium's render state and runs Distant Horizons' deferred transparent LOD pass.
+     * Called from Actinium's {@code RenderGlobal.renderBlockLayer} override after Iris entered its
+     * translucent phase; the call is inert while DH keeps its deferred toggle disabled.
      */
-    public static void ensureClientBindings() {
-        try {
-            Class.forName(
-                "com.seibel.distanthorizons.core.dependencyInjection.SingletonInjector",
-                false,
-                DistantHorizonsCompat.class.getClassLoader()
-            );
-        } catch (ClassNotFoundException e) {
-            return; // DH absent - keep DH classes off the classpath
-        }
-
-        if (hasClientBindings()) {
-            return;
-        }
-
-        try {
-            DependencySetup.createClientBindings();
-        } catch (RuntimeException e) {
-            LOGGER.warn("Failed to pre-initialize Distant Horizons client bindings", e);
-        }
-    }
-
-    public static boolean prepareVanillaLodRender(WorldClient world, double partialTicks) {
-        if (world == null || !Mods.DISTANTHORIZONS) {
-            return false;
-        }
-
-        try {
-            return prepareLodState(world, partialTicks, false);
-        } catch (Throwable t) {
-            logRenderFailure("prepare Distant Horizons vanilla LOD state", t);
-            return false;
-        }
-    }
-
     public static void renderDeferredLodsForShaders(WorldClient world, double partialTicks) {
         if (world == null || !Mods.DISTANTHORIZONS) {
             return;
         }
 
         try {
-            if (!prepareLodState(world, partialTicks, true)) {
+            if (!prepareLodState(world, partialTicks)) {
                 return;
             }
 
@@ -135,61 +68,13 @@ public final class DistantHorizonsCompat {
     }
 
     /**
-     * Appends the live Minecraft/DH/Iris render-target state to the F3 debug overlay, so resize
-     * desyncs (stale depth texture ids, mismatched dimensions) are directly visible in-game.
-     * Pure field reads: no GL calls, safe to run every frame.
+     * Copies Actinium's live GLSM matrices into Distant Horizons' render state and syncs the fog
+     * color and lightmap DH samples while drawing LODs.
+     *
+     * @return whether DH's deferred transparent LOD toggle is enabled for this frame
      */
-    public static void appendDebugStrings(List<String> strings) {
-        try {
-            strings.add(buildResizeDebugLine());
-            String irisLine = buildIrisResizeDebugLine();
-            if (irisLine != null) {
-                strings.add(irisLine);
-            }
-        } catch (Throwable t) {
-            if (!warnedDebugStringFailure) {
-                warnedDebugStringFailure = true;
-                LOGGER.warn("Failed to build Distant Horizons debug overlay state", t);
-            }
-        }
-    }
-
-    private static String buildResizeDebugLine() {
-        Framebuffer mcFramebuffer = Minecraft.getMinecraft().getFramebuffer();
-        IRenderTargetExt mcFramebufferExt = (IRenderTargetExt) mcFramebuffer;
-        InvokerGlDhMetaRenderer metaRenderer = (InvokerGlDhMetaRenderer) GlDhMetaRenderer.INSTANCE;
-        GlDhDepthTexture dhDepthTexture = metaRenderer.actinium$getDepthTexture();
-        return "DH resize: mc " + mcFramebuffer.framebufferWidth + "x" + mcFramebuffer.framebufferHeight
-            + " d" + mcFramebufferExt.iris$getDepthTextureId() + "/v" + mcFramebufferExt.iris$getDepthBufferVersion()
-            + " | dh " + metaRenderer.actinium$getTextureWidth() + "x" + metaRenderer.actinium$getTextureHeight()
-            + " tex" + (dhDepthTexture != null ? dhDepthTexture.getTextureId() : -1)
-            + " act" + GlDhMetaRenderer.INSTANCE.getActiveDepthTextureId();
-    }
-
-    private static String buildIrisResizeDebugLine() {
-        if (!Iris.enabled) {
-            return null;
-        }
-
-        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
-        if (pipeline == null || pipeline.getDHCompat() == null) {
-            return null;
-        }
-
-        DHCompatInternal dhCompat = pipeline.getDHCompat().getInstance();
-        if (dhCompat == null) {
-            return null;
-        }
-
-        return "DH iris: v" + dhCompat.getCachedDepthBufferVersion()
-            + " stored" + dhCompat.getStoredDepthTex()
-            + " nt" + dhCompat.getDepthTexNoTranslucent()
-            + " dirty=" + dhCompat.isTranslucentDepthDirty()
-            + " ovr=" + dhCompat.shouldOverride;
-    }
-
-    private static boolean prepareLodState(WorldClient world, double partialTicks, boolean deferred) {
-        if (deferred && !isDeferredLodRenderingEnabledForShaders()) {
+    private static boolean prepareLodState(WorldClient world, double partialTicks) {
+        if (!isDeferredLodRenderingEnabledForShaders()) {
             return false;
         }
 
@@ -271,65 +156,5 @@ public final class DistantHorizonsCompat {
                 LOGGER.warn("Failed to sync vanilla fog color before Distant Horizons LOD rendering", t);
             }
         }
-    }
-
-    private static void logRenderDiagnostics() {
-        IClientLevelWrapper levelWrapper = ClientApi.RENDER_STATE.clientLevelWrapper;
-        IDhClientWorld dhWorld = SharedApi.tryGetDhClientWorld();
-        IDhClientLevel dhLevel = dhWorld != null && levelWrapper != null ? dhWorld.getClientLevel(levelWrapper) : null;
-        RenderBufferHandler renderBufferHandler = dhLevel != null ? dhLevel.getRenderBufferHandler() : null;
-
-        String validation = ClientApi.INSTANCE.lastRenderParamValidationMessage;
-        int bufferCount = renderBufferHandler != null && renderBufferHandler.getColumnRenderBuffers() != null
-                ? renderBufferHandler.getColumnRenderBuffers().size()
-                : -1;
-
-        String stableSignature =
-                "validation=" + validation
-                        + ", rendererDisabled=" + ClientApi.INSTANCE.rendererDisabledBecauseOfExceptions
-                        + ", quickEnable=" + Config.Client.quickEnableRendering.get()
-                        + ", rendererMode=" + Config.Client.Advanced.Debugging.rendererMode.get()
-                        + ", hasLevelWrapper=" + (levelWrapper != null)
-                        + ", hasDhWorld=" + (dhWorld != null)
-                        + ", hasDhLevel=" + (dhLevel != null)
-                        + ", hasRenderBufferHandler=" + (renderBufferHandler != null)
-                        + ", hasGenericRenderer=" + (dhLevel != null && dhLevel.getGenericRenderer() != null)
-                        + ", dhLevelRendering=" + (dhLevel != null && dhLevel.isRendering())
-                        + ", vanillaFogEnabled=" + ClientApi.RENDER_STATE.vanillaFogEnabled
-                        + ", deferTransparentRendering=" + isDeferredLodRenderingEnabledForShaders()
-                        + ", fbo=" + GL32.glGetInteger(GL32.GL_FRAMEBUFFER_BINDING)
-                        + ", drawFbo=" + GL32.glGetInteger(GL32.GL_DRAW_FRAMEBUFFER_BINDING)
-                        + ", readFbo=" + GL32.glGetInteger(GL32.GL_READ_FRAMEBUFFER_BINDING)
-                        + ", program=" + GL32.glGetInteger(GL32.GL_CURRENT_PROGRAM);
-        String message = stableSignature
-                + ", bufferCount=" + bufferCount
-                + ", entityFogColor=" + getEntityFogColorDiagnostics()
-                + ", glFogColor=" + getGlFogColorDiagnostics();
-
-        long now = System.currentTimeMillis();
-        if (!stableSignature.equals(lastDiagnosticSignature) || now - lastDiagnosticLogTimeMs > 5000L) {
-            lastDiagnosticSignature = stableSignature;
-            lastDiagnosticLogTimeMs = now;
-            LOGGER.info("Distant Horizons bridge diagnostics: {}", message);
-        }
-    }
-
-    private static String getEntityFogColorDiagnostics() {
-        AccessorEntityRenderer entityRenderer = (AccessorEntityRenderer) Minecraft.getMinecraft().entityRenderer;
-        return formatColor(
-                entityRenderer.celeritas$getFogColorRed(),
-                entityRenderer.celeritas$getFogColorGreen(),
-                entityRenderer.celeritas$getFogColorBlue(),
-                1.0F);
-    }
-
-    private static String getGlFogColorDiagnostics() {
-        float[] fogColor = new float[4];
-        GL15.glGetFloatv(GL15.GL_FOG_COLOR, fogColor);
-        return formatColor(fogColor[0], fogColor[1], fogColor[2], fogColor[3]);
-    }
-
-    private static String formatColor(float red, float green, float blue, float alpha) {
-        return String.format("%.3f/%.3f/%.3f/%.3f", red, green, blue, alpha);
     }
 }

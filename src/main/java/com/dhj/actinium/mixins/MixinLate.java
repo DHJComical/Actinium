@@ -1,9 +1,6 @@
 package com.dhj.actinium.mixins;
 
-import com.dhj.actinium.compat.MixinReEntranceLockFix;
 import com.gtnewhorizon.gtnhlib.compat.Mods;
-import net.minecraft.client.renderer.EntityRenderer;
-import zone.rong.mixinbooter.Context;
 import zone.rong.mixinbooter.ILateMixinLoader;
 
 import java.io.IOException;
@@ -28,22 +25,6 @@ public class MixinLate implements ILateMixinLoader {
     @Override
     public List<String> getMixinConfigs() {
         return configsFor(Mods::isModPresent);
-    }
-
-    @Override
-    public void onMixinConfigQueued(Context context) {
-        if (!"mixins.actinium.dh.json".equals(context.mixinConfig())) {
-            return;
-        }
-
-        MixinReEntranceLockFix.clearLeakedLock();
-        MixinReEntranceLockFix.clearInvalidVanillaClasses();
-        try {
-            MixinReEntranceLockFix.preloadClasses(EntityRenderer.class);
-        } finally {
-            MixinReEntranceLockFix.clearLeakedLock();
-            MixinReEntranceLockFix.clearInvalidVanillaClasses();
-        }
     }
 
     /**
