@@ -37,6 +37,17 @@
   `distant-horizons-508933:8389134`（3.2.0-b）早于该提交，升级到含 Iris 支持的版本前，
   dev 环境不会有任何 Iris 访问器注册。
 
+## 延迟透明 LOD 渲染（deferred transparent LODs）
+
+- `DhApi.Delayed.renderProxy.setDeferTransparentRendering(...)` 归 Distant Horizons 所有：Actinium 只读取
+  （`DistantHorizonsCompat.isDeferredLodRenderingEnabledForShaders()`），不再每帧写回。此前 Actinium 在两处
+  覆盖该开关——`LodRendererEvents` 的 `DhApiBeforeRenderEvent` 处理与
+  `DistantHorizonsCompat.syncDeferredLodRenderingForShaders()`——使 DH 侧的 `renderDefferedLODs` 配置失效。
+- Actinium 仍在 `MixinRenderGlobal` 中、Iris 的 `beginTranslucents()` 之后驱动
+  `ClientApi.renderDeferredLodsForShaders()`。这条驱动不能删：Actinium 用 `@Overwrite` 接管了
+  `RenderGlobal.renderBlockLayer`，且延迟 LOD 必须落在 Iris 的半透明阶段内渲染。开关关闭时该调用是惰性的
+  （`LodRenderer.renderTerrain` 在 `runningDeferredPass && !deferTransparentRendering` 时直接返回）。
+
 ## 验证记录
 
 - 兼容矩阵记录：光影包 + DH LOD 场景已验证（MakeUp/BSL/Complementary/Bliss/

@@ -24,7 +24,6 @@ import net.coderbot.iris.Iris;
 import net.coderbot.iris.compat.dh.DHCompatInternal;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import net.coderbot.iris.rendertarget.IRenderTargetExt;
-import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -190,7 +189,6 @@ public final class DistantHorizonsCompat {
     }
 
     private static boolean prepareLodState(WorldClient world, double partialTicks, boolean deferred) {
-        syncDeferredLodRenderingForShaders();
         if (deferred && !isDeferredLodRenderingEnabledForShaders()) {
             return false;
         }
@@ -214,28 +212,13 @@ public final class DistantHorizonsCompat {
         }
     }
 
+    /**
+     * Reads the Distant Horizons deferred transparent LOD toggle. DH owns that flag (its own config
+     * decides it); Actinium only observes it to know whether the deferred pass must be driven this
+     * frame, and never writes it back.
+     */
     private static boolean isDeferredLodRenderingEnabledForShaders() {
         return DhApi.Delayed.renderProxy != null && DhApi.Delayed.renderProxy.getDeferTransparentRendering();
-    }
-
-    private static void syncDeferredLodRenderingForShaders() {
-        if (DhApi.Delayed.renderProxy != null) {
-            DhApi.Delayed.renderProxy.setDeferTransparentRendering(shouldRenderShaderLods());
-        }
-    }
-
-    private static boolean shouldRenderShaderLods() {
-        if (!Iris.enabled || !IrisApi.getInstance().isShaderPackInUse()) {
-            return false;
-        }
-
-        WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
-        if (pipeline == null || pipeline.getDHCompat() == null) {
-            return false;
-        }
-
-        DHCompatInternal instance = pipeline.getDHCompat().getInstance();
-        return instance != null && instance.shouldOverride;
     }
 
     private static DhMat4f copyJomlMatrix(Matrix4f sourceMatrix) {
