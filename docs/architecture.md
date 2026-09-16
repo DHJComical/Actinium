@@ -116,8 +116,9 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 - **`compat/` 根**：`MixinReEntranceLockFix` —— late mixin 配置入队前的 re-entrance lock
   清理与类预加载修复。
 - **`compat/ccl/`**：`GlStateTrackerSnapshot` —— CCL 状态跟踪快照（配 `mixin/mod/ccl`）。
-- **`compat/dh/`**：`DistantHorizonsCompat`（DH 渲染状态同步与延迟 LOD 驱动）。Actinium 不注入
-  DH：`IIrisAccessor` 注册与延迟 LOD 开关都由 DH 自行持有（见 `docs/compat/dh.md`）。
+- **DH 兼容**：Distant Horizons 自行完成 Actinium/Iris 集成（Iris 侧接管见 `shader` 子项目的
+  `net.coderbot.iris.compat.dh`）。Actinium 不注入 DH，也不持有 DH 的 Iris 访问器或延迟 LOD
+  开关（见 `docs/compat/dh.md`）。
 - **`compat/fluidlogged/`**：`FluidloggedCompat`、`FluidStateStorage`、`FluidloggedBlockAccess`
   —— 流体方块状态存取，供区块克隆离线读取。
 - **`compat/gibbed/`**：`ActiniumModelRenderer` —— Gibbed 尸块渲染模型扩展。

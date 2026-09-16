@@ -26,8 +26,8 @@ Actinium 的 celeritas 区块管线接管后：
 
 1. `MixinRenderGlobal.loadRenderers` 将 `GameSettings.renderDistanceChunks` 第二次读取
    重定向为 0，原版 `BuiltChunkStorage` 不再分配可用的 `RenderChunk` 阵列；
-2. `renderBlockLayer`/`setupTerrain` 被整体替换为 `ActiniumWorldRenderer`，
-   `ChunkRenderContainer.preRenderChunk` 不再被调用。
+2. `renderBlockLayer`（单参数重载，原版四参数入口调用的那个）/`setupTerrain` 被整体替换为
+   `ActiniumWorldRenderer`，`ChunkRenderContainer.preRenderChunk` 不再被调用。
 
 结论：Chunk Animator 的 ASM 注入仍然加载（不崩溃），但**两个 hook 都不会在渲染路径上
 生效**，动画完全不显示。

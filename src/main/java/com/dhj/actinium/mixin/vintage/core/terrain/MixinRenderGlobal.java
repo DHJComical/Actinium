@@ -3,7 +3,6 @@ package com.dhj.actinium.mixin.vintage.core.terrain;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.compat.ichunutil.PortalViewportProvider;
 import net.coderbot.iris.compat.rfp2.Rfp2Compat;
 import com.gtnewhorizons.angelica.glsm.shadow.InternalShadowRenderingState;
@@ -25,13 +24,13 @@ import net.minecraft.client.renderer.culling.ICamera;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.client.settings.GameSettings;
+import net.minecraftforge.client.MinecraftForgeClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
-import com.gtnewhorizon.gtnhlib.compat.Mods;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
 import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
@@ -125,13 +124,14 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     }
 
     /**
-     * @reason Redirect the chunk layer render passes to our renderer
+     * @reason Redirect the chunk layer render passes to our renderer. The single-argument overload is
+     * overwritten instead of the four-argument entry point: vanilla keeps invoking it (and keeps its
+     * layer setup), and Distant Horizons' own injections into this method stay reachable.
      * @author JellySquid
      */
     @Overwrite
-    public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
-        boolean renderDistantHorizonsLods = Mods.DISTANTHORIZONS
-                && !ShadowRenderingState.areShadowsCurrentlyBeingRendered();
+    private void renderBlockLayer(BlockRenderLayer blockLayerIn) {
+        float partialTicks = this.mc.getRenderPartialTicks();
 
         WorldRenderingPipeline pipeline = null;
         if (Iris.enabled) {
@@ -146,10 +146,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 } else if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
                     if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()
                             && IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
-                        this.actinium$beginIrisTranslucents(pipeline, (float) partialTicks);
-                        if (renderDistantHorizonsLods) {
-                            DistantHorizonsCompat.renderDeferredLodsForShaders(this.world, partialTicks);
-                        }
+                        this.actinium$beginIrisTranslucents(pipeline, partialTicks);
                     }
                     pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
                 }
@@ -163,17 +160,22 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         GlStateManager.bindTexture(this.mc.getTextureMapBlocks().getGlTextureId());
         GlStateManager.enableTexture2D();
 
+        // Distant Horizons injects its deferred LOD pass right after this call; keep it in place.
         this.mc.entityRenderer.enableLightmap();
 
-        double d3 = entityIn.lastTickPosX + (entityIn.posX - entityIn.lastTickPosX) * partialTicks;
-        double d4 = entityIn.lastTickPosY + (entityIn.posY - entityIn.lastTickPosY) * partialTicks + entityIn.getEyeHeight();
-        double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
+        Entity viewEntity = this.mc.getRenderViewEntity();
+        double d3 = viewEntity.lastTickPosX + (viewEntity.posX - viewEntity.lastTickPosX) * partialTicks;
+        double d4 = viewEntity.lastTickPosY + (viewEntity.posY - viewEntity.lastTickPosY) * partialTicks + viewEntity.getEyeHeight();
+        double d5 = viewEntity.lastTickPosZ + (viewEntity.posZ - viewEntity.lastTickPosZ) * partialTicks;
 
         long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
         try {
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
         } finally {
-            RenderDebugHooksHolder.recordRenderGlobalStageTiming("terrain-" + blockLayerIn.name().toLowerCase(Locale.ROOT), pass, drawStartNanos);
+            RenderDebugHooksHolder.recordRenderGlobalStageTiming(
+                    "terrain-" + blockLayerIn.name().toLowerCase(Locale.ROOT),
+                    MinecraftForgeClient.getRenderPass(),
+                    drawStartNanos);
             RenderDevice.exitManagedCode();
         }
 
@@ -183,8 +185,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         if (pipeline != null) {
             pipeline.setPhase(WorldRenderingPhase.NONE);
         }
-
-        return 1;
     }
 
     /**
@@ -250,7 +250,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
 
     @Inject(method = "renderEntities", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderHelper;enableStandardItemLighting()V", shift = At.Shift.AFTER, ordinal = 1), cancellable = true)
     public void sodium$renderTileEntities(Entity entity, ICamera camera, float partialTicks, CallbackInfo ci) {
-        int pass = net.minecraftforge.client.MinecraftForgeClient.getRenderPass();
+        int pass = MinecraftForgeClient.getRenderPass();
         boolean renderShadowBlockEntities = !ShadowRenderingState.areShadowsCurrentlyBeingRendered()
                 || InternalShadowRenderingState.shouldRenderShadowBlockEntities();
 
@@ -336,7 +336,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     private void renderEntities(Entity renderViewEntity, ICamera camera, float partialTicks, CallbackInfo ci,
                                 @Local(ordinal = 1) List<Entity> outlineEntityList,
                                 @Local(ordinal = 2) List<Entity> multipassEntityList) {
-        int pass = net.minecraftforge.client.MinecraftForgeClient.getRenderPass();
+        int pass = MinecraftForgeClient.getRenderPass();
         double renderViewX = renderViewEntity.prevPosX + (renderViewEntity.posX - renderViewEntity.prevPosX) * partialTicks;
         double renderViewY = renderViewEntity.prevPosY + (renderViewEntity.posY - renderViewEntity.prevPosY) * partialTicks;
         double renderViewZ = renderViewEntity.prevPosZ + (renderViewEntity.posZ - renderViewEntity.prevPosZ) * partialTicks;
