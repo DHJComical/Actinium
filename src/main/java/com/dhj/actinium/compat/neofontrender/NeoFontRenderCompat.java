@@ -8,8 +8,6 @@ import neofontrender.api.color.TextColorPaletteProvider;
  * Runtime bridge to Neo Font Render when it is installed.
  */
 public final class NeoFontRenderCompat {
-    public static final String MOD_ID = "neofontrender";
-
     private NeoFontRenderCompat() {
     }
 

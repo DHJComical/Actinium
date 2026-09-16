@@ -20,10 +20,6 @@ import sayys.depthsupdate.api.HeightInfo;
  * falls back to the vanilla identity mapping, so unaffected worlds keep their exact behaviour.
  */
 public final class DepthsUpdateCompat {
-    /**
-     * The mod ID of Depths Update.
-     */
-    public static final String MODID = "depthsupdate";
     public static final boolean IS_LOADED = Mods.DEPTHSUPDATE;
 
     private static final int VANILLA_MIN_SECTION = 0;

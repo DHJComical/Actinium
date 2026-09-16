@@ -14,7 +14,6 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.InvocationTargetException;
 
 public class DHCompat {
-    private static final String DH_MOD_ID = "distanthorizons";
     private static boolean dhPresent;
     private static boolean lastIncompatible;
     private DHCompatInternal compatInternalInstance;

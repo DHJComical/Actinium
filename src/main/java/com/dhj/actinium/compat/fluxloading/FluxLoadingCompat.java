@@ -19,10 +19,6 @@ import com.gtnewhorizon.gtnhlib.compat.Mods;
  * so they are never class-loaded unless FluxLoading is installed.</p>
  */
 public final class FluxLoadingCompat {
-    /**
-     * The mod ID of FluxLoading.
-     */
-    public static final String MODID = "fluxloading";
     public static final boolean IS_LOADED = Mods.FLUXLOADING;
 
     private FluxLoadingCompat() {

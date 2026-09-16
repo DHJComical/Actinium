@@ -34,8 +34,6 @@ import java.util.Objects;
  * automatically.</p>
  */
 public final class ChunkAnimatorCompat implements ChunkAnimationProvider {
-    public static final String MOD_ID = "chunkanimator";
-
     private final AnimationHandler animationHandler;
 
     private ChunkAnimatorCompat(AnimationHandler animationHandler) {

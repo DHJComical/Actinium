@@ -16,10 +16,6 @@ import net.minecraft.util.ResourceLocation;
  * chunk. Blocks that SRM owns must therefore fall back to the vanilla dispatcher path.
  */
 public final class SnowRealMagicCompat {
-    /**
-     * The mod ID of Snow! Real Magic!.
-     */
-    public static final String MODID = "snowrealmagic";
     public static final boolean IS_LOADED = Mods.SNOWREALMAGIC;
 
     private SnowRealMagicCompat() {
