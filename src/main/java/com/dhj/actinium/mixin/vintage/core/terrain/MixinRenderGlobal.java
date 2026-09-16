@@ -66,6 +66,15 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     @Shadow
     protected abstract boolean isOutlineActive(Entity entityIn, Entity viewer, ICamera camera);
 
+    /**
+     * Vanilla's single-argument overload. It is deliberately left unmodified and invoked from the
+     * overwritten entry point below, so injections anchored inside it stay reachable.
+     */
+    @Shadow
+    private void renderBlockLayer(BlockRenderLayer blockLayerIn) {
+        throw new AssertionError();
+    }
+
     @Shadow
     private WorldClient world;
     @Shadow
@@ -124,15 +133,15 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     }
 
     /**
-     * @reason Redirect the chunk layer render passes to our renderer. The single-argument overload is
-     * overwritten instead of the four-argument entry point: vanilla keeps invoking it (and keeps its
-     * layer setup), and Distant Horizons' own injections into this method stay reachable.
+     * @reason Redirect the chunk layer render passes to our renderer. The four-argument entry point is
+     * overwritten, while the single-argument overload it normally calls is left vanilla and invoked
+     * below, so injections anchored inside that overload keep firing. Overwriting the overload itself
+     * would break them: Mixin refuses instruction-level injection points in a method that a
+     * higher-priority mixin has already merged.
      * @author JellySquid
      */
     @Overwrite
-    private void renderBlockLayer(BlockRenderLayer blockLayerIn) {
-        float partialTicks = this.mc.getRenderPartialTicks();
-
+    public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
         WorldRenderingPipeline pipeline = null;
         if (Iris.enabled) {
             pipeline = Iris.getPipelineManager().getPipelineNullable();
@@ -146,7 +155,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                 } else if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
                     if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()
                             && IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
-                        this.actinium$beginIrisTranslucents(pipeline, partialTicks);
+                        this.actinium$beginIrisTranslucents(pipeline, (float) partialTicks);
                     }
                     pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
                 }
@@ -160,22 +169,24 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         GlStateManager.bindTexture(this.mc.getTextureMapBlocks().getGlTextureId());
         GlStateManager.enableTexture2D();
 
-        // Distant Horizons injects its deferred LOD pass right after this call; keep it in place.
+        if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
+            // Run vanilla's overload so third-party injections anchored inside it stay reachable (its
+            // enableLightmap call is one such anchor). Its renderContainer pass draws nothing, since
+            // Celeritas owns chunk rendering and never populates that container.
+            this.renderBlockLayer(blockLayerIn);
+        }
+
         this.mc.entityRenderer.enableLightmap();
 
-        Entity viewEntity = this.mc.getRenderViewEntity();
-        double d3 = viewEntity.lastTickPosX + (viewEntity.posX - viewEntity.lastTickPosX) * partialTicks;
-        double d4 = viewEntity.lastTickPosY + (viewEntity.posY - viewEntity.lastTickPosY) * partialTicks + viewEntity.getEyeHeight();
-        double d5 = viewEntity.lastTickPosZ + (viewEntity.posZ - viewEntity.lastTickPosZ) * partialTicks;
+        double d3 = entityIn.lastTickPosX + (entityIn.posX - entityIn.lastTickPosX) * partialTicks;
+        double d4 = entityIn.lastTickPosY + (entityIn.posY - entityIn.lastTickPosY) * partialTicks + entityIn.getEyeHeight();
+        double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
         long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
         try {
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
         } finally {
-            RenderDebugHooksHolder.recordRenderGlobalStageTiming(
-                    "terrain-" + blockLayerIn.name().toLowerCase(Locale.ROOT),
-                    MinecraftForgeClient.getRenderPass(),
-                    drawStartNanos);
+            RenderDebugHooksHolder.recordRenderGlobalStageTiming("terrain-" + blockLayerIn.name().toLowerCase(Locale.ROOT), pass, drawStartNanos);
             RenderDevice.exitManagedCode();
         }
 
@@ -185,6 +196,8 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         if (pipeline != null) {
             pipeline.setPhase(WorldRenderingPhase.NONE);
         }
+
+        return 1;
     }
 
     /**
