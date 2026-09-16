@@ -1,5 +1,7 @@
 package com.dhj.actinium.mixin.vintage.core.terrain;
 
+import com.google.common.collect.Iterables;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -32,19 +34,19 @@ import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import com.gtnewhorizon.gtnhlib.compat.Mods;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.IChunkProvider;
 import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
 import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
-import org.spongepowered.asm.mixin.Final;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
-import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import com.dhj.actinium.render.entity.EntityGatherer;
+import com.dhj.actinium.render.entity.EntitySource;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.render.terrain.TileEntityGlStateGuard;
 
@@ -341,8 +343,17 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         double renderViewY = renderViewEntity.prevPosY + (renderViewEntity.posY - renderViewEntity.prevPosY) * partialTicks;
         double renderViewZ = renderViewEntity.prevPosZ + (renderViewEntity.posZ - renderViewEntity.prevPosZ) * partialTicks;
         if (pass == 0 || celeritas$collectedEntities == null) {
+            IChunkProvider chunkProvider = this.world.getChunkProvider();
+
+            if (!(chunkProvider instanceof AccessorChunkProviderClient provider)) {
+                throw new IllegalStateException("Entity gathering needs the client chunk provider, got "
+                        + chunkProvider.getClass().getName());
+            }
+
+            // gather() only appends, so the per-pass lists have to be reset before every collection.
             celeritas$entityGatherer.clear();
-            celeritas$collectedEntities = celeritas$entityGatherer.getLoadedEntityList(world);
+            celeritas$collectedEntities = celeritas$entityGatherer.gather(
+                    actinium$createEntitySource(renderViewEntity, provider.celeritas$getLoadedChunks()));
         }
         EntityPlayerSP player = this.mc.player;
         BlockPos.MutableBlockPos entityBlockPos = new BlockPos.MutableBlockPos();
@@ -425,6 +436,47 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                     multipassEntities
             );
         }
+    }
+
+    /**
+     * Creates the entity source of the current frame: every chunk of the client's loaded chunk map
+     * that lies inside the chunk window vanilla's {@code ViewFrustum} covers.
+     *
+     * <p>That window is the {@code (2 * renderDistanceChunks + 1)} square of chunks centered on the
+     * chunk holding {@code floor(viewX) - 1}. Vanilla anchors the window with
+     * {@code MathHelper.floor(viewX) - 8} and then snaps a ring of 16-block columns onto it, which
+     * leaves the window one block behind the view entity; only chunks inside the window can reach
+     * {@code renderInfos}, so scanning exactly them never misses a renderable entity.</p>
+     *
+     * <p>The loaded chunk map is walked once and each chunk is rejected from its map key, so a chunk
+     * outside the window costs a range check and never a hash lookup or a chunk access.</p>
+     *
+     * @param renderViewEntity the entity the frustum is centered on, i.e. the one {@code setupTerrain}
+     *                         feeds to {@code ViewFrustum.updateChunkPositions}
+     * @param loadedChunks     the loaded chunk map of the client chunk provider
+     * @return the chunk source for {@link EntityGatherer#gather(EntitySource)}
+     */
+    @Unique
+    private EntitySource actinium$createEntitySource(Entity renderViewEntity, Long2ObjectMap<Chunk> loadedChunks) {
+        int centerChunkX = MathHelper.intFloorDiv(MathHelper.floor(renderViewEntity.posX) - 1, 16);
+        int centerChunkZ = MathHelper.intFloorDiv(MathHelper.floor(renderViewEntity.posZ) - 1, 16);
+        int radius = this.mc.gameSettings.renderDistanceChunks;
+        int minChunkX = centerChunkX - radius;
+        int maxChunkX = centerChunkX + radius;
+        int minChunkZ = centerChunkZ - radius;
+        int maxChunkZ = centerChunkZ + radius;
+
+        Iterable<Long2ObjectMap.Entry<Chunk>> scopedEntries = Iterables.filter(
+                loadedChunks.long2ObjectEntrySet(),
+                entry -> {
+                    long chunkKey = entry.getLongKey();
+                    int chunkX = (int)chunkKey;
+                    int chunkZ = (int)(chunkKey >> 32);
+
+                    return chunkX >= minChunkX && chunkX <= maxChunkX && chunkZ >= minChunkZ && chunkZ <= maxChunkZ;
+                });
+
+        return () -> Iterables.transform(scopedEntries, entry -> entry.getValue());
     }
 
     private boolean actinium$shouldRenderShadowEntity(Entity entity, Entity renderViewEntity) {
