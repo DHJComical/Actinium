@@ -1,7 +1,6 @@
 package com.dhj.actinium;
 
 import com.dhj.actinium.compat.chunkanimator.ChunkAnimatorCompat;
-import com.dhj.actinium.compat.dh.ActiniumDHIrisCompat;
 import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.compat.MissingModelCompat;
 import com.dhj.actinium.compat.kirino.KirinoCompat;
@@ -194,9 +193,13 @@ public class Actinium {
         ActiniumDiagnostics.logInitialization(ActiniumRuntime.version());
     }
 
+    /**
+     * Distant Horizons owns the {@code IIrisAccessor} binding: its 1.12.2 Iris support registers the accessor
+     * itself whenever the {@code actinium} mod is loaded. Binding a second implementation here would trip DH's
+     * duplicate-binding check, so Actinium only installs its own LOD render programs.
+     */
     private static void initializeDistantHorizonsCompat() {
         if (Iris.enabled && Mods.DISTANTHORIZONS) {
-            ActiniumDHIrisCompat.registerAccessor();
             DHCompat.run();
         }
     }

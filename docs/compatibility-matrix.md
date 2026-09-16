@@ -121,7 +121,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Celeritas        | 内嵌   | Gradle 子项目、最终 Jar 合并               | Actinium 的区块渲染器  |
 | GLSM             | 内嵌   | Gradle 子项目、service provider        | 管理 GL 状态和固定管线兼容  |
 | GTNHLib          | 内嵌   | Gradle 子项目、bridge API              | 提供底层渲染与内存工具      |
-| Distant Horizons | 部分   | API、late Mixin、Iris LOD programs   | 版本变化敏感，必须按指定版本验证 |
+| Distant Horizons | 部分   | API、late Mixin、Iris LOD programs   | 版本变化敏感，必须按指定版本验证；`IIrisAccessor` 由 DH 自行注册（上游 `b15b57cf`，3.2.1-b 起），Actinium 不再注册，搭配更早版本的 DH 会缺失光影 LOD 集成（见 [docs/compat/dh.md](compat/dh.md)） |
 | Lumenized        | 已验证（启动） | 条件 Mixin（bloom 兼容层，类探测门控 `class:gregtech.client.utils.BloomEffectUtil`） | 1.0.3：bloom 兼容层使其泛光真实生效（depth 共享 + FBO 清理 + composite 深度测试 + GL 状态守护，取代已移除的 bloomStyle=0 safe mode）；第一人称手部/所持物品全黑已由 `BloomStateGuard` 修复并实机确认（真因为 Unreal 管线对 2..4 号纹理单元的 TEXTURE_2D 使能泄漏，守护覆盖全部纹理单元），详见 [docs/compat/lumenized.md](compat/lumenized.md) |
 | StellarCore      | 已验证  | 无（不再需要配置规避） | HUD 缓存相关 GUI/HUD 症状实为 Draconic Evolution 引起（2026-08-12 实测归因修正）；DE 兼容桥修复后 HUD 正常，`HudCaching`/`HUDFramebuffer` 可恢复开启，详见 [docs/compat/stellarcore.md](compat/stellarcore.md) |
 | Draconic Evolution | 已验证 | 条件 Mixin（CCL GlStateTracker 兼容桥） | DE 2.3.28.354 在场时云异常/草方块侧面偏绿/主菜单消失；根因为 DE 每帧 HUD 经 CCL GlStateTracker 基于冻结的原版 GlStateManager 字段重置 GL 状态，已由 `mixins.actinium.ccl.json` 兼容桥修复（dev 回归通过，生产整合包全量回归待做），详见 [docs/compat/draconic-evolution.md](compat/draconic-evolution.md) |
