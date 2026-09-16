@@ -38,11 +38,21 @@
 - **far clip / far fade / AA**：DH 的 `RenderUtil.getFarClipPlaneDistanceInBlocks()` 与
   `LodRenderer.renderTerrain()` 只判断 `IRIS_ACCESSOR != null`，而 DH 自注册的访问器恒非 null，
   无光影包时也会走 Iris 分支（far clip 缩短为 `√2/2`）。建议 DH 上游改判 `isShaderPackInUse()`。
+- **渲染状态矩阵来源**：非延迟的 `renderLods()` 路径原先由 Actinium 的 `MixinClientApi` 用 GLSM 虚拟
+  状态（`RenderingState`）写入 DH 的 `RENDER_STATE`，现在改由 DH 自己的 `MixinRenderGlobal` 在调用前
+  用裸 `glGetFloatv` 读取真实 GL 矩阵。延迟路径仍由 Actinium 用 GLSM 状态同步。两者是否始终一致需要
+  实机确认。
 - **启动顺序**：原 `MixinConfig` / `MixinDependencySetup` 让 Actinium 提前建立 DH 客户端绑定、
-  并让 DH 自身的绑定调用跳过；移除后 Actinium 不再提前绑定 DH 依赖。
-- **多线程 LOD 构建**：方块状态缓存查询的加锁（原 `MixinFullDataToRenderDataTransformer`）。
-- **雾色**：DH 取雾色的路径（原 `MixinFogRenderParamFactory`）。
-- **F3 覆盖层**：DH 渲染目标状态的调试行（原 `InvokerGlDhMetaRenderer`）。
+  并让 DH 自身的绑定调用跳过；移除后 Actinium 不再提前绑定 DH 依赖。DH 的
+  `Config.Client.Advanced.*` 静态初始化若在 FML init 之前被触碰，仍会因 `IMinecraftSharedWrapper`
+  未绑定而 NPE——这条现在由 DH 自身保证。
+- **雾色**：DH 取雾色的路径（原 `MixinFogRenderParamFactory`）。若要保留原行为，可用 DH 的
+  `DhApiBeforeFogRenderEvent` + `DhApiMutableFogRenderParam.setFogColor` 在 DH 侧实现。
+- **F3 覆盖层**：DH 渲染目标状态的调试行（原 `InvokerGlDhMetaRenderer`）。深度纹理 id 与尺寸可用
+  `IDhApiRenderProxy.getDhDepthTextureGlId()` 与 `DhApiColorDepthTextureCreatedEvent` 重建
+  （`LodRendererEvents` 已在用这两条 API）。
+- **多线程 LOD 构建**：方块状态缓存查询的加锁（原 `MixinFullDataToRenderDataTransformer`）。DH 侧该缓存
+  目前仍是非同步的 lazy 静态字段，没有公开 API 可以替代这层保护，属于最需要 DH 侧接管的稳定性回归。
 
 ## 验证记录
 
