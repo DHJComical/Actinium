@@ -186,9 +186,8 @@ public class Actinium {
     }
 
     /**
-     * Distant Horizons owns the {@code IIrisAccessor} binding: its 1.12.2 Iris support registers the accessor
-     * itself whenever the {@code actinium} mod is loaded. Binding a second implementation here would trip DH's
-     * duplicate-binding check, so Actinium only installs its own LOD render programs.
+     * Distant Horizons owns its own integration (the {@code IIrisAccessor} binding and the deferred LOD
+     * toggle); Actinium only installs the shader-side DH render programs that DH then triggers itself.
      */
     private static void initializeDistantHorizonsCompat() {
         if (Iris.enabled && Mods.DISTANTHORIZONS) {
