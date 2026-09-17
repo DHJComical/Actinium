@@ -61,7 +61,7 @@ public class LodRendererEvents {
 
                     Iris.loadShaderpackWhenPossible();
 
-                    setupFogDrawModeEvent();
+                    setupSetDeferredBeforeRenderingEvent();
                     setupReconnectDepthTextureEvent();
                     setupGenericEvent();
                     setupCreateDepthTextureEvent();
@@ -84,15 +84,18 @@ public class LodRendererEvents {
     // setup event handlers //
 
 
-    private static void setupFogDrawModeEvent() {
+    /**
+     * DH leaves the deferred transparent LOD toggle to its Iris integration — the field has no DH-side
+     * config and no internal caller — so Actinium sets it here exactly like Angelica does.
+     */
+    private static void setupSetDeferredBeforeRenderingEvent() {
         DhApiBeforeRenderEvent beforeRenderEvent = new DhApiBeforeRenderEvent() {
             // this event is called before DH starts any rendering prep
             // canceling it will prevent DH from rendering for that frame
             @Override
             public void beforeRender(DhApiCancelableEventParam<DhApiRenderParam> event) {
-                // Deferred transparent LOD rendering is owned by Distant Horizons: it is driven by DH's own
-                // config, so Actinium must not call renderProxy.setDeferTransparentRendering() here or the
-                // DH-side toggle would be overwritten every frame.
+
+                DhApi.Delayed.renderProxy.setDeferTransparentRendering(IrisApi.getInstance().isShaderPackInUse() && getInstance().shouldOverride);
                 DhApi.Delayed.configs.graphics().fog().drawMode().setValue(getInstance().shouldOverride ? EDhApiFogDrawMode.FOG_DISABLED : EDhApiFogDrawMode.FOG_ENABLED);
             }
         };

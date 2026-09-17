@@ -6,9 +6,9 @@
 ## 模组信息
 
 - Distant Horizons（modid `distanthorizons`），按兼容矩阵指定版本
-- 接入方式：**不注入 DH，也不驱动 DH**。DH 自行完成 Actinium/Iris 集成并自己驱动 LOD 渲染；
-  Actinium 只在 Iris 侧通过 DH 的公开 API（`DhApi`、render proxy、override、events）接管
-  shader program / framebuffer / 深度纹理
+- 接入方式：**不注入 DH**。DH 自行持有 Iris 访问器并驱动 LOD 渲染；Actinium 只在 Iris 侧通过 DH 的
+  公开 API（`DhApi`、render proxy、override、events）接管 shader program / framebuffer / 深度纹理，
+  并设置 deferred 开关与雾色
 
 ## 机制
 
@@ -43,13 +43,15 @@ DH 的渲染状态矩阵由它自己的 `MixinActiveRenderInfo` 从原版 `Activ
 `DHCompatInternal`、`IrisLodRenderProgram`、`IrisGenericRenderProgram`、`DhFrameBufferWrapper`）
 通过 DH 的 API events 注册 Iris 的 LOD / generic override program、framebuffer 与深度纹理。
 
-## 由 DH 持有的开关
+## 开关归属
 
 - `IIrisAccessor`：DH 的 1.12.2 Iris 支持（上游 `b15b57cf`）在检测到 `actinium` 已加载时自行绑定；
-- `renderProxy.setDeferTransparentRendering()`：由 DH 侧配置决定，Actinium 不再读写。
+- `renderProxy.setDeferTransparentRendering()`：DH 侧既没有配置项也没有内部调用（整仓只有 setter 定义），
+  该开关由 Iris 集成设置。Actinium 在 `LodRendererEvents` 的 `DhApiBeforeRenderEvent` 处理器里设置它，
+  与 Angelica 完全一致；Actinium 侧不再有第二处（原先 `DistantHorizonsCompat` 每帧重同步的那处已随类删除）。
 
-Actinium 现在也不持有任何 DH 侧状态：`compat/dh` 包已删除，Actinium 不再注入 DH。搭配更早的 DH
-会缺失光影 LOD 集成；`gradle/scripts/dependencies.gradle` 里的
+Actinium 不注入 DH：`compat/dh` 只保留 `DhFogColorBridge`（走 `DhApiBeforeFogRenderEvent` 报告雾色）。
+搭配更早的 DH 会缺失光影 LOD 集成；`gradle/scripts/dependencies.gradle` 里的
 `distant-horizons-508933:8389134`（3.2.0-b）早于这些提交，升级前 dev 环境不会走新的光影 LOD 路径。
 
 ## 移除 DH 注入后由 DH 自身承担的部分
