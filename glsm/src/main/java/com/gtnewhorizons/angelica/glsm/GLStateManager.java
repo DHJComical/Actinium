@@ -154,6 +154,9 @@ public class GLStateManager {
 
     public static final GLFeatureSet HAS_MULTIPLE_SET = new GLFeatureSet();
 
+    /** Widest GL state query GLSM answers into a caller-provided array (a 4x4 matrix). */
+    private static final int ARRAY_QUERY_SCRATCH_SIZE = 16;
+
     // Generation counters for FFP uniform dirty tracking. Bumped when the corresponding GLSM state changes.
     // Per-matrix-mode generation counters — avoids re-uploading all matrices when only one mode changed
     public static int mvGeneration;    // modelview matrix changes
@@ -1168,6 +1171,18 @@ public class GLStateManager {
         }
     }
 
+    /**
+     * Array flavour of {@link #glGetInteger(int, IntBuffer)}. Callers whose GL queries GLSM redirects
+     * pass arrays, so this overload has to exist. The scratch buffer is sized for the widest query GLSM
+     * answers so the backend can never overflow a shorter caller array.
+     */
+    public static void glGetInteger(int pname, int[] params) {
+        final IntBuffer buffer = IntBuffer.allocate(Math.max(params.length, ARRAY_QUERY_SCRATCH_SIZE));
+        glGetInteger(pname, buffer);
+        buffer.position(0);
+        buffer.get(params);
+    }
+
     public static void glGetMaterial(int face, int pname, FloatBuffer params) {
         final MaterialStateStack state;
         if (face == GL11.GL_FRONT) {
@@ -1265,6 +1280,18 @@ public class GLStateManager {
                 }
             }
         }
+    }
+
+    /**
+     * Array flavour of {@link #glGetFloat(int, FloatBuffer)}. Callers whose GL queries GLSM redirects
+     * pass arrays, so this overload has to exist. The scratch buffer is sized for the widest query GLSM
+     * answers (a 4x4 matrix) so the backend can never overflow a shorter caller array.
+     */
+    public static void glGetFloat(int pname, float[] params) {
+        final FloatBuffer buffer = FloatBuffer.allocate(Math.max(params.length, ARRAY_QUERY_SCRATCH_SIZE));
+        glGetFloat(pname, buffer);
+        buffer.position(0);
+        buffer.get(params);
     }
 
     public static float glGetFloat(int pname) {
