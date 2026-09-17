@@ -54,26 +54,31 @@ Actinium 不注入 DH：`compat/dh` 只保留 `DhFogColorBridge`（走 `DhApiBef
 搭配更早的 DH 会缺失光影 LOD 集成；`gradle/scripts/dependencies.gradle` 里的
 `distant-horizons-508933:8389134`（3.2.0-b）早于这些提交，升级前 dev 环境不会走新的光影 LOD 路径。
 
-## 移除 DH 注入后由 DH 自身承担的部分
+## 与 Angelica 对齐：不代打的补丁
 
-以下行为此前由 Actinium 注入 DH 实现，现在交由 DH 侧接管：
+核对 Angelica（`D:\Code\Angelica`）：它对 DH 的类**零注入**——mixin 配置里没有任何一处提到
+`distanthorizons`，也搜不到 `IRIS_ACCESSOR`、`FullDataToRenderDataTransformer`、`createClientBindings`。
+下列补丁 Angelica 都不打，因此 Actinium 也不打（Actinium 侧原有实现已随 `mixin/mod/dh` 一并删除）：
 
 - **far clip / far fade / AA**：DH 的 `RenderUtil.getFarClipPlaneDistanceInBlocks()` 与
   `LodRenderer.renderTerrain()` 只判断 `IRIS_ACCESSOR != null`，而 DH 自注册的访问器恒非 null，
-  无光影包时也会走 Iris 分支（far clip 缩短为 `√2/2`）。建议 DH 上游改判 `isShaderPackInUse()`。
-- **多线程 LOD 构建**：方块状态缓存查询的加锁（原 `MixinFullDataToRenderDataTransformer`）。DH 侧该缓存
-  目前仍是非同步的 lazy 静态字段，没有公开 API 可以替代这层保护，属于最需要 DH 侧接管的稳定性回归。
-- **启动顺序**：原 `MixinConfig` / `MixinDependencySetup` 让 Actinium 提前建立 DH 客户端绑定、
-  并让 DH 自身的绑定调用跳过；移除后 Actinium 不再提前绑定 DH 依赖。DH 的
-  `Config.Client.Advanced.*` 静态初始化若在 FML init 之前被触碰，会因 `IMinecraftSharedWrapper`
-  未绑定而 NPE——这条现在由 DH 自身保证。
-- **雾色**（已修）：DH 的无光影路径经 `MinecraftRenderWrapper.getFogColor` 用裸 `glGetFloatv(GL_FOG_COLOR)`
-  取雾色，而 Actinium 的 `GLSMRedirector` 少了 `glGetFloatv -> glGetFloat` 这条重定向（Angelica 有），
-  查询因此落到真实 GL、读到默认黑色，远处云与 LOD 被染黑。补上重定向后查询回到 GLSM 虚拟状态，
-  DH 侧无需改动（`GLStateManager.glGetFloat` 本就有 `GL_FOG_COLOR` 分支）。
-- **F3 覆盖层**：DH 渲染目标状态的调试行（原 `InvokerGlDhMetaRenderer`）。深度纹理 id 与尺寸可用
-  `IDhApiRenderProxy.getDhDepthTextureGlId()` 与 `DhApiColorDepthTextureCreatedEvent` 重建
-  （`LodRendererEvents` 已在用这两条 API）。
+  无光影包时也会走 Iris 分支（far clip 缩短为 `√2/2`）。
+- **多线程 LOD 构建**：`BlockStateWrapper` 的方块状态缓存是非同步的 lazy 静态字段（原
+  `MixinFullDataToRenderDataTransformer` 负责加锁）。
+- **启动顺序**：DH 的 `Config.Client.Advanced.*` 若在 `FMLInitializationEvent` 之前被触碰，会因
+  `IMinecraftSharedWrapper` 未绑定而 NPE（原 `MixinConfig` / `MixinDependencySetup` 负责提前绑定，
+  并让 DH 自身的绑定调用跳过）。
+- **F3 覆盖层**：DH 渲染目标状态的调试行（原 `InvokerGlDhMetaRenderer`）。
+
+以上都属于 DH 自身的状态，需要时由 DH 修复。
+
+### 雾色：GLSM 侧的缺口，不是 DH 的补丁
+
+DH 的无光影路径经 `MinecraftRenderWrapper.getFogColor` 用裸 `glGetFloatv(GL_FOG_COLOR)` 取雾色，而
+Actinium 的 `glFog` 只把雾色写进 GLSM 虚拟状态、不转发真实 GL。Actinium 的 `GLSMRedirector` 原先缺少
+`glGetFloatv -> glGetFloat` 重定向（Angelica 有这条），查询因此落到真实 GL、读到默认黑色，远处云与
+LOD 被染黑。补上重定向后（并补齐 `GLStateManager` 缺失的数组重载）查询回到虚拟状态，
+`GLStateManager.glGetFloat` 本就有 `GL_FOG_COLOR` 分支，DH 侧无需改动。
 
 ## 验证记录
 
