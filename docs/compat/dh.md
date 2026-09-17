@@ -50,7 +50,8 @@ DH 的渲染状态矩阵由它自己的 `MixinActiveRenderInfo` 从原版 `Activ
   该开关由 Iris 集成设置。Actinium 在 `LodRendererEvents` 的 `DhApiBeforeRenderEvent` 处理器里设置它，
   与 Angelica 完全一致；Actinium 侧不再有第二处（原先 `DistantHorizonsCompat` 每帧重同步的那处已随类删除）。
 
-Actinium 不注入 DH：`compat/dh` 只保留 `DhFogColorBridge`（走 `DhApiBeforeFogRenderEvent` 报告雾色）。
+Actinium 不注入 DH，也不持有任何 DH 侧状态：`compat/dh` 目录已无实现类。雾色问题由 GLSM 重定向解决
+（见下节），不需要额外的 API 桥。
 搭配更早的 DH 会缺失光影 LOD 集成；`gradle/scripts/dependencies.gradle` 里的
 `distant-horizons-508933:8389134`（3.2.0-b）早于这些提交，升级前 dev 环境不会走新的光影 LOD 路径。
 
