@@ -4,6 +4,7 @@ import com.gtnewhorizons.angelica.glsm.hooks.events.BlendFuncChangeEvent;
 import com.gtnewhorizons.angelica.glsm.hooks.events.FogStateChangeEvent;
 import com.gtnewhorizons.angelica.glsm.hooks.events.ForeignDrawEndEvent;
 import com.gtnewhorizons.angelica.glsm.hooks.events.LightmapCoordsEvent;
+import com.gtnewhorizons.angelica.glsm.hooks.events.LoadingCheckpointEvent;
 import com.gtnewhorizons.angelica.glsm.hooks.events.ProgramChangeEvent;
 import com.gtnewhorizons.angelica.glsm.hooks.events.TextureBindEvent;
 import com.gtnewhorizons.angelica.glsm.hooks.events.TextureDeleteEvent;
@@ -17,6 +18,10 @@ public final class GLSMHooks {
     public static DeferredDepthColorHandler depthColorHandler;
     /** Optional host-owned observer for diagnostics at the native draw boundary. */
     public static DrawCallObserver drawCallObserver;
+    public static ShaderWorkSubmitter shaderWorkSubmitter;
+    public static ShaderTransformPostProcessor postTransformProcessor;
+    public static PerFrameUniformBlock perFrameUniformBlock;
+    public static PerFrameUniformBlock perPassUniformBlock;
 
     /** Escape hatch: -Dactinium.glsmHooksAlwaysActive=true forces the consumer gate on. */
     private static final boolean ALWAYS_ACTIVE = Boolean.getBoolean("actinium.glsmHooksAlwaysActive");
@@ -43,6 +48,7 @@ public final class GLSMHooks {
     public static final EventBus<BlendFuncChangeEvent> BLEND_FUNC_CHANGE = EventBus.create(BlendFuncChangeEvent.class);
     public static final EventBus<FogStateChangeEvent> FOG_STATE_CHANGE = EventBus.create(FogStateChangeEvent.class);
     public static final EventBus<LightmapCoordsEvent> LIGHTMAP_COORDS = EventBus.create(LightmapCoordsEvent.class);
+    public static final EventBus<LoadingCheckpointEvent> LOADING_CHECKPOINT = EventBus.create(LoadingCheckpointEvent.class);
 
     public static final TextureBindEvent textureBindEvent = new TextureBindEvent();
     public static final TextureDeleteEvent textureDeleteEvent = new TextureDeleteEvent();
@@ -53,6 +59,7 @@ public final class GLSMHooks {
     public static final BlendFuncChangeEvent blendFuncChangeEvent = new BlendFuncChangeEvent();
     public static final FogStateChangeEvent fogStateChangeEvent = new FogStateChangeEvent();
     public static final LightmapCoordsEvent lightmapCoordsEvent = new LightmapCoordsEvent();
+    public static final LoadingCheckpointEvent loadingCheckpointEvent = new LoadingCheckpointEvent();
 
     private GLSMHooks() {
     }
