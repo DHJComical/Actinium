@@ -103,7 +103,9 @@ import org.lwjgl.util.glu.GLU;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.DoubleBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
@@ -2126,13 +2128,39 @@ public class GLStateManager {
     }
 
     private static int changeFormatIfDeprecated(int internalformat) {
-        switch (internalformat) {
-            case GL11.GL_ALPHA4 -> internalformat = GL11.GL_RGBA4;
-            case GL11.GL_ALPHA8 -> internalformat = GL11.GL_RGBA8;
-            case GL11.GL_ALPHA12 -> internalformat = GL11.GL_RGBA12;
-            case GL11.GL_ALPHA16 -> internalformat = GL11.GL_RGBA16;
+        internalformat = GLESFormatRemap.promoteAlphaFormat(internalformat);
+        if (RenderSystem.isGLES()) {
+            internalformat = GLESFormatRemap.remapInternalFormat(internalformat);
         }
         return internalformat;
+    }
+
+    public static final class GLESTexImageRemap {
+        private final GLESFormatRemap.Result r;
+        private GLESTexImageRemap(GLESFormatRemap.Result r) { this.r = r; }
+        public int internalFormat() { return r.internalFormat(); }
+        public int format() { return r.format(); }
+        public int type() { return r.type(); }
+    }
+
+    public static GLESTexImageRemap remapTexImageForGLES(int internalformat, int format, int type) {
+        return new GLESTexImageRemap(GLESFormatRemap.apply(internalformat, format, type, RenderSystem.isGLES()));
+    }
+
+    static {
+        if (ByteOrder.nativeOrder() != ByteOrder.LITTLE_ENDIAN) {
+            LOGGER.warn("GLSM GLES pixel-type remap assumes little-endian host; big-endian detected - BGRA uploads may be byte-swapped");
+        }
+    }
+
+    private static int remapPixelTypeForGLES(int format, int type) {
+        return RenderSystem.isGLES() ? GLESFormatRemap.remapPixelType(format, type) : type;
+    }
+
+    private static int remapTypeForRemappedInternalFormat(int internalformat, int type) {
+        if (!RenderSystem.isGLES()) return type;
+        if (!GLESFormatRemap.isGenericPixelType(type)) return type;
+        return GLESFormatRemap.typeForInternalFormatES32(internalformat, type);
     }
 
     private static void logUncachedTextureTarget(int target) {
@@ -2154,6 +2182,8 @@ public class GLStateManager {
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, IntBuffer pixels) {
         internalformat = changeFormatIfDeprecated(internalformat);
+        type = remapPixelTypeForGLES(format, type);
+        type = remapTypeForRemappedInternalFormat(internalformat, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
             DisplayListManager.recordComplexCommand(TexImage2DCmd.fromIntBuffer(target, level, internalformat, width, height, border, format, type, pixels));
@@ -2174,12 +2204,15 @@ public class GLStateManager {
         restorePixelUnpackBuffer();
         recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
+        if (mode == RecordMode.NONE && RenderSystem.isLTW()) LTWWorkaround.onTexImage2D(target, level, format, pixels != null);
         maybeGenerateMipmap(target, level);
 
     }
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, FloatBuffer pixels) {
         internalformat = changeFormatIfDeprecated(internalformat);
+        type = remapPixelTypeForGLES(format, type);
+        type = remapTypeForRemappedInternalFormat(internalformat, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
             DisplayListManager.recordComplexCommand(TexImage2DCmd.fromFloatBuffer(target, level, internalformat, width, height, border, format, type, pixels));
@@ -2194,12 +2227,15 @@ public class GLStateManager {
         restorePixelUnpackBuffer();
         recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
+        if (mode == RecordMode.NONE && RenderSystem.isLTW()) LTWWorkaround.onTexImage2D(target, level, format, pixels != null);
         maybeGenerateMipmap(target, level);
 
     }
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, DoubleBuffer pixels) {
         internalformat = changeFormatIfDeprecated(internalformat);
+        type = remapPixelTypeForGLES(format, type);
+        type = remapTypeForRemappedInternalFormat(internalformat, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
             DisplayListManager.recordComplexCommand(TexImage2DCmd.fromDoubleBuffer(target, level, internalformat, width, height, border, format, type, pixels));
@@ -2214,12 +2250,15 @@ public class GLStateManager {
         restorePixelUnpackBuffer();
         recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
+        if (mode == RecordMode.NONE && RenderSystem.isLTW()) LTWWorkaround.onTexImage2D(target, level, format, pixels != null);
         maybeGenerateMipmap(target, level);
 
     }
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, ByteBuffer pixels) {
         internalformat = changeFormatIfDeprecated(internalformat);
+        type = remapPixelTypeForGLES(format, type);
+        type = remapTypeForRemappedInternalFormat(internalformat, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
             DisplayListManager.recordComplexCommand(TexImage2DCmd.fromByteBuffer(target, level, internalformat, width, height, border, format, type, pixels));
@@ -2238,12 +2277,15 @@ public class GLStateManager {
         restorePixelUnpackBuffer();
         recordGpuCommand(GpuCommandType.TEX_IMAGE_2D, GpuCommandPhase.END, getBoundTextureForGpuDiagnostics(), packDimensions(width, height));
         gpuCheckpoint(GpuCommandType.TEX_IMAGE_2D);
+        if (mode == RecordMode.NONE && RenderSystem.isLTW()) LTWWorkaround.onTexImage2D(target, level, format, pixels != null);
         maybeGenerateMipmap(target, level);
 
     }
 
     public static void glTexImage2D(int target, int level, int internalformat, int width, int height, int border, int format, int type, long pixels_buffer_offset) {
         internalformat = changeFormatIfDeprecated(internalformat);
+        type = remapPixelTypeForGLES(format, type);
+        type = remapTypeForRemappedInternalFormat(internalformat, type);
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexImage2D with buffer offset in display lists not yet supported");
         }
@@ -4729,28 +4771,99 @@ public class GLStateManager {
         };
     }
 
-    public static void glGetTexImage(int target, int level, int format, int type, java.nio.ByteBuffer pixels) {
+    public static void glGetTexImage(int target, int level, int format, int type, ByteBuffer pixels) {
+        if (RenderSystem.isGLES()) {
+            getTexImageViaFboReadPixels(target, level, format, type, pixels);
+            return;
+        }
         suspendPixelPackBuffer();
         RENDER_BACKEND.getTexImage(target, level, format, type, pixels);
         restorePixelPackBuffer();
     }
-    public static void glGetTexImage(int target, int level, int format, int type, java.nio.IntBuffer pixels) {
+    public static void glGetTexImage(int target, int level, int format, int type, IntBuffer pixels) {
+        if (RenderSystem.isGLES()) {
+            getTexImageViaFboReadPixels(target, level, format, type, pixels);
+            return;
+        }
         suspendPixelPackBuffer();
         RENDER_BACKEND.getTexImage(target, level, format, type, pixels);
         restorePixelPackBuffer();
     }
 
+    private static void getTexImageViaFboReadPixels(int target, int level, int format, int type, Buffer pixels) {
+        if (target != GL11.GL_TEXTURE_2D) {
+            LOGGER.warn("glGetTexImage ES: unsupported target 0x{}", Integer.toHexString(target));
+            return;
+        }
+        final int texId = getBoundTextureForServerState();
+        if (texId == 0) return;
+        final int width = RENDER_BACKEND.getTexLevelParameteri(target, level, GL11.GL_TEXTURE_WIDTH);
+        final int height = RENDER_BACKEND.getTexLevelParameteri(target, level, GL11.GL_TEXTURE_HEIGHT);
+        if (width <= 0 || height <= 0) return;
+
+        final int prevReadFb = RENDER_BACKEND.getInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        final int fbo = RENDER_BACKEND.genFramebuffers();
+        try {
+            RENDER_BACKEND.bindFramebuffer(GL30.GL_READ_FRAMEBUFFER, fbo);
+            RENDER_BACKEND.framebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, target, texId, level);
+            final int status = RENDER_BACKEND.checkFramebufferStatus(GL30.GL_READ_FRAMEBUFFER);
+            if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+                LOGGER.warn("glGetTexImage ES: FBO incomplete (0x{})", Integer.toHexString(status));
+                return;
+            }
+            final int esType = remapPixelTypeForGLES(format, type);
+            final boolean bgra = format == GL12.GL_BGRA;
+            final int esFormat = bgra ? GL11.GL_RGBA : format;
+            suspendPixelPackBuffer();
+            try {
+                if (pixels instanceof ByteBuffer bb) {
+                    RENDER_BACKEND.readPixels(0, 0, width, height, esFormat, esType, bb);
+                } else if (pixels instanceof IntBuffer ib) {
+                    RENDER_BACKEND.readPixels(0, 0, width, height, esFormat, esType, ib);
+                }
+                if (bgra) swapRedBlueInPlace(pixels);
+            } finally {
+                restorePixelPackBuffer();
+            }
+        } finally {
+            RENDER_BACKEND.bindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevReadFb);
+            RENDER_BACKEND.deleteFramebuffers(fbo);
+        }
+    }
+
+    private static void swapRedBlueInPlace(Buffer pixels) {
+        if (pixels instanceof ByteBuffer bb) {
+            final int p = bb.position();
+            final int lim = bb.limit();
+            for (int i = p; i + 3 < lim; i += 4) {
+                final byte r = bb.get(i);
+                bb.put(i, bb.get(i + 2));
+                bb.put(i + 2, r);
+            }
+        } else if (pixels instanceof IntBuffer ib) {
+            final int p = ib.position();
+            final int lim = ib.limit();
+            for (int i = p; i < lim; i++) {
+                final int w = ib.get(i);
+                ib.put(i, (w & 0xFF00FF00) | ((w & 0xFF) << 16) | ((w >> 16) & 0xFF));
+            }
+        }
+    }
+
     public static void glReadPixels(int x, int y, int width, int height, int format, int type, ByteBuffer pixels) {
+        type = remapPixelTypeForGLES(format, type);
         suspendPixelPackBuffer();
         RENDER_BACKEND.readPixels(x, y, width, height, format, type, pixels);
         restorePixelPackBuffer();
     }
     public static void glReadPixels(int x, int y, int width, int height, int format, int type, FloatBuffer pixels) {
+        type = remapPixelTypeForGLES(format, type);
         suspendPixelPackBuffer();
         RENDER_BACKEND.readPixels(x, y, width, height, format, type, pixels);
         restorePixelPackBuffer();
     }
     public static void glReadPixels(int x, int y, int width, int height, int format, int type, IntBuffer pixels) {
+        type = remapPixelTypeForGLES(format, type);
         suspendPixelPackBuffer();
         RENDER_BACKEND.readPixels(x, y, width, height, format, type, pixels);
         restorePixelPackBuffer();
@@ -5200,6 +5313,8 @@ public class GLStateManager {
     // Missing GL commands from Mesa cross-check
     public static void glTexImage1D(int target, int level, int internalformat, int width, int border, int format, int type, ByteBuffer pixels) {
         internalformat = changeFormatIfDeprecated(internalformat);
+        type = remapPixelTypeForGLES(format, type);
+        type = remapTypeForRemappedInternalFormat(internalformat, type);
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexImage1D in display lists not yet implemented");
         }
@@ -5210,6 +5325,8 @@ public class GLStateManager {
 
     public static void glTexImage3D(int target, int level, int internalformat, int width, int height, int depth, int border, int format, int type, ByteBuffer pixels) {
         internalformat = changeFormatIfDeprecated(internalformat);
+        type = remapPixelTypeForGLES(format, type);
+        type = remapTypeForRemappedInternalFormat(internalformat, type);
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexImage3D in display lists not yet implemented");
         }
@@ -5223,6 +5340,8 @@ public class GLStateManager {
 
     public static void glTexImage3D(int target, int level, int internalformat, int width, int height, int depth, int border, int format, int type, IntBuffer pixels) {
         internalformat = changeFormatIfDeprecated(internalformat);
+        type = remapPixelTypeForGLES(format, type);
+        type = remapTypeForRemappedInternalFormat(internalformat, type);
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexImage3D in display lists not yet implemented");
         }
@@ -5354,6 +5473,7 @@ public class GLStateManager {
 
     // Texture commands
     public static void glTexSubImage2D(int target, int level, int xoffset, int yoffset, int width, int height, int format, int type, ByteBuffer pixels) {
+        type = remapPixelTypeForGLES(format, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
             DisplayListManager.recordComplexCommand(TexSubImage2DCmd.fromByteBuffer(target, level, xoffset, yoffset, width, height, format, type, pixels));
@@ -5379,6 +5499,7 @@ public class GLStateManager {
     }
 
     public static void glTexSubImage2D(int target, int level, int xoffset, int yoffset, int width, int height, int format, int type, IntBuffer pixels) {
+        type = remapPixelTypeForGLES(format, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
             DisplayListManager.recordComplexCommand(TexSubImage2DCmd.fromIntBuffer(target, level, xoffset, yoffset, width, height, format, type, pixels));
@@ -5404,6 +5525,7 @@ public class GLStateManager {
     }
 
     public static void glTexSubImage2D(int target, int level, int xoffset, int yoffset, int width, int height, int format, int type, long pixels_buffer_offset) {
+        type = remapPixelTypeForGLES(format, type);
         if (DisplayListManager.isRecording()) {
             throw new UnsupportedOperationException("glTexSubImage2D with buffer offset in display lists not yet supported");
         }
@@ -5937,25 +6059,25 @@ public class GLStateManager {
         RENDER_BACKEND.bindBuffer(target, buffer);
     }
 
-    private static void suspendPixelUnpackBuffer() {
+    static void suspendPixelUnpackBuffer() {
         if (ctx().boundPixelUnpackBuffer != 0) {
             RENDER_BACKEND.bindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0);
         }
     }
 
-    private static void restorePixelUnpackBuffer() {
+    static void restorePixelUnpackBuffer() {
         if (ctx().boundPixelUnpackBuffer != 0) {
             RENDER_BACKEND.bindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, ctx().boundPixelUnpackBuffer);
         }
     }
 
-    private static void suspendPixelPackBuffer() {
+    static void suspendPixelPackBuffer() {
         if (ctx().boundPixelPackBuffer != 0) {
             RENDER_BACKEND.bindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
         }
     }
 
-    private static void restorePixelPackBuffer() {
+    static void restorePixelPackBuffer() {
         if (ctx().boundPixelPackBuffer != 0) {
             RENDER_BACKEND.bindBuffer(GL21.GL_PIXEL_PACK_BUFFER, ctx().boundPixelPackBuffer);
         }

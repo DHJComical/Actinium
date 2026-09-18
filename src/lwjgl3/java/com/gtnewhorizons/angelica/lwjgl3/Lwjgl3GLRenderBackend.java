@@ -1,5 +1,7 @@
 package com.gtnewhorizons.angelica.lwjgl3;
 
+import com.gtnewhorizons.angelica.glsm.GLESCaps;
+import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.glsm.backend.DebugMessageHandler;
 import com.gtnewhorizons.angelica.glsm.backend.GLDebugMessageListener;
 import com.gtnewhorizons.angelica.glsm.backend.GlfwFileDropWatcher;
@@ -116,23 +118,31 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
     @Override
     public void finish() {GL11C.glFinish();}
 
+    private static boolean capAllowed(int cap) {
+        return GLESCaps.isCapAllowed(cap, RenderSystem.isGLES(), RenderSystem.hasClipCullDistance());
+    }
+
     @Override
     public void enable(int cap) {
+        if (!capAllowed(cap)) return;
         GL11C.glEnable(cap);
     }
 
     @Override
     public void enablei(int cap, int index) {
+        if (!capAllowed(cap)) return;
         GL30C.glEnablei(cap, index);
     }
 
     @Override
     public void disable(int cap) {
+        if (!capAllowed(cap)) return;
         GL11C.glDisable(cap);
     }
 
     @Override
     public void disablei(int cap, int index) {
+        if (!capAllowed(cap)) return;
         GL30C.glDisablei(cap, index);
     }
 
