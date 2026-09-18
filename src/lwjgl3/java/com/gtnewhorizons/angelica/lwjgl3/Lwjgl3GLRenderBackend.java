@@ -1,6 +1,7 @@
 package com.gtnewhorizons.angelica.lwjgl3;
 
 import com.gtnewhorizons.angelica.glsm.backend.DebugMessageHandler;
+import com.gtnewhorizons.angelica.glsm.backend.GLDebugMessageListener;
 import com.gtnewhorizons.angelica.glsm.backend.GlfwFileDropWatcher;
 import com.gtnewhorizons.angelica.glsm.backend.RenderBackend;
 import org.lwjgl.glfw.GLFW;
@@ -45,6 +46,7 @@ import java.util.List;
 public final class Lwjgl3GLRenderBackend extends RenderBackend {
     private GLCapabilities caps;
     private GLDebugMessageCallback debugCallback;
+    private GLDebugMessageCallback appDebugCallback;
     private boolean debugOutputActive;
 
     @Override
@@ -1670,11 +1672,30 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
             debugCallback.free();
             debugCallback = null;
         }
+        if (appDebugCallback != null) {
+            appDebugCallback.free();
+            appDebugCallback = null;
+        }
         if (debugOutputActive) {
             GL11C.glDisable(GL43C.GL_DEBUG_OUTPUT);
             debugOutputActive = false;
         }
         return 1;
+    }
+
+    @Override
+    public void debugMessageCallback(GLDebugMessageListener listener, long userParam) {
+        // GL only holds one debug callback per context; a new listener replaces the previous one.
+        if (appDebugCallback != null) {
+            appDebugCallback.free();
+            appDebugCallback = null;
+        }
+        if (listener != null) {
+            appDebugCallback = GLDebugMessageCallback.create(listener::onMessage);
+            GL43C.glDebugMessageCallback(appDebugCallback, userParam);
+        } else {
+            GL43C.glDebugMessageCallback(null, 0L);
+        }
     }
 
     @Override

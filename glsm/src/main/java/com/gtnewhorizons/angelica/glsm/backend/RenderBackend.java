@@ -460,6 +460,8 @@ public abstract class RenderBackend {
     // Debug message filtering
     public void debugMessageControl(int source, int type, int severity, IntBuffer ids, boolean enabled) {}
 
+    public void debugMessageCallback(GLDebugMessageListener listener, long userParam) {}
+
     // Debug log retrieval; returns the number of messages written
     public int getDebugMessageLog(int count, IntBuffer sources, IntBuffer types, IntBuffer ids, IntBuffer severities, IntBuffer lengths, ByteBuffer messageLog) { return 0; }
 

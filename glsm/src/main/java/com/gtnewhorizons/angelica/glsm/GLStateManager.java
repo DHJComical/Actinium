@@ -8,6 +8,7 @@ import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
 import com.gtnewhorizons.angelica.glsm.DisplayListManager.RecordMode;
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
+import com.gtnewhorizons.angelica.glsm.backend.GLDebugMessageListener;
 import com.gtnewhorizons.angelica.glsm.backend.RenderBackend;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
@@ -96,6 +97,7 @@ import org.lwjgl.opengl.GL32;
 import org.lwjgl.opengl.GL42;
 import org.lwjgl.opengl.GLContext;
 import org.lwjgl.opengl.KHRDebug;
+import org.lwjgl.opengl.KHRDebugCallback;
 import org.lwjgl.util.glu.GLU;
 
 import java.lang.invoke.MethodHandle;
@@ -618,10 +620,12 @@ public class GLStateManager {
         if (BYPASS_CACHE) {
             LOGGER.info("GLStateManager cache bypassed");
         }
-        if (initConfig != null && initConfig.isLwjglDebug()) {
-            LOGGER.info("LWJGL debug context requested; installing synchronous high-severity driver output");
+        if (initConfig != null && (initConfig.isLwjglDebug() || CaptureGate.enabledAtStartup())) {
+            if (initConfig.isLwjglDebug()) {
+                LOGGER.info("LWJGL debug context requested; installing synchronous high-severity driver output");
+                GLDebug.setupDebugMessageCallback();
+            }
 
-            GLDebug.setupDebugMessageCallback();
             GLDebug.initDebugState();
 
             GLDebug.debugMessage("Angelica Debug Annotator Initialized");
@@ -1963,6 +1967,9 @@ public class GLStateManager {
             ah.deferAlphaTestToggle(true);
         } else {
             ctx().alphaTest.enable();
+            if (GLSMHooks.ALPHA_STATE_CHANGE.hasListeners()) {
+                GLSMHooks.ALPHA_STATE_CHANGE.post(GLSMHooks.alphaStateChangeEvent);
+            }
         }
         ctx().fragmentGeneration++;
     }
@@ -1981,6 +1988,9 @@ public class GLStateManager {
             ah.deferAlphaTestToggle(false);
         } else {
             ctx().alphaTest.disable();
+            if (GLSMHooks.ALPHA_STATE_CHANGE.hasListeners()) {
+                GLSMHooks.ALPHA_STATE_CHANGE.post(GLSMHooks.alphaStateChangeEvent);
+            }
         }
         ctx().fragmentGeneration++;
     }
@@ -2002,6 +2012,9 @@ public class GLStateManager {
             ctx().alphaState.setFunction(function);
             ctx().alphaState.setReference(reference);
             ctx().fragmentGeneration++;
+            if (GLSMHooks.ALPHA_STATE_CHANGE.hasListeners()) {
+                GLSMHooks.ALPHA_STATE_CHANGE.post(GLSMHooks.alphaStateChangeEvent);
+            }
         }
     }
 
@@ -2791,6 +2804,13 @@ public class GLStateManager {
         final GLContextState glCtx = ctx();
         if (r == glCtx.shaderColorR && g == glCtx.shaderColorG && b == glCtx.shaderColorB && a == glCtx.shaderColorA) return;
         glCtx.shaderColorR = r; glCtx.shaderColorG = g; glCtx.shaderColorB = b; glCtx.shaderColorA = a;
+        if (GLSMHooks.SHADER_COLOR_CHANGE.hasListeners()) {
+            GLSMHooks.shaderColorChangeEvent.red = r;
+            GLSMHooks.shaderColorChangeEvent.green = g;
+            GLSMHooks.shaderColorChangeEvent.blue = b;
+            GLSMHooks.shaderColorChangeEvent.alpha = a;
+            GLSMHooks.SHADER_COLOR_CHANGE.post(GLSMHooks.shaderColorChangeEvent);
+        }
     }
 
     public static void forcePixelUnpackState(PixelUnpackState target) {
@@ -3736,6 +3756,11 @@ public class GLStateManager {
         stateSeedPending = true;
         drawableGLHolder = null;
         drawableGL = null;
+        if (GLSMHooks.LOADING_CHECKPOINT.hasListeners()) {
+            GLSMHooks.loadingCheckpointEvent.requiresSync = true;
+            GLSMHooks.LOADING_CHECKPOINT.post(GLSMHooks.loadingCheckpointEvent);
+            GLSMHooks.loadingCheckpointEvent.requiresSync = false;
+        }
     }
 
     public static void markSplashComplete(String source) {
@@ -3801,7 +3826,11 @@ public class GLStateManager {
     }
 
     public static void glCallList(int list) {
-        GLDebug.pushGroup("glCallList " + list);
+        if (!GLDebug.isActive()) {
+            DisplayListManager.glCallList(list);
+            return;
+        }
+        GLDebug.pushGroup("glCallList ", list);
         try {
             DisplayListManager.glCallList(list);
         } finally {
@@ -6428,6 +6457,14 @@ public class GLStateManager {
         return RENDER_BACKEND.getDebugMessageLog(count, sources, types, ids, severities, lengths, messageLog);
     }
 
+    public static void registerDebugMessageListener(GLDebugMessageListener listener, long userParam) {
+        RENDER_BACKEND.debugMessageCallback(listener, userParam);
+    }
+
+    public static void glDebugMessageCallback(KHRDebugCallback callback) {
+        RENDER_BACKEND.debugMessageCallback(GLDebug.adaptDebugCallback(callback), 0L);
+    }
+
     public static void glGenerateMipmap(int target) {
         recordGpuCommand(GpuCommandType.GENERATE_MIPMAP, GpuCommandPhase.BEGIN, getBoundTextureForGpuDiagnostics(), target);
         RENDER_BACKEND.generateMipmap(target);
@@ -7011,7 +7048,15 @@ public class GLStateManager {
     }
 
     public static void glDeleteProgram(int program) {
+        if (program == 0) return;
         CompatUniformManager.onDeleteProgram(program);
+
+        // GL defers deletion of a bound program until unbind; the program cache entry stays set so the
+        // cache matches GL_CURRENT_PROGRAM and the next glUseProgram is not skipped as redundant.
+        if (GLSMHooks.PROGRAM_DELETE.hasListeners()) {
+            GLSMHooks.programDeleteEvent.program = program;
+            GLSMHooks.PROGRAM_DELETE.post(GLSMHooks.programDeleteEvent);
+        }
         RENDER_BACKEND.deleteProgram(program);
     }
 

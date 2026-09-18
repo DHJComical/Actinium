@@ -954,7 +954,7 @@ public class GLSMRedirector {
             GL_DESC_REDIRECTS.put(owner + " glDebugMessageInsert(IIIILjava/lang/CharSequence;)V", "glDebugMessageInsert");
             GL_DESC_REDIRECTS.put(owner + " glDebugMessageControl(IIILjava/nio/IntBuffer;Z)V", "glDebugMessageControl");
             GL_DESC_REDIRECTS.put(owner + " glGetDebugMessageLog(ILjava/nio/IntBuffer;Ljava/nio/IntBuffer;Ljava/nio/IntBuffer;Ljava/nio/IntBuffer;Ljava/nio/IntBuffer;Ljava/nio/ByteBuffer;)I", "glGetDebugMessageLog");
-            // glDebugMessageCallback intentionally omitted: GLStateManager has no KHRDebugCallback entry point
+            GL_DESC_REDIRECTS.put(owner + " glDebugMessageCallback(Lorg/lwjgl/opengl/KHRDebugCallback;)V", "glDebugMessageCallback");
         }
 
         TYPE_REDIRECTS.put("org/lwjgl/util/glu/Sphere", "com/gtnewhorizons/angelica/glsm/compat/lwjgl/AngelicaSphere");
