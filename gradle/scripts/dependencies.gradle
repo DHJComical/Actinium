@@ -187,6 +187,11 @@ dependencies {
     modImplementation 'curse.maven:creativecore-257814:4722163'
     modImplementation 'curse.maven:littletiles-257818:5180387'
 
+    // Obscure Tooltips 3.10.2 (PR #142: its ArmorPreviewComponent renders an armor-stand entity
+    // inside the GUI tooltip pass; the Iris armor item ID/glint hooks must skip that pass —
+    // dev-verifies mixins.actinium.obscuretooltips.json)
+    modImplementation 'curse.maven:obscure-tooltips-715660:8522661'
+    
     // Advanced Rocketry 2.0.0-17 + LibVulpes 0.4.2-25 (issue #150: RendererPrecisionAssembler /
     // WavefrontObject.renderAll feeds 2214 GL_TRIANGLES vertices through BufferBuilderStreamingDrawer
     // and the JVM dies with EXCEPTION_ACCESS_VIOLATION inside the NVIDIA driver's vertex copy loop;
