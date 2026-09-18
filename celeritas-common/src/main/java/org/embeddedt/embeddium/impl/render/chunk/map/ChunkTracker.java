@@ -35,6 +35,18 @@ public class ChunkTracker implements ClientChunkEventListener {
         this.requiredNeighborRadius = requiredNeighborRadius;
     }
 
+    /**
+     * Returns how many chunk rings around a chunk must be loaded before the tracker publishes that chunk as ready.
+     *
+     * <p>Callers that need the rendered boundary rather than the configured load radius use this value: the outermost
+     * rings of the load radius can never satisfy the gate, because the chunks beyond them are never loaded.</p>
+     *
+     * @return the current required neighbor radius (0 when chunks are published as soon as they load)
+     */
+    public synchronized int getRequiredNeighborRadius() {
+        return this.requiredNeighborRadius;
+    }
+
     public synchronized void setRequiredNeighborRadius(int radius) {
         if (radius < 0) {
             throw new IllegalArgumentException("radius must be nonnegative");
