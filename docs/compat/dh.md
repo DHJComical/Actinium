@@ -90,11 +90,11 @@ LOD 被染黑。补上重定向后（并补齐 `GLStateManager` 缺失的数组�
 - 兼容矩阵记录：光影包 + DH LOD 场景已验证（MakeUp/BSL/Complementary/Bliss/
   iterationT/iterationRP）。
 - DH 3.1.2-b + 光影 + 进出世界/维度切换回归通过。
+- 2026-09-18：DH 3.3.0-1.12.2（`maven.modrinth:uCdwusMi:Sa0ttGJr`，Actinium `6e66a3c7`）
+  实机回归通过：光影包 + DH LOD（矩阵六包）、无光影 LOD/雾色/天空盒、进出世界/维度切换。
 
 ## 待办
 
-- [ ] 对新 pin 的 DH 3.3.0-1.12.2（`maven.modrinth:uCdwusMi:Sa0ttGJr`，已从 3.2.0-b 升级）做完整回归
 - [ ] 实机确认四参入口 `@Overwrite` + TRANSLUCENT 显式调用单参重载下的地形与 DH LOD
       渲染（含 GTCEu 改写 `renderWorldPass` 调用点的路径）
 - [ ] 与 DH 侧确认上节各项由 DH 接管后的实际表现（尤其 far clip 与雾色）
-- [ ] 新版本 DH 验证后更新兼容矩阵
