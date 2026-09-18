@@ -145,9 +145,9 @@ public class CompatUniformManager {
 
         int[] locs = state.getLocations();
         // Uniform values are program-local, so each category is tracked per linked program on the cache-owning context.
-        final int mvGen = GLStateManager.mvGeneration;
-        final int projGen = GLStateManager.projGeneration;
-        final int texMatGen = GLStateManager.texMatrixGeneration;
+        final int mvGen = GLStateManager.getMvGeneration();
+        final int projGen = GLStateManager.getProjGeneration();
+        final int texMatGen = GLStateManager.getTexMatrixGeneration();
         final boolean mvChanged = state.needsModelViewUpload(mvGen);
         final boolean projChanged = state.needsProjectionUpload(projGen);
         final boolean texMatChanged = state.needsTextureMatrixUpload(texMatGen);
@@ -159,7 +159,7 @@ public class CompatUniformManager {
             if (texMatChanged) state.markTextureMatrixUploaded(texMatGen);
         }
 
-        final int fragGen = GLStateManager.fragmentGeneration;
+        final int fragGen = GLStateManager.getFragmentGeneration();
         final boolean fragmentChanged = state.needsFragmentUpload(fragGen);
         if (fragmentChanged) {
             if (!state.isValid()) return;
@@ -167,7 +167,7 @@ public class CompatUniformManager {
             state.markFragmentUploaded(fragGen);
         }
 
-        final int colorGen = GLStateManager.colorGeneration;
+        final int colorGen = GLStateManager.getColorGeneration();
         final boolean colorChanged = state.needsColorUpload(colorGen);
         if (colorChanged) {
             if (!state.isValid()) return;
@@ -175,7 +175,7 @@ public class CompatUniformManager {
             state.markColorUploaded(colorGen);
         }
 
-        final int litGen = GLStateManager.lightingGeneration;
+        final int litGen = GLStateManager.getLightingGeneration();
         final boolean lightingChanged = state.needsLightingUpload(litGen);
         if (lightingChanged) {
             if (!state.isValid()) return;
@@ -187,7 +187,7 @@ public class CompatUniformManager {
 
         final boolean hasClipPlaneUniforms = locs[LOC_CLIP_PLANES] != -1 || locs[LOC_CLIP_PLANES_ENABLED] != -1;
         if (hasClipPlaneUniforms) {
-            final int cpGen = GLStateManager.clipPlaneGeneration;
+            final int cpGen = GLStateManager.getClipPlaneGeneration();
             final boolean clipPlaneChanged = state.needsClipPlaneUpload(cpGen);
             if (clipPlaneChanged) {
                 if (!state.isValid()) return;
@@ -218,9 +218,9 @@ public class CompatUniformManager {
             return;
         }
         uploadMatrices(locs, true, true, true);
-        state.markModelViewUploaded(GLStateManager.mvGeneration);
-        state.markProjectionUploaded(GLStateManager.projGeneration);
-        state.markTextureMatrixUploaded(GLStateManager.texMatrixGeneration);
+        state.markModelViewUploaded(GLStateManager.getMvGeneration());
+        state.markProjectionUploaded(GLStateManager.getProjGeneration());
+        state.markTextureMatrixUploaded(GLStateManager.getTexMatrixGeneration());
     }
 
     private static void uploadMatrices(int[] locs, boolean mvChanged, boolean projChanged, boolean texMatChanged) {

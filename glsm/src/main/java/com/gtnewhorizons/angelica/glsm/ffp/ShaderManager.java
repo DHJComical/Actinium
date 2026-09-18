@@ -47,9 +47,14 @@ public class ShaderManager {
     private int currentFKLen = 0;
 
     @Getter private static final Vector3f currentNormal = new Vector3f(0.0f, 0.0f, 1.0f);
-    @Getter private static final Vector4f currentTexCoord = new Vector4f(0.0f, 0.0f, 0.0f, 1.0f);
+    private static final Vector4f[] currentTexCoords = {
+        new Vector4f(0.0f, 0.0f, 0.0f, 1.0f),
+        new Vector4f(0.0f, 0.0f, 0.0f, 1.0f),
+        new Vector4f(0.0f, 0.0f, 0.0f, 1.0f),
+        new Vector4f(0.0f, 0.0f, 0.0f, 1.0f),
+    };
     @Getter private static final Vec3fStack normalStack = new Vec3fStack(currentNormal);
-    @Getter private static final Vec4fStack texCoordStack = new Vec4fStack(currentTexCoord);
+    @Getter private static final Vec4fStack texCoordStack = new Vec4fStack(currentTexCoords[0]);
     @Getter private static int normalGeneration;
     @Getter private static int texCoordGeneration;
     @Getter private boolean enabled = false;
@@ -232,13 +237,21 @@ public class ShaderManager {
         }
     }
 
+    public static Vector4f getCurrentTexCoord() { return currentTexCoords[0]; }
+    public static Vector4f getCurrentTexCoord(int unit) { return currentTexCoords[unit]; }
+
     public static void setCurrentNormal(float x, float y, float z) {
         currentNormal.set(x, y, z);
         normalGeneration++;
     }
 
     public static void setCurrentTexCoord(float s, float t, float r, float q) {
-        currentTexCoord.set(s, t, r, q);
+        currentTexCoords[0].set(s, t, r, q);
+        texCoordGeneration++;
+    }
+
+    public static void setCurrentTexCoord(int unit, float s, float t, float r, float q) {
+        currentTexCoords[unit].set(s, t, r, q);
         texCoordGeneration++;
     }
 

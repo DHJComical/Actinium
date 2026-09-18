@@ -53,9 +53,9 @@ public class Uniforms {
     public void upload(Program program) {
         final ProgramUniformState uploaded = program.getUniformState();
 
-        final int mvGen = GLStateManager.mvGeneration;
-        final int projGen = GLStateManager.projGeneration;
-        final int texMatGen = GLStateManager.texMatrixGeneration;
+        final int mvGen = GLStateManager.getMvGeneration();
+        final int projGen = GLStateManager.getProjGeneration();
+        final int texMatGen = GLStateManager.getTexMatrixGeneration();
         final boolean mvChanged = uploaded.needsModelViewUpload(mvGen);
         final boolean projChanged = uploaded.needsProjectionUpload(projGen);
         final boolean texMatChanged = uploaded.needsTextureMatrixUpload(texMatGen);
@@ -67,7 +67,7 @@ public class Uniforms {
         }
 
         if (program.getVertexKey().lightingEnabled()) {
-            final int litGen = GLStateManager.lightingGeneration;
+            final int litGen = GLStateManager.getLightingGeneration();
             if (uploaded.needsLightingUpload(litGen)) {
                 uploadLighting(program);
                 uploaded.markLightingUploaded(litGen);
@@ -76,7 +76,7 @@ public class Uniforms {
 
         // Current color/normal/texcoord — skip if generation unchanged
         if (!program.getVertexKey().hasVertexColor()) {
-            final int colorGen = GLStateManager.colorGeneration;
+            final int colorGen = GLStateManager.getColorGeneration();
             if (uploaded.needsColorUpload(colorGen)) {
                 uploadCurrentColor(program);
                 uploaded.markColorUploaded(colorGen);
@@ -109,7 +109,7 @@ public class Uniforms {
         }
 
         if (program.getVertexKey().texGenEnabled()) {
-            final int tgGen = GLStateManager.texGenGeneration;
+            final int tgGen = GLStateManager.getTexGenGeneration();
             if (uploaded.needsTexGenUpload(tgGen)) {
                 uploadTexGen(program);
                 uploaded.markTexGenUploaded(tgGen);
@@ -117,14 +117,14 @@ public class Uniforms {
         }
 
         if (program.getVertexKey().clipPlanesEnabled()) {
-            final int cpGen = GLStateManager.clipPlaneGeneration;
+            final int cpGen = GLStateManager.getClipPlaneGeneration();
             if (uploaded.needsClipPlaneUpload(cpGen)) {
                 uploadClipPlanes(program);
                 uploaded.markClipPlaneUploaded(cpGen);
             }
         }
 
-        final int fragGen = GLStateManager.fragmentGeneration;
+        final int fragGen = GLStateManager.getFragmentGeneration();
         if (uploaded.needsFragmentUpload(fragGen)) {
             uploadFragmentUniforms(program);
             uploaded.markFragmentUploaded(fragGen);
