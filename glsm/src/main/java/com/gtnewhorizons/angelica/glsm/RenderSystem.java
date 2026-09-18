@@ -86,7 +86,9 @@ public class RenderSystem {
             } catch (NoSuchFieldError ignored) {
             }
             try {
-                if (dsaState == null && GLStateManager.capabilities.OpenGL45) {
+                // lwjglx's ContextCapabilities has no GL_ARB_direct_state_access field, so probe
+                // the extension string instead of the capability flag Angelica uses.
+                if (dsaState == null && hasExtension("GL_ARB_direct_state_access")) {
                     dsaState = new DSAARB();
                     GLStateManager.LOGGER.info("ARB_direct_state_access detected, enabling DSA.");
                 }
