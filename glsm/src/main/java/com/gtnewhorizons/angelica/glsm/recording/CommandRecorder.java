@@ -1,6 +1,8 @@
 package com.gtnewhorizons.angelica.glsm.recording;
 
 import com.gtnewhorizons.angelica.glsm.recording.commands.DisplayListCommand;
+import com.gtnewhorizons.angelica.glsm.recording.commands.IndexedDrawBatchBuilder;
+import com.gtnewhorizons.angelica.glsm.recording.commands.IndexedDrawCapture;
 import org.joml.Matrix4f;
 
 import java.nio.FloatBuffer;
@@ -8,10 +10,16 @@ import java.nio.IntBuffer;
 
 /**
  * Records GL commands to a CommandBuffer during display list compilation.
+ *
+ * <p>Indexed draws are baked at record time into {@link IndexedDrawCapture}s held by
+ * {@link #indexedDraws}; the command stream only carries their placeholder commands
+ * (as complex refs). The captures are turned into shared VAO/VBO/EBO batches by
+ * {@link IndexedDrawBatchBuilder#build()} when the list is finalized.
  */
 public final class CommandRecorder {
     private final CommandBuffer buffer;
     private int commandCount;
+    private final IndexedDrawBatchBuilder indexedDraws = new IndexedDrawBatchBuilder();
 
     public CommandRecorder() {
         this.buffer = new CommandBuffer();
@@ -26,7 +34,14 @@ public final class CommandRecorder {
         return commandCount;
     }
 
+    public IndexedDrawBatchBuilder getIndexedDraws() {
+        return indexedDraws;
+    }
+
     public void free() {
+        for (IndexedDrawCapture c : indexedDraws.getCaptures()) {
+            c.freeBuffers();
+        }
         buffer.free();
     }
 
@@ -69,6 +84,11 @@ public final class CommandRecorder {
 
     public void recordColor(float r, float g, float b, float a) {
         buffer.writeColor(r, g, b, a);
+        commandCount++;
+    }
+
+    public void recordSecondaryColor(float r, float g, float b) {
+        buffer.writeSecondaryColor(r, g, b);
         commandCount++;
     }
 
@@ -352,8 +372,14 @@ public final class CommandRecorder {
         commandCount++;
     }
 
-    public void recordDrawElements(int mode, int indices_count, int type, long indices_buffer_offset) {
-        buffer.writeDrawElements(mode, indices_count, type, indices_buffer_offset);
+    /**
+     * Record a baked indexed draw: the capture owns the baked vertex/index data and its
+     * placeholder goes into the command stream as a complex ref. The placeholder is
+     * filled when the capture's batch is built at the end of compilation.
+     */
+    public void recordIndexedDrawCapture(IndexedDrawCapture capture) {
+        indexedDraws.add(capture);
+        buffer.writeComplexRef(capture.placeholder);
         commandCount++;
     }
 

@@ -26,6 +26,7 @@ import com.gtnewhorizons.angelica.glsm.hooks.GpuCommandType;
 import com.gtnewhorizons.angelica.glsm.recording.CommandRecorder;
 import com.gtnewhorizons.angelica.glsm.recording.CompiledDisplayList;
 import com.gtnewhorizons.angelica.glsm.recording.ImmediateModeRecorder;
+import com.gtnewhorizons.angelica.glsm.recording.commands.IndexedDrawCapture;
 import com.gtnewhorizons.angelica.glsm.recording.commands.TexImage2DCmd;
 import com.gtnewhorizons.angelica.glsm.recording.commands.TexSubImage2DCmd;
 import com.gtnewhorizons.angelica.glsm.stacks.AlphaStateStack;
@@ -1858,8 +1859,12 @@ public class GLStateManager {
     }
 
     public static void glSecondaryColor3f(float red, float green, float blue) {
-        if (DisplayListManager.isRecording()) {
-            throw new UnsupportedOperationException("glSecondaryColor3f in display lists not yet implemented - if you see this, please report!");
+        final RecordMode mode = DisplayListManager.getRecordMode();
+        if (mode != RecordMode.NONE) {
+            DisplayListManager.recordSecondaryColor(red, green, blue);
+            if (mode == RecordMode.COMPILE) {
+                return;
+            }
         }
         changeSecondaryColor(red, green, blue);
     }
@@ -2186,7 +2191,7 @@ public class GLStateManager {
         type = remapTypeForRemappedInternalFormat(internalformat, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
-            DisplayListManager.recordComplexCommand(TexImage2DCmd.fromIntBuffer(target, level, internalformat, width, height, border, format, type, pixels));
+            DisplayListManager.recordComplexCommand(TexImage2DCmd.fromIntBuffer(target, level, internalformat, width, height, border, format, type, pixels, ctx().pixelUnpackState));
             if (mode == RecordMode.COMPILE) {
                 return;
             }
@@ -2215,7 +2220,7 @@ public class GLStateManager {
         type = remapTypeForRemappedInternalFormat(internalformat, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
-            DisplayListManager.recordComplexCommand(TexImage2DCmd.fromFloatBuffer(target, level, internalformat, width, height, border, format, type, pixels));
+            DisplayListManager.recordComplexCommand(TexImage2DCmd.fromFloatBuffer(target, level, internalformat, width, height, border, format, type, pixels, ctx().pixelUnpackState));
             if (mode == RecordMode.COMPILE) {
                 return;
             }
@@ -2238,7 +2243,7 @@ public class GLStateManager {
         type = remapTypeForRemappedInternalFormat(internalformat, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
-            DisplayListManager.recordComplexCommand(TexImage2DCmd.fromDoubleBuffer(target, level, internalformat, width, height, border, format, type, pixels));
+            DisplayListManager.recordComplexCommand(TexImage2DCmd.fromDoubleBuffer(target, level, internalformat, width, height, border, format, type, pixels, ctx().pixelUnpackState));
             if (mode == RecordMode.COMPILE) {
                 return;
             }
@@ -2261,7 +2266,7 @@ public class GLStateManager {
         type = remapTypeForRemappedInternalFormat(internalformat, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
-            DisplayListManager.recordComplexCommand(TexImage2DCmd.fromByteBuffer(target, level, internalformat, width, height, border, format, type, pixels));
+            DisplayListManager.recordComplexCommand(TexImage2DCmd.fromByteBuffer(target, level, internalformat, width, height, border, format, type, pixels, ctx().pixelUnpackState));
             if (mode == RecordMode.COMPILE) {
                 return;
             }
@@ -2594,86 +2599,142 @@ public class GLStateManager {
     }
 
     public static void glDrawElements(int mode, ByteBuffer indices) {
-        if (DisplayListManager.isRecording()) {
-            throw new UnsupportedOperationException("glDrawElements in display lists not yet implemented - if you see this, please report!");
-        }
-        if (FeedbackManager.isFeedbackMode()) {
+        CommandRecorder savedRecorder = null;
+        final RecordMode recordMode = DisplayListManager.getRecordMode();
+        if (recordMode != RecordMode.NONE) {
+            final IndexedDrawCapture capture = IndexedDrawCapture.createFromClientIndices(mode, indices.remaining(), GL11.GL_UNSIGNED_BYTE, MemoryUtilities.memAddress(indices), indices.remaining());
+            if (capture != null) {
+                DisplayListManager.recordIndexedDrawCapture(capture);
+            }
+            if (recordMode == RecordMode.COMPILE) {
+                return;
+            }
+            savedRecorder = DisplayListManager.pauseRecording();
+        } else if (FeedbackManager.isFeedbackMode()) {
             FeedbackManager.processDrawElements(mode, indices);
             return;
         }
-        prepareWideLineEmulation(mode);
-        preDrawFFP();
-        prepareClientArrays();
-        if (DEBUG_DRAW_LOGS) {
-            GLSMDebug.logDrawElements("byte-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_BYTE, -1L);
+        try {
+            prepareWideLineEmulation(mode);
+            preDrawFFP();
+            prepareClientArrays();
+            if (DEBUG_DRAW_LOGS) {
+                GLSMDebug.logDrawElements("byte-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_BYTE, -1L);
+            }
+            recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
+            RENDER_BACKEND.drawElements(mode, indices);
+        } finally {
+            if (savedRecorder != null) {
+                DisplayListManager.resumeRecording(savedRecorder);
+            }
         }
-        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
-        RENDER_BACKEND.drawElements(mode, indices);
     }
 
     public static void glDrawElements(int mode, IntBuffer indices) {
-        if (DisplayListManager.isRecording()) {
-            throw new UnsupportedOperationException("glDrawElements in display lists not yet implemented - if you see this, please report!");
-        }
-        if (FeedbackManager.isFeedbackMode()) {
+        CommandRecorder savedRecorder = null;
+        final RecordMode recordMode = DisplayListManager.getRecordMode();
+        if (recordMode != RecordMode.NONE) {
+            final IndexedDrawCapture capture = IndexedDrawCapture.createFromClientIndices(mode, indices.remaining(), GL11.GL_UNSIGNED_INT, MemoryUtilities.memAddress(indices), (long) indices.remaining() << 2);
+            if (capture != null) {
+                DisplayListManager.recordIndexedDrawCapture(capture);
+            }
+            if (recordMode == RecordMode.COMPILE) {
+                return;
+            }
+            savedRecorder = DisplayListManager.pauseRecording();
+        } else if (FeedbackManager.isFeedbackMode()) {
             FeedbackManager.processDrawElements(mode, indices);
             return;
         }
-        prepareWideLineEmulation(mode);
-        preDrawFFP();
-        prepareClientArrays();
-        if (DEBUG_DRAW_LOGS) {
-            GLSMDebug.logDrawElements("int-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_INT, -1L);
-        }
-        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
-        if (mode == GL11.GL_QUADS) {
-            QuadConverter.drawQuadElementsAsTriangles(indices);
-        } else {
-            RENDER_BACKEND.drawElements(mode, indices);
+        try {
+            prepareWideLineEmulation(mode);
+            preDrawFFP();
+            prepareClientArrays();
+            if (DEBUG_DRAW_LOGS) {
+                GLSMDebug.logDrawElements("int-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_INT, -1L);
+            }
+            recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
+            if (mode == GL11.GL_QUADS) {
+                QuadConverter.drawQuadElementsAsTriangles(indices);
+            } else {
+                RENDER_BACKEND.drawElements(mode, indices);
+            }
+        } finally {
+            if (savedRecorder != null) {
+                DisplayListManager.resumeRecording(savedRecorder);
+            }
         }
     }
 
     public static void glDrawElements(int mode, ShortBuffer indices) {
-        if (DisplayListManager.isRecording()) {
-            throw new UnsupportedOperationException("glDrawElements in display lists not yet implemented - if you see this, please report!");
-        }
-        if (FeedbackManager.isFeedbackMode()) {
+        CommandRecorder savedRecorder = null;
+        final RecordMode recordMode = DisplayListManager.getRecordMode();
+        if (recordMode != RecordMode.NONE) {
+            final IndexedDrawCapture capture = IndexedDrawCapture.createFromClientIndices(mode, indices.remaining(), GL11.GL_UNSIGNED_SHORT, MemoryUtilities.memAddress(indices), (long) indices.remaining() << 1);
+            if (capture != null) {
+                DisplayListManager.recordIndexedDrawCapture(capture);
+            }
+            if (recordMode == RecordMode.COMPILE) {
+                return;
+            }
+            savedRecorder = DisplayListManager.pauseRecording();
+        } else if (FeedbackManager.isFeedbackMode()) {
             FeedbackManager.processDrawElements(mode, indices);
             return;
         }
-        prepareWideLineEmulation(mode);
-        preDrawFFP();
-        prepareClientArrays();
-        if (DEBUG_DRAW_LOGS) {
-            GLSMDebug.logDrawElements("short-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_SHORT, -1L);
-        }
-        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
-        if (mode == GL11.GL_QUADS) {
-            QuadConverter.drawQuadElementsAsTriangles(indices);
-        } else {
-            RENDER_BACKEND.drawElements(mode, indices);
+        try {
+            prepareWideLineEmulation(mode);
+            preDrawFFP();
+            prepareClientArrays();
+            if (DEBUG_DRAW_LOGS) {
+                GLSMDebug.logDrawElements("short-buffer", mode, indices.remaining(), GL11.GL_UNSIGNED_SHORT, -1L);
+            }
+            recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices.remaining());
+            if (mode == GL11.GL_QUADS) {
+                QuadConverter.drawQuadElementsAsTriangles(indices);
+            } else {
+                RENDER_BACKEND.drawElements(mode, indices);
+            }
+        } finally {
+            if (savedRecorder != null) {
+                DisplayListManager.resumeRecording(savedRecorder);
+            }
         }
     }
 
     public static void glDrawElements(int mode, int count, int type, ByteBuffer indices) {
-        if (DisplayListManager.isRecording()) {
-            throw new UnsupportedOperationException("glDrawElements in display lists not yet implemented - if you see this, please report!");
-        }
-        if (FeedbackManager.isFeedbackMode()) {
+        CommandRecorder savedRecorder = null;
+        final RecordMode recordMode = DisplayListManager.getRecordMode();
+        if (recordMode != RecordMode.NONE) {
+            final IndexedDrawCapture capture = IndexedDrawCapture.createFromClientIndices(mode, count, type, MemoryUtilities.memAddress(indices), indices.remaining());
+            if (capture != null) {
+                DisplayListManager.recordIndexedDrawCapture(capture);
+            }
+            if (recordMode == RecordMode.COMPILE) {
+                return;
+            }
+            savedRecorder = DisplayListManager.pauseRecording();
+        } else if (FeedbackManager.isFeedbackMode()) {
             FeedbackManager.processDrawElements(mode, count, type, indices);
             return;
         }
-        prepareWideLineEmulation(mode);
-        preDrawFFP();
-        prepareClientArrays();
-        if (DEBUG_DRAW_LOGS) {
-            GLSMDebug.logDrawElements("typed-byte-buffer", mode, count, type, -1L);
-        }
-        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, count);
-        if (mode == GL11.GL_QUADS) {
-            QuadConverter.drawQuadElementsAsTriangles(count, type, indices);
-        } else {
-            RENDER_BACKEND.drawElements(mode, count, type, indices);
+        try {
+            prepareWideLineEmulation(mode);
+            preDrawFFP();
+            prepareClientArrays();
+            if (DEBUG_DRAW_LOGS) {
+                GLSMDebug.logDrawElements("typed-byte-buffer", mode, count, type, -1L);
+            }
+            recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, count);
+            if (mode == GL11.GL_QUADS) {
+                QuadConverter.drawQuadElementsAsTriangles(count, type, indices);
+            } else {
+                RENDER_BACKEND.drawElements(mode, count, type, indices);
+            }
+        } finally {
+            if (savedRecorder != null) {
+                DisplayListManager.resumeRecording(savedRecorder);
+            }
         }
     }
 
@@ -2681,15 +2742,17 @@ public class GLStateManager {
         CommandRecorder savedRecorder = null;
         final RecordMode recordMode = DisplayListManager.getRecordMode();
         if (recordMode != RecordMode.NONE) {
-            if (isVAOBound()) {
-                DisplayListManager.recordDrawElements(mode, indices_count, type, indices_buffer_offset);
+            // A VAO is always bound post-init (glBindVertexArray(0) redirects to the default
+            // VAO), so EBO-backed draws are baked via IndexedDrawCapture. When baking is not
+            // possible fall back to Actinium's immediate-mode VBO tessellation.
+            final IndexedDrawCapture capture = IndexedDrawCapture.create(mode, indices_count, type, indices_buffer_offset, ctx().boundEBO);
+            if (capture != null) {
+                DisplayListManager.recordIndexedDrawCapture(capture);
             } else if (isVBOBound() || VertexAttribState.hasVBOBoundAttrib()) {
                 final DirectTessellator result = ImmediateModeRecorder.processDrawElementsFromVBO(mode, indices_count, type, indices_buffer_offset, ctx().boundEBO);
                 if (result != null) {
                     DisplayListManager.addImmediateModeDraw(result);
                 }
-            } else {
-                throw new UnsupportedOperationException("glDrawElements in display lists not yet implemented - if you see this, please report!");
             }
             if (recordMode == RecordMode.COMPILE) {
                 return;
@@ -2699,19 +2762,24 @@ public class GLStateManager {
             FeedbackManager.processDrawElements(mode, indices_count, type, indices_buffer_offset);
             return;
         }
-        prepareWideLineEmulation(mode);
-        preDrawFFP();
-        prepareClientArrays();
-        if (DEBUG_DRAW_LOGS) {
-            GLSMDebug.logDrawElements("ebo-offset", mode, indices_count, type, indices_buffer_offset);
+        try {
+            prepareWideLineEmulation(mode);
+            preDrawFFP();
+            prepareClientArrays();
+            if (DEBUG_DRAW_LOGS) {
+                GLSMDebug.logDrawElements("ebo-offset", mode, indices_count, type, indices_buffer_offset);
+            }
+            recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices_count);
+            if (mode == GL11.GL_QUADS) {
+                QuadConverter.drawQuadElementsAsTriangles(indices_count, type, indices_buffer_offset);
+            } else {
+                RENDER_BACKEND.drawElements(mode, indices_count, type, indices_buffer_offset);
+            }
+        } finally {
+            if (savedRecorder != null) {
+                DisplayListManager.resumeRecording(savedRecorder);
+            }
         }
-        recordGpuCommand(GpuCommandType.DRAW_ELEMENTS, mode, indices_count);
-        if (mode == GL11.GL_QUADS) {
-            QuadConverter.drawQuadElementsAsTriangles(indices_count, type, indices_buffer_offset);
-        } else {
-            RENDER_BACKEND.drawElements(mode, indices_count, type, indices_buffer_offset);
-        }
-        if (savedRecorder != null) DisplayListManager.resumeRecording(savedRecorder);
     }
 
     public static void glDrawBuffer(int mode) {
@@ -5476,7 +5544,7 @@ public class GLStateManager {
         type = remapPixelTypeForGLES(format, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
-            DisplayListManager.recordComplexCommand(TexSubImage2DCmd.fromByteBuffer(target, level, xoffset, yoffset, width, height, format, type, pixels));
+            DisplayListManager.recordComplexCommand(TexSubImage2DCmd.fromByteBuffer(target, level, xoffset, yoffset, width, height, format, type, pixels, ctx().pixelUnpackState));
             if (mode == RecordMode.COMPILE) {
                 return;
             }
@@ -5502,7 +5570,7 @@ public class GLStateManager {
         type = remapPixelTypeForGLES(format, type);
         final RecordMode mode = DisplayListManager.getRecordMode();
         if (mode != RecordMode.NONE) {
-            DisplayListManager.recordComplexCommand(TexSubImage2DCmd.fromIntBuffer(target, level, xoffset, yoffset, width, height, format, type, pixels));
+            DisplayListManager.recordComplexCommand(TexSubImage2DCmd.fromIntBuffer(target, level, xoffset, yoffset, width, height, format, type, pixels, ctx().pixelUnpackState));
             if (mode == RecordMode.COMPILE) {
                 return;
             }
@@ -6414,10 +6482,6 @@ public class GLStateManager {
 
     public static boolean isVBOBound() {
         return ctx().boundVBO != 0;
-    }
-
-    public static boolean isVAOBound() {
-        return ctx().boundVAO != 0;
     }
 
     public static boolean vendorIsAMD() {
