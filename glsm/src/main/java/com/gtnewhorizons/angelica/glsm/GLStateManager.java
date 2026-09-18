@@ -373,6 +373,13 @@ public class GLStateManager {
      * {@link com.gtnewhorizons.angelica.glsm.ffp.VertexKey}.
      */
     public static boolean wideLineEmulationActive = false;
+    /**
+     * Set per draw call: true when the current draw is a line primitive with GL_LINE_STIPPLE
+     * enabled. Read by {@link com.gtnewhorizons.angelica.glsm.ffp.VertexKey} and
+     * {@link com.gtnewhorizons.angelica.glsm.ffp.FragmentKey}; also switches the provoking
+     * vertex convention so flat varyings come from each segment's first vertex.
+     */
+    public static boolean lineStippleActive = false;
 
     // Point state (GL_POINT_BIT)
 
@@ -680,6 +687,7 @@ public class GLStateManager {
             case GL11.GL_BLEND -> enableBlend();
             case GL11.GL_COLOR_MATERIAL -> enableColorMaterial();
             case GL11.GL_COLOR_LOGIC_OP -> ctx().colorLogicOpState.enable();
+            case GL14.GL_COLOR_SUM -> ctx().colorSumState.enable();
             case GL11.GL_CULL_FACE -> enableCull();
             case GL11.GL_DEPTH_TEST -> enableDepthTest();
             case GL11.GL_DITHER -> ctx().ditherState.enable();
@@ -760,6 +768,7 @@ public class GLStateManager {
             case GL11.GL_BLEND -> disableBlend();
             case GL11.GL_COLOR_MATERIAL -> disableColorMaterial();
             case GL11.GL_COLOR_LOGIC_OP -> ctx().colorLogicOpState.disable();
+            case GL14.GL_COLOR_SUM -> ctx().colorSumState.disable();
             case GL11.GL_CULL_FACE -> disableCull();
             case GL11.GL_DEPTH_TEST -> disableDepthTest();
             case GL11.GL_DITHER -> ctx().ditherState.disable();
@@ -834,6 +843,7 @@ public class GLStateManager {
             case GL11.GL_BLEND -> ctx().blendMode.isEnabled();
             case GL11.GL_COLOR_MATERIAL -> ctx().colorMaterial.isEnabled();
             case GL11.GL_COLOR_LOGIC_OP -> ctx().colorLogicOpState.isEnabled();
+            case GL14.GL_COLOR_SUM -> ctx().colorSumState.isEnabled();
             case GL11.GL_CULL_FACE -> ctx().cullState.isEnabled();
             case GL11.GL_DEPTH_TEST -> ctx().depthTest.isEnabled();
             case GL11.GL_DITHER -> ctx().ditherState.isEnabled();
@@ -902,7 +912,7 @@ public class GLStateManager {
     private static boolean isEnableCap(int pname) {
         return switch (pname) {
             case GL11.GL_ALPHA_TEST, GL11.GL_AUTO_NORMAL, GL11.GL_BLEND, GL11.GL_COLOR_MATERIAL,
-                    GL11.GL_COLOR_LOGIC_OP, GL11.GL_CULL_FACE, GL11.GL_DEPTH_TEST, GL11.GL_DITHER,
+                    GL11.GL_COLOR_LOGIC_OP, GL14.GL_COLOR_SUM, GL11.GL_CULL_FACE, GL11.GL_DEPTH_TEST, GL11.GL_DITHER,
                     GL11.GL_FOG, GL11.GL_INDEX_LOGIC_OP, GL11.GL_LIGHTING, GL11.GL_LIGHT0,
                     GL11.GL_LIGHT1, GL11.GL_LIGHT2, GL11.GL_LIGHT3, GL11.GL_LIGHT4, GL11.GL_LIGHT5,
                     GL11.GL_LIGHT6, GL11.GL_LIGHT7, GL11.GL_LINE_SMOOTH, GL11.GL_LINE_STIPPLE,
@@ -940,6 +950,7 @@ public class GLStateManager {
             case GL11.GL_BLEND -> ctx().blendMode.isEnabled();
             case GL11.GL_COLOR_MATERIAL -> ctx().colorMaterial.isEnabled();
             case GL11.GL_COLOR_LOGIC_OP -> ctx().colorLogicOpState.isEnabled();
+            case GL14.GL_COLOR_SUM -> ctx().colorSumState.isEnabled();
             case GL11.GL_CULL_FACE -> ctx().cullState.isEnabled();
             case GL11.GL_DEPTH_TEST -> ctx().depthTest.isEnabled();
             case GL11.GL_DEPTH_WRITEMASK -> ctx().depthState.isMaskEnabled();
@@ -2456,6 +2467,7 @@ public class GLStateManager {
     }
 
     public static void glBegin(int mode) {
+        ctx().unit23TexCoordSetDuringDraw = false;
         if (DisplayListManager.isRecording()) {
             ImmediateModeRecorder.begin(mode);
             return;
@@ -2745,6 +2757,7 @@ public class GLStateManager {
     /** Full pre-draw preparation when the primitive mode is unknown or not line-based. */
     public static void preDraw() {
         wideLineEmulationActive = false;
+        setLineStippleActive(false);
         preDrawFFP();
         prepareClientArrays();
     }
@@ -5219,9 +5232,22 @@ public class GLStateManager {
     }
 
     public static void prepareWideLineEmulation(int drawMode) {
-        wideLineEmulationActive = wideLineEmulationEnabled
-                && (drawMode == GL11.GL_LINES || drawMode == GL11.GL_LINE_STRIP || drawMode == GL11.GL_LINE_LOOP)
-                && ctx().lineState.getWidth() > 1.0f;
+        final GLContextState glCtx = ctx();
+        final boolean isLine = drawMode == GL11.GL_LINES || drawMode == GL11.GL_LINE_STRIP || drawMode == GL11.GL_LINE_LOOP;
+        wideLineEmulationActive = wideLineEmulationEnabled && isLine && glCtx.lineState.getWidth() > 1.0f;
+        setLineStippleActive(isLine && glCtx.lineStippleState.isEnabled());
+    }
+
+    /**
+     * Line stipple emulation feeds a flat varying from each segment's first vertex, so the
+     * provoking vertex convention must flip while stippled lines are drawn (GL default is
+     * LAST_VERTEX_CONVENTION). Only touched on transitions to avoid redundant driver calls.
+     */
+    private static void setLineStippleActive(boolean active) {
+        if (lineStippleActive != active) {
+            lineStippleActive = active;
+            RENDER_BACKEND.provokingVertex(active ? GL32.GL_FIRST_VERTEX_CONVENTION : GL32.GL_LAST_VERTEX_CONVENTION);
+        }
     }
 
     public static void glFlush() {

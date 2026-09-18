@@ -23,15 +23,19 @@ final class ProgramUniformState extends GenerationTrackedState {
     private static final int LIGHTMAP = 10;
     private static final int LINE_WIDTH = 11;
     private static final int VIEWPORT = 12;
+    private static final int LINE_STIPPLE = 13;
 
     private float lightmapX;
     private float lightmapY;
     private float lineWidth;
+    private int viewportX;
+    private int viewportY;
     private int viewportWidth;
     private int viewportHeight;
+    private int lineStipple;
 
     ProgramUniformState() {
-        super(13);
+        super(14);
     }
 
     boolean needsModelViewUpload(int generation) {
@@ -133,13 +137,25 @@ final class ProgramUniformState extends GenerationTrackedState {
         markUploaded(LINE_WIDTH, 0);
     }
 
-    boolean needsViewportUpload(int width, int height) {
-        return !isInitialized(VIEWPORT) || viewportWidth != width || viewportHeight != height;
+    boolean needsViewportUpload(int x, int y, int width, int height) {
+        return !isInitialized(VIEWPORT)
+            || viewportX != x || viewportY != y || viewportWidth != width || viewportHeight != height;
     }
 
-    void markViewportUploaded(int width, int height) {
+    void markViewportUploaded(int x, int y, int width, int height) {
+        viewportX = x;
+        viewportY = y;
         viewportWidth = width;
         viewportHeight = height;
         markUploaded(VIEWPORT, 0);
+    }
+
+    boolean needsLineStippleUpload(int packedFactorPattern) {
+        return !isInitialized(LINE_STIPPLE) || lineStipple != packedFactorPattern;
+    }
+
+    void markLineStippleUploaded(int packedFactorPattern) {
+        lineStipple = packedFactorPattern;
+        markUploaded(LINE_STIPPLE, 0);
     }
 }

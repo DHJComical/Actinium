@@ -120,6 +120,12 @@ public abstract class RenderBackend {
     public void drawArraysInstanced(int mode, int first, int count, int primcount) {
         throw new UnsupportedOperationException("drawArraysInstanced is only supported by the LWJGL3 backend");
     }
+    /**
+     * Sets the provoking vertex convention for flat varyings (used by line-stipple
+     * emulation: v_LineStart must come from each segment's first vertex).
+     * No-op on backends without GL 3.2.
+     */
+    public void provokingVertex(int provokeMode) {}
     public abstract void drawElementsBaseVertex(int mode, int count, int type, long indices, int baseVertex);
     public abstract void multiDrawElementsBaseVertex(int mode, long pCount, int type, long pIndices, int drawcount, long pBaseVertex);
     public void drawRangeElements(int mode, int start, int end, int count, int type, long indices) {

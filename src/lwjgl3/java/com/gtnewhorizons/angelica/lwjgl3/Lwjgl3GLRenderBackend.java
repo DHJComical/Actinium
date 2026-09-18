@@ -340,6 +340,11 @@ public final class Lwjgl3GLRenderBackend extends RenderBackend {
     }
 
     @Override
+    public void provokingVertex(int provokeMode) {
+        GL32C.glProvokingVertex(provokeMode);
+    }
+
+    @Override
     public void multiDrawElementsIndirect(int mode, int type, long indirect, int drawcount, int stride) {
         GL43C.glMultiDrawElementsIndirect(mode, type, indirect, drawcount, stride);
     }
