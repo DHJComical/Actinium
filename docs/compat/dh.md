@@ -1,7 +1,7 @@
 # Distant Horizons 兼容性说明
 
 兼容状态：**部分兼容**（版本敏感，必须按指定版本验证）
-最后更新：2026-09-16
+最后更新：2026-09-18
 
 ## 模组信息
 
@@ -27,15 +27,19 @@ DH 的渲染状态矩阵由它自己的 `MixinActiveRenderInfo` 从原版 `Activ
 
 ### Actinium 侧的配合
 
-`MixinRenderGlobal`（`mixin/vintage/core/terrain`）**覆盖单参数** `renderBlockLayer(BlockRenderLayer)`，
-而不是四参数入口：
+`MixinRenderGlobal`（`mixin/vintage/core/terrain`）**覆盖四参数入口**
+`renderBlockLayer(BlockRenderLayer, double, int, Entity)`，并在 TRANSLUCENT 分支显式调用
+原版的单参数重载 `renderBlockLayer(BlockRenderLayer)`（`@Shadow`，保持 vanilla 不改动）：
 
-- 原版四参数入口保留，DH 的 HEAD 注入仍然可达；
-- 覆盖后的方法体保留 `enableLightmap()` 调用，DH 的延迟注入因此落在
-  `actinium$beginIrisTranslucents()` 之后（Iris 已进入半透明阶段），时机正确。
+- DH 在四参数入口的 HEAD 注入是虚拟注入点，不受 `@Overwrite` 影响，继续生效；
+- 单参数重载保持原版实现，DH 锚定其内部 `enableLightmap()` 调用的延迟注入因此可达，
+  且落在 `actinium$beginIrisTranslucents()` 之后（Iris 已进入半透明阶段），时机正确。
 
-> 与 Angelica 同取向：Actinium 只替换"实际绘制"层，不占用 DH 也要注入的渲染入口。
-> 若把 `@Overwrite` 挪回四参数入口，原版四参数不再调用单参数，DH 的延迟注入将永远不触发。
+> 为什么不能覆盖单参数重载：Mixin 拒绝在已被更高优先级 Mixin 覆盖的方法内使用指令级
+> 注入点（`@At(INVOKE …)`）；Actinium（priority 1000）先于 DH（900）合并，覆盖单参数会让
+> DH 的延迟注入在 Mixin 应用期抛 `InvalidInjectionException`。反过来只覆盖四参却不显式
+> 调单参，该注入又永远不触发——覆盖四参入口并显式调用单参重载，是唯一让两个 DH 注入
+> 都保持可达的组合。
 
 ### Iris 侧接管
 
@@ -57,7 +61,7 @@ Actinium 不注入 DH，也不持有任何 DH 侧状态：`compat/dh` 目录已�
 
 ## 与 Angelica 对齐：不代打的补丁
 
-核对 Angelica（`D:\Code\Angelica`）：它对 DH 的类**零注入**——mixin 配置里没有任何一处提到
+核对 Angelica 源码：它对 DH 的类**零注入**——mixin 配置里没有任何一处提到
 `distanthorizons`，也搜不到 `IRIS_ACCESSOR`、`FullDataToRenderDataTransformer`、`createClientBindings`。
 下列补丁 Angelica 都不打，因此 Actinium 也不打（Actinium 侧原有实现已随 `mixin/mod/dh` 一并删除）：
 
@@ -90,7 +94,7 @@ LOD 被染黑。补上重定向后（并补齐 `GLStateManager` 缺失的数组�
 ## 待办
 
 - [ ] DH 发布含 `b15b57cf` / `ae21a1a0` 的版本后升级 gradle 依赖并做完整回归
-- [ ] 实机确认 `renderBlockLayer` 覆盖层级下移后的地形与 DH LOD 渲染（含 GTCEu 改写
-      `renderWorldPass` 调用点的路径）
+- [ ] 实机确认四参入口 `@Overwrite` + TRANSLUCENT 显式调用单参重载下的地形与 DH LOD
+      渲染（含 GTCEu 改写 `renderWorldPass` 调用点的路径）
 - [ ] 与 DH 侧确认上节各项由 DH 接管后的实际表现（尤其 far clip 与雾色）
 - [ ] 新版本 DH 验证后更新兼容矩阵

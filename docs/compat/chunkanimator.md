@@ -1,6 +1,6 @@
 # Chunk Animator 兼容（chunkanimator 1.12.2-1.2.1）
 
-最后更新：2026-08-15。分支：`feat/chunk-animator-compat`。
+最后更新：2026-09-18。分支：`feat/chunk-animator-compat`。
 
 ## 模组机制（反编译结论）
 
@@ -26,8 +26,9 @@ Actinium 的 celeritas 区块管线接管后：
 
 1. `MixinRenderGlobal.loadRenderers` 将 `GameSettings.renderDistanceChunks` 第二次读取
    重定向为 0，原版 `BuiltChunkStorage` 不再分配可用的 `RenderChunk` 阵列；
-2. `renderBlockLayer`（单参数重载，原版四参数入口调用的那个）/`setupTerrain` 被整体替换为
-   `ActiniumWorldRenderer`，`ChunkRenderContainer.preRenderChunk` 不再被调用。
+2. `renderBlockLayer`（四参数入口）/`setupTerrain` 被整体替换为
+   `ActiniumWorldRenderer`（单参数重载保留原版、仅 TRANSLUCENT 时被显式调用，但其
+   `renderContainer` 通道为空），`ChunkRenderContainer.preRenderChunk` 不再被调用。
 
 结论：Chunk Animator 的 ASM 注入仍然加载（不崩溃），但**两个 hook 都不会在渲染路径上
 生效**，动画完全不显示。
