@@ -59,6 +59,42 @@ Actinium 不注入 DH，也不持有任何 DH 侧状态：`compat/dh` 目录已�
 搭配更早的 DH 会缺失光影 LOD 集成；`gradle/scripts/dependencies.gradle` 已改 pin 到
 `maven.modrinth:uCdwusMi:Sa0ttGJr`（3.3.0-1.12.2，首个包含这两个提交的发布版）。
 
+## 上游补丁移植（Angelica #2090 / #2091）
+
+DH 开发者（DarkShadow44）提交、并已被 Angelica upstream 合并的两个修复，Actinium 按同样语义移植。
+
+### far uniform 报告实际渲染边界（#2091，upstream `2aa4ac75`）
+
+上游修复：`CameraUniforms.getRenderDistanceInBlocks()` 在 DH 存在且未启用
+`AngelicaConfig.useVanillaChunkTracking`（即默认的邻居就绪 tracker 模式）时，把报告给光影包的
+`far` 减一圈。原因是 Celeritas 的 tracker 要求相邻 chunk 全部加载后才发布当前 chunk，而配置渲染距离
+之外的 chunk 永远不加载，最外圈因此永不渲染。光影包用 `far` 做原版地形到 DH LOD 的过渡，必须落在
+真实可见边界上，报告配置加载半径会让过渡位置外移一圈。
+
+Actinium 的等价实现（不新增桥、不新增依赖边）：
+
+- `celeritas-common` 的 `ChunkTracker` 新增只读 `getRequiredNeighborRadius()`；
+- shader 侧 `SkyRenderDistance.farBlocks(renderDistanceChunks, unrenderedOuterRings)` 只做
+  "减去未渲染外圈"的计算，**不套用 Actinium 的天空下限**：下限会把边界报得比实际渲染的地形更远，
+  光影包的过渡带随即落在没有地形的区间里，表现为 LOD 与原版地形之间的大断层（渲染距离 2 区块时
+  尤其明显，`far` 会被抬到 8×16=128 而地形只到 16）。天空下限仍由 `effectiveChunks` 路径承担
+  （`HorizonRenderer` 几何、`setupCameraTransform` 投影、`updateFogColor` 雾色，见 `8faa19ee`／
+  `6eb7cc40`），`CameraUniforms` 只在 DH + Celeritas 组合**之外**才走那条带下限的路径；
+- `CameraUniforms.getUnrenderedOuterRings()` 只在 DH 已加载、Celeritas 地形渲染启用且世界已加载时
+  读取 tracker 半径（当前恒为 1，等价于上游的 `-1`）。
+
+上游条件里的 `useVanillaChunkTracking` 在 Actinium 没有对应实现：`ActiniumConfig.useVanillaChunkTracking`
+自导入起没有任何使用点，`ChunkTracker.setRequiredNeighborRadius` 也没有调用方，Actinium 只存在邻居
+就绪 tracker 这一种模式。因此这里读 tracker 的真实半径，而不是引入一个恒为 false 的开关。
+
+### 移除多余的 attrib pointer 调用（#2090，upstream `8f981510`）
+
+`IrisGenericRenderProgram` 构造 VAO 时在 `glEnableVertexAttribArray(0)` 之前调用
+`glVertexAttribPointer(0, 3, GL_FLOAT, false, 0, 0)`：此刻 attrib 0 指向"构造时恰好绑定的
+`GL_ARRAY_BUFFER`"（不保证是 DH 的顶点 buffer），会向 GLSM 的 per-VAO attrib 记录写入一条伪状态。
+DH 在绘制前通过 `bindVertexBuffer(int)` 绑定自己的 buffer 并设置 `stride = 12` 的 pointer，构造期那次
+设置没有作用，已按上游删除。
+
 ## 与 Angelica 对齐：不代打的补丁
 
 核对 Angelica 源码：它对 DH 的类**零注入**——mixin 配置里没有任何一处提到
@@ -92,9 +128,13 @@ LOD 被染黑。补上重定向后（并补齐 `GLStateManager` 缺失的数组�
 - DH 3.1.2-b + 光影 + 进出世界/维度切换回归通过。
 - 2026-09-18：DH 3.3.0-1.12.2（`maven.modrinth:uCdwusMi:Sa0ttGJr`，Actinium `6e66a3c7`）
   实机回归通过：光影包 + DH LOD（矩阵六包）、无光影 LOD/雾色/天空盒、进出世界/维度切换。
+- 2026-09-18：移植 Angelica #2090 / #2091（见上节）。`compileJava test` 通过，含
+  `SkyRenderDistanceTest` 新增的 far 边界用例；实机表现待验证。
 
 ## 待办
 
+- [ ] 实机验证渲染距离 2 区块等低配置下 LOD 与原版地形的过渡（#2091）、DH generic object
+      渲染（#2090），以及去掉 `far` 天空下限后低渲染距离的天空/云/天体的表现
 - [ ] 实机确认四参入口 `@Overwrite` + TRANSLUCENT 显式调用单参重载下的地形与 DH LOD
       渲染（含 GTCEu 改写 `renderWorldPass` 调用点的路径）
 - [ ] 与 DH 侧确认上节各项由 DH 接管后的实际表现（尤其 far clip 与雾色）
