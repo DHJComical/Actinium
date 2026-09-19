@@ -569,6 +569,7 @@ def verifyDistributedJar = tasks.register('verifyDistributedJar') {
             'THIRD_PARTY_NOTICES.md',
             'LICENSE-REESES-SODIUM-OPTIONS.md',
             'com/dhj/actinium/Actinium.class',
+            'org/taumc/celeritas/core/CeleritasLoadingPlugin.class',
             'com/gtnewhorizons/angelica/glsm/GLStateManager.class',
             'net/coderbot/iris/Iris.class',
             'org/embeddedt/embeddium/impl/render/chunk/RenderSectionManager.class',

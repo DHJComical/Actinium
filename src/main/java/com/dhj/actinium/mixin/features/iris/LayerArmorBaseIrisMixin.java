@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.dhj.actinium.render.GuiGlStateBoundary;
 import net.coderbot.iris.gbuffer_overrides.matching.SpecialCondition;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.uniforms.ItemIdManager;
@@ -32,6 +33,7 @@ public class LayerArmorBaseIrisMixin {
         EntityEquipmentSlot slot,
         CallbackInfo ci
     ) {
+        if (GuiGlStateBoundary.isEntityGuiSurface()) return;
         ItemIdManager.setItemId(entity.getItemStackFromSlot(slot));
     }
 
@@ -51,6 +53,7 @@ public class LayerArmorBaseIrisMixin {
         EntityEquipmentSlot slot,
         CallbackInfo ci
     ) {
+        if (GuiGlStateBoundary.isEntityGuiSurface()) return;
         ItemIdManager.resetItemId();
     }
 
@@ -71,6 +74,7 @@ public class LayerArmorBaseIrisMixin {
         float scale,
         CallbackInfo ci
     ) {
+        if (GuiGlStateBoundary.isEntityGuiSurface()) return;
         GbufferPrograms.setupSpecialRenderCondition(SpecialCondition.GLINT);
     }
 
@@ -91,6 +95,7 @@ public class LayerArmorBaseIrisMixin {
         float scale,
         CallbackInfo ci
     ) {
+        if (GuiGlStateBoundary.isEntityGuiSurface()) return;
         GbufferPrograms.teardownSpecialRenderCondition();
     }
 }

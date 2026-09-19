@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-09-18。
+最后更新：2026-09-19。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -8,6 +8,14 @@
 
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
+
+> 2026-09-19 追加：CensoredASM / Chibi 5.33（issue #159）共存启动崩溃已修复——其
+> on-demand animated textures 在 `TextureMap.updateAnimations` 与 `BufferBuilder.tex` 上
+> 与 Actinium 双重 overwrite（同优先级注入冲突导致 `TextureMap` 类变换失败），其
+> `squashBakedQuads` 又会改写 `MixinBakedQuad` 所 `@Shadow` 的 `BakedQuad` 字段。修复为提供
+> `org.taumc.celeritas.core.CeleritasLoadingPlugin` 探测标记类，让 LoliASM 走它自带的
+> Celeritas 让位路径（两组特性一起关闭）；dev 实机验证通过，详见
+> [docs/compat/censoredasm.md](compat/censoredasm.md)。
 
 > 2026-09-18 追加：Distant Horizons 3.3.0-1.12.2（`maven.modrinth:uCdwusMi:Sa0ttGJr`，Actinium
 > `6e66a3c7`）实机回归通过——六包光影 + DH LOD、无光影 LOD/雾色/天空盒、进出世界/维度切换
@@ -150,6 +158,8 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Gnetum | 部分 | launchwrapper transformer（`GnetumHudCachingCompatTransformer` 镜像 `Gnetum.rendering` 窗口到 `GLSMConfig.hudCacheOverride`，复用 StellarCore HudCaching 的 GLSM 覆盖路径）+ revoui 渐变重定向在缓存窗口内改道（直接画入缓存 FBO） | 1.4.3（CurseForge 1220460 / Modrinth）：①HUD 分帧缓存致半透明 HUD 元素随 pass 轮转闪烁已修复并实机确认（根因同 StellarCore 模式 A：预乘覆盖钩子被 glsm 重定向架空），commit `5d820b0e`；②与 Revo UI 共存时 GUI 背景渐变随 pass 轮转闪烁已修复（缓存使渐变 defer 管线降为 1/3 帧率；修复为缓存窗口内直接画入缓存 FBO，commit `edf7c6f2`），build 全绿、生产实机回归待确认；已知缺口：手部缓存（`gnetum:minecraft_hand`，默认关）未适配、危险混合检测在 Actinium 下不生效、Gnetum 的 modid 解析在 Cleanroom 下整体失效（上游缺陷，见文档），详见 [docs/compat/gnetum.md](compat/gnetum.md) |
 | CubicChunks | 部分 | 注入共存（天空距离兜底改为 `ModifyExpressionValue` 链式组合，无模组类引用） | 0.0.1301（292243:3546640）：共存启动 `EntityRenderer` invalid classes 崩溃已修复——其 vertviewdist `MixinEntityRenderer` 的 @Redirect 与 `EntityRendererIrisMixin` 竞争同一批 `GameSettings.renderDistanceChunks` 读取，冲突跳过叠加 `defaultRequire=1` 校验失败使类变换整体失败；改为 MEV + `require=0` 后两种应用顺序均不崩溃（Actinium 先应用时与 CC 值链式生效，CC 先应用时天空距离兜底让位于其垂直视距）；进世界渲染回归未验证（未 runClient） |
 | GregTech CEu | 部分 | 注入容差（translucent 层 debug 标记放宽为 `require=0`）+ bloom 兼容层（与 Lumenized 共用 `mixins.actinium.lumenized.json`，类探测门控） | 2.8.10-beta（557242:5519022）：共存启动 `EntityRenderer` invalid classes 崩溃已修复并实机确认——`GregTechTransformer` 用 ASM 把 `renderWorldPass` 第 4 处 `renderBlockLayer`（TRANSLUCENT）替换为 `BloomEffectUtil.renderBloomBlockLayer`，ordinal=3 注入 0 命中触发 require 校验失败；bloom 兼容层对 GTCEu 生效（同包同名 bloom 类，`renderBloomInternal` 拆分结构已适配），泛光下第一人称手部/所持物品全黑已由 `BloomStateGuard` 修复并实机确认（真因为 Unreal 管线对 2..4 号纹理单元的 TEXTURE_2D 使能泄漏，守护覆盖全部纹理单元），详见 [docs/compat/lumenized.md](compat/lumenized.md)；其对 RenderChunk/RegionRenderCacheBuilder 等的其余 ASM 改写未审计 |
+| Obscure Tooltips | 已验证 | 条件 Mixin（`mixins.actinium.obscuretooltips.json`：tooltip 盔甲预览的实体渲染包裹进 GUI entity surface，Iris 盔甲 item ID/glint 钩子在该 surface 内跳过） | 3.10.2（CurseForge 715660:8522661）：tooltip 内渲染盔甲架实体时 Iris 盔甲钩子把世界渲染 GBuffer/item ID 状态带进 GUI pass，可产生全屏黑罩（PR #142）；修复仅在该 surface 激活期间跳过盔甲钩子，世界盔甲渲染不变；dev 实机回归通过（光影下悬停盔甲 tooltip 无黑罩，世界盔甲渲染正常） |
+| CensoredASM / Chibi（LoliASM） | 已验证（dev） | 无侵入（提供 `org.taumc.celeritas.core.CeleritasLoadingPlugin` 探测标记类，触发 LoliASM 自带的 Celeritas 让位路径） | 5.33（CurseForge 460609:8225778，issue #159）：共存启动崩溃已修复——其 on-demand animated textures 与 Actinium 在 `TextureMap.updateAnimations` / `BufferBuilder.tex` 上双重 overwrite，`squashBakedQuads` 亦与 `MixinBakedQuad` 的 `@Shadow` 字段冲突；LoliASM 本就会在探测到 Celeritas 系时关闭两者，Actinium 移除 Celeritas 桥后该探测失效。dev 实机验证：LoliASM 两条让位日志出现、无 Mixin 失败、进世界正常；生产整合包回归待用户确认，详见 [docs/compat/censoredasm.md](compat/censoredasm.md) |
 
 ## 验证记录模板
 

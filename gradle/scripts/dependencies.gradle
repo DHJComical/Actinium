@@ -195,4 +195,15 @@ dependencies {
     // switch back to modRuntimeOnly — that repro needs AR at runtime.
     modCompileOnly 'curse.maven:libvulpes-236541:3801015'
     modCompileOnly 'curse.maven:advanced-rocketry-236542:4671856'
+    // Obscure Tooltips 3.10.2 (PR #142: its ArmorPreviewComponent renders an armor-stand entity
+    // inside the GUI tooltip pass; the Iris armor item ID/glint hooks must skip that pass —
+    // dev-verifies mixins.actinium.obscuretooltips.json)
+    modImplementation 'curse.maven:obscure-tooltips-715660:8522661'
+
+    // CensoredASM / Chibi 5.33 (issue #159: its on-demand animated textures @Overwrite
+    // TextureMap.updateAnimations and BufferBuilder.tex -- the same members Actinium injects into
+    // and overwrites -- and its BakedQuad squasher rewrites the fields MixinBakedQuad shadows.
+    // LoliASM switches both features off by itself once it sees a Celeritas-family marker, so the
+    // org.taumc.celeritas.core marker class is what this dev entry exercises.)
+    modRuntimeOnly 'curse.maven:chibi-460609:8225778'
 }
