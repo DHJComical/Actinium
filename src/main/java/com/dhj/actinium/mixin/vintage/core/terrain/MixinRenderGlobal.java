@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.dhj.actinium.compat.ichunutil.PortalViewportProvider;
+import com.dhj.actinium.debug.GlStateDiffProbe;
 import net.coderbot.iris.compat.rfp2.Rfp2Compat;
 import com.gtnewhorizons.angelica.glsm.shadow.InternalShadowRenderingState;
 import com.dhj.actinium.shadows.ShadowRenderingState;
@@ -169,11 +170,18 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         GlStateManager.bindTexture(this.mc.getTextureMapBlocks().getGlTextureId());
         GlStateManager.enableTexture2D();
 
+        GlStateDiffProbe.Snapshot beforeDhInjection = null;
+        GlStateDiffProbe.Snapshot afterDhInjection = null;
         if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
             // Run vanilla's overload so third-party injections anchored inside it stay reachable (its
             // enableLightmap call is one such anchor). Its renderContainer pass draws nothing, since
             // Celeritas owns chunk rendering and never populates that container.
+            // Distant Horizons anchors its deferred transparent LOD pass inside that overload, so the
+            // state is sampled across it: a difference here belongs to DH, one across the draw below
+            // belongs to Celeritas. Both captures are no-ops while the GL debug option is off.
+            beforeDhInjection = GlStateDiffProbe.capture();
             this.renderBlockLayer(blockLayerIn);
+            afterDhInjection = GlStateDiffProbe.capture();
         }
 
         this.mc.entityRenderer.enableLightmap();
@@ -183,10 +191,14 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
         long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
+        GlStateDiffProbe.Snapshot beforeTerrainDraw = GlStateDiffProbe.capture();
         try {
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
         } finally {
-            RenderDebugHooksHolder.recordRenderGlobalStageTiming("terrain-" + blockLayerIn.name().toLowerCase(Locale.ROOT), pass, drawStartNanos);
+            String layerName = blockLayerIn.name().toLowerCase(Locale.ROOT);
+            GlStateDiffProbe.diffAndPrint("dh-injection-" + layerName + "-pass" + pass, beforeDhInjection, afterDhInjection);
+            GlStateDiffProbe.diffAndPrint("celeritas-draw-" + layerName + "-pass" + pass, beforeTerrainDraw, GlStateDiffProbe.capture());
+            RenderDebugHooksHolder.recordRenderGlobalStageTiming("terrain-" + layerName, pass, drawStartNanos);
             RenderDevice.exitManagedCode();
         }
 
