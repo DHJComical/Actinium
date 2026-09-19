@@ -232,6 +232,14 @@ public class GLStateManager {
     /** Widest GL state query GLSM answers into a caller-provided array (a 4x4 matrix). */
     private static final int ARRAY_QUERY_SCRATCH_SIZE = 16;
 
+    /**
+     * Direct-memory scratch for the array query overloads. The backend hands the buffer straight to the
+     * driver, so these must not be heap buffers: a heap buffer has no stable native address, and the
+     * driver then writes through a null pointer.
+     */
+    private static final IntBuffer ARRAY_QUERY_INT_SCRATCH = BufferUtils.createIntBuffer(ARRAY_QUERY_SCRATCH_SIZE);
+    private static final FloatBuffer ARRAY_QUERY_FLOAT_SCRATCH = BufferUtils.createFloatBuffer(ARRAY_QUERY_SCRATCH_SIZE);
+
     // Generation counters for FFP uniform dirty tracking. Bumped when the corresponding GLSM state changes.
     // Per-matrix-mode generation counters — avoids re-uploading all matrices when only one mode changed
 
@@ -1159,7 +1167,10 @@ public class GLStateManager {
      * answers so the backend can never overflow a shorter caller array.
      */
     public static void glGetInteger(int pname, int[] params) {
-        final IntBuffer buffer = IntBuffer.allocate(Math.max(params.length, ARRAY_QUERY_SCRATCH_SIZE));
+        final IntBuffer buffer = params.length <= ARRAY_QUERY_SCRATCH_SIZE
+            ? ARRAY_QUERY_INT_SCRATCH
+            : BufferUtils.createIntBuffer(params.length);
+        buffer.clear();
         glGetInteger(pname, buffer);
         buffer.position(0);
         buffer.get(params);
@@ -1271,7 +1282,10 @@ public class GLStateManager {
      * answers (a 4x4 matrix) so the backend can never overflow a shorter caller array.
      */
     public static void glGetFloat(int pname, float[] params) {
-        final FloatBuffer buffer = FloatBuffer.allocate(Math.max(params.length, ARRAY_QUERY_SCRATCH_SIZE));
+        final FloatBuffer buffer = params.length <= ARRAY_QUERY_SCRATCH_SIZE
+            ? ARRAY_QUERY_FLOAT_SCRATCH
+            : BufferUtils.createFloatBuffer(params.length);
+        buffer.clear();
         glGetFloat(pname, buffer);
         buffer.position(0);
         buffer.get(params);
