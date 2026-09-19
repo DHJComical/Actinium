@@ -273,6 +273,13 @@ public abstract class RenderSectionManager {
         this.updateCameraPosition(playerViewport);
         this.shadowPassRanThisFrame = true;
 
+        // Both passes search one shared lattice and a search reads it for its whole duration, so every viewport this
+        // frame searches is prepared here, before its first search is submitted. The shadow manager cannot prepare
+        // its own: by the time it runs, the terrain search is already in flight. The two viewports are a frame apart
+        // — the terrain pass is handed the viewport captured last frame — so the prepared window covers both.
+        final float searchDistance = this.getSearchDistance(null);
+        this.renderListManager.prepareSearchWindow(searchDistance, playerViewport, shadowViewport);
+
         if (this.renderListManager.isNeedsUpdate()) {
             this.createTerrainRenderList(playerViewport, null, frame, spectator);
         }
@@ -284,7 +291,7 @@ public abstract class RenderSectionManager {
         }
 
         this.shadowRenderListManager.startShadowGraphUpdate(shadowViewport, frame, this.regions.getRegionIdsLength(),
-                this.getSearchDistance(null), lightVector, this.getTargetQueueSize());
+                searchDistance, lightVector, this.getTargetQueueSize());
     }
 
     /**
