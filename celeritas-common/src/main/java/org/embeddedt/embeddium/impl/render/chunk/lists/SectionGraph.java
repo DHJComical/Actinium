@@ -4,6 +4,7 @@ import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.SectionLattice;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Vector3ic;
 
 import java.util.ArrayDeque;
 import java.util.concurrent.CompletableFuture;
@@ -51,6 +52,26 @@ public final class SectionGraph {
 
     SectionLattice getLattice() {
         return this.lattice;
+    }
+
+    /**
+     * Prepare the occlusion window for the searches a frame is about to submit through {@link #submit}.
+     *
+     * <p>A running search reads the lattice's parallel arrays for its whole duration, so the window may only be
+     * allocated, rebased or slid while no search is in flight. A frame that searches more than one viewport — the
+     * terrain pass and the shadow pass share this lattice, and root their searches at cameras a frame apart — must
+     * therefore prepare every one of them <em>before</em> submitting the first search. Rebasing the window under a
+     * search in flight clears the very cells its queue still points at, and the traversal then classifies a slot
+     * whose region id is the lattice's empty-cell sentinel.
+     *
+     * <p>This method fails fast when that ordering is violated instead of corrupting a live search.
+     *
+     * @param searchDistance         render distance every prepared search will be run with
+     * @param cameraSectionPositions sections the frame's searches will be rooted at, one per pass
+     */
+    public void prepareWindow(float searchDistance, Vector3ic... cameraSectionPositions) {
+        this.assertSearchNotRunning();
+        this.lattice.ensureWindowCovers(searchDistance, cameraSectionPositions);
     }
 
     /**

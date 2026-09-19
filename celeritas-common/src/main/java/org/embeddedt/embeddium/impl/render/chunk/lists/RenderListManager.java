@@ -12,6 +12,7 @@ import org.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3fc;
+import org.joml.Vector3ic;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -107,7 +108,7 @@ public class RenderListManager {
             throw new IllegalStateException("startGraphUpdate is for the terrain pass; use startShadowGraphUpdate");
         }
 
-        this.lattice.ensureWindowCovers(viewport.getChunkCoord(), searchDistance);
+        this.graph.prepareWindow(searchDistance, viewport.getChunkCoord());
 
         this.submitSearch(frame, regionIdsLength, targetQueueSize, viewport, visitor ->
                 this.lattice.findVisible(visitor, viewport, searchDistance, regionIdsLength, useOcclusionCulling, true, frame));
@@ -117,6 +118,11 @@ public class RenderListManager {
      * Start the shadow search. Only valid on the shadow manager, and only after the terrain manager has submitted
      * its search for this frame.
      *
+     * <p>The lattice window is a resource shared with the terrain pass, and a search reads it for its whole
+     * duration: this manager must not prepare it here, because the terrain search for this frame has already been
+     * submitted and may still be running. The caller prepares every viewport the frame searches — including this one
+     * — through {@link #prepareSearchWindow} before the first search of the frame is submitted.
+     *
      * @param lightVector unit vector toward the shadow light, or {@code null} to run the frustum-only scan instead
      */
     public void startShadowGraphUpdate(Viewport shadowViewport, int frame, int regionIdsLength, float searchDistance, @Nullable Vector3fc lightVector, int targetQueueSize) {
@@ -124,10 +130,24 @@ public class RenderListManager {
             throw new IllegalStateException("startShadowGraphUpdate is for the shadow pass; use startGraphUpdate");
         }
 
-        this.lattice.ensureWindowCovers(shadowViewport.getChunkCoord(), searchDistance);
-
         this.submitSearch(frame, regionIdsLength, targetQueueSize, shadowViewport, visitor ->
                 this.lattice.findShadowVisible(visitor, shadowViewport, searchDistance, regionIdsLength, lightVector, frame));
+    }
+
+    /**
+     * Prepare the shared lattice window so searches rooted at {@code viewports} can run against it.
+     *
+     * <p>Called once per frame, for every viewport that frame will search, before any of its searches is submitted,
+     * so that no window rebase can run while a search is reading the lattice. See {@link SectionGraph#prepareWindow}.
+     */
+    public void prepareSearchWindow(float searchDistance, Viewport... viewports) {
+        Vector3ic[] cameras = new Vector3ic[viewports.length];
+
+        for (int i = 0; i < viewports.length; i++) {
+            cameras[i] = viewports[i].getChunkCoord();
+        }
+
+        this.graph.prepareWindow(searchDistance, cameras);
     }
 
     private void submitSearch(int frame, int regionIdsLength, int targetQueueSize, Viewport viewport,

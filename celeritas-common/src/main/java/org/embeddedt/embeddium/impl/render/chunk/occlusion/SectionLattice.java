@@ -402,7 +402,7 @@ public final class SectionLattice {
     }
 
     /**
-     * Ensure the lattice window covers the search radius around the camera.
+     * Ensure the lattice window covers the search radius around one camera.
      *
      * <p>The traversal can reach {@code radius} sections from the camera and
      * then inspect one more neighbour, so every section in that reach must be
@@ -423,38 +423,91 @@ public final class SectionLattice {
      * detachment, or metadata updates while it is running.
      */
     public void ensureWindowCovers(Vector3ic cameraSectionPos, float searchDistance) {
+        this.ensureWindowCovers(searchDistance, cameraSectionPos);
+    }
+
+    /**
+     * Ensure the window covers every camera that a frame's searches will be
+     * rooted at.
+     *
+     * <p>One lattice serves every pass of a frame, and each pass roots its
+     * search at its own viewport. Those cameras can differ — the shadow pass
+     * hands the terrain pass the viewport it captured a frame earlier — so a
+     * window holding just one of them would leave the other pass rooting its
+     * search outside the addressable interior. The window is sized and placed
+     * to hold all of them, which for a single camera is exactly the placement
+     * {@link #ensureWindowCovers(Vector3ic, float)} computes.
+     *
+     * <p>Call this for every viewport of the frame before submitting any of its
+     * searches: see {@link #findVisible}.
+     *
+     * @throws IllegalStateException if the requests are spread too far apart for
+     *                               the largest supported window
+     */
+    public void ensureWindowCovers(float searchDistance, Vector3ic... cameraSectionPositions) {
+        if (cameraSectionPositions.length == 0) {
+            throw new IllegalArgumentException("At least one camera section is required");
+        }
+
         int radius = MathUtil.mojfloor(searchDistance / 16.0f);
-        int neededDimXZ = 2 * (radius + SLACK) + 3;
+
+        int minX = cameraSectionPositions[0].x();
+        int maxX = minX;
+        int minZ = cameraSectionPositions[0].z();
+        int maxZ = minZ;
+
+        for (Vector3ic camera : cameraSectionPositions) {
+            minX = Math.min(minX, camera.x());
+            maxX = Math.max(maxX, camera.x());
+            minZ = Math.min(minZ, camera.z());
+            maxZ = Math.max(maxZ, camera.z());
+        }
+
+        // A base-sized window already holds cameras spanning SLACK sections; only a wider spread needs extra width,
+        // rounded up so a camera stepping one section at a time does not reallocate on every step.
+        int spread = Math.max(maxX - minX, maxZ - minZ);
+        int spreadAllowance = spread <= SLACK ? 0 : (spread + SLACK - 1) / SLACK * SLACK;
+        int neededDimXZ = 2 * (radius + SLACK) + 3 + spreadAllowance;
 
         if (this.visitState == null || neededDimXZ > this.dimX) {
             this.allocate(neededDimXZ);
         }
 
-        int lx = cameraSectionPos.x() - this.baseX;
-        int lz = cameraSectionPos.z() - this.baseZ;
-
         // Include the neighbour of the outermost section the traversal can visit.
         int reach = radius + 1;
 
-        boolean valid = this.established
-                && lx - reach >= 1 && lx + reach <= this.dimX - 2
-                && lz - reach >= 1 && lz + reach <= this.dimZ - 2;
-
-        if (!valid) {
-            int newBaseX = cameraSectionPos.x() - this.dimX / 2;
-            int newBaseZ = cameraSectionPos.z() - this.dimZ / 2;
-
-            if (this.established) {
-                // The current window is valid to slide from: reuse its retained
-                // contents and only resolve the newly exposed cells.
-                this.shiftRebase(newBaseX, newBaseZ);
-            } else {
-                // Fresh or resized arrays have no reusable contents.
-                this.rebase(newBaseX, newBaseZ);
-            }
-
-            this.established = true;
+        if (this.established && this.windowHoldsEveryCamera(cameraSectionPositions, reach)) {
+            return;
         }
+
+        int newBaseX = minX + (maxX - minX) / 2 - this.dimX / 2;
+        int newBaseZ = minZ + (maxZ - minZ) / 2 - this.dimZ / 2;
+
+        if (this.established) {
+            // The current window is valid to slide from: reuse its retained
+            // contents and only resolve the newly exposed cells.
+            this.shiftRebase(newBaseX, newBaseZ);
+        } else {
+            // Fresh or resized arrays have no reusable contents.
+            this.rebase(newBaseX, newBaseZ);
+        }
+
+        this.established = true;
+    }
+
+    // Whether every camera's reach lies inside the installable interior of the current window.
+    private boolean windowHoldsEveryCamera(Vector3ic[] cameraSectionPositions, int reach) {
+        for (Vector3ic camera : cameraSectionPositions) {
+            int lx = camera.x() - this.baseX;
+            int lz = camera.z() - this.baseZ;
+
+            if (lx - reach < 1 || lx + reach > this.dimX - 2
+                    || lz - reach < 1 || lz + reach > this.dimZ - 2) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
