@@ -12,15 +12,50 @@ import org.taumc.glsl.grammar.GLSLParserBaseListener;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VertexShaderGeneratorTest {
-    private static final int BIT_HAS_VERTEX_TEX = 17;
+    private static final int BIT_HAS_VERTEX_TEX = 18;
     private static final int BIT_TEXTURE = 12;
-    private static final int BIT_TEX_MATRIX = 14;
-    private static final int BIT_TEXGEN_S = 22;
-    private static final int BIT_TEXGEN_T = 25;
-    private static final int BIT_TEXGEN_R = 28;
+    private static final int BIT_TEX_MATRIX = 37;
+    private static final int BIT_TEXGEN_S = 23;
+    private static final int BIT_TEXGEN_T = 26;
+    private static final int BIT_TEXGEN_R = 29;
+    private static final int BIT_UNIT2_TEX = 14;
+    private static final int BIT_UNIT3_TEX = 15;
+    private static final int BIT_UNIT23_UV_FROM_UNIT0 = 41;
+    private static final int BIT_LINE_STIPPLE = 42;
+
+    @Test
+    void lineStippleEmitsFlatLineStartVaryingAndViewportUniform() {
+        String shader = VertexShaderGenerator.generate(VertexKey.fromPacked(1L << BIT_LINE_STIPPLE));
+
+        assertTrue(shader.contains("flat out vec2 v_LineStart;"), shader);
+        assertTrue(shader.contains("uniform vec4 u_Viewport;"), shader);
+        assertTrue(shader.contains("v_LineStart = u_Viewport.xy + (ndc * 0.5 + 0.5) * u_Viewport.zw;"), shader);
+    }
+
+    @Test
+    void units2And3EmitOwnVaryingsFedByCurrentTexCoordUniforms() {
+        String shader = VertexShaderGenerator.generate(VertexKey.fromPacked((1L << BIT_UNIT2_TEX) | (1L << BIT_UNIT3_TEX)));
+
+        assertTrue(shader.contains("out vec4 v_TexCoord2;"), shader);
+        assertTrue(shader.contains("out vec4 v_TexCoord3;"), shader);
+        assertTrue(shader.contains("uniform vec4 u_CurrentTexCoord2;"), shader);
+        assertTrue(shader.contains("uniform vec4 u_CurrentTexCoord3;"), shader);
+        assertTrue(shader.contains("v_TexCoord2 = u_CurrentTexCoord2;"), shader);
+        assertTrue(shader.contains("v_TexCoord3 = u_CurrentTexCoord3;"), shader);
+    }
+
+    @Test
+    void unit23UvFromUnit0SourcesVaryingsFromUnit0Attribute() {
+        final long packed = (1L << BIT_UNIT23_UV_FROM_UNIT0) | (1L << BIT_HAS_VERTEX_TEX) | (1L << BIT_UNIT2_TEX);
+        String shader = VertexShaderGenerator.generate(VertexKey.fromPacked(packed));
+
+        assertTrue(shader.contains("v_TexCoord2 = a_TexCoord0;"), shader);
+        assertFalse(shader.contains("u_CurrentTexCoord2"), shader);
+    }
 
     @Test
     void primaryTextureAttributeAcceptsCompleteHomogeneousCoordinates() {

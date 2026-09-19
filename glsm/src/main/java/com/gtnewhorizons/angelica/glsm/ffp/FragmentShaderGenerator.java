@@ -27,6 +27,7 @@ public final class FragmentShaderGenerator {
         }
 
         sb.append("void main() {\n");
+        emitLineStipple(sb, key);
         emitTextureSampling(sb, key);
         emitTexEnvChain(sb, key);
         emitSpecularAdd(sb, key);
@@ -44,16 +45,27 @@ public final class FragmentShaderGenerator {
         if (key.separateSpecular()) {
             sb.append("in vec3 v_SpecularColor;\n");
         }
-        if (key.textureEnabled()) {
-            sb.append("in vec4 v_TexCoord0;\n");
-        }
-        if (key.lightmapEnabled()) {
-            sb.append("in vec4 v_TexCoord1;\n");
+        // Per-unit texcoord inputs. Each enabled unit sources from its own varying.
+        for (int i = 0; i < key.nrEnabledUnits(); i++) {
+            if (key.unitEnabled(i)) {
+                sb.append("in vec4 v_TexCoord").append(i).append(";\n");
+            }
         }
         if (key.fogMode() != FragmentKey.FOG_NONE) {
             sb.append("in float v_FogCoord;\n");
         }
+        if (key.lineStipple()) {
+            sb.append("flat in vec2 v_LineStart;\n");
+        }
         sb.append('\n');
+    }
+
+    private static void emitLineStipple(StringBuilder sb, FragmentKey key) {
+        if (!key.lineStipple()) return;
+        // u_LineStipple packs the repeat factor in the high 16 bits and the pattern in the low 16.
+        sb.append("  vec2 stippleDelta = abs(gl_FragCoord.xy - v_LineStart);\n");
+        sb.append("  int stippleBit = int(floor(max(stippleDelta.x, stippleDelta.y) / float(u_LineStipple >> 16))) & 15;\n");
+        sb.append("  if (((u_LineStipple >> stippleBit) & 1) == 0) discard;\n\n");
     }
 
     private static void emitUniforms(StringBuilder sb, FragmentKey key) {
@@ -63,6 +75,9 @@ public final class FragmentShaderGenerator {
                 sb.append("uniform sampler2D u_Sampler").append(i).append(";\n");
             }
         }
+        if (key.lineStipple()) {
+            sb.append("uniform int u_LineStipple;\n");
+        }
         if (key.alphaTestEnabled()) {
             sb.append("uniform float u_AlphaRef;\n");
         }
@@ -71,6 +86,12 @@ public final class FragmentShaderGenerator {
             if (key.unitEnabled(i) && key.unitNeedsEnvColor(i)) {
                 sb.append("uniform vec4 u_TexEnvColor").append(i).append(";\n");
             }
+        }
+        if (key.overlayEnabled()) {
+            sb.append("uniform vec4 u_OverlayColor;\n");
+        }
+        if (key.colorSum()) {
+            sb.append("uniform vec3 u_SecondaryColor;\n");
         }
         if (key.fogMode() != FragmentKey.FOG_NONE) {
             sb.append("uniform vec4 u_FogParams;\n");
@@ -82,11 +103,7 @@ public final class FragmentShaderGenerator {
     private static void emitTextureSampling(StringBuilder sb, FragmentKey key) {
         for (int i = 0; i < key.nrEnabledUnits(); i++) {
             if (!key.unitEnabled(i)) continue;
-            // Unit 1 is the lightmap — uses v_TexCoord1.
-            // Units 2-3 intentionally share unit 0's texture coordinates since
-            // the vertex shader only provides 2 tex coord varyings (unit 0 and unit 1/lightmap).
-            final String texCoord = (i == 1) ? "projectTexCoord(v_TexCoord1)" : "projectTexCoord(v_TexCoord0)";
-            sb.append("  vec4 tex").append(i).append("Color = texture(u_Sampler").append(i).append(", ").append(texCoord).append(");\n");
+            sb.append("  vec4 tex").append(i).append("Color = texture(u_Sampler").append(i).append(", projectTexCoord(v_TexCoord").append(i).append("));\n");
         }
     }
 
@@ -94,13 +111,22 @@ public final class FragmentShaderGenerator {
         if (!key.textureEnabled()) {
             sb.append("  // No texture -- vertex color only\n");
             sb.append("  vec4 color = v_Color;\n");
+            emitOverlay(sb, key);
             return;
         }
 
-        // Process units in order; "previous" starts as vertex color
+        // Process units in order; "previous" starts as vertex color.
         boolean firstUnit = true;
+        boolean overlayInjected = false;
         for (int i = 0; i < key.nrEnabledUnits(); i++) {
             if (!key.unitEnabled(i)) continue;
+
+            // The damage overlay applies over the base texture (unit 0) result, before any
+            // later units (lightmap) modulate it — matching the fixed-function overlay pass.
+            if (!firstUnit && !overlayInjected) {
+                emitOverlay(sb, key);
+                overlayInjected = true;
+            }
 
             final String texVar = textureVariable(i);
             final String envColorVar = "u_TexEnvColor" + i;
@@ -114,6 +140,16 @@ public final class FragmentShaderGenerator {
             }
             firstUnit = false;
         }
+
+        if (!overlayInjected) emitOverlay(sb, key);
+    }
+
+    /**
+     * Emit the modern-style damage overlay mix.
+     */
+    private static void emitOverlay(StringBuilder sb, FragmentKey key) {
+        if (!key.overlayEnabled()) return;
+        sb.append("  color.rgb = mix(color.rgb, u_OverlayColor.rgb, u_OverlayColor.a);\n");
     }
 
     private static void emitSimpleUnit(StringBuilder sb, FragmentKey key, int unit, String texVar, String envColorVar, String prevVar, String assign) {
@@ -287,6 +323,10 @@ public final class FragmentShaderGenerator {
         if (key.separateSpecular()) {
             sb.append("  // Add separate specular\n");
             sb.append("  color.rgb += v_SpecularColor;\n");
+        }
+        if (key.colorSum()) {
+            sb.append("  // Color sum - GL_COLOR_SUM with the current secondary color\n");
+            sb.append("  color.rgb += u_SecondaryColor;\n");
         }
     }
 

@@ -132,6 +132,40 @@ class GLSMRedirectorTest {
     }
 
     @Test
+    void rewritesDebugMessageCallbackToGlsmEntryPoint() {
+        // Mods registering a KHR_debug callback through any of the three LWJGL owner classes must
+        // land on GLStateManager.glDebugMessageCallback so the active render backend sees them.
+        for (String glOwner : new String[]{"org/lwjgl/opengl/KHRDebug", "org/lwjgl/opengl/GL43", "org/lwjgl/opengl/GL43C"}) {
+            byte[] classBytes = generateClassCallingDebugMessageCallback(glOwner);
+            GLSMRedirector redirector = new GLSMRedirector();
+
+            assertTrue(redirector.shouldTransform(classBytes), "class referencing " + glOwner + " must be a redirect candidate");
+
+            ClassNode cn = new ClassNode();
+            new ClassReader(classBytes).accept(cn, 0);
+            boolean changed = redirector.transformClassNode("sample/DebugCallback", cn);
+            assertTrue(changed, glOwner + ".glDebugMessageCallback call must be rewritten");
+
+            MethodNode render = cn.methods.stream()
+                .filter(m -> m.name.equals("render"))
+                .findFirst()
+                .orElseThrow();
+            boolean redirected = false;
+            for (AbstractInsnNode node : render.instructions) {
+                if (node instanceof MethodInsnNode call
+                    && call.getOpcode() == Opcodes.INVOKESTATIC
+                    && call.owner.equals(GLSM_GL_STATE_MANAGER)
+                    && call.name.equals("glDebugMessageCallback")
+                    && call.desc.equals("(Lorg/lwjgl/opengl/KHRDebugCallback;)V")) {
+                    redirected = true;
+                    break;
+                }
+            }
+            assertTrue(redirected, glOwner + ".glDebugMessageCallback must be redirected to GLSM GLStateManager with the KHRDebugCallback descriptor");
+        }
+    }
+
+    @Test
     void untouchedClassWithoutGlReferencesIsNotTransformed() {
         ClassWriter cw = new ClassWriter(0);
         cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "sample/Plain", null, "java/lang/Object", null);
@@ -145,6 +179,20 @@ class GLSMRedirectorTest {
 
         GLSMRedirector redirector = new GLSMRedirector();
         assertEquals(false, redirector.shouldTransform(cw.toByteArray()));
+    }
+
+    private static byte[] generateClassCallingDebugMessageCallback(String glOwner) {
+        ClassWriter cw = new ClassWriter(0);
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, "sample/DebugCallback", null, "java/lang/Object", null);
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "render", "()V", null, null);
+        mv.visitCode();
+        mv.visitInsn(Opcodes.ACONST_NULL);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, glOwner, "glDebugMessageCallback", "(Lorg/lwjgl/opengl/KHRDebugCallback;)V", false);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(1, 0);
+        mv.visitEnd();
+        cw.visitEnd();
+        return cw.toByteArray();
     }
 
     private static byte[] generateClassCallingVanillaColor() {

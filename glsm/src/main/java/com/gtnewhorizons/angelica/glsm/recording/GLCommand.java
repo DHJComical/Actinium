@@ -61,6 +61,7 @@ public final class GLCommand {
     public static final int COLOR = 54;              // [cmd:4][r:4f][g:4f][b:4f][a:4f]
     public static final int CLEAR_COLOR = 55;        // [cmd:4][r:4f][g:4f][b:4f][a:4f]
     public static final int BLEND_COLOR = 56;        // [cmd:4][r:4f][g:4f][b:4f][a:4f]
+    public static final int SECONDARY_COLOR = 57;    // [cmd:4][r:4f][g:4f][b:4f]
 
     // === Mixed int+float commands ===
     public static final int ALPHA_FUNC = 60;         // [cmd:4][func:4][ref:4f]
@@ -98,7 +99,6 @@ public final class GLCommand {
 
 
     public static final int DRAW_ARRAYS = 110;       // [cmd:4][drawMode:4][start:4][count:4] = 20 bytes
-    public static final int DRAW_ELEMENTS = 111;     // [cmd:4][mode:4][indices_count:4][type:4][indices_buffer_offset:8] = 28 bytes
     public static final int DRAW_BUFFER = 112;       // [cmd:4][mode:4] = 8 bytes
     public static final int DRAW_BUFFERS = 113;      // [cmd:4][count:4][bufs:4*8] = 40 bytes (up to 8 buffers)
     /**
@@ -158,6 +158,7 @@ public final class GLCommand {
             case LINE_WIDTH -> "LINE_WIDTH";
             case POLYGON_OFFSET -> "POLYGON_OFFSET";
             case COLOR -> "COLOR";
+            case SECONDARY_COLOR -> "SECONDARY_COLOR";
             case CLEAR_COLOR -> "CLEAR_COLOR";
             case BLEND_COLOR -> "BLEND_COLOR";
             case ALPHA_FUNC -> "ALPHA_FUNC";
@@ -219,15 +220,14 @@ public final class GLCommand {
             // Three int commands (16 bytes)
             case GLCommand.STENCIL_FUNC, GLCommand.STENCIL_OP, GLCommand.TEX_PARAMETERI,
                  GLCommand.LIGHTF, GLCommand.LIGHTI,
-                 GLCommand.MATERIALF, GLCommand.TEX_PARAMETERF, GLCommand.DRAW_ARRAYS -> 16;
+                 GLCommand.MATERIALF, GLCommand.TEX_PARAMETERF, GLCommand.DRAW_ARRAYS,
+                 GLCommand.SECONDARY_COLOR -> 16;
 
             // Four int commands (20 bytes)
             case GLCommand.VIEWPORT, GLCommand.BLEND_FUNC, GLCommand.COLOR_MASK,
                  GLCommand.STENCIL_FUNC_SEPARATE, GLCommand.STENCIL_OP_SEPARATE,
                  GLCommand.SCISSOR,
                  GLCommand.COLOR, GLCommand.CLEAR_COLOR, GLCommand.BLEND_COLOR -> 20;
-
-            case GLCommand.DRAW_ELEMENTS -> 24;
 
             // DRAW_RANGE_RESTORE: 28 bytes
             case GLCommand.DRAW_RANGE_RESTORE -> 28;

@@ -102,3 +102,33 @@ dev 实机验证：进入世界时 Server thread 日志
 - 无已知遗留缺口：转换触发条件（`needsTransformation`/`COMPAT_BUILTINS`）已随修复补上
   `texture1D`/`textureCube`/`shadow1D`，纯函数场景（shader 只含旧式采样函数而无其他
   compat 内建）同样进入转换路径。
+
+## dev runtime 依赖降级为 compileOnly
+
+最后更新：2026-09-19
+
+CQR 在 `gradle/scripts/dependencies.gradle` 中已由 `modRuntimeOnly` 降级为
+`modCompileOnly`（其 requiredMods geckolib / ReachFix 一并停用），dev 环境不再加载 CQR。
+
+原因：unimined 为 cleanroom 生成的 dev 命名（MCP）Minecraft jar 里，`MapData.dimension`
+字段被命名为 `d`（反编译源码写的却是 `public int dimension; //FML byte -> int`，源码与
+字节码不一致；缓存内 cleanroom 0.3.31/0.5.12/0.6.7/0.6.10/0.6.12 各版本、stable_39 与
+snapshot 两个通道共 17 份 MCP jar 全部复现；`srg2mcp.tsrg` 中
+`field_76200_c dimension` 映射本身正确，说明丢失发生在应用映射的代码路径）。CQR 的
+remap 产物仍以 SRG 名 `MapData.field_76200_c` 引用该字段（同方法内 `xCenter`/`scale`/
+`zCenter`/`colors` 都已是 MCP 名），因此进入世界后一旦生成带填充地图的地牢
+（`GeneratableMapInfo.updateMapData` → `place` → `BlockDungeonPart.generate` →
+`DungeonGenerationEventHandler.onWorldTickEvent`），server tick loop 即抛
+
+```
+java.lang.NoSuchFieldError: Class net.minecraft.world.storage.MapData does not have member field 'int dimension'
+```
+
+集成服务器崩溃并保存 `crash-<时间>-server.txt`，客户端随之中止。生产 jar 走 SRG 名，
+不受此 dev 命名问题影响。
+
+shader 兼容路径不依赖 dev runtime：`CompatShaderTransformerTest` 用 CQR 自带 GLSL 原文做
+转换断言，仍持续覆盖。
+
+恢复 `modRuntimeOnly` 的条件：dev 命名 Minecraft jar 中该字段恢复为 `dimension` 后，
+连带恢复 geckolib / ReachFix 并重跑本文档上方"验证记录"的实机场景。

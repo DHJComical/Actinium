@@ -267,6 +267,13 @@ public final class CommandBufferExecutor {
                     ptr += 16;
                     GLStateManager.glColor4f(r, g, b, a);
                 }
+                case GLCommand.SECONDARY_COLOR -> {
+                    final float r = memGetFloat(ptr);
+                    final float g = memGetFloat(ptr + 4);
+                    final float b = memGetFloat(ptr + 8);
+                    ptr += 12;
+                    GLStateManager.glSecondaryColor3f(r, g, b);
+                }
                 case GLCommand.CLEAR_COLOR -> {
                     final float r = memGetFloat(ptr);
                     final float g = memGetFloat(ptr + 4);
@@ -533,10 +540,6 @@ public final class CommandBufferExecutor {
                 case GLCommand.DRAW_ARRAYS -> {
                     GLStateManager.glDrawArrays(memGetInt(ptr), memGetInt(ptr + 4), memGetInt(ptr + 8));
                     ptr += 12;
-                }
-                case GLCommand.DRAW_ELEMENTS -> {
-                    GLStateManager.glDrawElements(memGetInt(ptr), memGetInt(ptr + 4), memGetInt(ptr + 8), memGetLong(ptr + 12));
-                    ptr += 20;
                 }
                 case GLCommand.BIND_VBO -> {
                     GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, memGetInt(ptr));

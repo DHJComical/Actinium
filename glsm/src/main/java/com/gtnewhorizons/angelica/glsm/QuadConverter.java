@@ -345,6 +345,132 @@ public final class QuadConverter {
     }
 
     /**
+     * Read one index at {@code srcAddr + i * sizeof(srcType)} and return its
+     * zero-extended unsigned value.
+     */
+    private static int readIndex(long srcAddr, int srcType, int i) {
+        return switch (srcType) {
+            case GL11.GL_UNSIGNED_BYTE  -> memGetByte(srcAddr + i)          & 0xFF;
+            case GL11.GL_UNSIGNED_SHORT -> memGetShort(srcAddr + i * 2L)    & 0xFFFF;
+            case GL11.GL_UNSIGNED_INT   -> memGetInt(srcAddr + i * 4L);
+            default -> throw new IllegalArgumentException("unsupported index type 0x" + Integer.toHexString(srcType));
+        };
+    }
+
+    /**
+     * Write one index at {@code dstAddr + i * sizeof(dstType)}.
+     */
+    private static void writeIndex(long dstAddr, int dstType, int i, int value) {
+        switch (dstType) {
+            case GL11.GL_UNSIGNED_SHORT -> memPutShort(dstAddr + i * 2L, (short) value);
+            case GL11.GL_UNSIGNED_INT   -> memPutInt(dstAddr + i * 4L, value);
+            default -> throw new IllegalArgumentException("unsupported index type 0x" + Integer.toHexString(dstType));
+        }
+    }
+
+    /**
+     * Read {@code quadCount} quads from {@code srcAddr} and emit 6 triangle indices
+     * per quad at {@code dstAddr} using {@code GL_LAST_VERTEX_CONVENTION}:
+     * {@code (a,b,d), (b,c,d)}. v3 is the provoking vertex for both triangles;
+     * diagonal runs b→d. Matches Mesa's {@code do_quad} LAST path.
+     *
+     * <p>Caller allocates dst of size {@code quadCount * 6 * sizeof(dstType)}.
+     *
+     * <p>Supported src types: {@code GL_UNSIGNED_BYTE} / {@code GL_UNSIGNED_SHORT}
+     * / {@code GL_UNSIGNED_INT}. Supported dst types: {@code GL_UNSIGNED_SHORT} /
+     * {@code GL_UNSIGNED_INT}. Widening only.
+     */
+    public static void triangulateQuads(long srcAddr, int srcType, long dstAddr, int dstType, int quadCount) {
+        triangulateQuads(srcAddr, srcType, dstAddr, dstType, quadCount, 0);
+    }
+
+    /**
+     * Same as {@link #triangulateQuads(long, int, long, int, int)} but subtracts
+     * {@code minVtx} from every emitted index, rebasing to a 0-based buffer in
+     * one pass.
+     */
+    public static void triangulateQuads(long srcAddr, int srcType, long dstAddr, int dstType, int quadCount, int minVtx) {
+        for (int i = 0; i < quadCount; i++) {
+            final int a = readIndex(srcAddr, srcType, i * 4)     - minVtx;
+            final int b = readIndex(srcAddr, srcType, i * 4 + 1) - minVtx;
+            final int c = readIndex(srcAddr, srcType, i * 4 + 2) - minVtx;
+            final int d = readIndex(srcAddr, srcType, i * 4 + 3) - minVtx;
+            final int o = i * 6;
+            writeIndex(dstAddr, dstType, o,     a);
+            writeIndex(dstAddr, dstType, o + 1, b);
+            writeIndex(dstAddr, dstType, o + 2, d);
+            writeIndex(dstAddr, dstType, o + 3, b);
+            writeIndex(dstAddr, dstType, o + 4, c);
+            writeIndex(dstAddr, dstType, o + 5, d);
+        }
+    }
+
+    /**
+     * Copy {@code count} indices from {@code srcAddr} to {@code dstAddr}, converting
+     * from {@code srcType} to {@code dstType}.
+     *
+     * <p>Supported src types: {@code GL_UNSIGNED_BYTE} / {@code GL_UNSIGNED_SHORT} /
+     * {@code GL_UNSIGNED_INT}. Supported dst types: {@code GL_UNSIGNED_SHORT} /
+     * {@code GL_UNSIGNED_INT}. Widening only; narrowing is rejected by
+     * {@link #writeIndex(long, int, int, int) writeIndex}.
+     */
+    public static void widenIndices(long srcAddr, int srcType, long dstAddr, int dstType, int count) {
+        widenIndices(srcAddr, srcType, dstAddr, dstType, count, 0);
+    }
+
+    /**
+     * Same as {@link #widenIndices(long, int, long, int, int)} but subtracts
+     * {@code minVtx} from every written index in one pass.
+     */
+    public static void widenIndices(long srcAddr, int srcType, long dstAddr, int dstType, int count, int minVtx) {
+        for (int i = 0; i < count; i++) {
+            writeIndex(dstAddr, dstType, i, readIndex(srcAddr, srcType, i) - minVtx);
+        }
+    }
+
+    /**
+     * Scan {@code count} indices at {@code srcAddr} of {@code srcType}. Returns
+     * {@code (max << 32) | (min & 0xFFFFFFFFL)} or {@code -1L} for an unsupported
+     * type or empty range.
+     */
+    public static long scanMinMaxIndex(long srcAddr, int srcType, int count) {
+        if (count <= 0) return -1L;
+        long min = Long.MAX_VALUE;
+        long max = Long.MIN_VALUE;
+        switch (srcType) {
+            case GL11.GL_UNSIGNED_BYTE -> {
+                for (int i = 0; i < count; i++) {
+                    final int v = memGetByte(srcAddr + i) & 0xFF;
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+            }
+            case GL11.GL_UNSIGNED_SHORT -> {
+                for (int i = 0; i < count; i++) {
+                    final int v = memGetShort(srcAddr + i * 2L) & 0xFFFF;
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+            }
+            case GL11.GL_UNSIGNED_INT -> {
+                for (int i = 0; i < count; i++) {
+                    final long v = memGetInt(srcAddr + i * 4L) & 0xFFFFFFFFL;
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+                // readIndex / writeIndex / rebase all route UINT through signed int.
+                // Reject the > 2^31 slice so the caller bails rather than silently
+                // emitting negative indices. MC never hits this in practice.
+                if (max > Integer.MAX_VALUE) return -1L;
+            }
+            default -> {
+                return -1L;
+            }
+        }
+        return (max << 32) | (min & 0xFFFFFFFFL);
+    }
+
+    /**
      * Clean up the shared EBO.
      */
     public static synchronized void destroy() {

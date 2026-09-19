@@ -1,6 +1,6 @@
 # 上游代码维护
 
-最后更新：2026-09-07。
+最后更新：2026-09-18。
 
 Actinium 以源码形式内嵌了多个大型上游项目。当前仓库能确定本地首次导入 commit，
 但早期导入没有保存精确的上游 SHA。`THIRD_PARTY_NOTICES.md` 是当前来源清单，
@@ -12,7 +12,7 @@ Actinium 以源码形式内嵌了多个大型上游项目。当前仓库能确�
 | --- | --- | --- |
 | Celeritas 基础 | `6167e49`（独立项目提取时已存在） | `celeritas-common/`、部分 `src/main/java/org/taumc/` |
 | Iris 管线 | `79306ba` | `shader/`、Iris Mixin 与资源 |
-| Angelica GLSM | `119f607`、`83ea1b7` | `glsm/`、部分 `src/main/java/com/gtnewhorizons/angelica/` |
+| Angelica GLSM | `119f607`、`83ea1b7`；覆盖面同步基准 `02f0b0fc` | `glsm/`、部分 `src/main/java/com/gtnewhorizons/angelica/` |
 | GTNHLib | `83ea1b7` | `GTNHLib/` |
 | mitchej123 GL/LWJGL service | `4826cf8` | service 接口、provider 和相关 GL bridge |
 
@@ -21,6 +21,11 @@ Actinium 以源码形式内嵌了多个大型上游项目。当前仓库能确�
 Celeritas 上游（https://git.taumc.org/embeddedt/celeritas，stonecutter 分支）的同步基准
 已推进至 `5c68ed4cb`（2026-09-08，见 `sync-celeritas-5c68ed4cb.md`；此前依次为
 `f15085d4`、`7190f87d8`、`fe57c60fa`）。上游镜像仓库在 `D:/Code/celeritas-mirror`。
+
+Angelica GLSM 的覆盖面同步基准为 `02f0b0fc`（2026-09-18，分支 `feat/glsm-angelica-sync`，
+见 `sync-angelica-glsm-02f0b0fc.md`）：多上下文架构、redirect 表、FFP 生成、事件接线、
+GLES 支持、recording 烘焙与 sdl-gpu 前置件已落地；该 SHA 是本轮参照的上游检出，
+不追溯早期导入的精确上游 SHA（仍见下方「待追溯」）。
 
 ## 更新流程
 
