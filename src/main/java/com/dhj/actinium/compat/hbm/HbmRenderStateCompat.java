@@ -1,5 +1,6 @@
 package com.dhj.actinium.compat.hbm;
 
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.tileentity.TileEntity;
@@ -27,6 +28,23 @@ public final class HbmRenderStateCompat {
     private HbmRenderStateCompat() {
     }
 
+    /**
+     * Returns whether the HBM compatibility layer applies in this install.
+     *
+     * <p>Read per tile-entity entry from a hook that lives on a vanilla class, so the tile-entity
+     * side of the compat has to be inert on vanilla-only installs. The {@link Mods#HBM} flag is
+     * sampled through a holder instead of a field of this class: this class is also loaded by its
+     * unit tests and by early class verification, where reading the flag would touch a launch-time
+     * mod scan that has not run. The first actual call always happens after mod discovery.</p>
+     */
+    public static boolean isHbmInstalled() {
+        return HbmPresence.INSTALLED;
+    }
+
+    private static final class HbmPresence {
+        private static final boolean INSTALLED = Mods.HBM;
+    }
+
     /** Pushes the equivalent GLSM state for an HBM attribute scope. */
     public static void pushAttrib(int hbmMask) {
         GLStateManager.glPushAttrib(toGlMask(hbmMask));
@@ -48,8 +66,14 @@ public final class HbmRenderStateCompat {
      * <p>The dispatcher skips vanilla's lightmap update for fast renderers. HBM has renderers
      * that issue raw GL draws without a vertex lightmap attribute, so the current coordinate must
      * be valid before either renderer kind is entered.</p>
+     *
+     * <p>Inert without HBM: the caller is a hook on a vanilla class, so a vanilla-only install
+     * must see no lightmap write and no extra world lookup at all.</p>
      */
     public static void setWorldLightmap(TileEntity tileEntity) {
+        if (!isHbmInstalled()) {
+            return;
+        }
         int combinedLight = tileEntity.getWorld().getCombinedLight(tileEntity.getPos(), 0);
         GLStateManager.setLightmapTextureCoords(
             OpenGlHelper.lightmapTexUnit,

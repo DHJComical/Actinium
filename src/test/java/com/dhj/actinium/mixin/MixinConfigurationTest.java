@@ -54,6 +54,7 @@ class MixinConfigurationTest {
         "mixins.actinium.oldresearch.json",
         "mixins.actinium.botania.json",
         "mixins.actinium.hbm.json",
+        "mixins.actinium.hbm.early.json",
         "mixins.actinium.kirino.json",
         "mixins.actinium.scannable.json",
         "mixins.actinium.littletiles.json",

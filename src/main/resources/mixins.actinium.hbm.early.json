@@ -1,5 +1,5 @@
 {
-  "package": "com.dhj.actinium.mixin.mod.hbm",
+  "package": "com.dhj.actinium.mixin.early.hbm",
   "required": true,
   "refmap": "mixins.actinium-refmap.json",
   "target": "@env(DEFAULT)",
@@ -8,7 +8,7 @@
   "mixins": [],
   "server": [],
   "client": [
-    "MixinRenderUtil"
+    "MixinTileEntityRendererDispatcherLightmap"
   ],
   "injectors": {
     "defaultRequire": 1
