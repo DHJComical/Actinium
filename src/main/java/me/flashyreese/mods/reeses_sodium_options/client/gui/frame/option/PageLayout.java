@@ -1,12 +1,14 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.frame.option;
 
 import com.dhj.actinium.gui.rso.compat.Component;
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.state.SearchResultEntry;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.state.SearchResultOrder;
 import net.minecraft.util.ResourceLocation;
-import org.embeddedt.embeddium.api.options.structure.Option;
-import org.embeddedt.embeddium.api.options.structure.OptionGroup;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.Option;
+import dhj.embeddedt.embeddium.api.options.structure.OptionGroup;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -144,7 +146,7 @@ final class PageLayout {
 
     /** Returns the embeddium OptionIdentifier as a 1.12.2 ResourceLocation, or null. */
     static @Nullable ResourceLocation optionId(Option<?> option) {
-        org.embeddedt.embeddium.api.options.OptionIdentifier<?> id = option.getId();
+        OptionIdentifier<?> id = option.getId();
         if (id == null || id.getModId().isBlank() || id.getPath().isBlank()) {
             return null;
         }
@@ -152,7 +154,7 @@ final class PageLayout {
     }
 
     private static boolean hasLabel(OptionGroup group) {
-        org.embeddedt.embeddium.impl.gui.framework.TextComponent name = group.getName();
+        TextComponent name = group.getName();
         return name != null && !name.toString().isEmpty();
     }
 

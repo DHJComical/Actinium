@@ -1,6 +1,6 @@
 package com.dhj.actinium.compat.ichunutil;
 
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.joml.Vector3d;
 
 import java.util.Objects;

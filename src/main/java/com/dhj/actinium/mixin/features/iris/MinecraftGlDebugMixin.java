@@ -2,7 +2,7 @@ package com.dhj.actinium.mixin.features.iris;
 
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.minecraft.client.Minecraft;
-import org.embeddedt.embeddium.impl.gl.profiling.TimerQueryManager;
+import dhj.embeddedt.embeddium.impl.gl.profiling.TimerQueryManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;

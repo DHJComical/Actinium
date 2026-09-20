@@ -1,0 +1,14 @@
+package dhj.embeddedt.embeddium.api.shader.vertex;
+
+import net.minecraft.block.Block;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
+
+public interface ContextAwareChunkVertexEncoder extends ChunkVertexEncoder {
+    void prepareToRenderBlock(BlockRenderContext ctx, Block block, int metadata, short renderType, byte lightValue);
+
+    void prepareToRenderFluid(BlockRenderContext ctx, Block block, int metadata, byte lightValue);
+
+    void prepareToRenderVanilla(BlockRenderContext ctx);
+
+    void finishRenderingBlock();
+}

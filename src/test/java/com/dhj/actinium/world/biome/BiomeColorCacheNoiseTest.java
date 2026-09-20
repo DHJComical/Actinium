@@ -4,7 +4,7 @@ import net.minecraft.world.biome.BiomeColorHelper;
 import org.junit.jupiter.api.Test;
 
 import com.dhj.actinium.runtime.ActiniumRuntime;
-import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
+import dhj.embeddedt.embeddium.impl.gui.SodiumGameOptions;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

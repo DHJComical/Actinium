@@ -9,7 +9,7 @@ import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
-import org.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
+import dhj.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
 import com.dhj.actinium.render.VanillaBufferBuilderRenderer;
 
 import java.nio.ByteBuffer;

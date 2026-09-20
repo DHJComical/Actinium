@@ -12,8 +12,8 @@ import net.coderbot.iris.gl.shader.ShaderType;
 import net.coderbot.iris.pipeline.transform.parameter.AttributeParameters;
 import net.coderbot.iris.pipeline.transform.parameter.Parameters;
 import net.coderbot.iris.pipeline.AdaptiveShadowBoundsStats;
-import org.embeddedt.embeddium.impl.gl.shader.ShaderConstants;
-import org.embeddedt.embeddium.impl.render.shader.ShaderLoader;
+import dhj.embeddedt.embeddium.impl.gl.shader.ShaderConstants;
+import dhj.embeddedt.embeddium.impl.render.shader.ShaderLoader;
 import org.taumc.glsl.ShaderParser;
 import org.taumc.glsl.Transformer;
 import org.taumc.glsl.grammar.GLSLLexer;
@@ -484,7 +484,7 @@ public class ShaderTransformer {
             .add("VERT_TEX_SCALE", "1.0")
             .build();
 
-        final String chunkVertexHeader = org.embeddedt.embeddium.impl.gl.shader.ShaderParser.parseShader(
+        final String chunkVertexHeader = dhj.embeddedt.embeddium.impl.gl.shader.ShaderParser.parseShader(
             ShaderLoader.getShaderSource("actinium:include/chunk_vertex.glsl"), ShaderLoader::getShaderSource, constants)
             .replace("_get_relative_chunk_coord(pos) * vec3(16.0)", "vec3(_get_relative_chunk_coord(pos)) * 16.0");
 

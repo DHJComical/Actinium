@@ -2,7 +2,7 @@ package com.dhj.actinium.compat.ichunutil;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
-import org.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
+import dhj.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
 import org.joml.Matrix4f;
 
 /**

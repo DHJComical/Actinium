@@ -1,18 +1,18 @@
 package net.coderbot.iris.celeritas;
 
-import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
-import org.embeddedt.embeddium.api.shader.ShaderProvider;
+import dhj.embeddedt.embeddium.api.shader.BlockRenderLayer;
+import dhj.embeddedt.embeddium.api.shader.ShaderProvider;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.coderbot.iris.celeritas.vertices.ExtendedChunkVertexType;
 import net.coderbot.iris.celeritas.vertices.TerrainVertexFormatRequirements;
 import net.coderbot.iris.shadows.ShadowRenderingState;
 import net.minecraft.block.Block;
-import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
-import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
-import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
+import dhj.embeddedt.embeddium.impl.gl.shader.GlProgram;
+import dhj.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
+import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;

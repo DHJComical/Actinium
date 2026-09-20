@@ -1,10 +1,10 @@
 package net.irisshaders.iris.compat.sodium;
 
 import net.coderbot.iris.gui.option.IrisVideoSettings;
-import org.embeddedt.embeddium.api.options.structure.ExternalPage;
-import org.embeddedt.embeddium.api.options.structure.Option;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.api.options.structure.ExternalPage;
+import dhj.embeddedt.embeddium.api.options.structure.Option;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

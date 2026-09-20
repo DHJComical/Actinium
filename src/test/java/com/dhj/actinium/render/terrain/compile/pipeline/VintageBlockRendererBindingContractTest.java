@@ -21,7 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * adapted for Actinium (e.g. celeritasleafculling's VintageBlockRendererMixin) @Shadow the private
  * fields and the private {@code renderQuadList} method, and @Redirect the {@code renderQuadList}
  * call sites inside {@code renderBlock}; renaming or re-signing any of these breaks those addons
- * silently at runtime. This contract replaces the bridge-era
+ * silently at runtime.
+ *
+ * <p>Since the 2026 class-path refactor the parameter types in that descriptor live under
+ * {@code dhj.embeddedt.embeddium.impl}, not the upstream {@code org.embeddedt.embeddium.impl}
+ * namespace, so an addon that still binds the upstream binary names has to migrate with Actinium.
+ *
+ * <p>This contract replaces the bridge-era
  * {@code CeleritasCompatBridgeJarTest#legacyRendererRetainsThirdPartyMixinBindingContract}, which
  * guarded the same surface on the removed compatibility bridge.
  */
@@ -32,12 +38,12 @@ class VintageBlockRendererBindingContractTest {
     private static final String BLOCK_ACCESS_DESCRIPTOR =
             "Lcom/dhj/actinium/world/cloned/ActiniumBlockAccess;";
     private static final String RENDER_QUAD_LIST_DESCRIPTOR =
-            "(Lorg/embeddedt/embeddium/impl/render/chunk/compile/buffers/ChunkModelBuilder;"
-            + "Lorg/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildBuffers;"
-            + "Lorg/embeddedt/embeddium/impl/render/chunk/terrain/material/Material;"
+            "(Ldhj/embeddedt/embeddium/impl/render/chunk/compile/buffers/ChunkModelBuilder;"
+            + "Ldhj/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildBuffers;"
+            + "Ldhj/embeddedt/embeddium/impl/render/chunk/terrain/material/Material;"
             + "Lnet/minecraft/util/math/BlockPos;"
             + "Lnet/minecraft/util/EnumFacing;"
-            + "Lorg/embeddedt/embeddium/impl/model/light/LightPipeline;"
+            + "Ldhj/embeddedt/embeddium/impl/model/light/LightPipeline;"
             + "Lnet/minecraft/client/renderer/color/IBlockColor;"
             + "Lnet/minecraft/util/math/Vec3d;"
             + "Ljava/util/List;)V";

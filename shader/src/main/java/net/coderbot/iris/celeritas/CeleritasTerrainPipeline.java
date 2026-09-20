@@ -24,8 +24,8 @@ import net.coderbot.iris.uniforms.builtin.BuiltinReplacementUniforms;
 import net.coderbot.iris.shaderpack.ProgramSource;
 import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.coderbot.iris.celeritas.vertices.TerrainVertexFormatRequirements;
-import org.embeddedt.embeddium.api.shader.ShaderProvider;
-import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import dhj.embeddedt.embeddium.api.shader.ShaderProvider;
+import dhj.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;

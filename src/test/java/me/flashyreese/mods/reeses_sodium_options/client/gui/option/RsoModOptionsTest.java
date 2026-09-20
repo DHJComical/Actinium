@@ -1,13 +1,13 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.option;
 
 import net.minecraft.util.ResourceLocation;
-import org.embeddedt.embeddium.api.options.OptionIdentifier;
-import org.embeddedt.embeddium.api.options.control.TickBoxControl;
-import org.embeddedt.embeddium.api.options.structure.OptionGroup;
-import org.embeddedt.embeddium.api.options.structure.OptionImpl;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
-import org.embeddedt.embeddium.api.options.structure.OptionStorage;
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
+import dhj.embeddedt.embeddium.api.options.control.TickBoxControl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionGroup;
+import dhj.embeddedt.embeddium.api.options.structure.OptionImpl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.OptionStorage;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -71,8 +71,8 @@ class RsoModOptionsTest {
         var slider = OptionImpl.createBuilder(int.class, storage)
                 .setName(TextComponent.literal(path + " slider"))
                 .setTooltip(TextComponent.literal(path + " slider tooltip"))
-                .setControl(option -> new org.embeddedt.embeddium.api.options.control.SliderControl(option,
-                        0, 10, 1, org.embeddedt.embeddium.api.options.control.ControlValueFormatter.number()))
+                .setControl(option -> new dhj.embeddedt.embeddium.api.options.control.SliderControl(option,
+                        0, 10, 1, dhj.embeddedt.embeddium.api.options.control.ControlValueFormatter.number()))
                 .setBinding((data, value) -> data.value = value, data -> data.value)
                 .build();
         OptionGroup group = OptionGroup.createBuilder()

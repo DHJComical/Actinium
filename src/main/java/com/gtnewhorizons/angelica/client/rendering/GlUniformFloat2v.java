@@ -1,7 +1,7 @@
 package com.gtnewhorizons.angelica.client.rendering;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
-import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniform;
+import dhj.embeddedt.embeddium.impl.gl.shader.uniform.GlUniform;
 
 public class GlUniformFloat2v extends GlUniform<float[]> {
     public GlUniformFloat2v(int index) {

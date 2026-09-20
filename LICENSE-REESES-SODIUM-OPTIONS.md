@@ -36,7 +36,7 @@ Porting notes:
   layout math and widget behavior are kept verbatim.
 - The option data layer no longer touches the (removed) `net.caffeinemc`
   configuration model: RSO rows read from the embeddium option model
-  (`org.embeddedt.embeddium.api.options.*`) through the self-authored
+  (`dhj.embeddedt.embeddium.api.options.*`) through the self-authored
   `RsoOption` / `RsoModOptions` wrappers. The embeddium API extensions added
   for this port (`ExternalPage`, `ExternalButtonControl`, option pending/applied
   defaults, group headers) are Actinium's own MIT-licensed additions.

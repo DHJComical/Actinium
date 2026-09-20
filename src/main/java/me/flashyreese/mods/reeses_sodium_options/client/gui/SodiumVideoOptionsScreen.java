@@ -22,17 +22,13 @@ import me.flashyreese.mods.reeses_sodium_options.client.gui.search.SearchTextFie
 import me.flashyreese.mods.reeses_sodium_options.client.gui.state.OptionsScreenUiState;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.widget.BaseWidget;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.widget.FlatButtonWidget;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
 import org.lwjgl.input.Keyboard;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 public class SodiumVideoOptionsScreen extends GuiScreen implements PreviousScreenHolder {
 

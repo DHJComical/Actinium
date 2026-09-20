@@ -194,7 +194,7 @@ def actiniumProjectAccessTransformer = propertyBool('use_access_transformer')
 /**
  * Dev-runtime image of the mod in the same shadow layout as the production jar: merged module
  * classes plus the shadow bundle classes relocated under
- * org.embeddedt.embeddium.impl.shadow.joml. The client and server runs swap the raw source-set
+ * dhj.embeddedt.embeddium.impl.shadow.joml. The client and server runs swap the raw source-set
  * outputs and the plain joml jar for this artifact so mixin field descriptors seen at dev runtime
  * match the production distribution. The plain joml jar itself stays on the run classpath for
  * third-party mods that still speak org.joml.
@@ -208,7 +208,7 @@ def devShadowJar = tasks.register('devShadowJar', ShadowJar) {
     destinationDirectory.set(layout.buildDirectory.dir('dev-libs'))
     configurations.set([project.configurations.shadowBundle])
     from(sourceSets.main.output)
-    relocate('org.joml', 'org.embeddedt.embeddium.impl.shadow.joml')
+    relocate('org.joml', 'dhj.embeddedt.embeddium.impl.shadow.joml')
     mergeServiceFiles()
     // Deliberately no manifest inheritance from the jar task: that manifest carries the
     // FMLCorePlugin / FMLCorePluginContainsFMLMod entries the production jar needs, but at dev time
@@ -297,11 +297,11 @@ unimined.minecraft {
 }
 
 /**
- * Production mod jar in the upstream Celeritas distribution layout: the remapped thin jar merged
- * with the shadow bundle classes, with joml relocated under
- * org.embeddedt.embeddium.impl.shadow.joml so mixin field descriptors match the layout upstream
- * Celeritas addons bind against. The ContainedDeps joml jar inherited from the thin jar stays
- * nested for third-party mods that still consume plain org.joml.
+ * Production mod jar: the remapped thin jar merged with the shadow bundle classes, with joml
+ * relocated under dhj.embeddedt.embeddium.impl.shadow.joml. The relocation target sits in
+ * Actinium's own namespace so this bundled joml cannot class-collide with the shadow copy inside
+ * an upstream Embeddium/Celeritas jar on the same class path. The ContainedDeps joml jar inherited
+ * from the thin jar stays nested for third-party mods that still consume plain org.joml.
  */
 def shadowRemapJar = tasks.register('shadowRemapJar', ShadowJar) {
     group = 'build'
@@ -310,7 +310,7 @@ def shadowRemapJar = tasks.register('shadowRemapJar', ShadowJar) {
     archiveClassifier.set('')
     configurations.set([project.configurations.shadowBundle])
     from(zipTree(tasks.named('remapJar').get().archiveFile))
-    relocate('org.joml', 'org.embeddedt.embeddium.impl.shadow.joml')
+    relocate('org.joml', 'dhj.embeddedt.embeddium.impl.shadow.joml')
     mergeServiceFiles()
     manifest.inheritFrom(tasks.named('jar').get().manifest)
 }
@@ -572,8 +572,8 @@ def verifyDistributedJar = tasks.register('verifyDistributedJar') {
             'org/taumc/celeritas/core/CeleritasLoadingPlugin.class',
             'com/gtnewhorizons/angelica/glsm/GLStateManager.class',
             'net/coderbot/iris/Iris.class',
-            'org/embeddedt/embeddium/impl/render/chunk/RenderSectionManager.class',
-            'org/embeddedt/embeddium/impl/shadow/joml/Vector3f.class',
+            'dhj/embeddedt/embeddium/impl/render/chunk/RenderSectionManager.class',
+            'dhj/embeddedt/embeddium/impl/shadow/joml/Vector3f.class',
             'joml-1.10.5.jar',
             'mixins.actinium.iris.json',
             'mixins.actinium.vintage.json',

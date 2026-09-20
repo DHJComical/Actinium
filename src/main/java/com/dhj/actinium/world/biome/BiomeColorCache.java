@@ -6,12 +6,12 @@ import net.minecraft.world.biome.BiomeColorHelper;
 import com.dhj.actinium.world.WorldSlice;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 
-import org.embeddedt.embeddium.impl.util.position.PositionalSupplier;
+import dhj.embeddedt.embeddium.impl.util.position.PositionalSupplier;
 
 // The base class lives in celeritas-common under the same simple name, so it can only be
 // referenced here by its fully qualified name (a same-name import would be shadowed by this
 // class declaration and resolve to itself).
-public class BiomeColorCache extends org.embeddedt.embeddium.impl.biome.BiomeColorCache<Biome, BiomeColorHelper.ColorResolver> {
+public class BiomeColorCache extends dhj.embeddedt.embeddium.impl.biome.BiomeColorCache<Biome, BiomeColorHelper.ColorResolver> {
     private final BlockPos.MutableBlockPos biomeCursor = new BlockPos.MutableBlockPos();
 
     public BiomeColorCache(WorldSlice slice, int blendRadius) {

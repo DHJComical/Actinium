@@ -1,10 +1,16 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.option;
 
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
+import dhj.embeddedt.embeddium.api.options.control.CyclingControl;
+import dhj.embeddedt.embeddium.api.options.control.ExternalButtonControl;
+import dhj.embeddedt.embeddium.api.options.control.SliderControl;
+import dhj.embeddedt.embeddium.api.options.control.TickBoxControl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionImpact;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
-import org.embeddedt.embeddium.api.options.structure.Option;
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.api.options.structure.Option;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 
 import java.util.Objects;
 
@@ -28,7 +34,7 @@ public final class RsoOption {
 
     /** Returns the stable option id (from the embeddium OptionIdentifier). */
     public String rso$getId() {
-        org.embeddedt.embeddium.api.options.OptionIdentifier<?> id = this.delegate.getId();
+        OptionIdentifier<?> id = this.delegate.getId();
         return id == null ? "" : id.toString();
     }
 
@@ -85,56 +91,56 @@ public final class RsoOption {
 
     /** Returns the performance impact label (may be null). */
     public String getImpactName() {
-        org.embeddedt.embeddium.api.options.structure.OptionImpact impact = this.delegate.getImpact();
+        OptionImpact impact = this.delegate.getImpact();
         return impact == null ? null : impact.name();
     }
 
     /** Control-type dispatch: whether this is a boolean tick-box. */
     public boolean isTickBox() {
-        return this.delegate.getControl() instanceof org.embeddedt.embeddium.api.options.control.TickBoxControl;
+        return this.delegate.getControl() instanceof TickBoxControl;
     }
 
     /** Control-type dispatch: whether this is an integer slider. */
     public boolean isSlider() {
-        return this.delegate.getControl() instanceof org.embeddedt.embeddium.api.options.control.SliderControl;
+        return this.delegate.getControl() instanceof SliderControl;
     }
 
     /** Control-type dispatch: whether this is a cycling control (enum/discrete values). */
     public boolean isCycling() {
-        return this.delegate.getControl() instanceof org.embeddedt.embeddium.api.options.control.CyclingControl;
+        return this.delegate.getControl() instanceof CyclingControl;
     }
 
     /** Control-type dispatch: whether this opens a separate screen. */
     public boolean isExternalButton() {
-        return this.delegate.getControl() instanceof org.embeddedt.embeddium.api.options.control.ExternalButtonControl;
+        return this.delegate.getControl() instanceof ExternalButtonControl;
     }
 
     /** Returns the slider lower bound (meaningful only when isSlider). */
     public int sliderMin() {
-        return ((org.embeddedt.embeddium.api.options.control.SliderControl) this.delegate.getControl()).getMin();
+        return ((SliderControl) this.delegate.getControl()).getMin();
     }
 
     /** Returns the slider upper bound (meaningful only when isSlider). */
     public int sliderMax() {
-        return ((org.embeddedt.embeddium.api.options.control.SliderControl) this.delegate.getControl()).getMax();
+        return ((SliderControl) this.delegate.getControl()).getMax();
     }
 
     /** Returns the slider step (meaningful only when isSlider). */
     public int sliderInterval() {
-        return ((org.embeddedt.embeddium.api.options.control.SliderControl) this.delegate.getControl()).getInterval();
+        return ((SliderControl) this.delegate.getControl()).getInterval();
     }
 
     /** Returns the formatted slider value text (meaningful only when isSlider). */
     public ITextComponent formatSliderValue(Object value) {
-        org.embeddedt.embeddium.api.options.control.SliderControl control =
-                (org.embeddedt.embeddium.api.options.control.SliderControl) this.delegate.getControl();
+        SliderControl control =
+                (SliderControl) this.delegate.getControl();
         return convertText(control.getFormatter().format((Integer) value));
     }
 
     /** Returns the cycling control label for a value (meaningful only when isCycling). */
     public ITextComponent getElementName(Object value) {
-        org.embeddedt.embeddium.api.options.control.CyclingControl<Object> control =
-                (org.embeddedt.embeddium.api.options.control.CyclingControl<Object>) this.delegate.getControl();
+        CyclingControl<Object> control =
+                (CyclingControl<Object>) this.delegate.getControl();
         Object[] allowed = control.getAllowedValues();
         TextComponent[] names = control.getNames();
         for (int i = 0; i < allowed.length; i++) {
@@ -147,8 +153,8 @@ public final class RsoOption {
 
     /** Returns whether the cycling control accepts a value (meaningful only when isCycling). */
     public boolean isValueAllowed(Object value) {
-        org.embeddedt.embeddium.api.options.control.CyclingControl<Object> control =
-                (org.embeddedt.embeddium.api.options.control.CyclingControl<Object>) this.delegate.getControl();
+        CyclingControl<Object> control =
+                (CyclingControl<Object>) this.delegate.getControl();
         for (Object allowed : control.getAllowedValues()) {
             if (Objects.equals(allowed, value)) {
                 return true;
@@ -159,14 +165,14 @@ public final class RsoOption {
 
     /** Returns all values of the cycling control (meaningful only when isCycling). */
     public Object[] getAllowedValues() {
-        org.embeddedt.embeddium.api.options.control.CyclingControl<Object> control =
-                (org.embeddedt.embeddium.api.options.control.CyclingControl<Object>) this.delegate.getControl();
+        CyclingControl<Object> control =
+                (CyclingControl<Object>) this.delegate.getControl();
         return control.getAllowedValues();
     }
 
     /** Returns the external button's screen consumer (meaningful only when isExternalButton). */
     public java.util.function.Consumer<net.minecraft.client.gui.GuiScreen> getCurrentScreenConsumer() {
-        return ((org.embeddedt.embeddium.api.options.control.ExternalButtonControl) this.delegate.getControl())
+        return ((ExternalButtonControl) this.delegate.getControl())
                 .getScreenConsumer();
     }
 

@@ -5,9 +5,9 @@ import com.gtnewhorizon.gtnhlib.compat.Mods;
 import lumien.chunkanimator.ChunkAnimator;
 import lumien.chunkanimator.handler.AnimationHandler;
 import net.minecraft.util.math.BlockPos;
-import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProvider;
-import org.embeddedt.embeddium.api.render.chunk.ChunkAnimationProviderHolder;
-import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
+import dhj.embeddedt.embeddium.api.render.chunk.ChunkAnimationProvider;
+import dhj.embeddedt.embeddium.api.render.chunk.ChunkAnimationProviderHolder;
+import dhj.embeddedt.embeddium.impl.render.chunk.RenderSection;
 import org.lwjgl.util.vector.Vector3f;
 
 import java.util.Objects;
