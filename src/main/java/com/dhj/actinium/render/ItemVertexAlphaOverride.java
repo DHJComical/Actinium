@@ -1,0 +1,25 @@
+package com.dhj.actinium.render;
+
+/**
+ * Reports the multiplier a foreign mod is currently applying to the alpha channel of item vertex
+ * colours.
+ *
+ * <p>Actinium renders lit items through a fast path that appends baked quads straight to the vertex
+ * buffer and, for stable models, caches the result in a GLSM display list. Both shortcuts assume
+ * the vertex colours are a pure function of the baked quad data. NeverEnoughAnimation breaks that
+ * assumption: while a GUI opens or closes it scales the alpha of every item vertex, so the fast path
+ * either drops the fade or bakes the alpha of the compile frame into the display list. Registering
+ * an implementation here lets the fast path step aside while such scaling is active.</p>
+ *
+ * <p>Implementations are polled for every item draw on the client render thread, so
+ * {@link #getAlphaMultiplier()} must be cheap and free of side effects.</p>
+ */
+public interface ItemVertexAlphaOverride {
+
+    /**
+     * Returns the multiplier currently applied to item vertex alpha, or {@code 1.0F} when this
+     * source is not scaling anything right now. Any value other than exactly {@code 1.0F} marks the
+     * fast lit item path as unsound for the current frame.
+     */
+    float getAlphaMultiplier();
+}

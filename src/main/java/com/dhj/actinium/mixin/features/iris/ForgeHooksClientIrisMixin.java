@@ -2,6 +2,7 @@ package com.dhj.actinium.mixin.features.iris;
 
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.dhj.actinium.render.FastLitItemDisplayListCache;
+import com.dhj.actinium.render.ItemVertexAlphaOverrides;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.RenderItem;
@@ -62,14 +63,25 @@ public abstract class ForgeHooksClientIrisMixin {
             return;
         }
 
+        // A registered mod is scaling item vertex alpha right now (NeverEnoughAnimation's GUI
+        // open/close fade, issue #145). Both shortcuts below assume the vertex colours are a pure
+        // function of the baked quad data: the raw append writes the quad bytes unchanged and drops
+        // the scaling, and the display list bakes the alpha of the compile frame into a cache that
+        // glCallList then replays, which left chest GUI items permanently transparent. Drawing the
+        // quads through renderQuads keeps the scaling visible without caching it; falling through to
+        // Forge's own renderLitItem instead would hand the frame's lightmap and lighting state to a
+        // renderer Actinium does not own, which darkened the GUI.
+        boolean vertexAlphaScaled = ItemVertexAlphaOverrides.isActive();
+
         try {
             Tessellator tessellator = Tessellator.getInstance();
-            FastLitItemDisplayListCache.CachedDisplayList cached = ActiniumRuntimeOptions.useFastLitItemDisplayLists()
+            FastLitItemDisplayListCache.CachedDisplayList cached = !vertexAlphaScaled
+                    && ActiniumRuntimeOptions.useFastLitItemDisplayLists()
                     ? FastLitItemDisplayListCache.getOrCompile(renderItem, model, quads, color, stack)
                     : null;
             if (cached != null) {
                 cached.render();
-            } else if (actinium$canAppendRawItemQuads(quads, color)) {
+            } else if (!vertexAlphaScaled && actinium$canAppendRawItemQuads(quads, color)) {
                 BufferBuilder buffer = tessellator.getBuffer();
                 buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.ITEM);
                 actinium$appendRawItemQuads(buffer, quads);
