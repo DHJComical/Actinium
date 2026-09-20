@@ -3,8 +3,8 @@ package com.dhj.actinium.compat.sodium;
 import com.dhj.actinium.gui.ActiniumGameOptionPages;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import net.irisshaders.iris.compat.sodium.IrisConfigEntryPoint;
-import org.embeddedt.embeddium.impl.gui.options.CommonOptionPages;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.impl.gui.options.CommonOptionPages;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
 
 import java.util.ArrayList;
 import java.util.List;

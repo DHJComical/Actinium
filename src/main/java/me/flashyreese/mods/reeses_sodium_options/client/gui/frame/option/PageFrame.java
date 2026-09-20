@@ -14,8 +14,8 @@ import me.flashyreese.mods.reeses_sodium_options.client.gui.widget.BaseWidget;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.widget.LabelWidget;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.option.RsoModOptions;
 
-import org.embeddedt.embeddium.api.options.structure.Option;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.Option;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.util.ResourceLocation;
 import org.apache.commons.lang3.Validate;

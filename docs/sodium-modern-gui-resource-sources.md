@@ -33,7 +33,7 @@ entirely** from this repository, including:
 
 The `LICENSE-SODIUM.md` notice text was removed together with the last PolyForm Shield resource.
 The settings UI is now the MIT-licensed Reese's Sodium Options port backed by the embeddium
-option model (`org.embeddedt.embeddium.api.options.*` plus Actinium's self-authored extensions in
+option model (`dhj.embeddedt.embeddium.api.options.*` plus Actinium's self-authored extensions in
 `celeritas-common/.../embeddium/api/options/`). The GUI translation keys (`sodium.options.*`,
 `celeritas.options.*`, `embeddium.options.*`) are carried by the celeritas namespace language
 files, whose content is maintained in sync with the upstream Celeritas fork

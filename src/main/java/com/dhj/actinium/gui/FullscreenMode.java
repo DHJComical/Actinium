@@ -1,7 +1,7 @@
 package com.dhj.actinium.gui;
 
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
-import org.embeddedt.embeddium.impl.gui.options.TextProvider;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.impl.gui.options.TextProvider;
 
 public enum FullscreenMode implements TextProvider {
     OFF("celeritas.options.fullscreen_mode.off"),

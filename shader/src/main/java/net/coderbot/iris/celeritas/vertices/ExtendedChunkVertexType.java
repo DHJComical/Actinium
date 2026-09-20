@@ -1,10 +1,10 @@
 package net.coderbot.iris.celeritas.vertices;
 
-import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeFormat;
-import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
+import dhj.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeFormat;
+import dhj.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 
 import java.util.Objects;
 

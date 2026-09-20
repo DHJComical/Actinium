@@ -19,8 +19,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.gen.Invoker;
-import org.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
-import org.embeddedt.embeddium.api.shader.buffer.VanillaQuadContext;
+import dhj.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
+import dhj.embeddedt.embeddium.api.shader.buffer.VanillaQuadContext;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;

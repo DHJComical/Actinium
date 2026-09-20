@@ -2,8 +2,8 @@ package com.dhj.actinium.render.terrain.fog;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.states.FogState;
-import org.embeddedt.embeddium.impl.render.chunk.fog.FogService;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
+import dhj.embeddedt.embeddium.impl.render.chunk.fog.FogService;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
 import org.joml.Vector3d;
 
 public class GLStateManagerFogService implements FogService {

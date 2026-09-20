@@ -5,7 +5,7 @@ import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import net.coderbot.iris.Iris;
-import org.embeddedt.embeddium.impl.gl.debug.GLDebug;
+import dhj.embeddedt.embeddium.impl.gl.debug.GLDebug;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL43;

@@ -1,12 +1,14 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.option;
 
+import dhj.embeddedt.embeddium.api.options.structure.Option;
+import dhj.embeddedt.embeddium.api.options.structure.OptionGroup;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.theme.ActiniumTheme;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 
 import java.util.List;
 import java.util.Objects;
@@ -112,18 +114,18 @@ public final class RsoModOptions {
 
     /** RSO view of an option group: wraps an embeddium OptionGroup. */
     public static final class RsoOptionGroup {
-        private final org.embeddedt.embeddium.api.options.structure.OptionGroup delegate;
+        private final OptionGroup delegate;
 
-        RsoOptionGroup(org.embeddedt.embeddium.api.options.structure.OptionGroup delegate) {
+        RsoOptionGroup(OptionGroup delegate) {
             this.delegate = delegate;
         }
 
         public ITextComponent name() {
-            org.embeddedt.embeddium.impl.gui.framework.TextComponent groupName = this.delegate.getName();
+            TextComponent groupName = this.delegate.getName();
             return groupName == null ? new TextComponentString("") : convertText(groupName);
         }
 
-        public List<org.embeddedt.embeddium.api.options.structure.Option<?>> options() {
+        public List<Option<?>> options() {
             return this.delegate.getOptions();
         }
     }

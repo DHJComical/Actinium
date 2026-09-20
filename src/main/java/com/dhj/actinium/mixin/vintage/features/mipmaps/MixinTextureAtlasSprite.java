@@ -1,9 +1,9 @@
 package com.dhj.actinium.mixin.vintage.features.mipmaps;
 
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import org.embeddedt.embeddium.api.util.ColorARGB;
-import org.embeddedt.embeddium.impl.render.chunk.sprite.SpriteTransparencyLevel;
-import org.embeddedt.embeddium.impl.util.color.ColorSRGB;
+import dhj.embeddedt.embeddium.api.util.ColorARGB;
+import dhj.embeddedt.embeddium.impl.render.chunk.sprite.SpriteTransparencyLevel;
+import dhj.embeddedt.embeddium.impl.util.color.ColorSRGB;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;

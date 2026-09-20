@@ -1,5 +1,6 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.search;
 
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
 import me.flashyreese.mods.reeses_sodium_options.client.config.ReeseSodiumOptionsConfig;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.layout.LayoutBounds;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.option.RsoModOptions;
@@ -11,10 +12,10 @@ import me.flashyreese.mods.reeses_sodium_options.client.gui.state.SearchResultOr
 import me.flashyreese.mods.reeses_sodium_options.client.search.SearchIndex;
 import me.flashyreese.mods.reeses_sodium_options.client.search.SearchResult;
 import net.minecraft.util.ResourceLocation;
-import org.embeddedt.embeddium.api.options.structure.Option;
+import dhj.embeddedt.embeddium.api.options.structure.Option;
 import com.dhj.actinium.gui.rso.compat.Component;
-import org.embeddedt.embeddium.api.options.structure.OptionGroup;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.OptionGroup;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -66,7 +67,7 @@ final class OptionSearch {
     }
 
     private static @Nullable String optionIdString(Option<?> option) {
-        org.embeddedt.embeddium.api.options.OptionIdentifier<?> id = option.getId();
+        OptionIdentifier<?> id = option.getId();
         if (id == null || id.getModId().isBlank() || id.getPath().isBlank()) {
             return null;
         }

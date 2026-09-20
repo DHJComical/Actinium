@@ -3,7 +3,7 @@ package net.coderbot.iris.gl.texture;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import net.coderbot.iris.shaderpack.texture.TextureFilteringData;
-import org.embeddedt.embeddium.impl.gl.GlObject;
+import dhj.embeddedt.embeddium.impl.gl.GlObject;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL14;

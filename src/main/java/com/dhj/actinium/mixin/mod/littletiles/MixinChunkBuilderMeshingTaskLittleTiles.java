@@ -5,7 +5,7 @@ import com.dhj.actinium.render.terrain.compile.VintageChunkBuildContext;
 import com.dhj.actinium.render.terrain.compile.task.ChunkBuilderMeshingTask;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -19,9 +19,9 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class MixinChunkBuilderMeshingTaskLittleTiles {
     @Unique
     private static final String EXECUTE_METHOD =
-            "execute(Lorg/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildContext;"
-                    + "Lorg/embeddedt/embeddium/impl/util/task/CancellationToken;"
-                    + ")Lorg/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildOutput;";
+            "execute(Ldhj/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildContext;"
+                    + "Ldhj/embeddedt/embeddium/impl/util/task/CancellationToken;"
+                    + ")Ldhj/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildOutput;";
 
     @WrapOperation(
             method = EXECUTE_METHOD,
@@ -29,7 +29,7 @@ public abstract class MixinChunkBuilderMeshingTaskLittleTiles {
                     value = "INVOKE",
                     target = "Lcom/dhj/actinium/render/terrain/compile/VintageChunkBuildContext;"
                             + "convertVanillaDataToCeleritasData("
-                            + "Lorg/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildBuffers;)V",
+                            + "Ldhj/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildBuffers;)V",
                     remap = false
             )
     )

@@ -9,7 +9,7 @@ import me.flashyreese.mods.reeses_sodium_options.client.gui.option.RsoModOptions
 import me.flashyreese.mods.reeses_sodium_options.client.gui.state.Holder;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.state.OptionStateStore;
 import net.minecraft.client.gui.GuiScreen;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
 
 import java.util.function.Function;
 

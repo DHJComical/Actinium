@@ -2,11 +2,11 @@ package com.dhj.actinium.render.terrain.compile.light;
 
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
-import org.embeddedt.embeddium.impl.model.light.data.LightDataAccess;
+import dhj.embeddedt.embeddium.impl.model.light.data.LightDataAccess;
 import com.dhj.actinium.world.EmptyBlockAccess;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.minecraft.block.Block;
-import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
+import dhj.embeddedt.embeddium.impl.model.light.debug.AODebug;
 
 public class LightDataCache extends LightDataAccess {
     private final IBlockAccess world;

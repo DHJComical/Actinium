@@ -1,6 +1,6 @@
 package com.dhj.actinium.world.cloned;
 
-import org.embeddedt.embeddium.impl.util.position.SectionPos;
+import dhj.embeddedt.embeddium.impl.util.position.SectionPos;
 
 /**
  * Carries a per-task snapshot from {@code WorldSlice.prepare} to the chunk build task: the origin

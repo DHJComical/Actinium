@@ -2,10 +2,10 @@ package com.dhj.actinium.render.terrain.compile.light;
 
 import net.minecraft.util.EnumFacing;
 import net.minecraftforge.client.model.pipeline.LightUtil;
-import org.embeddedt.embeddium.impl.model.light.DiffuseProvider;
-import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
+import dhj.embeddedt.embeddium.impl.model.light.DiffuseProvider;
+import dhj.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 
-import static org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing.*;
+import static dhj.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing.*;
 
 public enum VintageDiffuseProvider implements DiffuseProvider {
     INSTANCE;

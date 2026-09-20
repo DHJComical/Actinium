@@ -2,8 +2,8 @@ package com.dhj.actinium.mixin.vintage.core.frustum;
 
 import net.minecraft.client.renderer.culling.ClippingHelper;
 import net.minecraft.client.renderer.culling.Frustum;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
-import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
 import org.spongepowered.asm.mixin.*;
 import com.dhj.actinium.render.frustum.IClippingHelper;
 import com.dhj.actinium.render.terrain.CameraHelper;

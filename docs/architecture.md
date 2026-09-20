@@ -250,14 +250,14 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 几乎不 import Minecraft 类（仅 2 处），是脱离 Minecraft 的纯 GL 渲染引擎
 （JOML 20 处、LWJGL 3 处 import）。
 
-- **`org.embeddedt.embeddium.api.*`**（9 个包，对外 API）：
+- **`dhj.embeddedt.embeddium.api.*`**（9 个包，对外 API）：
   - `eventbus`：精简事件总线（`EmbeddiumEvent`、`EventHandlerRegistrar`）与选项事件。
   - `options.*`：选项系统（`Option`/`OptionGroup`/`OptionPage`、binding、control 控件、
     `StandardOptions`）。
   - `shader`：着色器接入点 —— `ShaderProvider` + `ShaderProviderHolder`（静态注册点）、
     `BlockRenderLayer`、`shader.buffer.*`、`shader.vertex.*`。
   - `debug`：`RenderDebugHooks`；`util`：`ColorABGR`/`NormI8` 等颜色工具。
-- **`org.embeddedt.embeddium.impl.*`**（实现）：
+- **`dhj.embeddedt.embeddium.impl.*`**（实现）：
   - `gl.*`：GL 设备抽象与状态管理 —— `device.RenderDevice`/`DrawCommandList`（命令列表
     架构）、`arena.GlBufferArena` + `staging.*`（缓冲竞技场与映射暂存）、`buffer.*`
     （immutable/mutable buffer）、`state.GlStateTracker`、`shader.*`/`shader.uniform.*`、
@@ -484,8 +484,17 @@ Mixin 组织约定：
 - Fluidlogged API：world slice 中的 fluid state 快照与渲染。
 - Gibbed：模型渲染快速路径及条件 Mixin。
 - ModernUI 和若干 HUD/地图模组：GUI scale 或编译期兼容接口。
-- Celeritas 系 addon：直接适配 Actinium 主实现（选项 API 位于 `org.embeddedt.embeddium.api`，
+- Celeritas 系 addon：直接适配 Actinium 主实现（选项 API 位于 `dhj.embeddedt.embeddium.api`，
   renderer 绑定面由 `VintageBlockRendererBindingContractTest` 锁定）。
+  - **类路径重构（2026）**：`celeritas-common` 的 `org.embeddedt.embeddium.{api,impl}.*` 已整体
+    迁至 `dhj.embeddedt.embeddium.*`，打包时 joml 的 relocate 目标同步为
+    `dhj.embeddedt.embeddium.impl.shadow.joml`，以免与同一 classpath 上上游
+    Embeddium/Celeritas jar 内的同名类冲突。仍按上游 `org.embeddedt.embeddium.*` 二进制名
+    绑定的 addon（如 HBM-CE 的 `MixinRenderSectionManager`、celeritasleafculling 的
+    `VintageBlockRendererMixin`）必须随 Actinium 迁移，否则 `@Redirect` / `@Shadow` 匹配不到
+    目标。
+  - 例外：探测标记类保持 `org.taumc.celeritas.core.CeleritasLoadingPlugin` 不变 —— LoliASM
+    用精确类名 `Class.forName` 探测，改名即失效，见 [compat/censoredasm.md](compat/censoredasm.md)。
 
 兼容代码应由模组存在性检查保护。引用外部类的 Mixin 必须放在 late/conditional 配置中，
 避免未安装对应模组时触发类加载。
@@ -501,7 +510,7 @@ Mixin 组织约定：
   transformer 注入逻辑）、`mixin`/`mixins`（MixinConfigurationTest 配置覆盖校验、
   MixinLate 门控逻辑）、`render`（EndPortal、流式绘制、投影纹理坐标、光照缓存等）。
 - 嵌入第三方源码的测试命名空间：`com.gtnewhorizons.angelica.*`（glsm：shader/uniform
-  兼容、ffp 生成器、GPU 诊断、streaming）、`org.embeddedt.embeddium.*`（选项/区块渲染）、
+  兼容、ffp 生成器、GPU 诊断、streaming）、`dhj.embeddedt.embeddium.*`（选项/区块渲染）、
   `net.coderbot.iris.*` 与
   `net.irisshaders.iris.*`（shaderpack 解析、pipeline transform、uniforms、阴影）。
 - `net/minecraft/client/renderer/culling/ClippingHelperImpl.java` 为测试用 stub。

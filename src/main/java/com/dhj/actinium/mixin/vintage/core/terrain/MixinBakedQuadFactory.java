@@ -6,8 +6,8 @@ import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.BlockPartFace;
 import net.minecraft.client.renderer.block.model.FaceBakery;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import org.embeddedt.embeddium.impl.model.quad.BakedQuadView;
-import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFlags;
+import dhj.embeddedt.embeddium.impl.model.quad.BakedQuadView;
+import dhj.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFlags;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 

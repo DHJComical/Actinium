@@ -12,7 +12,7 @@ import me.flashyreese.mods.reeses_sodium_options.client.gui.state.SearchResultEn
 import me.flashyreese.mods.reeses_sodium_options.client.gui.widget.BaseWidget;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.widget.ScrollBarWidget;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.widget.TabHeaderWidget;
-import org.embeddedt.embeddium.api.options.structure.ExternalPage;
+import dhj.embeddedt.embeddium.api.options.structure.ExternalPage;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.jspecify.annotations.NonNull;

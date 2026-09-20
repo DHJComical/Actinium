@@ -1,7 +1,7 @@
 package com.dhj.actinium.gui;
 
 import net.minecraft.client.settings.GameSettings;
-import org.embeddedt.embeddium.api.options.binding.OptionBinding;
+import dhj.embeddedt.embeddium.api.options.binding.OptionBinding;
 
 public class VanillaBooleanOptionBinding implements OptionBinding<GameSettings, Boolean> {
     private final GameSettings.Options option;

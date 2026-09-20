@@ -66,7 +66,7 @@ key，section 销毁后自动回收，无需显式清理。
 - `src/main/java/com/dhj/actinium/Actinium.java`（onInit 安装）
 - `gradle/scripts/dependencies.gradle`（`modImplementation curse.maven:chunk-animator-236484:3850023`）
 - `build.gradle`（`prepareChunkAnimatorMcpMappings` 任务，dev 环境 MCP 映射供给）
-- `src/test/java/org/embeddedt/embeddium/api/render/chunk/ChunkAnimationProviderHolderTest.java`
+- `src/test/java/dhj/embeddedt/embeddium/api/render/chunk/ChunkAnimationProviderHolderTest.java`
 
 ## 行为差异（相对原版）
 
