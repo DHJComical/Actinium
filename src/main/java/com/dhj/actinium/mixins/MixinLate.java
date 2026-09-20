@@ -3,6 +3,8 @@ package com.dhj.actinium.mixins;
 import com.dhj.actinium.compat.MixinReEntranceLockFix;
 import com.gtnewhorizon.gtnhlib.compat.Mods;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import zone.rong.mixinbooter.Context;
 import zone.rong.mixinbooter.ILateMixinLoader;
 
@@ -15,6 +17,19 @@ import java.util.function.Predicate;
 
 @SuppressWarnings("unused")
 public class MixinLate implements ILateMixinLoader {
+
+    private static final Logger LOGGER = LogManager.getLogger("Actinium");
+
+    /** Late config whose vanilla target can be pulled in before the config is prepared. */
+    private static final String HBM_CONFIG = "mixins.actinium.hbm.json";
+
+    /**
+     * Binary name of the vanilla class the hbm config mixes into. Spelled out rather than taken
+     * from {@code TileEntityRendererDispatcher.class}: resolving that literal loads the class,
+     * destroying the pre-load evidence the diagnostic reports.
+     */
+    private static final String TILE_ENTITY_RENDERER_DISPATCHER =
+        "net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher";
 
     /**
      * Maps each late/conditional mixin config to the mod ids that gate it.
@@ -32,8 +47,36 @@ public class MixinLate implements ILateMixinLoader {
 
     @Override
     public void onMixinConfigQueued(Context context) {
-        if ("mixins.actinium.hbm.json".equals(context.mixinConfig())) {
-            preloadTargets(TileEntityRendererDispatcher.class);
+        if (!HBM_CONFIG.equals(context.mixinConfig())) {
+            return;
+        }
+        reportPreloadState();
+        preloadTargets(TileEntityRendererDispatcher.class);
+    }
+
+    /**
+     * Logs whether the hbm config's vanilla target was already loaded when the config was
+     * queued, which decides whether {@link #preloadTargets} can still help.
+     *
+     * <p>The preload only wins while the target is still unknown to the loader; if the tracker
+     * already reports it as loaded, the preload is a no-op and the required config will abort
+     * the launch. The probe uses the same tracker {@code MixinInfo.readDeclaredTargets} reads,
+     * so its answer matches the transformer's decision instead of approximating it.
+     */
+    private static void reportPreloadState() {
+        Boolean alreadyLoaded = MixinReEntranceLockFix.isClassLoaded(TILE_ENTITY_RENDERER_DISPATCHER);
+        if (Boolean.TRUE.equals(alreadyLoaded)) {
+            LOGGER.warn(
+                "[mixin-preload] {} queued, but {} was already loaded: preloading cannot apply it, "
+                    + "the config will abort with MixinTargetAlreadyLoadedException",
+                HBM_CONFIG,
+                TILE_ENTITY_RENDERER_DISPATCHER);
+        } else {
+            LOGGER.info(
+                "[mixin-preload] {} queued, {} alreadyLoaded={}: preloading it so the queued configs apply in one pass",
+                HBM_CONFIG,
+                TILE_ENTITY_RENDERER_DISPATCHER,
+                alreadyLoaded);
         }
     }
 

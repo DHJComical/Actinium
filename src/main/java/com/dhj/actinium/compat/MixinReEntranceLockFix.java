@@ -2,6 +2,7 @@ package com.dhj.actinium.compat;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.spongepowered.asm.service.IClassTracker;
 import org.spongepowered.asm.service.MixinService;
 import org.spongepowered.asm.util.ReEntranceLock;
 import top.outlands.foundation.boot.ActualClassLoader;
@@ -88,6 +89,33 @@ public final class MixinReEntranceLockFix {
         } catch (Throwable t) {
             LOGGER.warn("Unable to clean the invalid-class cache", t);
         }
+    }
+
+    /**
+     * Reports whether the mixin class tracker already recorded a class as loaded.
+     *
+     * <p>This is the exact condition {@code MixinInfo.readDeclaredTargets} evaluates before it
+     * aborts a required config ("target was loaded too early"), so it answers whether a late
+     * config can still apply to the class. It asks the same tracker Mixin itself consults
+     * instead of approximating the answer with a class resource lookup, which would report a
+     * class as present long before anything loaded it.
+     *
+     * @param className binary name of the class to probe
+     * @return {@code TRUE}/{@code FALSE} for the tracker's answer, or {@code null} when the
+     *         mixin service or its tracker is unavailable, so callers can tell "not loaded"
+     *         apart from "cannot tell"
+     */
+    public static Boolean isClassLoaded(String className) {
+        try {
+            return isClassLoaded(MixinService.getService().getClassTracker(), className);
+        } catch (Throwable t) {
+            LOGGER.warn("Mixin class tracker unavailable while probing {}", className, t);
+            return null;
+        }
+    }
+
+    static Boolean isClassLoaded(IClassTracker tracker, String className) {
+        return tracker == null ? null : tracker.isClassLoaded(className);
     }
 
     /**
