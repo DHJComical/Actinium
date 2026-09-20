@@ -108,6 +108,12 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
 
         public boolean enableVignette = true;
 
+        // Vanilla widens the field of view while sprinting/flying and narrows it while drawing a bow.
+        // That factor only reaches the projection matrix when getFOVModifier is called with
+        // useFOVSetting=true, so disabling this drops the dynamic factor while leaving the vanilla
+        // underwater and death-camera scaling untouched.
+        public boolean dynamicFov = true;
+
         @SerializedName("use_quad_normals_for_shading_v2")
         public boolean useQuadNormalsForShading = true;
 

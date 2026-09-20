@@ -57,6 +57,7 @@ public final class StandardOptions {
         public static final OptionIdentifier<Void> ENTITY_DISTANCE = OptionIdentifier.create("minecraft", "entity_distance");
         public static final OptionIdentifier<Void> ENTITY_SHADOWS = OptionIdentifier.create("minecraft", "entity_shadows");
         public static final OptionIdentifier<Void> VIGNETTE = OptionIdentifier.create("minecraft", "vignette");
+        public static final OptionIdentifier<Void> DYNAMIC_FOV = OptionIdentifier.create(ACTINIUM_MOD_NAME, "dynamic_fov");
         public static final OptionIdentifier<Void> MIPMAP_LEVEL = OptionIdentifier.create("minecraft", "mipmap_levels");
         public static final OptionIdentifier<Void> CHUNK_UPDATE_THREADS = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "chunk_update_threads");
         public static final OptionIdentifier<Void> DEFFER_CHUNK_UPDATES = OptionIdentifier.create(EMBEDDIUM_MOD_ID, "defer_chunk_updates");

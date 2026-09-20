@@ -43,6 +43,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 - 新增 Mixin 必须加入 `MixinConfigurationTest` 覆盖的配置文件。
 - 发布前运行 `build`；`check` 会验证自动化测试及 remap jar 结构。
 
+渲染选项的持久化字段、注册页面与实现落点见 `docs/options.md`。
+
 ## 初始化链路
 
 1. **`MixinEarly`**（`mixins/` 包，FML plugin 阶段）：实现 `IFMLLoadingPlugin` + `IEarlyMixinLoader`。
