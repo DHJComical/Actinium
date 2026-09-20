@@ -352,6 +352,14 @@ public class ActiniumGameOptionPages {
                         .setBinding((opts, value) -> opts.quality.enableVignette = value, opts -> opts.quality.enableVignette)
                         .setImpact(OptionImpact.LOW)
                         .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.DYNAMIC_FOV.cast())
+                        .setName(TextComponent.translatable("sodium.options.dynamic_fov.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.dynamic_fov.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setBinding((opts, value) -> opts.quality.dynamicFov = value, opts -> opts.quality.dynamicFov)
+                        .setImpact(OptionImpact.LOW)
+                        .build())
                 .build());
 
 
