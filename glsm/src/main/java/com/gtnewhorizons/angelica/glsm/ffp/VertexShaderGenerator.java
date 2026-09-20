@@ -29,6 +29,9 @@ public final class VertexShaderGenerator {
             emitColorPassthrough(sb, key);
         }
         emitTexCoordPassthrough(sb, key);
+        if (key.lineStipple()) {
+            emitLineStart(sb);
+        }
         if (key.fogEnabled()) {
             emitFogDistance(sb, key);
         }
@@ -42,7 +45,10 @@ public final class VertexShaderGenerator {
             source = source.replace("v_SpecularColor", "v_SpecularColor_gs")
                            .replace("v_TexCoord0", "v_TexCoord0_gs")
                            .replace("v_TexCoord1", "v_TexCoord1_gs")
+                           .replace("v_TexCoord2", "v_TexCoord2_gs")
+                           .replace("v_TexCoord3", "v_TexCoord3_gs")
                            .replace("v_FogCoord", "v_FogCoord_gs")
+                           .replace("v_LineStart", "v_LineStart_gs")
                            .replace("v_Color", "v_Color_gs");
         }
         return source;
@@ -66,6 +72,13 @@ public final class VertexShaderGenerator {
         sb.append('\n');
     }
 
+    private static void emitLineStart(StringBuilder sb) {
+        // Screen-space position of this line's start vertex; the fragment stage measures
+        // each fragment's distance from it to step through the stipple pattern.
+        sb.append("  vec2 ndc = gl_Position.xy / gl_Position.w;\n");
+        sb.append("  v_LineStart = u_Viewport.xy + (ndc * 0.5 + 0.5) * u_Viewport.zw;\n\n");
+    }
+
     private static void emitUniforms(StringBuilder sb, VertexKey key) {
         sb.append("// Matrices\n");
         sb.append("uniform mat4 u_ModelViewMatrix;\n");
@@ -76,8 +89,17 @@ public final class VertexShaderGenerator {
             sb.append("uniform mat3 u_NormalMatrix;\n");
         }
 
-        if (key.textureMatrixEnabled()) {
+        if (key.unitTexMatEnabled(0)) {
             sb.append("uniform mat4 u_TextureMatrix0;\n");
+        }
+        for (int i = 2; i < VertexKey.MAX_UNITS; i++) {
+            if (key.unitTexCoordEnabled(i) && !key.unit23UvFromUnit0() && key.unitTexMatEnabled(i)) {
+                sb.append("uniform mat4 u_TextureMatrix").append(i).append(";\n");
+            }
+        }
+
+        if (key.lineStipple()) {
+            sb.append("uniform vec4 u_Viewport;\n");
         }
 
         // TexGen plane uniforms
@@ -98,8 +120,14 @@ public final class VertexShaderGenerator {
             sb.append("uniform vec4 u_CurrentColor;\n");
         }
 
-        if (!key.hasVertexTexCoord() && key.textureEnabled()) {
+        if (!key.hasVertexTexCoord() && key.unitTexCoordEnabled(0)) {
             sb.append("uniform vec4 u_CurrentTexCoord;\n");
+        }
+
+        for (int i = 2; i < VertexKey.MAX_UNITS; i++) {
+            if (key.unitTexCoordEnabled(i) && !key.unit23UvFromUnit0()) {
+                sb.append("uniform vec4 u_CurrentTexCoord").append(i).append(";\n");
+            }
         }
 
         if (key.lightmapEnabled() && !key.hasVertexLightmap()) {
@@ -140,13 +168,13 @@ public final class VertexShaderGenerator {
             sb.append("uniform vec4 u_MaterialSpecular;\n");
             sb.append("uniform float u_MaterialShininess;\n");
 
-            if (key.light0Enabled()) {
+            if (key.lightEnabled(0)) {
                 sb.append("uniform vec4 u_Light0Ambient;\n");
                 sb.append("uniform vec4 u_Light0Diffuse;\n");
                 sb.append("uniform vec4 u_Light0Specular;\n");
                 sb.append("uniform vec4 u_Light0Position;\n");
             }
-            if (key.light1Enabled()) {
+            if (key.lightEnabled(1)) {
                 sb.append("uniform vec4 u_Light1Ambient;\n");
                 sb.append("uniform vec4 u_Light1Diffuse;\n");
                 sb.append("uniform vec4 u_Light1Specular;\n");
@@ -156,13 +184,13 @@ public final class VertexShaderGenerator {
             // Pre-computed: sceneColor + lightProducts
             sb.append("uniform vec4 u_SceneColor;\n");
 
-            if (key.light0Enabled()) {
+            if (key.lightEnabled(0)) {
                 sb.append("uniform vec4 u_Light0Position;\n");
                 sb.append("uniform vec3 u_LightProd0Ambient;\n");
                 sb.append("uniform vec3 u_LightProd0Diffuse;\n");
                 sb.append("uniform vec3 u_LightProd0Specular;\n");
             }
-            if (key.light1Enabled()) {
+            if (key.lightEnabled(1)) {
                 sb.append("uniform vec4 u_Light1Position;\n");
                 sb.append("uniform vec3 u_LightProd1Ambient;\n");
                 sb.append("uniform vec3 u_LightProd1Diffuse;\n");
@@ -175,15 +203,21 @@ public final class VertexShaderGenerator {
     private static void emitOutputs(StringBuilder sb, VertexKey key) {
         sb.append("// Outputs\n");
         sb.append("out vec4 v_Color;\n");
+        if (key.lineStipple()) {
+            sb.append("flat out vec2 v_LineStart;\n");
+        }
         if (key.separateSpecular()) {
             sb.append("out vec3 v_SpecularColor;\n");
         }
-        if (key.textureEnabled() || key.hasVertexTexCoord() || key.texGenEnabled()) {
+        // Per-unit varying outputs. Each enabled texture unit (and texgen, which targets unit 0) gets its own v_TexCoord<i>.
+        if (key.unitTexCoordEnabled(0) || key.hasVertexTexCoord() || key.texGenEnabled()) {
             sb.append("out vec4 v_TexCoord0;\n");
         }
         if (key.lightmapEnabled()) {
             sb.append("out vec4 v_TexCoord1;\n");
         }
+        if (key.unitTexCoordEnabled(2)) sb.append("out vec4 v_TexCoord2;\n");
+        if (key.unitTexCoordEnabled(3)) sb.append("out vec4 v_TexCoord3;\n");
         if (key.fogEnabled()) {
             sb.append("out float v_FogCoord;\n");
         }
@@ -247,11 +281,10 @@ public final class VertexShaderGenerator {
         }
 
         // Per-light accumulation
-        if (key.light0Enabled()) {
-            emitLightContribution(sb, key, 0);
-        }
-        if (key.light1Enabled()) {
-            emitLightContribution(sb, key, 1);
+        for (int i = 0; i < VertexKey.FFP_LIGHT_COUNT; i++) {
+            if (key.lightEnabled(i)) {
+                emitLightContribution(sb, key, i);
+            }
         }
 
         sb.append("  v_Color = vec4(clamp(color0, 0.0, 1.0), outAlpha);\n");
@@ -263,7 +296,7 @@ public final class VertexShaderGenerator {
 
     private static void emitLightContribution(StringBuilder sb, VertexKey key, int lightIndex) {
         final String li = String.valueOf(lightIndex);
-        final boolean directional = (lightIndex == 0) ? key.light0Directional() : key.light1Directional();
+        final boolean directional = key.lightDirectional(lightIndex);
         final String posUniform = "u_Light" + li + "Position";
 
         sb.append("  { // Light ").append(li).append('\n');
@@ -331,20 +364,13 @@ public final class VertexShaderGenerator {
     private static void emitTexCoordPassthrough(StringBuilder sb, VertexKey key) {
         if (key.texGenEnabled()) {
             emitTexGenCoordGeneration(sb, key);
-        } else if (key.textureEnabled() || key.hasVertexTexCoord()) {
-            sb.append("  // Texture coordinates\n");
-            if (key.hasVertexTexCoord()) {
-                if (key.textureMatrixEnabled()) {
-                    sb.append("  v_TexCoord0 = u_TextureMatrix0 * a_TexCoord0;\n");
-                } else {
-                    sb.append("  v_TexCoord0 = a_TexCoord0;\n");
-                }
+        } else if (key.unitTexCoordEnabled(0) || key.hasVertexTexCoord()) {
+            sb.append("  // Texture coordinates - unit 0\n");
+            final String src = key.hasVertexTexCoord() ? "a_TexCoord0" : "u_CurrentTexCoord";
+            if (key.unitTexMatEnabled(0)) {
+                sb.append("  v_TexCoord0 = u_TextureMatrix0 * ").append(src).append(";\n");
             } else {
-                if (key.textureMatrixEnabled()) {
-                    sb.append("  v_TexCoord0 = u_TextureMatrix0 * u_CurrentTexCoord;\n");
-                } else {
-                    sb.append("  v_TexCoord0 = u_CurrentTexCoord;\n");
-                }
+                sb.append("  v_TexCoord0 = ").append(src).append(";\n");
             }
         }
         if (key.lightmapEnabled()) {
@@ -352,6 +378,16 @@ public final class VertexShaderGenerator {
                 sb.append("  v_TexCoord1 = u_LightmapTextureMatrix * vec4(a_TexCoord1, 0.0, 1.0);\n");
             } else {
                 sb.append("  v_TexCoord1 = u_LightmapTextureMatrix * vec4(u_CurrentLightmapCoord, 0.0, 1.0);\n");
+            }
+        }
+        for (int i = 2; i < VertexKey.MAX_UNITS; i++) {
+            if (!key.unitTexCoordEnabled(i)) continue;
+            sb.append("  // Texture coordinates - unit ").append(i).append('\n');
+            final String src = key.unit23UvFromUnit0() ? "a_TexCoord0" : "u_CurrentTexCoord" + i;
+            if (!key.unit23UvFromUnit0() && key.unitTexMatEnabled(i)) {
+                sb.append("  v_TexCoord").append(i).append(" = u_TextureMatrix").append(i).append(" * ").append(src).append(";\n");
+            } else {
+                sb.append("  v_TexCoord").append(i).append(" = ").append(src).append(";\n");
             }
         }
     }

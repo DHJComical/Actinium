@@ -1,7 +1,7 @@
 package com.dhj.actinium.texture;
 
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import org.embeddedt.embeddium.impl.util.collections.quadtree.QuadTree;
+import dhj.embeddedt.embeddium.impl.util.collections.quadtree.QuadTree;
 
 public interface TextureMapExtension {
     QuadTree<TextureAtlasSprite> celeritas$getQuadTree();

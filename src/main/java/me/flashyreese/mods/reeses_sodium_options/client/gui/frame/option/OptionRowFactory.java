@@ -1,5 +1,9 @@
 package me.flashyreese.mods.reeses_sodium_options.client.gui.frame.option;
 
+import dhj.embeddedt.embeddium.api.options.control.CyclingControl;
+import dhj.embeddedt.embeddium.api.options.control.ExternalButtonControl;
+import dhj.embeddedt.embeddium.api.options.control.SliderControl;
+import dhj.embeddedt.embeddium.api.options.control.TickBoxControl;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.layout.LayoutBounds;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.option.RsoOption;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.state.OptionStateStore;
@@ -7,7 +11,7 @@ import me.flashyreese.mods.reeses_sodium_options.client.gui.theme.ActiniumTheme;
 import me.flashyreese.mods.reeses_sodium_options.client.gui.theme.GuiTheme;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.util.ResourceLocation;
-import org.embeddedt.embeddium.api.options.structure.Option;
+import dhj.embeddedt.embeddium.api.options.structure.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,13 +63,13 @@ final class OptionRowFactory {
         // The embeddium option model carries no upstream Control objects; the
         // concrete control type selects the row implementation directly.
         return switch (option) {
-            case Option<?> o when o.getControl() instanceof org.embeddedt.embeddium.api.options.control.TickBoxControl ->
+            case Option<?> o when o.getControl() instanceof TickBoxControl ->
                     new BooleanOptionRow(dim, this.theme, this.optionStateStore, new RsoOption(o));
-            case Option<?> o when o.getControl() instanceof org.embeddedt.embeddium.api.options.control.SliderControl ->
+            case Option<?> o when o.getControl() instanceof SliderControl ->
                     new IntegerSliderOptionRow(dim, this.theme, this.optionStateStore, new RsoOption(o));
-            case Option<?> o when o.getControl() instanceof org.embeddedt.embeddium.api.options.control.CyclingControl ->
+            case Option<?> o when o.getControl() instanceof CyclingControl ->
                     new CyclingOptionRow(dim, this.theme, this.optionStateStore, new RsoOption(o));
-            case Option<?> o when o.getControl() instanceof org.embeddedt.embeddium.api.options.control.ExternalButtonControl ->
+            case Option<?> o when o.getControl() instanceof ExternalButtonControl ->
                     new ExternalButtonOptionRow(this.screen, dim, this.theme, this.optionStateStore, new RsoOption(o));
             default -> this.createUnsupportedRow(option, dim);
         };

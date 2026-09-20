@@ -1,9 +1,9 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import net.coderbot.iris.gl.blending.DepthColorStorage;
-import org.embeddedt.embeddium.impl.gl.GlObject;
-import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
-import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
+import dhj.embeddedt.embeddium.impl.gl.GlObject;
+import dhj.embeddedt.embeddium.impl.gl.shader.GlProgram;
+import dhj.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

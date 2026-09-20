@@ -314,7 +314,6 @@ Actinium
 
 ### 9.4 不建议动（架构事实）
 
-- `Lwjgl2GLRenderBackend` vs `src/lwjgl3/.../Lwjgl3GLRenderBackend`：同一 `RenderBackend` 抽象的两个平台实现，方法级重复是预期设计
 - celeritas-common `GlVertexArray` vs GTNHLib VAO：记录式 vs 立即式双轨，且依赖方向约束下合并成本高
 - shader `AlphaTestStorage`/`BlendModeStorage`/`DepthColorStorage`：是 glsm `DeferredHandler` 接口的实现（设计如此）；其「另存 original 状态」可复用 glsm 状态栈快照原语，属渐进优化
 - `DebugMessageHandler`（glsm backend vs lwjglCommon）：仅同名，签名/职责不同

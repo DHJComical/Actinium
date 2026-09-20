@@ -5,7 +5,7 @@ import com.dhj.actinium.runtime.ActiniumRuntime;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
-import org.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
+import dhj.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;

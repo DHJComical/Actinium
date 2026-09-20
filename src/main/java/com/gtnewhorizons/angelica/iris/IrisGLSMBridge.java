@@ -24,21 +24,27 @@ import net.coderbot.iris.texture.pbr.PBRTextureManager;
 import net.coderbot.iris.vertices.ImmediateState;
 
 public final class IrisGLSMBridge {
+    private static Runnable alphaFuncListener;
+    private static Runnable alphaTestListener;
     private static Runnable blendFuncListener;
     private static Runnable fogModeListener;
     private static Runnable fogStartListener;
     private static Runnable fogEndListener;
     private static Runnable fogDensityListener;
+    private static Runnable colorModulatorListener;
     private static boolean registered;
     private static boolean inputsDeferred;
     private static boolean blendDeferred;
 
     static {
+        StateUpdateNotifiers.alphaFuncNotifier = listener -> alphaFuncListener = listener;
+        StateUpdateNotifiers.alphaTestNotifier = listener -> alphaTestListener = listener;
         StateUpdateNotifiers.blendFuncNotifier = listener -> blendFuncListener = listener;
         StateUpdateNotifiers.fogModeNotifier = listener -> fogModeListener = listener;
         StateUpdateNotifiers.fogStartNotifier = listener -> fogStartListener = listener;
         StateUpdateNotifiers.fogEndNotifier = listener -> fogEndListener = listener;
         StateUpdateNotifiers.fogDensityNotifier = listener -> fogDensityListener = listener;
+        StateUpdateNotifiers.colorModulatorNotifier = listener -> colorModulatorListener = listener;
     }
 
     private IrisGLSMBridge() {
@@ -171,6 +177,24 @@ public final class IrisGLSMBridge {
                 DepthColorStorage.deferColorMask(r, g, b, a);
             }
         };
+
+        GLSMHooks.ALPHA_STATE_CHANGE.addListener(event -> {
+            if (!Iris.enabled) {
+                return;
+            }
+            if (alphaFuncListener != null) {
+                alphaFuncListener.run();
+            }
+            if (alphaTestListener != null) {
+                alphaTestListener.run();
+            }
+        });
+
+        GLSMHooks.SHADER_COLOR_CHANGE.addListener(event -> {
+            if (Iris.enabled && colorModulatorListener != null) {
+                colorModulatorListener.run();
+            }
+        });
 
         GLSMHooks.BLEND_FUNC_CHANGE.addListener(event -> {
             if (Iris.enabled && blendFuncListener != null) {

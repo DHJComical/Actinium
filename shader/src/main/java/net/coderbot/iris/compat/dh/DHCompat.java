@@ -1,10 +1,10 @@
 package net.coderbot.iris.compat.dh;
 
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.pipeline.DeferredWorldRenderingPipeline;
 import net.minecraft.client.Minecraft;
-import net.minecraftforge.fml.common.Loader;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 
@@ -14,7 +14,6 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.InvocationTargetException;
 
 public class DHCompat {
-    private static final String DH_MOD_ID = "distanthorizons";
     private static boolean dhPresent;
     private static boolean lastIncompatible;
     private DHCompatInternal compatInternalInstance;
@@ -66,7 +65,7 @@ public class DHCompat {
     }
 
     public static boolean isDistantHorizonsLoaded() {
-        return Loader.instance().getIndexedModList().containsKey(DH_MOD_ID);
+        return Mods.DISTANTHORIZONS;
     }
 
     public static boolean lastPackIncompatible() {

@@ -26,6 +26,16 @@ public class BooleanState implements ISettableState<BooleanState> {
         stateUnknown = true;
     }
 
+    /** Re-applies the cached enable state to the backend; used when replaying state onto a fresh GL context. */
+    public void applyToBackend() {
+        if (ffpStateOnly) return;
+        if (enabled) {
+            RENDER_BACKEND.enable(glCap);
+        } else {
+            RENDER_BACKEND.disable(glCap);
+        }
+    }
+
     public void disable() {
         this.setEnabled(false);
     }

@@ -16,8 +16,6 @@ Minecraft 1.12.2 / Cleanroom Loader。目标是在旧版客户端引入现代化
 - `glsm/`：OpenGL 状态跟踪、重定向、固定管线模拟与调试设施。
 - `GTNHLib/`：渲染原语库（tessellator / VBO / VAO / 后处理 / 顶点格式）。
 
-另有独立打包的 `compatBridge`（`celeritas-compat-bridge.jar`），伪装旧 Celeritas mod id 供 addon 兼容。
-
 ## 构建模型
 
 ### 子项目依赖方向
@@ -28,7 +26,7 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 - `GTNHLib`：零子项目依赖，仅测试用 JUnit + LWJGL natives。
 - `glsm`：`api project(':GTNHLib')`，并把根项目 `src/lwjglCommon/java`、`src/lwjgl3/java`
-  两个 source set 直接并入 main（LWJGL2/LWJGL3 双后端抽象，Angelica 遗留）。
+  两个 source set 直接并入 main（LWJGL 服务抽象层，Angelica 遗留）。
 - `celeritas-common`：`api project(':glsm')`，无 resources。
 - `shader`：`api project(':glsm') + project(':GTNHLib') + project(':celeritas-common')`，无 resources。
 
@@ -36,11 +34,6 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 - 根项目通过 `mergeEmbeddedLibraryClasses` 把四个子项目输出 Sync 合并进主 jar
   （`DuplicatesStrategy.FAIL`），`remapJar` 生成可安装的 SRG 产物。
-- `compatBridge` 是根项目独立 source set（`src/compatBridge/`），编译期依赖主源码、
-  celeritas-common 与 embeddium API，单独产出 `celeritas-compat-bridge.jar`（独立 remap、
-  独立 mixin 配置 `celeritas-compat-bridge.mixin.json`），由 `prepareCompatBridgeRun`
-  安装进 dev 运行目录。
-- 主模组**不引用** compatBridge 任何类；桥单向依赖主模组（`required-after:actinium`）。
 
 开发约束：
 
@@ -48,7 +41,7 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   跨边界行为通过 bridge、provider 或小接口注入（约定见 `docs/bridges.md`）。
 - 新增 render pass 必须明确 framebuffer、program、texture unit、viewport 与混合/深度状态归属。
 - 新增 Mixin 必须加入 `MixinConfigurationTest` 覆盖的配置文件。
-- 发布前运行 `build`；`check` 会验证自动化测试及 remap jar 结构（含 compatBridge）。
+- 发布前运行 `build`；`check` 会验证自动化测试及 remap jar 结构。
 
 ## 初始化链路
 
@@ -57,13 +50,12 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
    注册 ASM transformer（`MacDisplayForwardCompatTransformer`、Angelica EarlyRedirector）；
    追加 AngelicaLateTweaker；设 mixin 兼容到 JAVA_11。
 2. **`MixinLate`**（late 阶段）：读取 `mixins.actinium.conditions.properties` 的 mod id 门控，
-   挑选 conditional 配置加载；DH 配置入队前执行 re-entrance lock 修复（`MixinReEntranceLockFix`）。
+   挑选 conditional 配置加载。
 3. **`Actinium.onConstruct`**（`@Mod` 主类）：挂载全部第三方 bridge
    （`GLRenderDevice.VANILLA_STATE_RESETTER`、`RuntimeOptionsBridge`、`EmbeddiumRuntimeOptions`、
    `PostProcessingBridge`、`WorldRendererCompatBridge`、`IrisDebugOptions.Bridge`、
    `GLSMPerfDebugHooks`）；初始化 DH / NeoFontRender 兼容。
-4. **`onPreInit`**：Distant Horizons client bindings 注册。
-5. **`onInit`**：NeoFontRender 初始化、dev 命令注册、Iris fmlInitEvent。
+4. **`onInit`**：NeoFontRender 初始化、dev 命令注册、Iris fmlInitEvent。
 
 `ActiniumRuntime`（`runtime/` 包）在类加载时静态装载 `SodiumGameOptions` 配置与版本信息，
 失败时降级为只读默认值，是全局状态的静态持有者。
@@ -101,7 +93,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   - `mixin/features/iris`（含 `startup/`）：约 35 个 Iris 兼容注入
     （实体、粒子、渲染器、纹理地图接入与启动期纹理注入）。
   - `mixin/mod/`：按模组分组的 conditional 注入 —— `betterfoliage`、`ccl`、`dh`（7 个）、
-    `gibbed`、`hbm`（2 类，机器状态与世界光照兼容）、`ichunutil`、`lumenized`、`revoui`、
+    `gibbed`、`hbm`（2 类，机器状态与世界光照兼容）、`ichunutil`、`littletiles`（2 类，
+    TE 顶点缓存接入区块网格）、`lumenized`、`revoui`、
     `voxelmap`（3 类，小地图兼容）；
     `stellarcore` 为空目录（规划占位）。
   - `mixin/vintage/`：原版 1.12.2 注入分支 —— `core`（Minecraft/RenderGlobal/Tessellator/
@@ -120,11 +113,12 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 
 ### 兼容层（业务逻辑，mixin 只做注入）
 
-- **`compat/` 根**：`MixinReEntranceLockFix` —— DH mixin 配置入队前的 re-entrance lock
+- **`compat/` 根**：`MixinReEntranceLockFix` —— late mixin 配置入队前的 re-entrance lock
   清理与类预加载修复。
 - **`compat/ccl/`**：`GlStateTrackerSnapshot` —— CCL 状态跟踪快照（配 `mixin/mod/ccl`）。
-- **`compat/dh/`**：`DistantHorizonsCompat`（DH 接入渲染桥）、`ActiniumDHIrisCompat` /
-  `ActiniumDHIrisAccessor` / `DistantHorizonsIrisAccessorState`（Iris 访问器与状态）。
+- **DH 兼容**：Distant Horizons 自行完成 Actinium/Iris 集成（Iris 侧接管见 `shader` 子项目的
+  `net.coderbot.iris.compat.dh`）。Actinium 不注入 DH，也不持有 DH 的 Iris 访问器或延迟 LOD
+  开关（见 `docs/compat/dh.md`）。
 - **`compat/fluidlogged/`**：`FluidloggedCompat`、`FluidStateStorage`、`FluidloggedBlockAccess`
   —— 流体方块状态存取，供区块克隆离线读取。
 - **`compat/gibbed/`**：`ActiniumModelRenderer` —— Gibbed 尸块渲染模型扩展。
@@ -141,9 +135,9 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 - **`compat/rfp2/`**：空目录（规划占位）。
 - **`compat/voxelmap/`**：`VoxelMapCompat` —— VoxelMap 小地图兼容桥（CPU 纹理路径
   强制、mipmap 回退判定、跨 mixin 共享的 scissor 活动标志，配 `mixin/mod/voxelmap`）。
-- **`compat/sodium/`**：Embeddium/钠配置引导与旧扩展点适配 —— `ActiniumConfigBootstrap`、
+- **`compat/sodium/`**：Embeddium/钠配置引导与选项扩展收集 —— `ActiniumConfigBootstrap`、
   `ActiniumApplyActions(Impl)`、`ActiniumFlagHook`、`LegacyExtensionEntryPoint` /
-  `LegacyOptionAdapter` / `LegacyOptionPageProvider`、`OptionGUIConstructionBridge`。
+  `LegacyOptionAdapter`、`OptionGUIConstructionBridge`。
 
 ### 渲染
 
@@ -194,10 +188,6 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   `ShadowMatrixAccess`（依赖 glsm 的 `InternalShadowRenderingState`）。
 - **`texture/`**：`SpriteExtension`、`TextureMapExtension` —— 精灵/纹理地图扩展
   （动画帧、mipmap、上传数据访问）。
-
-根项目另有 `src/main/java/org/taumc/celeritas/`（`CeleritasRuntime`、`CeleritasRuntimeOptions`、
-`core/CeleritasLoadingPlugin`、`impl/loader/common/ModLogoUtil` 等），是当前 celeritas 命名
-兼容层，委托 `ActiniumRuntime`；与 compatBridge 同包名但分属两个 jar。
 
 ## shader/ 子项目（Iris 风格光影管线）
 
@@ -260,14 +250,14 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 几乎不 import Minecraft 类（仅 2 处），是脱离 Minecraft 的纯 GL 渲染引擎
 （JOML 20 处、LWJGL 3 处 import）。
 
-- **`org.embeddedt.embeddium.api.*`**（9 个包，对外 API）：
+- **`dhj.embeddedt.embeddium.api.*`**（9 个包，对外 API）：
   - `eventbus`：精简事件总线（`EmbeddiumEvent`、`EventHandlerRegistrar`）与选项事件。
   - `options.*`：选项系统（`Option`/`OptionGroup`/`OptionPage`、binding、control 控件、
     `StandardOptions`）。
   - `shader`：着色器接入点 —— `ShaderProvider` + `ShaderProviderHolder`（静态注册点）、
     `BlockRenderLayer`、`shader.buffer.*`、`shader.vertex.*`。
   - `debug`：`RenderDebugHooks`；`util`：`ColorABGR`/`NormI8` 等颜色工具。
-- **`org.embeddedt.embeddium.impl.*`**（实现）：
+- **`dhj.embeddedt.embeddium.impl.*`**（实现）：
   - `gl.*`：GL 设备抽象与状态管理 —— `device.RenderDevice`/`DrawCommandList`（命令列表
     架构）、`arena.GlBufferArena` + `staging.*`（缓冲竞技场与映射暂存）、`buffer.*`
     （immutable/mutable buffer）、`state.GlStateTracker`、`shader.*`/`shader.uniform.*`、
@@ -289,6 +279,28 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   - 其它：`asm.ProxyClassGenerator`、`biome.BiomeColorCache`、`runtime.EmbeddiumRuntimeOptions`、
     `texture.MipmapHelper`、`util.*`（集合、颜色、迭代器、随机、排序、任务）。
 
+### 遮挡搜索的并发契约
+
+地形 pass 与阴影 pass 共享同一个 `occlusion.SectionLattice` 与单条搜索线程
+（`lists.SectionGraph` 的单线程 executor）。一次可见性搜索会读写 lattice 的平行数组
+（`visitState`/`sectionMeta`/`regionOfCell`/`latticeSection`），因此自搜索提交到 join 期间
+这些数组必须保持结构稳定：
+
+- `attach/detach` 由 `SectionGraph.assertSearchNotRunning()` 兜底（在飞即抛异常）；
+- 元数据更新由 `SectionGraph.submitUpdateTask` 延迟到所有搜索 join 后执行；
+- 窗口准备（`SectionLattice.ensureWindowCovers`，可能触发 allocate/shiftRebase/rebase 就地
+  改写数组）只能经 `SectionGraph.prepareWindow` 在无搜索在飞时执行。两个 pass 的窗口准备
+  统一在 `RenderSectionManager.updateForShadowPass` 提交任何搜索之前完成，因此
+  `startShadowGraphUpdate` 不再自行准备窗口。
+
+两个 pass 的相机并不相同：阴影 pass 交给地形 pass 的是上一帧捕获的 viewport，两者相差一帧
+的相机位移。窗口因此按本帧全部搜索相机的跨度开窗（`RenderListManager.prepareSearchWindow`
+可传多个 viewport），保证两边的搜索 root 都落在 lattice 可安装区内；单相机时窗口尺寸与
+放置与原先一致，没有阴影 pass 的世界不受影响。
+
+阴影搜索（`ShadowOcclusionCuller`）消费地形搜索当帧写出的 `visibleCells` 根集，因此两次
+搜索之间不允许任何结构变化（含窗口重建）。
+
 ## glsm/ 子项目（GL 状态跟踪与渲染后端抽象）
 
 核心原则：所有 GL 调用不直接调用 OpenGL，而是路由到 `BackendManager.RENDER_BACKEND`
@@ -302,8 +314,7 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   `CompatProgramUniformState(s)`（旧 GLSL/uniform 兼容，`actinium_renamed_` 前缀重命名）、
   `Feature`/`GLFeatureSet`、`FeedbackManager`、`GpuCommandDiagnostics`、`Vendor`、`GLDebug`、
   `ITessellatorData`。
-- **`backend/`**：渲染后端抽象 —— `RenderBackend`、`BackendManager`、`Lwjgl2GLRenderBackend`、
-  `DebugMessageHandler`。
+- **`backend/`**：渲染后端抽象 —— `RenderBackend`、`BackendManager`、`DebugMessageHandler`。
 - **`compat/`**：`FogHelper`（雾色状态捕获）；`compat/lwjgl/`：`AngelicaCylinder/Disk/
   PartialDisk/Sphere`（替代 LWJGL2 GLU quadric 形状）。
 - **`debug/`**：`GLSMDebug`（详细 draw 日志）、`GLSMPerfDebug` + `GLSMPerfDebugHooks`
@@ -353,8 +364,8 @@ LWJGL 后端（并入本子项目）：
   抽象、`GL11`~`GL44`/`GLExtension` 常量转发类、`DebugExtension`、`DebugMessageHandler`。
 - **`src/lwjgl3`**：LWJGL3 实现 —— `com.mitchej123.lwjgl.lwjgl3.LWJGL3Service`、
   `LWJGL3MemoryStack`、`LWJGL3DebugSupport`；`com.gtnewhorizons.angelica.lwjgl3.
-  Lwjgl3GLRenderBackend` —— glsm `RenderBackend` 的 LWJGL3 后端。两个后端经
-  `META-INF/services/...glsm.backend.RenderBackend` 注册，由 `BackendManager` ServiceLoader 选择。
+  Lwjgl3GLRenderBackend` —— glsm `RenderBackend` 的唯一实现，经
+  `META-INF/services/...glsm.backend.RenderBackend` 注册，由 `BackendManager` ServiceLoader 加载。
 
 ## GTNHLib/ 子项目（渲染原语库，`com.gtnewhorizon.gtnhlib`）
 
@@ -398,43 +409,6 @@ LWJGL 后端（并入本子项目）：
   的字体字形参数 mixin 注入接口）。
 - `client/model/`：空目录。
 
-## compatBridge（Celeritas 兼容桥，`org.taumc.celeritas`）
-
-独立 jar（`celeritas-compat-bridge.jar`），`mcmod.info` 中 `modid: "celeritas"`、
-主类 `CeleritasVintage`（`@Mod`，`clientSideOnly`，`required-after:actinium`，版本手工管理）。
-提供旧 Celeritas 2.4.0 API，使旧 addon 的 mod id 依赖检查与注入目标继续有效。
-
-- **根包**：`CeleritasVintage` —— 桥入口，构造阶段调用 `CeleritasLegacyEventBridge.install()`。
-- **`api/`**：旧版公开 API 镜像 —— `OptionGUIConstructionEvent`、
-  `OptionGroupConstructionEvent`、`OptionPageConstructionEvent`；`eventbus/`
-  （`EmbeddiumEvent`、`EventHandlerRegistrar`）；`options/binding/`（`OptionBinding`/
-  `GenericBinding`）；`options/control/`（`Control`、`ControlElement`、
-  `Slider/Cycling/TickBoxControl`、`ControlValueFormatter`）；`options/structure/`
-  （`Option`/`OptionGroup`/`OptionPage`/`OptionStorage`/`OptionImpl`/`OptionIdentifier`/
-  `OptionFlag`/`OptionImpact`/`StandardOptions`）。
-- **`compat/`**（桥接层）：`CeleritasLegacyEventBridge`（旧事件 → 主模组选项系统）、
-  `LegacyEventDispatcher`、`Legacy*/Current*` 各 Mapper（新旧模型互转）、
-  `Option/Group/Page/Storage/Control/Identifier` 等 Model 数据类、`LegacyRendererFactory`/
-  `LegacyRendererAccess`/`LegacyOptionGroupView`/`LegacyOptionPageView`、`InstallOnce`、
-  `BridgeDispatchGuard`（防止桥内模型构造回流到旧监听器）。
-- **`compat/mixin/`**：4 个 mixin（`celeritas-compat-bridge.mixin.json`，priority 1500）——
-  `CeleritasTileEntityRendererDispatcherMixin`（恢复旧六参 TE render ABI）、
-  `LegacyRendererAccessMixin`、`LegacyRendererConstructionMixin`、`LegacyWorldSliceMixin`。
-- **`impl/`**：`gui/MinecraftOptionsStorage`（旧存储门面）、
-  `render/terrain/compile/pipeline`（`VintageBlockRenderer`、`ActiniumVintageBlockRenderer`
-  —— 注意：桥内 renderBlock 编排及其私有成员是 Celeritas 2.4.0 兼容契约的一部分，
-  第三方 addon（celeritasleafculling 的 VintageBlockRendererMixin）会 @Shadow 其私有
-  字段与 renderQuadList，并 redirect renderBlock 内部的 renderQuadList 调用点，
-  因此编排不可收缩为纯转发别名；易漂移的渲染决策（如流体材质路由）经主实现共享
-  helper（`VintageBlockRenderer#resolveRenderMaterial`）保持单份实现，契约由
-  `CeleritasCompatBridgeJarTest#legacyRendererRetainsThirdPartyMixinBindingContract`
-  锁定）、
-  `world/cloned`（`CeleritasBlockAccess` 旧名接口）。
-
-桥通过 `com.dhj.actinium.*`（`ActiniumRuntime`、`compat.sodium.LegacyOptionPageProvider`/
-`OptionGUIConstructionBridge`、`render.terrain.compile.*` 的 `VintageBlockRenderer`/
-`LightDataCache` 等）与 `org.embeddedt.embeddium.*` API 接线。
-
 ## Mixin 配置清单
 
 `src/main/resources/` 下的 early/conditional 配置与 1 个门控声明：
@@ -443,7 +417,6 @@ LWJGL 后端（并入本子项目）：
 | --- | --- | --- |
 | `mixins.actinium.vintage.json` | early（MixinEarly） | 原版注入全量：`mixin/vintage` 下 60+ 类 |
 | `mixins.actinium.iris.json` | early（MixinEarly） | `mixin/core/terrain.BufferBuilderMixin` + `mixin/core/vertex.MixinVertexFormat` + `mixin/features/iris` 全部（含 startup） |
-| `mixins.actinium.dh.json` | late/conditional（mod: distanthorizons） | `mixin/mod/dh` 7 类 |
 | `mixins.actinium.gibbed.json` | late/conditional（gibbed） | `BasicGibMixin` |
 | `mixins.actinium.ichunutil.json` | late/conditional（ichunutil） | `mixin/mod/ichunutil` 3 类 |
 | `mixins.actinium.lumenized.json` | late/conditional（lumenized） | `mixin/mod/lumenized` 3 类 |
@@ -451,6 +424,7 @@ LWJGL 后端（并入本子项目）：
 | `mixins.actinium.betterfoliage.json` | late/conditional（betterfoliage） | `MixinChunkBuilderMeshingTaskBetterFoliage` |
 | `mixins.actinium.ccl.json` | late/conditional（codechickenlib） | `MixinGlStateTracker` |
 | `mixins.actinium.hbm.json` | late/conditional（hbm） | `MixinRenderUtil`、`MixinTileEntityRendererDispatcherLightmap` |
+| `mixins.actinium.littletiles.json` | late/conditional（littletiles） | `MixinChunkBuilderMeshingTaskLittleTiles`、`MixinTileEntityRenderManager`（TE 顶点缓存注入 section 网格 + 缓存构建完成触发 section 重建） |
 | `mixins.actinium.voxelmap.json` | late/conditional（voxelmap） | `mixin/mod/voxelmap` 3 类（GLUtils/GLShim/renderMap，小地图 CPU 路径与 HudCaching alpha 保护） |
 
 门控映射在 `mixins.actinium.conditions.properties`（mixin loader 不认 json 自定义字段），
@@ -510,7 +484,17 @@ Mixin 组织约定：
 - Fluidlogged API：world slice 中的 fluid state 快照与渲染。
 - Gibbed：模型渲染快速路径及条件 Mixin。
 - ModernUI 和若干 HUD/地图模组：GUI scale 或编译期兼容接口。
-- Celeritas addon：经 compatBridge 提供旧 mod id 与 API 镜像。
+- Celeritas 系 addon：直接适配 Actinium 主实现（选项 API 位于 `dhj.embeddedt.embeddium.api`，
+  renderer 绑定面由 `VintageBlockRendererBindingContractTest` 锁定）。
+  - **类路径重构（2026）**：`celeritas-common` 的 `org.embeddedt.embeddium.{api,impl}.*` 已整体
+    迁至 `dhj.embeddedt.embeddium.*`，打包时 joml 的 relocate 目标同步为
+    `dhj.embeddedt.embeddium.impl.shadow.joml`，以免与同一 classpath 上上游
+    Embeddium/Celeritas jar 内的同名类冲突。仍按上游 `org.embeddedt.embeddium.*` 二进制名
+    绑定的 addon（如 HBM-CE 的 `MixinRenderSectionManager`、celeritasleafculling 的
+    `VintageBlockRendererMixin`）必须随 Actinium 迁移，否则 `@Redirect` / `@Shadow` 匹配不到
+    目标。
+  - 例外：探测标记类保持 `org.taumc.celeritas.core.CeleritasLoadingPlugin` 不变 —— LoliASM
+    用精确类名 `Class.forName` 探测，改名即失效，见 [compat/censoredasm.md](compat/censoredasm.md)。
 
 兼容代码应由模组存在性检查保护。引用外部类的 Mixin 必须放在 late/conditional 配置中，
 避免未安装对应模组时触发类加载。
@@ -526,10 +510,9 @@ Mixin 组织约定：
   transformer 注入逻辑）、`mixin`/`mixins`（MixinConfigurationTest 配置覆盖校验、
   MixinLate 门控逻辑）、`render`（EndPortal、流式绘制、投影纹理坐标、光照缓存等）。
 - 嵌入第三方源码的测试命名空间：`com.gtnewhorizons.angelica.*`（glsm：shader/uniform
-  兼容、ffp 生成器、GPU 诊断、streaming）、`org.embeddedt.embeddium.*`（选项/区块渲染）、
+  兼容、ffp 生成器、GPU 诊断、streaming）、`dhj.embeddedt.embeddium.*`（选项/区块渲染）、
   `net.coderbot.iris.*` 与
-  `net.irisshaders.iris.*`（shaderpack 解析、pipeline transform、uniforms、阴影）、
-  `org.taumc.celeritas.*`（Celeritas 兼容层/选项桥）。
+  `net.irisshaders.iris.*`（shaderpack 解析、pipeline transform、uniforms、阴影）。
 - `net/minecraft/client/renderer/culling/ClippingHelperImpl.java` 为测试用 stub。
 
 普通单元测试适合覆盖属性解析、GLSL 变换、ID 映射、fallback 和打包契约。

@@ -4,7 +4,7 @@ import net.minecraft.client.renderer.texture.TextureUtil;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 
-import static org.embeddedt.embeddium.impl.texture.MipmapHelper.weightedAverageColor;
+import static dhj.embeddedt.embeddium.impl.texture.MipmapHelper.weightedAverageColor;
 
 @Mixin(value = TextureUtil.class, priority = 900)
 public class MixinTextureUtil {

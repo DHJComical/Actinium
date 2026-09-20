@@ -3,7 +3,7 @@ package com.dhj.actinium.mixin.mod.ichunutil;
 import com.dhj.actinium.compat.ichunutil.PortalViewportFactory;
 import com.dhj.actinium.compat.ichunutil.PortalViewportProvider;
 import me.ichun.mods.ichunutil.common.module.worldportals.client.render.culling.Frustum;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 

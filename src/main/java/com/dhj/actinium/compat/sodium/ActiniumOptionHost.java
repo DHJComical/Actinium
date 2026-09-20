@@ -6,16 +6,13 @@ import me.flashyreese.mods.reeses_sodium_options.client.gui.option.RsoModOptions
 import net.minecraft.client.Minecraft;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.embeddedt.embeddium.api.OptionGUIConstructionEvent;
-import org.embeddedt.embeddium.api.options.structure.Option;
-import org.embeddedt.embeddium.api.options.structure.OptionFlag;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
-import org.embeddedt.embeddium.api.options.structure.OptionStorage;
+import dhj.embeddedt.embeddium.api.options.structure.Option;
+import dhj.embeddedt.embeddium.api.options.structure.OptionFlag;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.OptionStorage;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.EnumSet;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

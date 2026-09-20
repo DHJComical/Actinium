@@ -302,8 +302,6 @@ public final class GLSMPerfDebug {
             if (className.startsWith("com.gtnewhorizons.angelica.glsm.debug.")
                 || className.startsWith("com.dhj.actinium.render.")
                 || className.startsWith("com.dhj.actinium.mixin.vintage.core.")
-                || className.startsWith("org.taumc.celeritas.impl.render.")
-                || className.startsWith("org.taumc.celeritas.mixin.core.")
                 || isBufferBuilderBridge(className, element.getMethodName())
                 || className.equals("java.lang.Thread")) {
                 continue;
@@ -331,8 +329,6 @@ public final class GLSMPerfDebug {
             if (className.startsWith("com.gtnewhorizons.angelica.glsm.")
                 || className.startsWith("com.dhj.actinium.render.")
                 || className.startsWith("com.dhj.actinium.mixin.vintage.core.")
-                || className.startsWith("org.taumc.celeritas.impl.render.")
-                || className.startsWith("org.taumc.celeritas.mixin.core.")
                 || className.equals("java.lang.Thread")) {
                 continue;
             }

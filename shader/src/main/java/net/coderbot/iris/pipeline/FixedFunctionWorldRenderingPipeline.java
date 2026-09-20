@@ -17,8 +17,7 @@ import net.coderbot.iris.helpers.Tri;
 import net.coderbot.iris.shaderpack.CloudSetting;
 import net.coderbot.iris.shaderpack.texture.TextureStage;
 import net.coderbot.iris.uniforms.FrameUpdateNotifier;
-import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
-import net.minecraft.client.Minecraft;
+import dhj.embeddedt.embeddium.impl.model.light.debug.AODebug;
 import net.minecraft.client.renderer.EntityRenderer;
 
 import java.util.List;

@@ -1,15 +1,16 @@
 package me.flashyreese.mods.reeses_sodium_options.client.config;
 
-import org.embeddedt.embeddium.api.options.OptionIdentifier;
-import org.embeddedt.embeddium.api.options.control.ControlValueFormatter;
-import org.embeddedt.embeddium.api.options.control.CyclingControl;
-import org.embeddedt.embeddium.api.options.control.SliderControl;
-import org.embeddedt.embeddium.api.options.control.TickBoxControl;
-import org.embeddedt.embeddium.api.options.structure.OptionGroup;
-import org.embeddedt.embeddium.api.options.structure.OptionImpl;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
-import org.embeddedt.embeddium.api.options.structure.OptionStorage;
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.api.options.structure.OptionFlag;
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
+import dhj.embeddedt.embeddium.api.options.control.ControlValueFormatter;
+import dhj.embeddedt.embeddium.api.options.control.CyclingControl;
+import dhj.embeddedt.embeddium.api.options.control.SliderControl;
+import dhj.embeddedt.embeddium.api.options.control.TickBoxControl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionGroup;
+import dhj.embeddedt.embeddium.api.options.structure.OptionImpl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.OptionStorage;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 
 import java.util.List;
 import java.util.Set;
@@ -214,7 +215,7 @@ public final class ReeseSodiumOptionsConfigEntryPoint {
         }
 
         @Override
-        public void save(Set<org.embeddedt.embeddium.api.options.structure.OptionFlag> flags) {
+        public void save(Set<OptionFlag> flags) {
             this.save();
         }
     }

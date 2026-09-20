@@ -19,8 +19,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.gen.Invoker;
-import org.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
-import org.embeddedt.embeddium.api.shader.buffer.VanillaQuadContext;
+import dhj.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
+import dhj.embeddedt.embeddium.api.shader.buffer.VanillaQuadContext;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -231,7 +231,7 @@ public abstract class BufferBuilderMixin implements BufferBuilderExtension, Proj
      * instead of writing into undefined slots.
      */
     @Overwrite
-    private void nextVertexFormatIndex() {
+    public void nextVertexFormatIndex() {
         int[] nextIndices = ((FastVertexLayout) (Object) this.vertexFormat).actinium$nextIndices();
         int index = this.vertexFormatIndex;
         if (index < 0 || index >= nextIndices.length) {

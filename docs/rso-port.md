@@ -15,7 +15,7 @@
 - **删除旧界面系统**：整个 `net.caffeinemc.mods.sodium.{api,client}.config` 数据模型与
   `net.caffeinemc.mods.sodium.client.gui` 设置界面（PolyForm Shield 1.0.0 许可）**全部删除**，
   不再以任何形式保留或分发。
-- **数据层**：RSO 依赖 **Embeddium 框架**（celeritas-common `org.embeddedt.embeddium.api.options.*`）
+- **数据层**：RSO 依赖 **Embeddium 框架**（celeritas-common `dhj.embeddedt.embeddium.api.options.*`）
   作为选项数据模型，并以自研（MIT）扩展补齐 RSO 需要的 pending/applied 语义与外部页能力。
 - **入口方式**：仿上游用 mixin 拦截入口——`MixinGuiOptions` 拦截视频设置按钮（id 101），
   RSO `enabled` 开启时打开 RSO 屏幕，关闭时走原版 `GuiVideoSettings`。
@@ -26,7 +26,7 @@
 - **embeddium 选项模型**：页面/组/选项改为 embeddium `OptionPage` / `OptionGroup` / `Option<T>`
   及其 Builder；内置 Actinium 页面（`ActiniumGameOptionPages` / `CommonOptionPages`）与
   RSO 自身配置页（`ReeseSodiumOptionsConfigEntryPoint`）均以 embeddium `OptionPage` 形式提供。
-- **自研扩展**（celeritas-common `org.embeddedt.embeddium.api.options.*`，MIT）：
+- **自研扩展**（celeritas-common `dhj.embeddedt.embeddium.api.options.*`，MIT）：
   - `Option` 接口默认方法 `getAppliedValue/getDefaultValue/resetToDefault/shouldHideControl`，
     在 `OptionImpl` 以 `modifiedValue` 与 `defaultValue` 实现，还原 RSO 需要的
     pending/applied 语义（`UndoAction`/`ResetAction` 依赖）。
@@ -102,7 +102,7 @@ OptionTooltipController、action 5 个）、`client/gui/widget/*`（6）、
 `PreviousScreenHolder`、入口 mixin `MixinGuiOptions`（拦截视频设置按钮 id 101 切屏，
 RSO 关闭时放行原版 `GuiVideoSettings`）、
 `com.dhj.actinium.compat.sodium`（ActiniumOptionHost / ActiniumOptionPages /
-ActiniumApplyActions / OptionGUIConstructionBridge / LegacyOptionPageProvider）、
+ActiniumApplyActions / OptionGUIConstructionBridge）、
 `net.irisshaders.iris.compat.sodium.IrisConfigEntryPoint`（embeddium 化并接入内置页面）。
 
 ## 视觉保真保障

@@ -6,23 +6,23 @@ import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
-import org.embeddedt.embeddium.api.options.OptionIdentifier;
-import org.embeddedt.embeddium.api.options.control.ControlValueFormatter;
-import org.embeddedt.embeddium.api.options.control.CyclingControl;
-import org.embeddedt.embeddium.api.options.control.SliderControl;
-import org.embeddedt.embeddium.api.options.control.TickBoxControl;
-import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
+import dhj.embeddedt.embeddium.api.options.control.ControlValueFormatter;
+import dhj.embeddedt.embeddium.api.options.control.CyclingControl;
+import dhj.embeddedt.embeddium.api.options.control.SliderControl;
+import dhj.embeddedt.embeddium.api.options.control.TickBoxControl;
+import dhj.embeddedt.embeddium.impl.gui.SodiumGameOptions;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.lwjgl.opengl.Display;
-import org.embeddedt.embeddium.impl.render.chunk.MultiDrawMode;
+import dhj.embeddedt.embeddium.impl.render.chunk.MultiDrawMode;
 import com.dhj.actinium.runtime.ActiniumRuntime;
-import org.embeddedt.embeddium.api.options.structure.OptionFlag;
-import org.embeddedt.embeddium.api.options.structure.OptionGroup;
-import org.embeddedt.embeddium.api.options.structure.OptionImpact;
-import org.embeddedt.embeddium.api.options.structure.OptionImpl;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
-import org.embeddedt.embeddium.api.options.structure.OptionStorage;
-import org.embeddedt.embeddium.api.options.structure.StandardOptions;
+import dhj.embeddedt.embeddium.api.options.structure.OptionFlag;
+import dhj.embeddedt.embeddium.api.options.structure.OptionGroup;
+import dhj.embeddedt.embeddium.api.options.structure.OptionImpact;
+import dhj.embeddedt.embeddium.api.options.structure.OptionImpl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.OptionStorage;
+import dhj.embeddedt.embeddium.api.options.structure.StandardOptions;
 import com.dhj.actinium.compat.modernui.MuiGuiScaleHook;
 import com.dhj.actinium.render.FastLitItemDisplayListCache;
 import com.mitchej123.lwjgl.GLExtension;
@@ -503,6 +503,15 @@ public class ActiniumGameOptionPages {
                         .setControl(TickBoxControl::new)
                         .setImpact(OptionImpact.HIGH)
                         .setBinding((opts, value) -> opts.debug.enableActiniumGlDebug = value, opts -> opts.debug.enableActiniumGlDebug)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_LWJGL_DEBUG.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.lwjgl_debug.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.lwjgl_debug.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.HIGH)
+                        .setBinding((opts, value) -> opts.debug.enableLwjglDebug = value, opts -> opts.debug.enableLwjglDebug)
+                        .setFlags(OptionFlag.REQUIRES_GAME_RESTART)
                         .build())
                 .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
                         .setId(StandardOptions.Option.ACTINIUM_PBR_DEBUG.cast())

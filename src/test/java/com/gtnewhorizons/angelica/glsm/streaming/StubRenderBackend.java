@@ -188,6 +188,7 @@ class StubRenderBackend extends RenderBackend {
     @Override public int getBufferParameteri(int target, int pname) { throw new UnsupportedOperationException(); }
     @Override public boolean isBuffer(int buffer) { throw new UnsupportedOperationException(); }
     @Override public int genVertexArrays() { throw new UnsupportedOperationException(); }
+    @Override public long getContextHandle() { return 0L; }
     @Override public void deleteVertexArrays(int array) { throw new UnsupportedOperationException(); }
     @Override public void bindVertexArray(int array) { throw new UnsupportedOperationException(); }
     @Override public void vertexAttribPointer(int index, int size, int type, boolean normalized, int stride, long pointer) { throw new UnsupportedOperationException(); }
@@ -226,9 +227,11 @@ class StubRenderBackend extends RenderBackend {
     @Override public void namedBufferSubData(int buffer, long offset, ByteBuffer data) { throw new UnsupportedOperationException(); }
     @Override public void copyTextureSubImage2D(int texture, int target, int level, int xoffset, int yoffset, int x, int y, int width, int height) { throw new UnsupportedOperationException(); }
     @Override public int getTextureParameteri(int texture, int target, int pname) { throw new UnsupportedOperationException(); }
+    @Override public float getTextureParameterf(int texture, int target, int pname) { throw new UnsupportedOperationException(); }
     @Override public int getTextureLevelParameteri(int texture, int level, int pname) { throw new UnsupportedOperationException(); }
     @Override public int getInteger(int pname) { throw new UnsupportedOperationException(); }
     @Override public void getInteger(int pname, IntBuffer params) { throw new UnsupportedOperationException(); }
+    @Override public int getIntegerIndexed(int pname, int index) { throw new UnsupportedOperationException(); }
     @Override public float getFloat(int pname) { throw new UnsupportedOperationException(); }
     @Override public void getFloat(int pname, FloatBuffer params) { throw new UnsupportedOperationException(); }
     @Override public boolean getBoolean(int pname) { throw new UnsupportedOperationException(); }
@@ -244,4 +247,29 @@ class StubRenderBackend extends RenderBackend {
     @Override public void bindImageTexture(int unit, int texture, int level, boolean layered, int layer, int access, int format) { throw new UnsupportedOperationException(); }
     @Override public void memoryBarrier(int barriers) { throw new UnsupportedOperationException(); }
     @Override public void copyImageSubData(int srcName, int srcTarget, int srcLevel, int srcX, int srcY, int srcZ, int dstName, int dstTarget, int dstLevel, int dstX, int dstY, int dstZ, int srcWidth, int srcHeight, int srcDepth) { throw new UnsupportedOperationException(); }
+    @Override public void multiDrawArrays(int mode, IntBuffer firsts, IntBuffer counts) { throw new UnsupportedOperationException(); }
+    @Override public void primitiveRestartIndex(int index) { throw new UnsupportedOperationException(); }
+    @Override public void pointParameterf(int pname, float param) { throw new UnsupportedOperationException(); }
+    @Override public void pointParameteri(int pname, int param) { throw new UnsupportedOperationException(); }
+    @Override public int genRenderbuffers() { throw new UnsupportedOperationException(); }
+    @Override public void deleteRenderbuffers(int renderbuffer) { throw new UnsupportedOperationException(); }
+    @Override public void bindRenderbuffer(int target, int renderbuffer) { throw new UnsupportedOperationException(); }
+    @Override public void renderbufferStorage(int target, int internalformat, int width, int height) { throw new UnsupportedOperationException(); }
+    @Override public void renderbufferStorageMultisample(int target, int samples, int internalformat, int width, int height) { throw new UnsupportedOperationException(); }
+    @Override public void framebufferRenderbuffer(int target, int attachment, int renderbuffertarget, int renderbuffer) { throw new UnsupportedOperationException(); }
+    @Override public void getTexImage(int target, int level, int format, int type, long pixelBufferOffset) { throw new UnsupportedOperationException(); }
+    @Override public void getActiveAttrib(int program, int index, IntBuffer length, IntBuffer size, IntBuffer type, ByteBuffer name) { throw new UnsupportedOperationException(); }
+    @Override public String getActiveAttrib(int program, int index, int maxLength, IntBuffer sizeType) { throw new UnsupportedOperationException(); }
+    @Override public void bindBufferRange(int target, int index, int buffer, long offset, long size) { throw new UnsupportedOperationException(); }
+    @Override public int getUniformBlockIndex(int program, CharSequence name) { throw new UnsupportedOperationException(); }
+    @Override public void uniformBlockBinding(int program, int blockIndex, int binding) { throw new UnsupportedOperationException(); }
+    @Override public int getIndexedBufferBinding(int target, int index) { throw new UnsupportedOperationException(); }
+    @Override public void flushMappedBufferRange(int target, long offset, long length) { throw new UnsupportedOperationException(); }
+    @Override public boolean isTexture(int texture) { throw new UnsupportedOperationException(); }
+    @Override public boolean isFramebuffer(int framebuffer) { throw new UnsupportedOperationException(); }
+    @Override public boolean isRenderbuffer(int renderbuffer) { throw new UnsupportedOperationException(); }
+    @Override public boolean isSampler(int sampler) { throw new UnsupportedOperationException(); }
+    @Override public boolean isQuery(int query) { throw new UnsupportedOperationException(); }
+    @Override public void namedBufferData(int buffer, long size, int usage) { throw new UnsupportedOperationException(); }
+    @Override public void clearBufferData(int target, int internalformat, int format, int type, ByteBuffer data) { throw new UnsupportedOperationException(); }
 }

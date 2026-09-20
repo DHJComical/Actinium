@@ -5,16 +5,16 @@ import net.coderbot.iris.vertices.NormalHelper;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockDynamicLiquid;
 import net.minecraft.block.BlockStaticLiquid;
-import org.embeddedt.embeddium.api.util.NormI8;
-import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.impl.VanillaLikeChunkVertex;
+import dhj.embeddedt.embeddium.api.util.NormI8;
+import dhj.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.impl.VanillaLikeChunkVertex;
 import org.joml.Vector3f;
-import org.embeddedt.embeddium.api.shader.ShaderProvider;
-import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
-import org.embeddedt.embeddium.api.shader.vertex.BlockRenderContext;
-import org.embeddedt.embeddium.api.shader.vertex.ContextAwareChunkVertexEncoder;
-import org.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
+import dhj.embeddedt.embeddium.api.shader.ShaderProvider;
+import dhj.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import dhj.embeddedt.embeddium.api.shader.vertex.BlockRenderContext;
+import dhj.embeddedt.embeddium.api.shader.vertex.ContextAwareChunkVertexEncoder;
+import dhj.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
 
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 

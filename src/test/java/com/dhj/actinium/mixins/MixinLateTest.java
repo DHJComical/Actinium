@@ -41,7 +41,6 @@ class MixinLateTest {
 
         assertEquals(
             Set.of(
-                "mixins.actinium.dh.json",
                 "mixins.actinium.gibbed.json",
                 "mixins.actinium.ichunutil.json",
                 "mixins.actinium.lumenized.json",
@@ -54,7 +53,9 @@ class MixinLateTest {
                 "mixins.actinium.oldresearch.json",
                 "mixins.actinium.botania.json",
                 "mixins.actinium.hbm.json",
-                "mixins.actinium.scannable.json"
+                "mixins.actinium.scannable.json",
+                "mixins.actinium.littletiles.json",
+                "mixins.actinium.obscuretooltips.json"
             ),
             Set.copyOf(MixinLate.configsFor(modId -> true, className -> true))
         );

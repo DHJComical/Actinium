@@ -1,7 +1,7 @@
 package com.dhj.actinium.compat.sodium;
 
-import org.embeddedt.embeddium.api.options.OptionIdentifier;
-import org.embeddedt.embeddium.api.options.structure.StandardOptions;
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
+import dhj.embeddedt.embeddium.api.options.structure.StandardOptions;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Guards the RSO tab grouping: the settings pages (general/quality/
  * performance/advanced/debug) must live under the host "actinium" namespace
- * so they do not end up in the celeritas compatibility-bridge tab.
+ * so they are grouped as first-party pages rather than addon contributions.
  */
 class EmbeddiumStandardOptionsPagesTest {
     @Test

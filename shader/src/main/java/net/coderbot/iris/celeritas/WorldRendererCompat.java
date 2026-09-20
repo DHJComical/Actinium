@@ -1,8 +1,8 @@
 package net.coderbot.iris.celeritas;
 
 import net.minecraft.util.BlockRenderLayer;
-import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
 
 import java.util.Collection;
 

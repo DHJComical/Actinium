@@ -4,6 +4,7 @@ import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormat;
 import com.gtnewhorizons.angelica.glsm.CompatUniformManager;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.gtnewhorizons.angelica.glsm.QuadConverter;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import com.gtnewhorizons.angelica.glsm.hooks.DeferredBlendHandler;
@@ -11,6 +12,7 @@ import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.glsm.stacks.Vec3fStack;
 import com.gtnewhorizons.angelica.glsm.stacks.Vec4fStack;
 import com.gtnewhorizons.angelica.glsm.states.VertexAttribState;
+import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMInitConfig;
 import lombok.Getter;
@@ -47,9 +49,14 @@ public class ShaderManager {
     private int currentFKLen = 0;
 
     @Getter private static final Vector3f currentNormal = new Vector3f(0.0f, 0.0f, 1.0f);
-    @Getter private static final Vector4f currentTexCoord = new Vector4f(0.0f, 0.0f, 0.0f, 1.0f);
+    private static final Vector4f[] currentTexCoords = {
+        new Vector4f(0.0f, 0.0f, 0.0f, 1.0f),
+        new Vector4f(0.0f, 0.0f, 0.0f, 1.0f),
+        new Vector4f(0.0f, 0.0f, 0.0f, 1.0f),
+        new Vector4f(0.0f, 0.0f, 0.0f, 1.0f),
+    };
     @Getter private static final Vec3fStack normalStack = new Vec3fStack(currentNormal);
-    @Getter private static final Vec4fStack texCoordStack = new Vec4fStack(currentTexCoord);
+    @Getter private static final Vec4fStack texCoordStack = new Vec4fStack(currentTexCoords[0]);
     @Getter private static int normalGeneration;
     @Getter private static int texCoordGeneration;
     @Getter private boolean enabled = false;
@@ -67,6 +74,7 @@ public class ShaderManager {
     }
 
     public void enable() {
+        warmUp();
         enabled = true;
 
         VertexFormat.registerSetupBufferStateOverride((format, offset) -> {
@@ -76,6 +84,27 @@ public class ShaderManager {
         });
 
         GLStateManager.LOGGER.info("FFP shader emulation enabled");
+    }
+
+    // Force loading of classes before the SplashThread kicks off
+    // Ensure it's GL free
+    private static void warmUp() {
+        try {
+            final long[] fkScratch = new long[FragmentKey.MAX_UNITS];
+            final int fkLen = FragmentKey.packFromState(fkScratch);
+            final int fragMask = FragmentKey.unitMaskFromPacked(fkScratch, fkLen);
+            final long vkPacked = VertexKey.packFromState(true, true, true, true, fragMask);
+            final VertexKey vk = VertexKey.fromPacked(vkPacked);
+            VertexShaderGenerator.generate(vk);
+            FragmentShaderGenerator.generate(FragmentKey.fromPacked(fkScratch, fkLen));
+            GeometryShaderGenerator.generate(vk);
+            final Class<?>[] touched = { Program.class, ShaderCache.class, TessellatorStreamingDrawer.class, QuadConverter.class };
+            for (Class<?> c : touched) {
+                c.getName();
+            }
+        } catch (Throwable t) {
+            GLStateManager.LOGGER.warn("FFP warmup failed; draw-path classes will resolve lazily", t);
+        }
     }
 
     public void disable() {
@@ -126,8 +155,9 @@ public class ShaderManager {
             }
         }
 
-        final long vkPacked = VertexKey.packFromState(hasColor, hasNormal, hasTexCoord, hasLightmap);
         final int fkLen = FragmentKey.packFromState(currentFKScratch);
+        final int fragUnitMask = FragmentKey.unitMaskFromPacked(currentFKScratch, fkLen);
+        final long vkPacked = VertexKey.packFromState(hasColor, hasNormal, hasTexCoord, hasLightmap, fragUnitMask);
 
         if (!isCurrentVariant(currentVertexKeyPacked, currentFKPacked, currentFKLen, vkPacked, currentFKScratch, fkLen)) {
             commitVariant(vkPacked, fkLen);
@@ -183,8 +213,9 @@ public class ShaderManager {
     }
 
     private void updateVariant(boolean hasColor, boolean hasNormal, boolean hasTexCoord, boolean hasLightmap) {
-        final long vkPacked = VertexKey.packFromState(hasColor, hasNormal, hasTexCoord, hasLightmap);
         final int fkLen = FragmentKey.packFromState(currentFKScratch);
+        final int fragUnitMask = FragmentKey.unitMaskFromPacked(currentFKScratch, fkLen);
+        final long vkPacked = VertexKey.packFromState(hasColor, hasNormal, hasTexCoord, hasLightmap, fragUnitMask);
         final boolean variantChanged = currentProgram == null
             || !isCurrentVariant(currentVertexKeyPacked, currentFKPacked, currentFKLen, vkPacked, currentFKScratch, fkLen);
         if (variantChanged) {
@@ -232,13 +263,21 @@ public class ShaderManager {
         }
     }
 
+    public static Vector4f getCurrentTexCoord() { return currentTexCoords[0]; }
+    public static Vector4f getCurrentTexCoord(int unit) { return currentTexCoords[unit]; }
+
     public static void setCurrentNormal(float x, float y, float z) {
         currentNormal.set(x, y, z);
         normalGeneration++;
     }
 
     public static void setCurrentTexCoord(float s, float t, float r, float q) {
-        currentTexCoord.set(s, t, r, q);
+        currentTexCoords[0].set(s, t, r, q);
+        texCoordGeneration++;
+    }
+
+    public static void setCurrentTexCoord(int unit, float s, float t, float r, float q) {
+        currentTexCoords[unit].set(s, t, r, q);
         texCoordGeneration++;
     }
 
@@ -273,7 +312,7 @@ public class ShaderManager {
         uniforms.destroy();
         final GLSMInitConfig config = GLStateManager.getInitConfig();
         if (config != null && config.getStreamingDrawerDestroy() != null) config.getStreamingDrawerDestroy().run();
-        com.gtnewhorizons.angelica.glsm.QuadConverter.destroy();
+        QuadConverter.destroy();
         active = false;
         currentProgram = null;
     }

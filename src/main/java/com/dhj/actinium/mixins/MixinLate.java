@@ -1,9 +1,8 @@
 package com.dhj.actinium.mixins;
 
 import com.dhj.actinium.compat.MixinReEntranceLockFix;
-import net.minecraft.client.renderer.EntityRenderer;
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
-import net.minecraftforge.fml.common.Loader;
 import zone.rong.mixinbooter.Context;
 import zone.rong.mixinbooter.ILateMixinLoader;
 
@@ -28,16 +27,13 @@ public class MixinLate implements ILateMixinLoader {
 
     @Override
     public List<String> getMixinConfigs() {
-        return configsFor(Loader::isModLoaded);
+        return configsFor(Mods::isModPresent);
     }
 
     @Override
     public void onMixinConfigQueued(Context context) {
-        switch (context.mixinConfig()) {
-            case "mixins.actinium.dh.json" -> preloadTargets(EntityRenderer.class);
-            case "mixins.actinium.hbm.json" -> preloadTargets(TileEntityRendererDispatcher.class);
-            default -> {
-            }
+        if ("mixins.actinium.hbm.json".equals(context.mixinConfig())) {
+            preloadTargets(TileEntityRendererDispatcher.class);
         }
     }
 

@@ -164,6 +164,13 @@ public class RenderTargets {
                     continue;
                 }
 
+                if (framebuffer.isDepthAttachmentManagedExternally()) {
+                    // NB: Distant Horizons framebuffers re-attach DH's own depth texture via
+                    // DHCompatInternal.reconnectDHTextures on the next LOD pass; attaching the
+                    // window depth here leaves them broken until a full shader reload.
+                    continue;
+                }
+
                 if (framebuffer.hasDepthAttachment()) {
                     framebuffer.addDepthAttachment(newDepthTextureId);
                 }
@@ -262,13 +269,20 @@ public class RenderTargets {
 	}
 
 	public GlFramebuffer createDHFramebuffer(ImmutableSet<Integer> stageWritesToAlt, int[] drawBuffers) {
+		final GlFramebuffer framebuffer;
+
 		if (drawBuffers.length == 0) {
-			return createEmptyFramebuffer();
+			framebuffer = createEmptyFramebuffer();
+		} else {
+			ImmutableSet<Integer> stageWritesToMain = invert(stageWritesToAlt, drawBuffers);
+			framebuffer = createColorFramebuffer(stageWritesToMain, drawBuffers);
 		}
 
-		ImmutableSet<Integer> stageWritesToMain = invert(stageWritesToAlt, drawBuffers);
-
-		return createColorFramebuffer(stageWritesToMain, drawBuffers);
+		// Distant Horizons owns the depth attachment of these framebuffers: its LOD pass
+		// re-attaches DH's own depth texture via DHCompatInternal.reconnectDHTextures, so
+		// window-depth rebuilds on resize must leave them alone.
+		framebuffer.setDepthAttachmentManagedExternally(true);
+		return framebuffer;
 	}
 
 	public GlFramebuffer createGbufferFramebuffer(ImmutableSet<Integer> stageWritesToAlt, int[] drawBuffers) {

@@ -8,7 +8,7 @@ import net.coderbot.iris.shadows.frustum.advanced.AdvancedShadowCullingFrustum;
 import net.coderbot.iris.shadows.frustum.advanced.SafeZoneCullingFrustum;
 import net.coderbot.iris.shadows.frustum.fallback.BoxCullingFrustum;
 import net.coderbot.iris.shadows.frustum.fallback.NonCullingFrustum;
-import org.embeddedt.embeddium.impl.render.viewport.frustum.Frustum;
+import dhj.embeddedt.embeddium.impl.render.viewport.frustum.Frustum;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;

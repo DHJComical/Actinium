@@ -20,7 +20,7 @@ public final class ActiniumStartupDebugConfig {
     private static final Path CONFIG_PATH = Paths.get("config", "actinium-options.json");
     private static final Path LEGACY_CONFIG_PATH = Paths.get("config", "embeddium-options.json");
     private static final Snapshot SNAPSHOT = loadSnapshot();
-    private static final boolean LWJGL_DEBUG = resolveLwjglDebug(System.getProperty("actinium.lwjglDebug"));
+    private static final boolean LWJGL_DEBUG = resolveLwjglDebug(System.getProperty("actinium.lwjglDebug"), SNAPSHOT.enableLwjglDebug);
 
     private ActiniumStartupDebugConfig() {
     }
@@ -50,8 +50,8 @@ public final class ActiniumStartupDebugConfig {
         return override != null ? Boolean.parseBoolean(override) : fallback;
     }
 
-    static boolean resolveLwjglDebug(String override) {
-        return override != null && Boolean.parseBoolean(override);
+    static boolean resolveLwjglDebug(String override, boolean configured) {
+        return override != null ? Boolean.parseBoolean(override) : configured;
     }
 
     private static Snapshot loadSnapshot() {
@@ -74,7 +74,8 @@ public final class ActiniumStartupDebugConfig {
             return new Snapshot(
                 getBoolean(debug, "enable_redirector_debug"),
                 getBoolean(debug, "enable_redirector_log_spam"),
-                getBoolean(debug, "enable_redirector_class_dump")
+                getBoolean(debug, "enable_redirector_class_dump"),
+                getBoolean(debug, "enable_lwjgl_debug")
             );
         } catch (IOException | RuntimeException e) {
             LOGGER.warn("Failed to read startup debug options from {}", path, e);
@@ -87,7 +88,7 @@ public final class ActiniumStartupDebugConfig {
         return element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isBoolean() && element.getAsBoolean();
     }
 
-    private record Snapshot(boolean redirectorDebug, boolean redirectorLogSpam, boolean classDump) {
-        private static final Snapshot DEFAULT = new Snapshot(false, false, false);
+    private record Snapshot(boolean redirectorDebug, boolean redirectorLogSpam, boolean classDump, boolean enableLwjglDebug) {
+        private static final Snapshot DEFAULT = new Snapshot(false, false, false, false);
     }
 }

@@ -1,7 +1,12 @@
 name: Build mod jar
 
 on:
-  [workflow_dispatch, push]
+  workflow_dispatch:
+  push:
+  # Pull requests need an explicit trigger: pushes to a fork never reach this
+  # repository, so without it a contribution gets no build at all.
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -25,7 +30,7 @@ jobs:
         distribution: 'temurin'
     - uses: gradle/actions/setup-gradle@v6
       with:
-        gradle-version: 9.6.1
+        gradle-version: 9.7.1
       name: Set up Gradle
     - name: Add permission
       run: chmod +x ./gradlew

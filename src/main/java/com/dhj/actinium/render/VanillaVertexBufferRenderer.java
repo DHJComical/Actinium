@@ -8,7 +8,7 @@ import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import net.minecraft.client.renderer.vertex.VertexFormat;
 import net.minecraft.client.renderer.vertex.VertexFormatElement;
-import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import dhj.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30C;
@@ -23,6 +23,9 @@ public final class VanillaVertexBufferRenderer {
     private static final boolean DRAW_STATE_DEBUG = Boolean.getBoolean("actinium.streamingDrawStateDebug");
     private static final Map<Integer, Integer> VAOS_BY_VBO = new HashMap<>();
     private static final Map<Integer, Integer> FLAGS_BY_VBO = new HashMap<>();
+    // Birth context handle per VAO: container objects do not survive a display context
+    // migration (issue #150); entries born on another context must be recreated.
+    private static final Map<Integer, Long> VAO_CONTEXTS = new HashMap<>();
 
     private VanillaVertexBufferRenderer() {
     }
@@ -81,15 +84,42 @@ public final class VanillaVertexBufferRenderer {
         Integer vao = VAOS_BY_VBO.remove(vbo);
         FLAGS_BY_VBO.remove(vbo);
         if (vao != null) {
+            VAO_CONTEXTS.remove(vao);
             GLStateManager.glDeleteVertexArrays(vao);
         }
         GLStateManager.glDeleteBuffers(vbo);
+    }
+
+    /**
+     * Drops cached VAO entries born on another GL context: VAOs do not survive a display context
+     * migration (issue #150). The VBOs are shared across contexts and stay valid; mismatched VAOs
+     * are recreated lazily on next use.
+     */
+    public static void recreateVertexArrays() {
+        final long current = RENDER_BACKEND.getContextHandle();
+        VAOS_BY_VBO.entrySet().removeIf(entry -> {
+            final int vao = entry.getValue();
+            final Long birth = VAO_CONTEXTS.get(vao);
+            if (birth == null || birth == current) {
+                return false;
+            }
+            FLAGS_BY_VBO.remove(entry.getKey());
+            VAO_CONTEXTS.remove(vao);
+            return true;
+        });
+    }
+
+    /** True when the VAO was created on the calling thread's current context (or is untracked). */
+    static boolean vaoMatchesCurrentContext(int vao) {
+        final Long birth = VAO_CONTEXTS.get(vao);
+        return birth == null || birth == RENDER_BACKEND.getContextHandle();
     }
 
     public static int createStreamingVertexArray(VertexFormat format, int vbo) {
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
         int vao = GLStateManager.glGenVertexArrays();
+        VAO_CONTEXTS.put(vao, RENDER_BACKEND.getContextHandle());
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         setupVertexFormatAttributes(format);

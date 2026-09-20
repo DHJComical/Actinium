@@ -107,6 +107,14 @@ public class CompatShaderTransformer {
 
     /**
      * Transform a mod shader source for core profile compatibility.
+     *
+     * <p>Deliberate divergence from upstream Angelica: Angelica additionally re-emits the
+     * transformed 330-core GLSL as GLSL ES 320 on GLES contexts ({@code toGLES(...)} via
+     * {@code SpirvShaderTranslator.glslToGlslEs}, shaderc + SPIRV-Cross). That path is not wired
+     * here because the shaderc/spvc natives are compileOnly in glsm and are not shipped; the
+     * {@code GLES_IFDEF} handling below is a different, desktop-side concern (stripping ES
+     * precision guard blocks so ES-style mod shaders parse as desktop GLSL). GLES output
+     * re-emission remains a follow-up for the WP that ships the natives.
      */
     public static String transform(String source, boolean isFragment) {
         final boolean needsTransform = needsTransformation(source);

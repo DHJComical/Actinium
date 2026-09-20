@@ -1,17 +1,16 @@
 package com.dhj.actinium.compat.fluxloading;
 
-import net.minecraftforge.fml.common.Loader;
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 
 /**
  * Compatibility for FluxLoading (mod id {@code fluxloading}).
  *
  * <p>FluxLoading drives its loading-screen state machine from chunk-compile notifications. Its
- * Celeritas hook is a late mixin that only loads when {@code Loader.isModLoaded("celeritas")}
- * passes, and the vanilla {@code ChunkRenderWorker.processTask} hook never fires because Actinium
- * meshes chunks on its own builder threads. In a production install neither source exists, so the
- * state machine stalls in {@code DEFAULT_WORLD_LOADING} forever and the loading screen never fades
- * out after re-entering a world (#102); dev runs do not reproduce this because {@code runClient}
- * installs the compat-bridge jar whose mod id satisfies the check.</p>
+ * Celeritas hook is a late mixin that only loads when the {@code celeritas} mod id is present,
+ * and the vanilla {@code ChunkRenderWorker.processTask} hook never fires because Actinium
+ * meshes chunks on its own builder threads. Actinium does not provide the {@code celeritas} mod id,
+ * so without this compat the state machine stalls in {@code DEFAULT_WORLD_LOADING} forever and the
+ * loading screen never fades out after re-entering a world (#102).</p>
  *
  * <p>The compat forwards the same per-frame signal FluxLoading's own Celeritas mixin would emit:
  * {@code RenderSectionManager.updateChunks} returning in {@link
@@ -20,11 +19,7 @@ import net.minecraftforge.fml.common.Loader;
  * so they are never class-loaded unless FluxLoading is installed.</p>
  */
 public final class FluxLoadingCompat {
-    /**
-     * The mod ID of FluxLoading.
-     */
-    public static final String MODID = "fluxloading";
-    public static final boolean IS_LOADED = Loader.isModLoaded(MODID);
+    public static final boolean IS_LOADED = Mods.FLUXLOADING;
 
     private FluxLoadingCompat() {
     }

@@ -4,7 +4,7 @@ import com.dhj.actinium.mixin.vintage.core.MinecraftAccessor;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import net.minecraft.client.Minecraft;
 import org.apache.logging.log4j.Logger;
-import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
+import dhj.embeddedt.embeddium.impl.gui.SodiumGameOptions;
 import org.lwjgl.opengl.Display;
 
 public final class ActiniumWindowModeController {

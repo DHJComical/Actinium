@@ -3,6 +3,7 @@ package com.dhj.actinium.mixin.vintage.core.terrain;
 import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 import java.nio.FloatBuffer;
@@ -20,11 +21,13 @@ public interface AccessorActiveRenderInfo {
         throw new AssertionError();
     }
 
+    @Mutable
     @Accessor("PROJECTION")
     static void setProjectionMatrix(FloatBuffer matrix) {
         throw new AssertionError();
     }
 
+    @Mutable
     @Accessor("MODELVIEW")
     static void setModelViewMatrix(FloatBuffer matrix) {
         throw new AssertionError();
@@ -35,6 +38,7 @@ public interface AccessorActiveRenderInfo {
         throw new AssertionError();
     }
 
+    @Mutable
     @Accessor("OBJECTCOORDS")
     static void setObjectCoords(FloatBuffer buffer) {
         throw new AssertionError();
@@ -45,6 +49,7 @@ public interface AccessorActiveRenderInfo {
         throw new AssertionError();
     }
 
+    @Mutable
     @Accessor("VIEWPORT")
     static void setViewportBuffer(IntBuffer buffer) {
         throw new AssertionError();

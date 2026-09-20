@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-09-02。
+最后更新：2026-09-19。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -8,6 +8,18 @@
 
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
+
+> 2026-09-19 追加：CensoredASM / Chibi 5.33（issue #159）共存启动崩溃已修复——其
+> on-demand animated textures 在 `TextureMap.updateAnimations` 与 `BufferBuilder.tex` 上
+> 与 Actinium 双重 overwrite（同优先级注入冲突导致 `TextureMap` 类变换失败），其
+> `squashBakedQuads` 又会改写 `MixinBakedQuad` 所 `@Shadow` 的 `BakedQuad` 字段。修复为提供
+> `org.taumc.celeritas.core.CeleritasLoadingPlugin` 探测标记类，让 LoliASM 走它自带的
+> Celeritas 让位路径（两组特性一起关闭）；dev 实机验证通过，详见
+> [docs/compat/censoredasm.md](compat/censoredasm.md)。
+
+> 2026-09-18 追加：Distant Horizons 3.3.0-1.12.2（`maven.modrinth:uCdwusMi:Sa0ttGJr`，Actinium
+> `6e66a3c7`）实机回归通过——六包光影 + DH LOD、无光影 LOD/雾色/天空盒、进出世界/维度切换
+> （用户实机确认，详见 [docs/compat/dh.md](compat/dh.md)）。
 
 > 2026-08-31 追加：Photon v1.3b 水面不生效（水面保持原版贴图、仅余微弱反光）的修复——
 > 根因不在水面渲染路径，而在 block.properties 的版本条件求值：Photon 把全部 modern 方块映射
@@ -34,7 +46,8 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > 2026-08-18 追加：Depths Update（issue #68）扩展世界高度（默认 -64..320，可配 -256..512）下
 > Y 范围 0-255 之外方块不渲染的修复——见下方 [模组与环境](#模组与环境) 的 Depths Update 行。
 > 根因是渲染器硬编码 0-255 的 section 范围，且 Depths 自带的 celeritas 兼容 mixin 指向
-> 重构前的 `org.taumc.celeritas.impl.*` 类路径而不生效；修复改为从 Depths 公开 API
+> 重构前的 `org.taumc.celeritas.impl.*` 类路径而不生效（该类路径已随 2026-09-14 兼容桥移除
+> 彻底删除）；修复改为从 Depths 公开 API
 > （`DepthsUpdateAPI.getHeightInfo`）推导 section 范围，并按其 storage 布局映射读取（commit
 > `6d8fc24`，dev 实测 Y<0 与 Y>255 区域正常渲染）。
 > 
@@ -43,6 +56,13 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > 无条件强制 `glDepthMask(true)`，translucent 层里的罐体玻璃窗因此写出深度，遮挡了其后绘制的
 > TESR 液体；修复后 translucent terrain pass 在主 pass 不再写深度（与 vanilla 语义一致），
 > 阴影图 pass 与不透明 pass 保持写深度。
+
+> 2026-09-14 追加：Celeritas 兼容桥（`celeritas` mod id 与 `org.taumc.celeritas` API 镜像）已
+> 整体移除，Celeritas 系 addon 改为直接适配 Actinium 主实现（renderer 绑定面由
+> `VintageBlockRendererBindingContractTest` 锁定）。已知回归：外部已发布的 **celeritas-extra**
+> 在 mcmod.info 硬依赖 `celeritas` mod id，将拒绝加载，需其作者发布 Actinium 适配版；
+> celeritas-dynamic-lights / celeritasleafculling 的已发布版本失去选项页与 renderer 增强，
+> 但其 vanilla 注入的核心逻辑仍生效，二者本地源码的 Actinium 适配方案已立项。
 >
 > 2026-09-02 追加：上述修复曾被 #85（`da83c59`）回潮——该提交把 translucent terrain pass
 > 翻转为写深度，依据的"vanilla 半透明阶段保持写深度"前提不实：vanilla 1.12.2 将整个
@@ -113,7 +133,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Celeritas        | 内嵌   | Gradle 子项目、最终 Jar 合并               | Actinium 的区块渲染器  |
 | GLSM             | 内嵌   | Gradle 子项目、service provider        | 管理 GL 状态和固定管线兼容  |
 | GTNHLib          | 内嵌   | Gradle 子项目、bridge API              | 提供底层渲染与内存工具      |
-| Distant Horizons | 部分   | API、late Mixin、Iris LOD programs   | 版本变化敏感，必须按指定版本验证 |
+| Distant Horizons | 部分   | DH 公开 API + Iris LOD override programs（不注入 DH）   | 版本变化敏感，必须按指定版本验证；`IIrisAccessor` 注册与延迟透明 LOD 开关均由 DH 持有（上游 `b15b57cf` 起），搭配更早版本的 DH 会缺失光影 LOD 集成；3.3.0-1.12.2 实机回归通过（2026-09-18，见 [docs/compat/dh.md](compat/dh.md)） |
 | Lumenized        | 已验证（启动） | 条件 Mixin（bloom 兼容层，类探测门控 `class:gregtech.client.utils.BloomEffectUtil`） | 1.0.3：bloom 兼容层使其泛光真实生效（depth 共享 + FBO 清理 + composite 深度测试 + GL 状态守护，取代已移除的 bloomStyle=0 safe mode）；第一人称手部/所持物品全黑已由 `BloomStateGuard` 修复并实机确认（真因为 Unreal 管线对 2..4 号纹理单元的 TEXTURE_2D 使能泄漏，守护覆盖全部纹理单元），详见 [docs/compat/lumenized.md](compat/lumenized.md) |
 | StellarCore      | 已验证  | 无（不再需要配置规避） | HUD 缓存相关 GUI/HUD 症状实为 Draconic Evolution 引起（2026-08-12 实测归因修正）；DE 兼容桥修复后 HUD 正常，`HudCaching`/`HUDFramebuffer` 可恢复开启，详见 [docs/compat/stellarcore.md](compat/stellarcore.md) |
 | Draconic Evolution | 已验证 | 条件 Mixin（CCL GlStateTracker 兼容桥） | DE 2.3.28.354 在场时云异常/草方块侧面偏绿/主菜单消失；根因为 DE 每帧 HUD 经 CCL GlStateTracker 基于冻结的原版 GlStateManager 字段重置 GL 状态，已由 `mixins.actinium.ccl.json` 兼容桥修复（dev 回归通过，生产整合包全量回归待做），详见 [docs/compat/draconic-evolution.md](compat/draconic-evolution.md) |
@@ -128,7 +148,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Snow! Real Magic! | 已验证 | 兼容门控（SRM 的 snow_layer 块退回 vanilla dispatcher 路径） | 0.7.4：带雪栅栏不渲染已修复（SRM 把被覆盖方块替换为带 SnowTile 的雪层、仅在 `BlockRendererDispatcher.renderBlock` 内重绘，快速区块路径已绕过）；`6aee395`，dev 运行验证通过（MakeUp Ultra Fast 下无光影 + 光影各验一次） |
 | TC4 Research Port: Reborn | 部分 | 条件 Mixin（Old Research Tessellator 转发到 streaming drawer） | 1.0.1-release（1632015:8642028）：已修复 splash 结束后 repack capacity 为 0 导致的 GUI Client thread 无限循环；dev 人工回归确认研究笔记 GUI 不再卡死，优化后约 500+ FPS，与背包界面同量级；研究树视觉回归待补，详见 [docs/compat/oldresearch.md](compat/oldresearch.md) |
 | Modern Splash    | 部分 | 无侵入（替换类与 mixin 注入天然兼容）+ splash 字体 color=0 修复 | 1.5.3（629058:8487408）dev 运行通过（coremod 加载、mixin 注入保留、字体颜色按配置生效）；光影场景回归待做，详见 [docs/compat/modern-splash.md](compat/modern-splash.md) |
-| Reese's Sodium Options（内嵌） | 代码支持 | 内嵌移植 UI（`me.flashyreese.mods.reeses_sodium_options`，MIT）+ embeddium 选项数据层（`org.embeddedt.embeddium.api.options.*` 自研扩展） | RSO 界面作为视频设置入口（`MixinGuiOptions` 拦截按钮 101，`enabled=false` 回退原版 `GuiVideoSettings`）；`net.caffeinemc` 设置界面与配置模型已整体删除；编译与 349 项单元测试通过，**运行期视觉对比待人工验证**，详见 [docs/rso-port.md](rso-port.md) |
+| Reese's Sodium Options（内嵌） | 代码支持 | 内嵌移植 UI（`me.flashyreese.mods.reeses_sodium_options`，MIT）+ embeddium 选项数据层（`dhj.embeddedt.embeddium.api.options.*` 自研扩展） | RSO 界面作为视频设置入口（`MixinGuiOptions` 拦截按钮 101，`enabled=false` 回退原版 `GuiVideoSettings`）；`net.caffeinemc` 设置界面与配置模型已整体删除；编译与 349 项单元测试通过，**运行期视觉对比待人工验证**，详见 [docs/rso-port.md](rso-port.md) |
 | Extra Utilities 2 | 已验证 | `ModdedBlockRenderCompat` 在完整 block-render 生命周期内按 block 实例串行化 | `extrautils2@1.0`：Java 25 dev 客户端启动 10 个 chunk-builder worker，进入已有世界并触发区块重载后未复现 Issue #36 的 CME；代码提交 `44f4295`，详见 [docs/compat/extrautils2.md](compat/extrautils2.md) |
 | AgriCraft | 部分 | `ModdedBlockRenderCompat` 使用共享 renderer 锁保护 crop 缓存 | 与 XU2 相同的异步第三方缓存访问模式已加入兼容层；dev 运行验证待补，详见 [docs/compat/extrautils2.md](compat/extrautils2.md) |
 | Kirino Engine（Cleanroom 内建） | 部分（Headless） | early 配置 + `IMixinConfigPlugin` 门控，钉死 `isEnableRenderDelegate()` 为 false（`MixinKirinoConfigHub`） | Kirino Graphics 模式会整体替换 `EntityRenderer#renderWorld`，使 Actinium 全部渲染注入点失效；共存的唯一路径是 Kirino Headless 模式：本兼容层强制其渲染委托关闭、保留 ECS/分析运行时，Actinium 独掌渲染管线。Cleanroom 0.6.7-alpha（kirino epoch-1.a5）dev 运行通过（early 配置注册、headless installer、兼容层日志、渲染循环正常），详见 [docs/compat/kirino.md](compat/kirino.md) |
@@ -138,6 +158,8 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Gnetum | 部分 | launchwrapper transformer（`GnetumHudCachingCompatTransformer` 镜像 `Gnetum.rendering` 窗口到 `GLSMConfig.hudCacheOverride`，复用 StellarCore HudCaching 的 GLSM 覆盖路径）+ revoui 渐变重定向在缓存窗口内改道（直接画入缓存 FBO） | 1.4.3（CurseForge 1220460 / Modrinth）：①HUD 分帧缓存致半透明 HUD 元素随 pass 轮转闪烁已修复并实机确认（根因同 StellarCore 模式 A：预乘覆盖钩子被 glsm 重定向架空），commit `5d820b0e`；②与 Revo UI 共存时 GUI 背景渐变随 pass 轮转闪烁已修复（缓存使渐变 defer 管线降为 1/3 帧率；修复为缓存窗口内直接画入缓存 FBO，commit `edf7c6f2`），build 全绿、生产实机回归待确认；已知缺口：手部缓存（`gnetum:minecraft_hand`，默认关）未适配、危险混合检测在 Actinium 下不生效、Gnetum 的 modid 解析在 Cleanroom 下整体失效（上游缺陷，见文档），详见 [docs/compat/gnetum.md](compat/gnetum.md) |
 | CubicChunks | 部分 | 注入共存（天空距离兜底改为 `ModifyExpressionValue` 链式组合，无模组类引用） | 0.0.1301（292243:3546640）：共存启动 `EntityRenderer` invalid classes 崩溃已修复——其 vertviewdist `MixinEntityRenderer` 的 @Redirect 与 `EntityRendererIrisMixin` 竞争同一批 `GameSettings.renderDistanceChunks` 读取，冲突跳过叠加 `defaultRequire=1` 校验失败使类变换整体失败；改为 MEV + `require=0` 后两种应用顺序均不崩溃（Actinium 先应用时与 CC 值链式生效，CC 先应用时天空距离兜底让位于其垂直视距）；进世界渲染回归未验证（未 runClient） |
 | GregTech CEu | 部分 | 注入容差（translucent 层 debug 标记放宽为 `require=0`）+ bloom 兼容层（与 Lumenized 共用 `mixins.actinium.lumenized.json`，类探测门控） | 2.8.10-beta（557242:5519022）：共存启动 `EntityRenderer` invalid classes 崩溃已修复并实机确认——`GregTechTransformer` 用 ASM 把 `renderWorldPass` 第 4 处 `renderBlockLayer`（TRANSLUCENT）替换为 `BloomEffectUtil.renderBloomBlockLayer`，ordinal=3 注入 0 命中触发 require 校验失败；bloom 兼容层对 GTCEu 生效（同包同名 bloom 类，`renderBloomInternal` 拆分结构已适配），泛光下第一人称手部/所持物品全黑已由 `BloomStateGuard` 修复并实机确认（真因为 Unreal 管线对 2..4 号纹理单元的 TEXTURE_2D 使能泄漏，守护覆盖全部纹理单元），详见 [docs/compat/lumenized.md](compat/lumenized.md)；其对 RenderChunk/RegionRenderCacheBuilder 等的其余 ASM 改写未审计 |
+| Obscure Tooltips | 已验证 | 条件 Mixin（`mixins.actinium.obscuretooltips.json`：tooltip 盔甲预览的实体渲染包裹进 GUI entity surface，Iris 盔甲 item ID/glint 钩子在该 surface 内跳过） | 3.10.2（CurseForge 715660:8522661）：tooltip 内渲染盔甲架实体时 Iris 盔甲钩子把世界渲染 GBuffer/item ID 状态带进 GUI pass，可产生全屏黑罩（PR #142）；修复仅在该 surface 激活期间跳过盔甲钩子，世界盔甲渲染不变；dev 实机回归通过（光影下悬停盔甲 tooltip 无黑罩，世界盔甲渲染正常） |
+| CensoredASM / Chibi（LoliASM） | 已验证（dev） | 无侵入（提供 `org.taumc.celeritas.core.CeleritasLoadingPlugin` 探测标记类，触发 LoliASM 自带的 Celeritas 让位路径） | 5.33（CurseForge 460609:8225778，issue #159）：共存启动崩溃已修复——其 on-demand animated textures 与 Actinium 在 `TextureMap.updateAnimations` / `BufferBuilder.tex` 上双重 overwrite，`squashBakedQuads` 亦与 `MixinBakedQuad` 的 `@Shadow` 字段冲突；LoliASM 本就会在探测到 Celeritas 系时关闭两者，Actinium 移除 Celeritas 桥后该探测失效。dev 实机验证：LoliASM 两条让位日志出现、无 Mixin 失败、进世界正常；生产整合包回归待用户确认，详见 [docs/compat/censoredasm.md](compat/censoredasm.md) |
 
 ## 验证记录模板
 

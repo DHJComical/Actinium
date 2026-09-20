@@ -55,17 +55,17 @@ To run the automated tests and pre-release structure checks:
 .\gradlew.bat check --no-daemon
 ```
 
-Install `build/libs/Actinium-<version>.jar` in a compatible Cleanroom instance. The `-sources.jar` file is for development, and the unremapped `-all.jar` is not a runtime mod. The Celeritas compatibility bridge built alongside the main mod produces its own `celeritas-compat-bridge-<version>.jar`.
+Install `build/libs/Actinium-<version>.jar` in a compatible Cleanroom instance. The `-sources.jar` file is for development.
 
 The jar version is derived from the git state at build time: an exact tag on HEAD wins; otherwise the base version from `gradle.properties` is used with the current commit's git sha appended (e.g. `2.4.0-dev-2dc019e`). It can be overridden explicitly with `-Pversion=...`.
 
 ## Mod Metadata
 
-Mod List metadata for Actinium and the Celeritas compatibility bridge is configured from Gradle properties in `gradle.properties`. Main mod fields use the `mod_*` prefix (`mod_description`, `mod_url`, `mod_authors`, `mod_credits`, `mod_logo_path`), while bridge fields use `bridge_mod_*` (`bridge_mod_name`, `bridge_mod_description`, `bridge_mod_authors`, `bridge_mod_credits`, `bridge_mod_url`, `bridge_mod_update_json`, `bridge_mod_logo_path`). Values can also be overridden per build with `-P` arguments, for example `-Pmod_description=... -Pbridge_mod_name=...`.
+Actinium's Mod List metadata is configured from Gradle properties in `gradle.properties`. Main mod fields use the `mod_*` prefix (`mod_description`, `mod_url`, `mod_authors`, `mod_credits`, `mod_logo_path`). Values can also be overridden per build with `-P` arguments, for example `-Pmod_description=...`.
 
 ## Repository Layout
 
-- `src/` contains Actinium integration, compatibility hooks (`src/compatBridge/`), mixins, and runtime resources.
+- `src/` contains Actinium integration, compatibility hooks, mixins, and runtime resources.
 - `shader/` contains the integrated Iris-style shader pipeline.
 - `glsm/` contains the embedded GLSM-side integration.
 - `GTNHLib/` contains the embedded GTNHLib pieces used by the project.

@@ -29,9 +29,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class MixinChunkBuilderMeshingTaskBetterFoliage {
     @Unique
     private static final String EXECUTE_METHOD =
-            "execute(Lorg/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildContext;"
-                    + "Lorg/embeddedt/embeddium/impl/util/task/CancellationToken;"
-                    + ")Lorg/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildOutput;";
+            "execute(Ldhj/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildContext;"
+                    + "Ldhj/embeddedt/embeddium/impl/util/task/CancellationToken;"
+                    + ")Ldhj/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildOutput;";
 
     @Redirect(
             method = EXECUTE_METHOD,

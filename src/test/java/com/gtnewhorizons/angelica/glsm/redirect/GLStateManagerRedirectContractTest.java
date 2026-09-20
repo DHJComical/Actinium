@@ -111,6 +111,25 @@ class GLStateManagerRedirectContractTest {
         );
     }
 
+    @Test
+    void arbUniformBufferFormsExist() throws IOException {
+        for (String name : new String[] {"glUniform1ARB", "glUniform2ARB", "glUniform3ARB", "glUniform4ARB"}) {
+            Set<String> descriptors = methodDescriptors(name);
+            assertTrue(
+                descriptors.contains("(ILjava/nio/FloatBuffer;)V"),
+                "GLStateManager must expose " + name + "(int, FloatBuffer): the GL redirector rewrites "
+                    + "ARBShaderObjects." + name + " calls to it while preserving the descriptor, and a missing "
+                    + "overload crashes the caller with NoSuchMethodError (Dynamic Surroundings aurora shader, "
+                    + "issue #137)"
+            );
+            assertTrue(
+                descriptors.contains("(ILjava/nio/IntBuffer;)V"),
+                "GLStateManager must expose " + name + "(int, IntBuffer) to cover every descriptor the "
+                    + "redirector can produce for ARBShaderObjects." + name
+            );
+        }
+    }
+
     private static Set<String> methodDescriptors(String methodName) throws IOException {
         return loadClassNode().methods.stream()
             .filter(method -> method.name.equals(methodName))

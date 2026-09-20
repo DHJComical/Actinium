@@ -1,5 +1,6 @@
 package com.dhj.actinium.gui.rso.compat;
 
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -36,19 +37,19 @@ public class Component implements FormattedText {
     }
 
     /** Converts an embeddium framework text component into an RSO component. */
-    public static Component fromEmbeddium(org.embeddedt.embeddium.impl.gui.framework.TextComponent component) {
-        if (component instanceof org.embeddedt.embeddium.impl.gui.framework.TextComponent.Translatable translatable) {
+    public static Component fromEmbeddium(TextComponent component) {
+        if (component instanceof TextComponent.Translatable translatable) {
             return new Component(new TextComponentTranslation(translatable.keys().get(0),
                     translatable.args().stream()
-                            .map(arg -> arg instanceof org.embeddedt.embeddium.impl.gui.framework.TextComponent nested
+                            .map(arg -> arg instanceof TextComponent nested
                                     ? fromEmbeddium(nested).unwrap()
                                     : arg)
                             .toArray()));
         }
-        if (component instanceof org.embeddedt.embeddium.impl.gui.framework.TextComponent.Literal literal) {
+        if (component instanceof TextComponent.Literal literal) {
             return new Component(new TextComponentString(literal.text()));
         }
-        if (component instanceof org.embeddedt.embeddium.impl.gui.framework.TextComponent.Styled styled) {
+        if (component instanceof TextComponent.Styled styled) {
             return fromEmbeddium(styled.inner());
         }
         return new Component(new TextComponentString(component.toString()));

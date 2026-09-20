@@ -1,7 +1,12 @@
 package com.gtnewhorizons.angelica.glsm;
 
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
+import org.taumc.glsl.grammar.GLSLLexer;
+import org.taumc.glsl.grammar.GLSLParser;
+import org.taumc.glsl.grammar.GLSLPreParser;
 
 import java.util.List;
 import java.util.Map;
@@ -102,6 +107,26 @@ public class GlslTransformUtils {
         source = source.replace(RENAMED_PREFIX + "sample", "sample");
         source = source.replace(RENAMED_PREFIX + "new", "new");
         return source;
+    }
+
+    /** Parse a full GLSL translation unit with syntax-error listeners suppressed. */
+    public static GLSLParser.Translation_unitContext parseFullQuiet(String source) {
+        final GLSLLexer lexer = new GLSLLexer(CharStreams.fromString(source));
+        lexer.removeErrorListeners();
+        final GLSLParser parser = new GLSLParser(new CommonTokenStream(lexer));
+        parser.removeErrorListeners();
+        parser.setBuildParseTree(true);
+        return parser.translation_unit();
+    }
+
+    /** Parse only the preprocessor structure of a GLSL source, with syntax-error listeners suppressed. */
+    public static GLSLPreParser.Translation_unitContext parsePreQuiet(String source) {
+        final GLSLLexer lexer = new GLSLLexer(CharStreams.fromString(source));
+        lexer.removeErrorListeners();
+        final GLSLPreParser preParser = new GLSLPreParser(new CommonTokenStream(lexer, GLSLLexer.DIRECTIVES));
+        preParser.removeErrorListeners();
+        preParser.setBuildParseTree(true);
+        return preParser.translation_unit();
     }
 
     public static String getFormattedShader(ParseTree tree, String header) {

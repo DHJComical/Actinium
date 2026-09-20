@@ -1,14 +1,14 @@
 package com.dhj.actinium.compat.sodium;
 
-import org.embeddedt.embeddium.api.OptionGUIConstructionEvent;
-import org.embeddedt.embeddium.api.eventbus.EventHandlerRegistrar;
-import org.embeddedt.embeddium.api.options.OptionIdentifier;
-import org.embeddedt.embeddium.api.options.control.TickBoxControl;
-import org.embeddedt.embeddium.api.options.structure.OptionGroup;
-import org.embeddedt.embeddium.api.options.structure.OptionImpl;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
-import org.embeddedt.embeddium.api.options.structure.OptionStorage;
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.api.OptionGUIConstructionEvent;
+import dhj.embeddedt.embeddium.api.eventbus.EventHandlerRegistrar;
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
+import dhj.embeddedt.embeddium.api.options.control.TickBoxControl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionGroup;
+import dhj.embeddedt.embeddium.api.options.structure.OptionImpl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.OptionStorage;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

@@ -84,6 +84,10 @@ public class LodRendererEvents {
     // setup event handlers //
 
 
+    /**
+     * DH leaves the deferred transparent LOD toggle to its Iris integration — the field has no DH-side
+     * config and no internal caller — so Actinium sets it here exactly like Angelica does.
+     */
     private static void setupSetDeferredBeforeRenderingEvent() {
         DhApiBeforeRenderEvent beforeRenderEvent = new DhApiBeforeRenderEvent() {
             // this event is called before DH starts any rendering prep

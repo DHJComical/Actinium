@@ -1,6 +1,6 @@
 # Chunk Animator 兼容（chunkanimator 1.12.2-1.2.1）
 
-最后更新：2026-08-15。分支：`feat/chunk-animator-compat`。
+最后更新：2026-09-18。分支：`feat/chunk-animator-compat`。
 
 ## 模组机制（反编译结论）
 
@@ -26,8 +26,9 @@ Actinium 的 celeritas 区块管线接管后：
 
 1. `MixinRenderGlobal.loadRenderers` 将 `GameSettings.renderDistanceChunks` 第二次读取
    重定向为 0，原版 `BuiltChunkStorage` 不再分配可用的 `RenderChunk` 阵列；
-2. `renderBlockLayer`/`setupTerrain` 被整体替换为 `ActiniumWorldRenderer`，
-   `ChunkRenderContainer.preRenderChunk` 不再被调用。
+2. `renderBlockLayer`（四参数入口）/`setupTerrain` 被整体替换为
+   `ActiniumWorldRenderer`（单参数重载保留原版、仅 TRANSLUCENT 时被显式调用，但其
+   `renderContainer` 通道为空），`ChunkRenderContainer.preRenderChunk` 不再被调用。
 
 结论：Chunk Animator 的 ASM 注入仍然加载（不崩溃），但**两个 hook 都不会在渲染路径上
 生效**，动画完全不显示。
@@ -65,7 +66,7 @@ key，section 销毁后自动回收，无需显式清理。
 - `src/main/java/com/dhj/actinium/Actinium.java`（onInit 安装）
 - `gradle/scripts/dependencies.gradle`（`modImplementation curse.maven:chunk-animator-236484:3850023`）
 - `build.gradle`（`prepareChunkAnimatorMcpMappings` 任务，dev 环境 MCP 映射供给）
-- `src/test/java/org/embeddedt/embeddium/api/render/chunk/ChunkAnimationProviderHolderTest.java`
+- `src/test/java/dhj/embeddedt/embeddium/api/render/chunk/ChunkAnimationProviderHolderTest.java`
 
 ## 行为差异（相对原版）
 
