@@ -123,7 +123,8 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   —— 流体方块状态存取，供区块克隆离线读取。
 - **`compat/gibbed/`**：`ActiniumModelRenderer` —— Gibbed 尸块渲染模型扩展。
 - **`compat/hbm/`**：`HbmRenderStateCompat` —— HBM attribute scope 到 GLSM 状态栈的映射，
-  以及方块实体世界 lightmap 同步（配 `mixin/mod/hbm`）。
+  以及方块实体世界 lightmap 同步（RenderUtil 走 `mixin/mod/hbm`，方块实体侧走
+  `mixin/early/hbm`，后者按 `isHbmInstalled()` 运行时门控）。
 - **`compat/ichunutil/`**：`PortalViewportFactory` / `PortalViewportProvider` /
   `PortalChunkRenderMatrices` / `PortalRenderState` / `WorldBoxVisibility`
   —— 传送门视口与渲染状态管理。
@@ -417,13 +418,14 @@ LWJGL 后端（并入本子项目）：
 | --- | --- | --- |
 | `mixins.actinium.vintage.json` | early（MixinEarly） | 原版注入全量：`mixin/vintage` 下 60+ 类 |
 | `mixins.actinium.iris.json` | early（MixinEarly） | `mixin/core/terrain.BufferBuilderMixin` + `mixin/core/vertex.MixinVertexFormat` + `mixin/features/iris` 全部（含 startup） |
+| `mixins.actinium.hbm.early.json` | early（MixinEarly） | `MixinTileEntityRendererDispatcherLightmap` —— 原版 TE dispatcher 的世界 lightmap 同步（必须 early：目标类会被核心 mod 的 ASM 变压器在 late 窗口前拉起，late 配置会以 `MixinTargetAlreadyLoadedException` 中止启动；注入体按 `isHbmInstalled()` 门控） |
 | `mixins.actinium.gibbed.json` | late/conditional（gibbed） | `BasicGibMixin` |
 | `mixins.actinium.ichunutil.json` | late/conditional（ichunutil） | `mixin/mod/ichunutil` 3 类 |
 | `mixins.actinium.lumenized.json` | late/conditional（lumenized） | `mixin/mod/lumenized` 3 类 |
 | `mixins.actinium.revoui.json` | late/conditional（neofontrender_ui_enhancements） | `mixin/mod/revoui` 3 类 |
 | `mixins.actinium.betterfoliage.json` | late/conditional（betterfoliage） | `MixinChunkBuilderMeshingTaskBetterFoliage` |
 | `mixins.actinium.ccl.json` | late/conditional（codechickenlib） | `MixinGlStateTracker` |
-| `mixins.actinium.hbm.json` | late/conditional（hbm） | `MixinRenderUtil`、`MixinTileEntityRendererDispatcherLightmap` |
+| `mixins.actinium.hbm.json` | late/conditional（hbm） | `MixinRenderUtil` |
 | `mixins.actinium.littletiles.json` | late/conditional（littletiles） | `MixinChunkBuilderMeshingTaskLittleTiles`、`MixinTileEntityRenderManager`（TE 顶点缓存注入 section 网格 + 缓存构建完成触发 section 重建） |
 | `mixins.actinium.voxelmap.json` | late/conditional（voxelmap） | `mixin/mod/voxelmap` 3 类（GLUtils/GLShim/renderMap，小地图 CPU 路径与 HudCaching alpha 保护） |
 
