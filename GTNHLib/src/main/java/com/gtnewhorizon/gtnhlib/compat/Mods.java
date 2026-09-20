@@ -35,6 +35,7 @@ public final class Mods {
     public static final boolean FLUIDLOGGED_API = isModPresent("fluidlogged_api");
     public static final boolean FLUXLOADING = isModPresent("fluxloading");
     public static final boolean NEOFONTRENDER = isModPresent("neofontrender");
+    public static final boolean NEVERENOUGHANIMATIONS = isModPresent("neverenoughanimations");
     public static final boolean RFP2 = isModPresent("rfp2");
     public static final boolean SNOWREALMAGIC = isModPresent("snowrealmagic");
 

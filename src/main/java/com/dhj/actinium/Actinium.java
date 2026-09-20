@@ -4,6 +4,7 @@ import com.dhj.actinium.compat.chunkanimator.ChunkAnimatorCompat;
 import com.dhj.actinium.compat.MissingModelCompat;
 import com.dhj.actinium.compat.kirino.KirinoCompat;
 import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
+import com.dhj.actinium.compat.neverenoughanimations.NeverEnoughAnimationsAlphaOverride;
 import com.dhj.actinium.command.TogglePassCommand;
 import com.dhj.actinium.config.ActiniumConfig;
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
@@ -168,6 +169,7 @@ public class Actinium {
         }
         ChunkAnimatorCompat.install();
         KirinoCompat.install();
+        NeverEnoughAnimationsAlphaOverride.install();
 
         ((IReloadableResourceManager) Minecraft.getMinecraft().getResourceManager())
                 .registerReloadListener(resourceManager -> MissingModelCompat.onResourceManagerReload());

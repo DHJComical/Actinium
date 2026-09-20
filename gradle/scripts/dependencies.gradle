@@ -213,4 +213,12 @@ dependencies {
     // LoliASM switches both features off by itself once it sees a Celeritas-family marker, so the
     // org.taumc.celeritas.core marker class is what this dev entry exercises.)
     modRuntimeOnly 'curse.maven:chibi-460609:8225778'
+
+    // NeverEnoughAnimation 1.0.7 (issue #145: its GUI open/close fade scales every item vertex
+    // alpha through LightUtil/BufferBuilder mixins; Actinium's fast lit item path writes baked quad
+    // data outside that pipeline and caches it in GLSM display lists, so the fade of the compile
+    // frame was baked into the cache and left chest GUI items invisible). Compiled against, not just
+    // run: the compat layer in com.dhj.actinium.compat.neverenoughanimations reads NEA's animation
+    // state, and it is only loaded once Mods.NEVERENOUGHANIMATIONS reports the mod present.
+    modImplementation 'curse.maven:neverenoughanimation-1062347:7289408'
 }
