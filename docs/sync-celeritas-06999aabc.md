@@ -439,4 +439,6 @@ ShaderChunkRenderer: There was an error creating a chunk program. Terrain will n
 `#else`/`#elif`""多余 `#endif`"报错；已做红绿验证（放回多余的 `#endif` 会精确报出
 `line 71: '#else' without an open conditional`）。**今后任何触碰 shader 的改动都要以该测试通过为准。**
 
+**实机确认**：2026-09-21 用户实机确认地形恢复正常（同一次会话中开关状态未变，故确认是修复本身生效）。
+
 
