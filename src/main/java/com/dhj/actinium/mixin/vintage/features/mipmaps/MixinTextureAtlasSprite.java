@@ -44,6 +44,17 @@ public abstract class MixinTextureAtlasSprite implements SpriteExtension, Sprite
         return iconName.startsWith("block", iconName.indexOf(':') + 1);
     }
 
+    /** Maps an accumulated {@link SpriteTransparencyLevel} ordinal back to its constant. */
+    private static SpriteTransparencyLevel embeddium$levelForOrdinal(int ordinal) {
+        if (ordinal >= SpriteTransparencyLevel.TRANSLUCENT.ordinal()) {
+            return SpriteTransparencyLevel.TRANSLUCENT;
+        }
+        if (ordinal >= SpriteTransparencyLevel.TRANSPARENT.ordinal()) {
+            return SpriteTransparencyLevel.TRANSPARENT;
+        }
+        return SpriteTransparencyLevel.OPAQUE;
+    }
+
     private SpriteTransparencyLevel embeddium$processTransparentImages(SpriteTransparencyLevel prevLevel, int[] nativeImage, boolean shouldRewriteColors) {
         // Calculate an average color from all pixels that are not completely transparent.
         // This average is weighted based on the (non-zero) alpha value of the pixel.
@@ -53,7 +64,15 @@ public abstract class MixinTextureAtlasSprite implements SpriteExtension, Sprite
 
         float totalWeight = 0.0f;
 
-        SpriteTransparencyLevel level = prevLevel;
+        // The transparency level is tracked as a plain ordinal and the enum stays out of the pixel
+        // loop: chooseNextLevel only keeps the higher ordinal, so accumulating that maximum by hand
+        // yields an identical result. The per-pixel polymorphic call of the previous shape is what
+        // sent C2 into an unbounded compilation under ZGC (one compile allocated ~200 MB/s of arena
+        // memory until the JVM aborted in Chunk::new), so the loop body is kept to int/float
+        // arithmetic.
+        final int translucentOrdinal = SpriteTransparencyLevel.TRANSLUCENT.ordinal();
+        final int transparentOrdinal = SpriteTransparencyLevel.TRANSPARENT.ordinal();
+        int levelOrdinal = prevLevel.ordinal();
 
         for (int y = 0; y < nativeImage.length; y++) {
             int color = nativeImage[y];
@@ -61,11 +80,12 @@ public abstract class MixinTextureAtlasSprite implements SpriteExtension, Sprite
 
             // Ignore all fully-transparent pixels for the purposes of computing an average color.
             if (alpha > 0) {
-                if(alpha < 255) {
-                    level = level.chooseNextLevel(SpriteTransparencyLevel.TRANSLUCENT);
-                } else {
-                    level = level.chooseNextLevel(SpriteTransparencyLevel.OPAQUE);
+                if (alpha < 255) {
+                    if (levelOrdinal < translucentOrdinal) {
+                        levelOrdinal = translucentOrdinal;
+                    }
                 }
+                // A fully opaque pixel asks for OPAQUE (ordinal 0), which never raises the maximum.
 
                 if (shouldRewriteColors) {
                     float weight = (float) alpha;
@@ -78,9 +98,13 @@ public abstract class MixinTextureAtlasSprite implements SpriteExtension, Sprite
                     totalWeight += weight;
                 }
             } else {
-                level = level.chooseNextLevel(SpriteTransparencyLevel.TRANSPARENT);
+                if (levelOrdinal < transparentOrdinal) {
+                    levelOrdinal = transparentOrdinal;
+                }
             }
         }
+
+        SpriteTransparencyLevel level = embeddium$levelForOrdinal(levelOrdinal);
 
         // Bail if none of the pixels are semi-transparent or we aren't supposed to rewrite colors.
         if (!shouldRewriteColors || totalWeight == 0.0f) {
