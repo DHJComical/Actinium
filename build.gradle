@@ -471,6 +471,10 @@ idea {
 jar {
     duplicatesStrategy = DuplicatesStrategy.FAIL
 
+    // The manifest is written in doFirst, so Gradle snapshots the (empty) manifest before the version is applied.
+    // Declare the version explicitly or the build cache can restore a jar whose Implementation-Version is stale.
+    inputs.property('finalVersion', finalVersion)
+
     if (configurations.contain.size() > 0) {
         into('/') {
             from configurations.contain
