@@ -8,7 +8,8 @@
   "mixins": [],
   "server": [],
   "client": [
-    "MixinRenderUtil"
+    "MixinRenderUtil",
+    "MixinItemRenderWeaponBase"
   ],
   "injectors": {
     "defaultRequire": 1
