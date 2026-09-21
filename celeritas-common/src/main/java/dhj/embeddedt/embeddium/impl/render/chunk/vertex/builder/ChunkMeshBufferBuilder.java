@@ -3,7 +3,8 @@ package dhj.embeddedt.embeddium.impl.render.chunk.vertex.builder;
 import dhj.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import dhj.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
 import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
-import dhj.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
+import dhj.embeddedt.embeddium.impl.render.chunk.sorting.SortState;
+import dhj.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadRecorder;
 import org.jetbrains.annotations.Nullable;
 import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
 import java.nio.ByteBuffer;
@@ -14,7 +15,7 @@ public class ChunkMeshBufferBuilder {
     private final int stride;
 
     private final int initialCapacity;
-    private final TranslucentQuadAnalyzer analyzer;
+    private final TranslucentQuadRecorder analyzer;
 
     // Off-heap scratch storage retained across build tasks; only destroy() hands the block back
     // to the OS, while start() just resets the write position so the next task reuses the capacity.
@@ -36,7 +37,7 @@ public class ChunkMeshBufferBuilder {
 
         this.initialCapacity = initialCapacity;
 
-        this.analyzer = collectSortState ? new TranslucentQuadAnalyzer() : null;
+        this.analyzer = collectSortState ? new TranslucentQuadRecorder() : null;
     }
 
     public void push(ChunkVertexEncoder.Vertex[] vertices, Material material) {
@@ -120,7 +121,7 @@ public class ChunkMeshBufferBuilder {
     }
 
     @Nullable
-    public TranslucentQuadAnalyzer.SortState getSortState() {
+    public SortState getSortState() {
         return this.analyzer != null ? this.analyzer.getSortState() : null;
     }
 

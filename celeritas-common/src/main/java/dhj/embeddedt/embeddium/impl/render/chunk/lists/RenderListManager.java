@@ -6,7 +6,8 @@ import lombok.Getter;
 import lombok.Setter;
 import dhj.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
 import dhj.embeddedt.embeddium.impl.render.chunk.occlusion.SectionLattice;
-import dhj.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
+import dhj.embeddedt.embeddium.impl.render.chunk.RenderSection;
+import dhj.embeddedt.embeddium.impl.render.chunk.sorting.SortState;
 import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
 import org.jetbrains.annotations.NotNull;
@@ -67,13 +68,12 @@ public class RenderListManager {
             StringBuilder sb = new StringBuilder();
 
             sb.append("Sorting: ");
-            TranslucentQuadAnalyzer.Level[] values = TranslucentQuadAnalyzer.Level.VALUES;
-            for (int i = 0; i < values.length; i++) {
-                TranslucentQuadAnalyzer.Level level = values[i];
-                sb.append(level.name());
+            String[] names = SortState.DEBUG_NAMES;
+            for (int i = 0; i < names.length; i++) {
+                sb.append(names[i]);
                 sb.append('=');
-                sb.append(sortingSectionCounts[level.ordinal()]);
-                if((i + 1) < values.length) {
+                sb.append(sortingSectionCounts[i]);
+                if((i + 1) < names.length) {
                     sb.append(", ");
                 }
             }
@@ -264,7 +264,7 @@ public class RenderListManager {
 
         var iterator = renderLists.iterator();
 
-        int[] sectionCounts = new int[TranslucentQuadAnalyzer.Level.VALUES.length];
+        int[] sectionCounts = new int[SortState.DEBUG_NAMES.length];
 
         boolean isSorting = renderLists.getPasses().stream().anyMatch(TerrainRenderPass::isSorted);
 
@@ -302,11 +302,11 @@ public class RenderListManager {
                     var section = region.getSection(sectionIndex);
 
                     // Do not count sections without translucent data
-                    if(section == null || section.getTranslucencySortStates().isEmpty()) {
+                    if(section == null || section.getHighestSortingIndex() == RenderSection.NO_TRANSLUCENT_GEOMETRY) {
                         continue;
                     }
 
-                    sectionCounts[section.getHighestSortingLevel().ordinal()]++;
+                    sectionCounts[section.getHighestSortingIndex()]++;
                 }
             }
         }
