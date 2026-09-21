@@ -126,7 +126,9 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
 - **`compat/gibbed/`**：`ActiniumModelRenderer` —— Gibbed 尸块渲染模型扩展。
 - **`compat/hbm/`**：`HbmRenderStateCompat` —— HBM attribute scope 到 GLSM 状态栈的映射，
   以及方块实体世界 lightmap 同步（RenderUtil 走 `mixin/mod/hbm`，方块实体侧走
-  `mixin/early/hbm`，后者按 `isHbmInstalled()` 运行时门控）。
+  `mixin/early/hbm`，后者按 `isHbmInstalled()` 运行时门控）；`HbmWeaponDepthCompat` ——
+  Sedna 武器第一人称渲染的手部深度接管（用 Actinium 的光影状态回答 HBM 的 OptiFine 探针，
+  避免它在 Iris 手部 pass 内清空世界深度），配 `mixin/mod/hbm` 的 `MixinItemRenderWeaponBase`。
 - **`compat/ichunutil/`**：`PortalViewportFactory` / `PortalViewportProvider` /
   `PortalChunkRenderMatrices` / `PortalRenderState` / `WorldBoxVisibility`
   —— 传送门视口与渲染状态管理。
@@ -427,7 +429,7 @@ LWJGL 后端（并入本子项目）：
 | `mixins.actinium.revoui.json` | late/conditional（neofontrender_ui_enhancements） | `mixin/mod/revoui` 3 类 |
 | `mixins.actinium.betterfoliage.json` | late/conditional（betterfoliage） | `MixinChunkBuilderMeshingTaskBetterFoliage` |
 | `mixins.actinium.ccl.json` | late/conditional（codechickenlib） | `MixinGlStateTracker` |
-| `mixins.actinium.hbm.json` | late/conditional（hbm） | `MixinRenderUtil` |
+| `mixins.actinium.hbm.json` | late/conditional（hbm） | `MixinRenderUtil`、`MixinItemRenderWeaponBase`（Sedna 武器手部深度：跳过 Iris 手部 pass 内的深度清理，改用 `HandRenderer.DEPTH` 投影压缩） |
 | `mixins.actinium.littletiles.json` | late/conditional（littletiles） | `MixinChunkBuilderMeshingTaskLittleTiles`、`MixinTileEntityRenderManager`（TE 顶点缓存注入 section 网格 + 缓存构建完成触发 section 重建） |
 | `mixins.actinium.voxelmap.json` | late/conditional（voxelmap） | `mixin/mod/voxelmap` 3 类（GLUtils/GLShim/renderMap，小地图 CPU 路径与 HudCaching alpha 保护） |
 
