@@ -40,7 +40,6 @@ in uint a_LightCoord;
 #ifdef USE_BILINEAR_CORRECTION
 in vec4 a_RdhFactor;
 #endif
-#endif
 
 #if !defined(VERT_POS_SCALE)
 #error "VERT_POS_SCALE not defined"
