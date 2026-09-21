@@ -147,6 +147,12 @@ public class MappedStagingBuffer implements StagingBuffer {
         this.mappedBuffer.delete(commandList);
         this.fallbackStagingBuffer.delete(commandList);
         this.pendingCopies.clear();
+
+        // flip() only reclaims fences that have already signaled, so anything still in flight has to be deleted here
+        // or every renderer teardown leaks a GL sync object.
+        while (!this.fencedRegions.isEmpty()) {
+            this.fencedRegions.dequeue().fence().delete();
+        }
     }
 
     @Override

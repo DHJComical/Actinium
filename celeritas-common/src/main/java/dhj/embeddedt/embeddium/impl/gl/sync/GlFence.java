@@ -33,24 +33,6 @@ public class GlFence {
         return result == GL32.GL_SIGNALED;
     }
 
-    public void sync() {
-        this.checkDisposed();
-        this.sync(Long.MAX_VALUE);
-    }
-
-    public void sync(long timeout) {
-        this.checkDisposed();
-        int result = LWJGL.glClientWaitSync(this.id, GL32.GL_SYNC_FLUSH_COMMANDS_BIT, timeout);
-
-        if (result == GL32.GL_WAIT_FAILED) {
-            throw new RuntimeException("glClientWaitSync failed");
-        }
-
-        if (result == GL32.GL_TIMEOUT_EXPIRED) {
-            throw new RuntimeException("Timed out while waiting for GL fence");
-        }
-    }
-
     public void delete() {
         LWJGL.glDeleteSync(this.id);
         this.disposed = true;
