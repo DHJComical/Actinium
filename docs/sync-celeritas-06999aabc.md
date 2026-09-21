@@ -1,6 +1,7 @@
 # 上游 celeritas 同步评估（5c68ed4cb → 06999aabc）与历史未收编项复审
 
-> 状态：**评估完成，尚未实施**。本文件只做评估与排期，不改动任何业务代码。
+> 状态：**已完成并提交**（分支 `sync/celeritas-06999aabc`）。评估结论与落地结果见下方「完成记录」，
+> 全部批次逐次通过 `./gradlew check --no-daemon`。
 >
 > 评估对象：
 > 1. 上游 stonecutter 分支 `5c68ed4cb..06999aabc` 共 **14 个提交**（2026-09-08 → 2026-09-20）；
@@ -11,6 +12,39 @@
 > 结论速览：14 个新提交 **6 个收编**、8 个不适用；历史项 **11 组维持现状**（其中 1 组新增可做子项、
 > 1 组遗留疑点被证伪）、**3 组可做**（1 个真实资源泄漏、1 行构建配置、1 份待恢复的基准设施）；
 > `shader-refactor` 分支**最小必做集为空集**（其内容早已进入 stonecutter，且本地已有等价物）。
+
+## 完成记录
+
+| 批次 | 上游 | 本地 commit | 内容 |
+|---|---|---|---|
+| 1 | `6140755e8` | `723215e0` | `MappedStagingBuffer.delete()` 排空未完成 fence（真实 GLsync 泄漏），删除死代码 `GlFence.sync()` |
+| 1 | `752696e73` | `587554ce` | ColorMixer 截断→四舍五入；新增 `ColorMixerTest`(5)、`ChunkColorWriterTest`(3) |
+| 1 | `5c68ed4cb` 决策 7 | `3cadb8ad` | 开启 Gradle build cache；`jar` 显式声明 `finalVersion` 输入（manifest 写在 `doFirst`，版本不在指纹内） |
+| 2 | `727b464d0` | `0c2ff199` | 自适应光栅预算 `RasterBudget` + bitraster 缓冲复用；两处本地化；`RasterBudgetTest`(16) |
+| 3 | `671ecaffc` | `9b797a3b` + `b386da63` | 半透明排序 v3：先加数据模型，再切换生产/消费端、删除 `TranslucentQuadAnalyzer`、接入切平面调度；`SortStateCompactionTest`(6) |
+| 3 | `2edc3d211` | 随 `9b797a3b` | `OVERLAP_EPSILON` 在 C1 一次写入（1.12 流体侧面内缩导致的瀑布错序） |
+| 4 | 新增独立项 | `6df86f59` | fluid 通道共享解包（`ClonedChunkSection` 惰性解包 + `WorldSlice` 别名） |
+| 4 | `f3c5642e` 线 | `193ac440` | 恢复 JMH harness（取上游 HEAD 的 bench 源码 + 本地包名与 `MultiDrawMode` 适配），保全 tag `jmh-harness-recovered` |
+| 5 | `06999aabc` | `e6d8fe66` | compact vertex 位域重平衡（位置 21bit / UV 18bit，stride 不变）；`ChunkVertexFormatTest` 补整数属性断言 |
+
+小计：10 个提交，62 个文件变更（+5929/−638）。
+
+### 实施中的偏差与判断
+
+- **批次 3 未按 C1–C4 四次提交，改为两次**（C1 + 完整移植）。原因是上游的 v3 是一个自洽整体：切平面调度与
+  新排序状态、`PackedSectionMetadata` 位宽、`ChunkRenderList` 桶是同一批改动；若按 C2 只切生产/消费端，
+  就得自己发明一个上游从未存在、无法对照验证的"每次移动都重排"中间态。风险更高的做法留下了更少的验证依据，
+  因此合并为一次完整移植。
+- **`RenderSectionManager` 用三方合并落地**（`git merge-file`：本地 = A，上游父 = O，上游终态 = B），
+  4 处冲突逐一按语义解决：保留本地 `frameClock` 归一化、HBM-CE 的 `CameraTransform` getfield 内联契约、
+  抽出的 `releaseBuildCancellationToken` 辅助；采用上游的 `updateTranslucencyInfo(..., latestBuild)` 签名。
+- **`RenderSection.updateCachedContextDataFlags()` 提前引入了 `NEEDS_DYNAMIC_SORT`**（原计划在 C3），
+  因为它与 `setTranslucencySortStates` 同属状态模型；位宽扩张随之一并落地，不存在"设了位但被掩码丢掉"的中间态。
+- **JMH bench 源码改取上游 HEAD 而非被回退的那份**：旧副本引用已被 multidraw 重构删除的 `MultiDrawEmitter`，
+  上游 HEAD 版本才是与当前 batch API 一致的版本；本地只保留包名与 `MultiDrawMode` 两处适配。
+- **未做单元测试的项**：`MappedStagingBuffer` fence 排空（需要 GL 上下文）、fluid 别名（构造
+  `ClonedChunkSection` 需要真实 World/Chunk），两者都留给实机验证，理由与验证方式见 §7。
+
 
 ## 0. 基线与覆盖核验（机械比对，非推断）
 
@@ -29,6 +63,8 @@
 - 上游 `common/src/test` 在基线处为空，HEAD 只有 `RasterBudgetTest.java`；本地测试面远大于上游，属本地自建。
 
 ## 1. 新提交结论总表（5c68ed4cb → 06999aabc）
+
+> 下表是评估时的结论；实际落地情况与本地 commit 见上方「完成记录」。
 
 | # | 上游 commit | 内容 | 结论 | 风险 | 优先级 |
 |---|---|---|---|---|---|
@@ -339,32 +375,41 @@ patch 等价提交（例：`44711ceb7` ≡ `91ef370b8`、`be719b1d7` ≡ `a46579
   → `./gradlew :celeritas-common:compileJmhJava --no-daemon` 验证（编译不需要 GL context）。
   运行基准另开 Linux/CI job（ubuntu-latest 自带 Mesa llvmpipe），不要塞进现有 `build.yml`。
 
-## 6. 建议批次与顺序
+## 6. 批次与实施顺序（已完成）
 
 | 批次 | 内容 | 说明 |
 |---|---|---|
-| 1 | `6140755e8` fence 清理；`752696e73` ColorMixer（+ `ChunkColorWriterTest`）；`org.gradle.caching=true` | 零/低风险，互不依赖，可立即做 |
+| 1 | `6140755e8` fence 清理；`752696e73` ColorMixer（+ `ChunkColorWriterTest`）；`org.gradle.caching=true` | 零/低风险，互不依赖 |
 | 2 | `727b464d0` RasterBudget（含 2 处本地化 + `RasterBudgetTest`） | 自包含，与其余项零文件重叠，失败方向保守 |
-| 3 | `671ecaffc` + `2edc3d211` 排序 v3（C1→C4 四次提交） | 大件；C1/C2 之间保留一版"正确但无性能收益"的中间态以隔离风险；C3 内含 HBM 适配 |
-| 4 | fluid 通道共享解包（§5.2）；恢复 JMH harness（§5.6） | 独立小项，可并行 |
-| 5 | `06999aabc` compact vertex format | 行数最少但触及所有地形顶点与 GLSL 解包，blast radius 最大，放在小项之后单独验证 |
+| 3 | `671ecaffc` + `2edc3d211` 排序 v3 | 合并为 C1 + 完整移植两次提交（理由见「实施中的偏差」） |
+| 4 | fluid 通道共享解包（§5.2）；恢复 JMH harness（§5.6） | 独立小项 |
+| 5 | `06999aabc` compact vertex format | 行数最少但触及所有地形顶点与 GLSL 解包，单独验证 |
 
-文档收尾：实施完成后按 `docs/upstream-maintenance.md` 的流程把基线推进到 `06999aabc`，并把 §1 总表替换为
-"完成记录"（含本地 commit 对应关系）；§5 的"维持现状"结论应作为下一轮复审的输入，不要重复推导。
+后续同步仍按此模板：评估文档 → 分批判定 → 逐批 `check` + 提交 → 推进 `docs/upstream-maintenance.md` 基线；
+§5 的"维持现状"结论作为下一轮复审输入，不要重复推导。
 
 ## 7. 遗留验证与风险登记
 
+- **实机验证清单（本轮新增改动，尚未实机确认）**：
+  - `RasterBudget`：`chunk.raster` 的 `buffer=WxH`（预算是否生效）与 `testedPerSec`；平原静止、洞穴/峡谷、
+    长距离飞行与传送、扩展高度、光影开/关、HBM-CE 同场。
+  - 排序 v3：瀑布（`2edc3d211` 场景）、玻璃墙贴大冰面（大 quad 遮挡小 quad）、水下湖边缘、跨 section 与
+    远距离传送（调试 overlay 的 `Sorting:` 与 `Tree Sort:` 应只在跨切平面时跳）、光影 + 阴影 pass、DH、HBM。
+  - compact vertex：关光影 + 默认 compact + 渲染距离 ≥12 看铁轨/栅栏/红石/睡莲/花盆无抖动穿洞、区块与 region
+    边界无裂缝、树叶 alpha cutoff 正常；再切 `useCompactVertexFormat=false` 与开光影各看一次。
+  - ColorMixer：密草/藤蔓的 AO 梯度与整体亮度（光影开/关）。
+  - fence 清理：光影开/关各一轮后进出世界 10–20 次，用 RenderDoc/GL debug 看 sync object 是否回落。
+  - fluid 共享解包：装 Fluidlogged API，大视距飞行/传送时对比 `chunk.*` meshing 段耗时；确认液体外观无变化。
 - **回归约束（勿删除既有注入）**：`MixinClientChunkManager` 的 `loadChunk`/`unloadChunk`/`tick` 三处注入、
   `ChunkTracker.reconcile`、`MixinRenderGlobal.setDisplayListEntitiesDirty`、
   `SimpleWorldRenderer.scheduleTerrainUpdate`/`prepareFrame` 的 `CameraState` 脏检查；删除或改 shift 会重新
   引入与上游 `2b742f6ac`/`84e64cea1` 同源的缺陷。
-- **HBM-CE seam**：任何触碰 `RenderSectionManager.update(Viewport,int,boolean)` 相机记账的重构（含 v3 C3）
-  都必须保持三个 getfield 内联，`HbmCameraRedirectContractTest` 是编译期兜底，但仍需实机带 HBM 验证。
-- **`PackedSectionMetadata` 位布局**：v3 会把 visuals 从 3 bit 扩到 4 bit 并平移其后所有位；本地目前无额外的
-  occlusion/raster 位，平移干净，但外部只用 `VISIBILITY_MASK`/`GRAPH_INPUT_MASK`，
-  `PackedSectionMetadataTest`/`VisibleChunkCollectorSchedulingTest`/`OcclusionCullerProvisionalVisibilityTest`
-  是兜底。
-- **待实机确认的量化项**：RasterBudget 的收益（`chunk.raster` 的 `buffer=` 与 `testedPerSec`）、
-  fluid 通道共享解包的实际 meshing 耗时改善、compact vertex 位域在关光影下的大视距表现。
-- **本轮评估未执行的动作**：未改任何业务代码，未跑构建，未启动客户端。唯一的仓库改动是保全 tag
-  `jmh-harness-recovered`。
+- **HBM-CE seam**：`RenderSectionManager.update(Viewport,int,boolean)` 的三个 `CameraTransform` getfield
+  已保持内联（v3 落地时按此解决冲突），`HbmCameraRedirectContractTest` 是编译期兜底，仍需实机带 HBM 验证。
+- **`PackedSectionMetadata` 位布局**：visuals 已由 3 bit 扩到 4 bit 并平移其后所有位（46..49 / 50..52 / 53 / 54）；
+  外部只用 `VISIBILITY_MASK`/`GRAPH_INPUT_MASK`，`PackedSectionMetadataTest`/`VisibleChunkCollectorSchedulingTest`/
+  `OcclusionCullerProvisionalVisibilityTest` 是兜底。
+- **JMH**：本机 Windows 无 EGL，运行基准需 Linux/CI；`compileJmhJava` 是本地可做的验证。
+- **未做单元测试的两项**：`MappedStagingBuffer` 的 fence 排空（需 GL 上下文）与 fluid 别名
+  （构造 `ClonedChunkSection` 需要真实 World/Chunk），因此都列为实机验证项，而不是用占位测试充数。
+

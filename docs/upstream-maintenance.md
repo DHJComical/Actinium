@@ -19,8 +19,8 @@ Actinium 以源码形式内嵌了多个大型上游项目。当前仓库能确�
 这些 commit 只能证明代码何时进入 Actinium，不能替代上游 SHA。
 
 Celeritas 上游（https://git.taumc.org/embeddedt/celeritas，stonecutter 分支）的同步基准
-已推进至 `5c68ed4cb`（2026-09-08，见 `sync-celeritas-5c68ed4cb.md`；此前依次为
-`f15085d4`、`7190f87d8`、`fe57c60fa`）。上游镜像仓库在 `D:/Code/celeritas-mirror`。
+已推进至 `06999aabc`（2026-09-20，见 `sync-celeritas-06999aabc.md`；此前依次为
+`5c68ed4cb`、`f15085d4`、`7190f87d8`、`fe57c60fa`）。上游镜像仓库在 `D:/Code/celeritas-mirror`。
 
 `origin/shader-refactor` 是同一镜像上的旁支，已被 stonecutter 吸收并重构（其独占的
 `common-shaders/` 模块在 stonecutter HEAD 已不存在，内容拆入 `modern/src/main/shaders_java/`），
