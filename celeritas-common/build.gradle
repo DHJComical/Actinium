@@ -2,6 +2,113 @@ plugins {
     id 'java-library'
 }
 
+import java.util.Locale
+
+repositories {
+    // JMH (jmhImplementation) resolves from Maven Central; main code has no external Maven deps.
+    mavenCentral()
+}
+
+// The GL benchmarks (HeadlessGl et al.) open a real EGL/OpenGL context, so the jmh source set needs LWJGL 3.4.1
+// on its classpath and the matching natives on its runtime classpath. Same native-classifier logic as GTNHLib.
+def osName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def osArchitecture = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+def osKey
+if (osName.startsWith('windows')) {
+    osKey = 'windows'
+} else if (osName.startsWith('linux')) {
+    osKey = 'linux'
+} else if (osName.startsWith('mac')) {
+    osKey = 'macos'
+} else {
+    throw new GradleException("Unsupported jmh platform: ${osName}/${osArchitecture}")
+}
+
+def nativeClassifiers = [
+    windows: [
+        amd64: 'natives-windows',
+        x86_64: 'natives-windows',
+        x64: 'natives-windows',
+        x86: 'natives-windows-x86',
+        i386: 'natives-windows-x86',
+        i486: 'natives-windows-x86',
+        i586: 'natives-windows-x86',
+        i686: 'natives-windows-x86',
+        aarch64: 'natives-windows-arm64',
+        arm64: 'natives-windows-arm64'
+    ],
+    linux: [
+        amd64: 'natives-linux',
+        x86_64: 'natives-linux',
+        x64: 'natives-linux',
+        arm: 'natives-linux-arm32',
+        arm32: 'natives-linux-arm32',
+        aarch32: 'natives-linux-arm32',
+        armv7l: 'natives-linux-arm32',
+        aarch64: 'natives-linux-arm64',
+        arm64: 'natives-linux-arm64',
+        ppc64le: 'natives-linux-ppc64le',
+        riscv64: 'natives-linux-riscv64'
+    ],
+    macos: [
+        amd64: 'natives-macos',
+        x86_64: 'natives-macos',
+        x64: 'natives-macos',
+        aarch64: 'natives-macos-arm64',
+        arm64: 'natives-macos-arm64'
+    ]
+]
+def lwjglNatives = nativeClassifiers[osKey][osArchitecture]
+if (lwjglNatives == null) {
+    throw new GradleException("Unsupported jmh platform: ${osName}/${osArchitecture}")
+}
+
+def lwjglVersion = '3.4.1'
+
+sourceSets {
+    jmh {
+        compileClasspath += main.output
+        compileClasspath += main.compileClasspath
+        runtimeClasspath += main.output
+        runtimeClasspath += main.runtimeClasspath
+    }
+}
+
+// The benchmarks run against main's code, so the jmh source set needs main's dependencies too.
+configurations {
+    jmhImplementation.extendsFrom(implementation)
+    jmhRuntimeOnly.extendsFrom(runtimeOnly)
+}
+
 dependencies {
     api project(':glsm')
+
+    jmhImplementation "org.openjdk.jmh:jmh-core:${jmh_version}"
+    jmhAnnotationProcessor "org.openjdk.jmh:jmh-generator-annprocess:${jmh_version}"
+
+    // LWJGL 3.4.1 for the headless EGL/GL benchmark harness (HeadlessGl). API modules at compile time,
+    // platform natives at runtime. lwjgl-egl publishes no natives classifier (its native library is loaded from
+    // the system), so only lwjgl and lwjgl-opengl get natives — same split as upstream.
+    jmhImplementation platform("org.lwjgl:lwjgl-bom:${lwjglVersion}")
+    jmhImplementation "org.lwjgl:lwjgl:${lwjglVersion}"
+    jmhImplementation "org.lwjgl:lwjgl-opengl:${lwjglVersion}"
+    jmhImplementation "org.lwjgl:lwjgl-egl:${lwjglVersion}"
+    jmhRuntimeOnly "org.lwjgl:lwjgl:${lwjglVersion}:${lwjglNatives}"
+    jmhRuntimeOnly "org.lwjgl:lwjgl-opengl:${lwjglVersion}:${lwjglNatives}"
+}
+
+// Run the benchmarks through Gradle. Any JMH argument can be passed through, e.g.
+//   ./gradlew :celeritas-common:jmh -Pjmhargs="-f 1 -p renderDistance=64"
+tasks.register('jmh', JavaExec) {
+    group = 'verification'
+    description = 'Runs the JMH benchmarks.'
+
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = 'org.openjdk.jmh.Main'
+
+    doFirst {
+        if (project.hasProperty('jmhargs')) {
+            args(project.property('jmhargs').toString().split('\\s+').findAll { !it.isEmpty() })
+        }
+    }
 }
