@@ -413,3 +413,30 @@ patch 等价提交（例：`44711ceb7` ≡ `91ef370b8`、`be719b1d7` ≡ `a46579
 - **未做单元测试的两项**：`MappedStagingBuffer` 的 fence 排空（需 GL 上下文）与 fluid 别名
   （构造 `ClonedChunkSection` 需要真实 World/Chunk），因此都列为实机验证项，而不是用占位测试充数。
 
+## 8. 事故记录：地形整体不渲染（已修复）
+
+**症状**：实机进入世界后所有地形不可见（连脚下方块也没有），天空、雾、实体、箱子/告示牌/末地传送门方块正常；
+F3 显示 `solid - 21 sections`、`cutout_mipped - 22 sections`、`G: 23/33 MiB`，即区块**已建好、已上传、已提交绘制**，
+也没有任何 Java 异常。关闭 compact vertex format 与 raster occlusion culling 均无变化。
+
+**根因**：`assets/actinium/shaders/include/chunk_vertex.glsl` 的条件指令**不配对**——移植 `06999aabc` 时用三方合并
+解决 shader 冲突，结果 `#endif` 落在 `#else` 之前，使 `#else` 与文件末尾的 `#endif` 成为孤儿。引擎自己的报错是：
+
+```
+Shader compilation log for actinium:blocks/block_layer_opaque.vsh: 0(144) : error C7102: unmatched #else
+                                                               0(152) : error C0122: #else cannot follow #else
+ShaderChunkRenderer: There was an error creating a chunk program. Terrain will not render until this is fixed.
+```
+
+区块 program 编译失败 ⇒ 所有地形 pass 什么都不画；天空/雾/实体/TESR 走别的 program ⇒ 不受影响；Java 侧不抛异常。
+两个开关无效也由此解释：坏掉的条件块同时包住 compact 与 uncompact 两条分支。
+
+**修复**：`25d1704d`（去掉多余的 `#endif`，恢复 `#ifdef USE_VERTEX_COMPRESSION … #else … #endif` 的正确配对）。
+**为什么之前的验证没拦住**：`check` 只覆盖 Java 编译与 JUnit，GLSL 要等运行时才编译；而我当时对 shader 的"验证"
+是逐行比对上游内容，恰好把合并留下的 `#ifdef` 差异误当成既有的本地分叉。
+
+**新增防护**：`ShaderConditionalBalanceTest` 用栈式解析遍历所有已打包的着色器源，对"未闭合条件""无对应 `#if` 的
+`#else`/`#elif`""多余 `#endif`"报错；已做红绿验证（放回多余的 `#endif` 会精确报出
+`line 71: '#else' without an open conditional`）。**今后任何触碰 shader 的改动都要以该测试通过为准。**
+
+
