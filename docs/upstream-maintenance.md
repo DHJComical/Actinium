@@ -22,6 +22,14 @@ Celeritas 上游（https://git.taumc.org/embeddedt/celeritas，stonecutter 分�
 已推进至 `5c68ed4cb`（2026-09-08，见 `sync-celeritas-5c68ed4cb.md`；此前依次为
 `f15085d4`、`7190f87d8`、`fe57c60fa`）。上游镜像仓库在 `D:/Code/celeritas-mirror`。
 
+`origin/shader-refactor` 是同一镜像上的旁支，已被 stonecutter 吸收并重构（其独占的
+`common-shaders/` 模块在 stonecutter HEAD 已不存在，内容拆入 `modern/src/main/shaders_java/`），
+**不再作为同步源**。该分支的逐项评估见 `sync-celeritas-06999aabc.md` 第 4 节。
+
+勘察上游分支时注意 `git cherry <upstream> <head>` 的标记语义：**`-` 表示上游已有 patch 等价提交，
+`+` 才表示上游没有**（2026-09-21 在 `stonecutter` 与 `origin/shader-refactor` 之间实测 28/28、20/20）。
+按"`-` = 待同步"解读会得到完全相反的结论，必须先做 `patch-id` 抽样验证再下判断。
+
 Angelica GLSM 的覆盖面同步基准为 `02f0b0fc`（2026-09-18，分支 `feat/glsm-angelica-sync`，
 见 `sync-angelica-glsm-02f0b0fc.md`）：多上下文架构、redirect 表、FFP 生成、事件接线、
 GLES 支持、recording 烘焙与 sdl-gpu 前置件已落地；该 SHA 是本轮参照的上游检出，
