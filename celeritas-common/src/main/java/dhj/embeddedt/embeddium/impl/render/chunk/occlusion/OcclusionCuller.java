@@ -109,6 +109,7 @@ public class OcclusionCuller {
 
     // When non-null, receives the queue entry ((packedLocalXYZ << 32) | latticeIndex) of every cell reported
     // visible, in traversal order; the count is published to SectionLattice.visibleCount at the end of the search.
+    // The count is kept either way, for the raster budget.
     // Used as the root set of the shadow search.
     private long[] visibleCells;
     private int visibleCount;
@@ -117,6 +118,7 @@ public class OcclusionCuller {
     private final RegionCullCache regionCullCache = new RegionCullCache();
 
     private final @Nullable RasterOccluder rasterOccluder;
+    private final RasterBudget rasterBudget = new RasterBudget();
     private boolean rasterActive;
 
     private boolean isCameraInUnloadedSection;
@@ -205,11 +207,16 @@ public class OcclusionCuller {
         this.rasterActive = this.rasterOccluder != null && useOcclusionCulling && viewport.getVpMatrix() != null;
 
         if (this.rasterActive) {
-            this.rasterOccluder.prepareScene(frame, viewport, searchDistance);
+            this.rasterBudget.beginFrame(this.maxSquaredChunkDistance(searchDistance, viewport));
+            this.rasterOccluder.prepareScene(frame, viewport, this.rasterTestDistance(searchDistance));
             this.occludeCameraSection(viewport);
         }
 
         this.process(visitor, viewport, searchDistance, useOcclusionCulling, allowFrustumClamping, frame);
+
+        if (this.rasterActive) {
+            this.rasterBudget.endFrame(this.visibleCount);
+        }
 
         if (recordVisible) {
             this.lattice.visibleCount = this.visibleCount;
@@ -346,8 +353,12 @@ public class OcclusionCuller {
                 continue;
             }
 
-            if (visible && visibleCells != null) {
-                visibleCells[visibleCount++] = entry;
+            if (visible) {
+                if (visibleCells != null) {
+                    visibleCells[visibleCount] = entry;
+                }
+
+                visibleCount++;
             }
 
             int connections;
@@ -389,6 +400,37 @@ public class OcclusionCuller {
         this.visibleCount = visibleCount;
     }
 
+    /**
+     * An upper bound on the squared chunk distance of any section the search can reach.
+     *
+     * <p>Unlike upstream, the local distance test is a pure horizontal circle with no vertical cutoff, so the
+     * vertical span has to come from the world's section bounds instead of the search distance. Ignoring it would
+     * make the ceiling smaller than the distances the search actually visits, pinning the budget at the ceiling and
+     * throwing away the saving in tall or extended-height worlds.
+     */
+    private int maxSquaredChunkDistance(float searchDistance, Viewport viewport) {
+        return maxSquaredChunkDistance(searchDistance, viewport.getChunkCoord().y(), this.minSectionY, this.maxSectionY);
+    }
+
+    /** Testable form of {@link #maxSquaredChunkDistance(float, Viewport)} that takes the section bounds directly. */
+    static int maxSquaredChunkDistance(float searchDistance, int cameraSectionY, int minSectionY, int maxSectionY) {
+        int radius = (int) Math.ceil(searchDistance / 16.0f) + 2;
+        int verticalReach = Math.max(cameraSectionY - minSectionY, maxSectionY - cameraSectionY);
+        return (radius * radius) + (verticalReach * verticalReach);
+    }
+
+    /** Farthest distance in blocks at which this search will test a section, for sizing the coverage buffer. */
+    private float rasterTestDistance(float searchDistance) {
+        int testable = this.rasterBudget.testableLimit();
+
+        if (testable == RasterBudget.UNBOUNDED) {
+            return searchDistance;
+        }
+
+        // one chunk of slack, since the squared distance is measured between section origins
+        return Math.min(searchDistance, ((float) Math.sqrt(testable) + 1.0f) * 16.0f);
+    }
+
     private void occludeCameraSection(Viewport viewport) {
         int idx = this.cameraSectionIndex;
 
@@ -428,14 +470,28 @@ public class OcclusionCuller {
         int dz = chunkZ - camZ;
         int squaredChunkDist = (dx * dx) + (dy * dy) + (dz * dz);
 
+        // Near sections are always drawn (and never tested, see testSection). Farther ones are rationed by the
+        // budget: one beyond its limit is neither tested nor drawn, which is conservative for a coverage-only
+        // buffer, and costs nothing.
+        boolean near = squaredChunkDist <= RasterOccluder.NEAR_SQUARED_CHUNK_DIST;
+
+        if (!near && !this.rasterBudget.shouldTest(squaredChunkDist)) {
+            if (AbstractRasterizer.STATS) RasterOccluder.STAT_BUDGET_SKIP++;
+            return RasterOccluder.SectionVisibility.VISIBLE;
+        }
+
         boolean hasGeometry =
                 (PackedSectionMetadata.getCompactVisualsFlags(meta) & (1 << RenderVisualsService.HAS_BLOCK_GEOMETRY)) != 0;
 
         RasterOccluder.SectionVisibility result = occluder.testSection(chunkX << 4, chunkY << 4, chunkZ << 4,
                 squaredChunkDist, occluderBounds[idx]);
 
-        if (result == RasterOccluder.SectionVisibility.VISIBLE && hasGeometry) {
-            occluder.occludeSection(occluderData[idx]);
+        if (result == RasterOccluder.SectionVisibility.VISIBLE) {
+            if (hasGeometry) {
+                occluder.occludeSection(occluderData[idx]);
+            }
+        } else {
+            this.rasterBudget.recordCulled();
         }
 
         return result;
@@ -449,6 +505,10 @@ public class OcclusionCuller {
 
     public int rasterBacktrackCount() {
         return this.rasterOccluder == null ? 0 : this.rasterOccluder.backtrackCount();
+    }
+
+    public RasterBudget rasterBudget() {
+        return this.rasterBudget;
     }
 
     // Visit each selected neighbour using both its linear array offset and
@@ -708,8 +768,10 @@ public class OcclusionCuller {
         int xyz = this.lattice.packXyz(origin.x(), origin.y(), origin.z());
 
         if (this.visibleCells != null) {
-            this.visibleCells[this.visibleCount++] = ((long) xyz << 32) | (idx & 0xFFFFFFFFL);
+            this.visibleCells[this.visibleCount] = ((long) xyz << 32) | (idx & 0xFFFFFFFFL);
         }
+
+        this.visibleCount++;
 
         int outgoing;
 

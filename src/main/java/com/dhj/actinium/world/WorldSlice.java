@@ -165,6 +165,8 @@ public class WorldSlice implements ActiniumBlockAccess {
         this.blockStatesArrays = new IBlockState[SECTION_TABLE_ARRAY_SIZE][];
         this.biomeCaches = new Biome[SECTION_TABLE_ARRAY_SIZE][16 * 16];
         this.biomeColorCache = new BiomeColorCache(this, ActiniumRuntime.options().quality.legacyBiomeBlendRadius);
+        // Only the outer table: each entry is aliased to the cloned section's shared unpacked fluid data, so no
+        // per-slice copy of 4096 fluid states is needed.
         if(!FluidloggedCompat.IS_LOADED) this.fluidStatesArrays = null;
         else this.fluidStatesArrays = new Object[SECTION_TABLE_ARRAY_SIZE][];
 
@@ -176,10 +178,7 @@ public class WorldSlice implements ActiniumBlockAccess {
                     this.blockStatesArrays[i] = new IBlockState[SECTION_BLOCK_COUNT];
                     Arrays.fill(this.blockStatesArrays[i], EMPTY_BLOCK_STATE);
 
-                    if (FluidloggedCompat.IS_LOADED) {
-                        this.fluidStatesArrays[i] = new Object[SECTION_BLOCK_COUNT];
-                        Arrays.fill(this.fluidStatesArrays[i], FluidloggedCompat.getEmptyFluidState());
-                    }
+
                 }
             }
         }
@@ -219,7 +218,7 @@ public class WorldSlice implements ActiniumBlockAccess {
                     this.unpackBlockData(this.blockStatesArrays[idx], section, this.volumeBox);
 
                     if (FluidloggedCompat.IS_LOADED) {
-                        this.unpackFluidData(this.fluidStatesArrays[idx], section, this.volumeBox);
+                        this.fluidStatesArrays[idx] = section.getUnpackedFluidData();
                     }
                 }
             }
@@ -248,20 +247,6 @@ public class WorldSlice implements ActiniumBlockAccess {
         }
     }
 
-    private void unpackFluidData(Object[] states, ClonedChunkSection section, StructureBoundingBox box) {
-        var storage = section.getFluidData();
-        if (storage.isEmpty()) {
-            Arrays.fill(states, FluidloggedCompat.getEmptyFluidState());
-            return;
-        }
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    states[getLocalBlockIndex(x, y, z)] = storage.get(x, y, z);
-                }
-            }
-        }
-    }
 
     private static void copyBlocks(IBlockState[] blocks, ClonedChunkSection section, int minBlockY, int maxBlockY, int minBlockZ, int maxBlockZ, int minBlockX, int maxBlockX) {
         for (int y = minBlockY; y <= maxBlockY; y++) {

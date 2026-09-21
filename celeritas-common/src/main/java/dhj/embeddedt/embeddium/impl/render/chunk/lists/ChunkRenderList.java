@@ -19,6 +19,9 @@ public class ChunkRenderList {
     private final byte[] sectionsWithEntities = new byte[RenderRegion.REGION_SIZE];
     private int sectionsWithEntitiesCount = 0;
 
+    private final byte[] sectionsNeedingDynamicSort = new byte[RenderRegion.REGION_SIZE];
+    private int sectionsNeedingDynamicSortCount = 0;
+
     private int size;
 
     public ChunkRenderList(RenderRegion region) {
@@ -48,6 +51,9 @@ public class ChunkRenderList {
 
         this.sectionsWithEntities[this.sectionsWithEntitiesCount] = (byte) sectionIndex;
         this.sectionsWithEntitiesCount += (flags >>> RenderVisualsService.HAS_BLOCK_ENTITIES) & 1;
+
+        this.sectionsNeedingDynamicSort[this.sectionsNeedingDynamicSortCount] = (byte) sectionIndex;
+        this.sectionsNeedingDynamicSortCount += (flags >>> RenderVisualsService.NEEDS_DYNAMIC_SORT) & 1;
     }
 
     /**
@@ -56,6 +62,18 @@ public class ChunkRenderList {
      */
     public byte[] getSectionsWithGeometry() {
         return this.sectionsWithGeometry;
+    }
+
+    /**
+     * Returns a forward iterator over the local section indices whose translucent geometry has to be resorted as
+     * the camera crosses a cut plane, or null when none of them do.
+     */
+    public @Nullable ByteIterator sectionsNeedingDynamicSortIterator() {
+        if (this.sectionsNeedingDynamicSortCount == 0) {
+            return null;
+        }
+
+        return new ByteArrayIterator(this.sectionsNeedingDynamicSort, this.sectionsNeedingDynamicSortCount);
     }
 
     /**

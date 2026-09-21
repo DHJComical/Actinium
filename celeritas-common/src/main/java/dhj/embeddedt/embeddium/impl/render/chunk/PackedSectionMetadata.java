@@ -39,21 +39,21 @@ public final class PackedSectionMetadata {
 
     // The three visual-presence flags occupy bits 46..48.
     private static final int VISUALS_FLAGS_SHIFT = 46;
-    private static final long VISUALS_FLAGS_MASK = 0b111L;
+    private static final long VISUALS_FLAGS_MASK = 0b1111L;
 
     /** Metadata fields that can change the result of a lattice search. */
     public static final long GRAPH_INPUT_MASK = VISIBILITY_MASK | (VISUALS_FLAGS_MASK << VISUALS_FLAGS_SHIFT);
 
     // Zero means no pending update; otherwise the enum ordinal is stored + 1.
-    private static final int PENDING_UPDATE_SHIFT = 49;
+    private static final int PENDING_UPDATE_SHIFT = 50;
     private static final long PENDING_UPDATE_MASK = 0b111L;
 
-    // Bit 52 records that a cancellation token is attached to a build.
-    private static final int BUILD_IN_FLIGHT_BIT = 52;
+    // Bit 53 records that a cancellation token is attached to a build.
+    private static final int BUILD_IN_FLIGHT_BIT = 53;
     private static final long BUILD_IN_FLIGHT_FLAG = 1L << BUILD_IN_FLIGHT_BIT;
 
-    // Bit 53 records that the section's built data has occluder boxes.
-    private static final int HAS_OCCLUDER_DATA_BIT = 53;
+    // Bit 54 records that the section's built data has occluder boxes.
+    private static final int HAS_OCCLUDER_DATA_BIT = 54;
     private static final long HAS_OCCLUDER_DATA_FLAG = 1L << HAS_OCCLUDER_DATA_BIT;
 
     /** Returns only the visibility graph portion of the packed metadata. */

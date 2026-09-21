@@ -6,13 +6,13 @@ import dhj.embeddedt.embeddium.impl.gl.util.VertexRange;
 import dhj.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import dhj.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
-import dhj.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
+import dhj.embeddedt.embeddium.impl.render.chunk.sorting.SortState;
 import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 
-public record BuiltSectionMeshParts(NativeBuffer vertexBuffer, @Nullable NativeBuffer indexBuffer, @Nullable TranslucentQuadAnalyzer.SortState sortState, Map<ModelQuadFacing, VertexRange> ranges) {
+public record BuiltSectionMeshParts(NativeBuffer vertexBuffer, @Nullable NativeBuffer indexBuffer, @Nullable SortState sortState, Map<ModelQuadFacing, VertexRange> ranges) {
     public void free() {
         vertexBuffer.free();
         if (indexBuffer != null) {

@@ -46,7 +46,10 @@ import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
 import dhj.embeddedt.embeddium.impl.render.viewport.frustum.ShadowSearchFrustum;
 import dhj.embeddedt.embeddium.impl.util.PositionUtil;
 import dhj.embeddedt.embeddium.impl.util.iterator.ByteIterator;
-import dhj.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkSortOutput;
+import dhj.embeddedt.embeddium.impl.render.chunk.sorting.CutPlaneIndex;
+import dhj.embeddedt.embeddium.impl.render.chunk.sorting.PartitionTree;
+import dhj.embeddedt.embeddium.impl.render.chunk.sorting.SortState;
 import dhj.embeddedt.embeddium.impl.util.suppliers.ExpiringSupplier;
 import org.jetbrains.annotations.MustBeInvokedByOverriders;
 import org.jetbrains.annotations.Nullable;
@@ -98,8 +101,19 @@ public abstract class RenderSectionManager {
 
     private final int renderDistance;
 
-    protected @Nullable Vector3ic lastCameraPosition;
+    /** {@link #cameraPosition}, rounded down to block coordinates */
+    protected @Nullable Vector3ic cameraBlockPosition;
+
     protected Vector3d cameraPosition = new Vector3d();
+
+    /** last frame's exact camera position */
+    protected @Nullable Vector3d previousCameraPosition;
+
+    private final CutPlaneIndex<RenderSection> cutPlaneIndex = new CutPlaneIndex<>();
+
+    private final ChunkJobMetricsTracker.MetricsData treeSortMetrics = new ChunkJobMetricsTracker.MetricsData();
+    private long treeStatsWindowStart = System.nanoTime();
+    private int treeTriggersThisSecond, treeTriggersLastSecond;
 
     @Getter
     private final RenderPassConfiguration<?> renderPassConfiguration;
@@ -243,9 +257,15 @@ public abstract class RenderSectionManager {
         // Critical injection error, poisoning this class (NoClassDefFoundError during mod
         // construction). updateCameraPosition is kept for the shadow pass, which HBM-CE
         // does not redirect. See HbmCameraRedirectContractTest.
-        this.lastCameraPosition = positionedViewport.getBlockCoord();
-        var transform = positionedViewport.getTransform();
-        this.cameraPosition = new Vector3d(transform.x, transform.y, transform.z);
+        if (!this.shadowPassRanThisFrame) {
+            if (this.cameraBlockPosition != null) {
+                this.previousCameraPosition = this.cameraPosition;
+            }
+
+            this.cameraBlockPosition = positionedViewport.getBlockCoord();
+            var transform = positionedViewport.getTransform();
+            this.cameraPosition = new Vector3d(transform.x, transform.y, transform.z);
+        }
 
         if (this.shadowPassRanThisFrame) {
             // The shadow pass searched for this frame if the graph was dirty then. Any needsUpdate raised by
@@ -299,7 +319,11 @@ public abstract class RenderSectionManager {
      * redirector must find the CameraTransform getfields inside {@code update}'s own body.
      */
     private void updateCameraPosition(Viewport positionedViewport) {
-        this.lastCameraPosition = positionedViewport.getBlockCoord();
+        if (this.cameraBlockPosition != null) {
+            this.previousCameraPosition = this.cameraPosition;
+        }
+
+        this.cameraBlockPosition = positionedViewport.getBlockCoord();
         var transform = positionedViewport.getTransform();
         this.cameraPosition = new Vector3d(transform.x, transform.y, transform.z);
     }
@@ -317,7 +341,15 @@ public abstract class RenderSectionManager {
     }
 
     private void checkTranslucencyChange() {
-        if(lastCameraPosition == null)
+        long now = System.nanoTime();
+        if (now - this.treeStatsWindowStart >= ChunkJobMetricsTracker.OBSERVATION_COUNT_TIME) {
+            this.treeTriggersLastSecond = this.treeTriggersThisSecond;
+            this.treeTriggersThisSecond = 0;
+            this.treeSortMetrics.flipInterval();
+            this.treeStatsWindowStart = now;
+        }
+
+        if(cameraBlockPosition == null)
             return;
 
         int camSectionX = PositionUtil.posToSectionCoord(cameraPosition.x);
@@ -325,6 +357,7 @@ public abstract class RenderSectionManager {
         int camSectionZ = PositionUtil.posToSectionCoord(cameraPosition.z);
 
         this.scheduleTranslucencyUpdates(camSectionX, camSectionY, camSectionZ);
+        this.scheduleTreeSortedUpdates();
     }
 
     private void scheduleTranslucencyUpdates(int camSectionX, int camSectionY, int camSectionZ) {
@@ -341,15 +374,15 @@ public abstract class RenderSectionManager {
             if (!region.hasSectionsInPass(translucentPass)) {
                 continue;
             }
-            ByteIterator sectionIterator = entry.sectionsWithGeometryIterator();
+            ByteIterator sectionIterator = entry.sectionsNeedingDynamicSortIterator();
             if (sectionIterator == null) {
                 continue;
             }
             while (sectionIterator.hasNext()) {
                 var section = region.getSection(sectionIterator.nextByteAsInt());
 
-                if (section == null || !section.isNeedsDynamicTranslucencySorting()) {
-                    // Sections without sortable translucent data are not relevant
+                // tree-sorted sections are retriggered by scheduleTreeSortedUpdates() instead
+                if (section == null || section.getSortMode() != RenderSection.SortMode.DYNAMIC) {
                     continue;
                 }
 
@@ -374,17 +407,48 @@ public abstract class RenderSectionManager {
                         camSectionY != PositionUtil.posToSectionCoord(section.lastCameraY) ||
                         camSectionZ != PositionUtil.posToSectionCoord(section.lastCameraZ);
 
-                if (cameraChangedSection || section.isAlignedWithSectionOnGrid(camSectionX, camSectionY, camSectionZ)) {
-                    section.setPendingUpdate(update);
-                    // Inject it into the appropriate list
-                    rebuildLists.get(update).add(section);
-
-                    section.lastCameraX = cameraPosition.x;
-                    section.lastCameraY = cameraPosition.y;
-                    section.lastCameraZ = cameraPosition.z;
+                if (!cameraChangedSection && !section.isAlignedWithSectionOnGrid(camSectionX, camSectionY, camSectionZ)) {
+                    continue;
                 }
+
+                section.setPendingUpdate(update);
+                // Inject it into the appropriate list
+                rebuildLists.get(update).add(section);
+
+                section.lastCameraX = cameraPosition.x;
+                section.lastCameraY = cameraPosition.y;
+                section.lastCameraZ = cameraPosition.z;
             }
         }
+    }
+
+    /** Resorts tree-sorted sections whose cut planes this frame's movement crossed, visible or not */
+    private void scheduleTreeSortedUpdates() {
+        if (this.previousCameraPosition == null || this.cutPlaneIndex.size() == 0) {
+            return;
+        }
+
+        this.cutPlaneIndex.query(
+                this.previousCameraPosition.x, this.previousCameraPosition.y, this.previousCameraPosition.z,
+                this.cameraPosition.x, this.cameraPosition.y, this.cameraPosition.z,
+                section -> {
+                    this.treeTriggersThisSecond++;
+                    this.scheduleTreeSort(section);
+                }
+        );
+    }
+
+    private void scheduleTreeSort(RenderSection section) {
+        ChunkUpdateType update = ChunkUpdateType.getPromotionUpdateType(section.getPendingUpdate(),
+                (allowImportantRebuilds() && this.shouldPrioritizeRebuild(section)) ? ChunkUpdateType.IMPORTANT_SORT : ChunkUpdateType.SORT);
+
+        if (update == null) {
+            // We wouldn't be able to resort this section anyway
+            return;
+        }
+
+        section.setPendingUpdate(update);
+        this.getCurrentRenderListManager().getRebuildLists().byUpdateType().get(update).add(section);
     }
 
     /**
@@ -490,6 +554,8 @@ public abstract class RenderSectionManager {
         this.markGraphDirty();
 
         this.sectionMetricsTracker.removeSection(section);
+
+        this.cutPlaneIndex.remove(section);
 
         section.delete();
 
@@ -643,6 +709,10 @@ public abstract class RenderSectionManager {
 
         for (var holder : filtered) {
             var result = holder.output();
+
+            // whether this result belongs to the most recently submitted build
+            boolean latest = result.buildTime >= result.render.getLastSubmittedFrame();
+
             if (result instanceof ChunkBuildOutput buildResult) {
                 boolean changed = this.updateSectionInfo(result.render, buildResult.info);
 
@@ -654,7 +724,7 @@ public abstract class RenderSectionManager {
                 }
 
                 // We only change the translucency info on full rebuilds, as sorts can keep using the same data
-                this.updateTranslucencyInfo(result.render, buildResult.meshes);
+                this.updateTranslucencyInfo(result.render, buildResult.meshes, latest);
             }
 
             releaseBuildCancellationToken(result);
@@ -675,15 +745,62 @@ public abstract class RenderSectionManager {
             output.render.setBuildCancellationToken(null);
         }
     }
+    /**
+     * @param latestBuild whether the meshes come from the most recent submission; a stale build keeps its planes
+     *                    indexed but leaves the camera bookkeeping to the build still in flight
+     */
+    private void updateTranslucencyInfo(RenderSection render, Map<TerrainRenderPass, BuiltSectionMeshParts> meshes, boolean latestBuild) {
+        Map<TerrainRenderPass, SortState.Resortable> sortStates = new Reference2ObjectArrayMap<>();
+        int highestIndex = RenderSection.NO_TRANSLUCENT_GEOMETRY;
 
-    private void updateTranslucencyInfo(RenderSection render, Map<TerrainRenderPass, BuiltSectionMeshParts> meshes) {
-        Map<TerrainRenderPass, TranslucentQuadAnalyzer.SortState> sortStates = new Reference2ObjectArrayMap<>();
         for(var entry : meshes.entrySet()) {
-            if(entry.getKey().isSorted()) {
-                sortStates.put(entry.getKey(), Objects.requireNonNull(entry.getValue().sortState()).compactForStorage());
+            if(!entry.getKey().isSorted()) {
+                continue;
+            }
+
+            var state = Objects.requireNonNull(entry.getValue().sortState());
+
+            highestIndex = Math.max(highestIndex, state.debugIndex());
+
+            // Only resortable states survive compaction; everything else is already in its final order.
+            if(state.compactForStorage() instanceof SortState.Resortable resortable) {
+                sortStates.put(entry.getKey(), resortable);
             }
         }
-        render.setTranslucencySortStates(sortStates.isEmpty() ? Collections.emptyMap() : sortStates);
+
+        render.setTranslucencySortStates(sortStates.isEmpty() ? Collections.emptyMap() : sortStates, highestIndex);
+
+        if (render.isTreeSorted()) {
+            List<PartitionTree> trees = new ArrayList<>(sortStates.size());
+            for (var state : sortStates.values()) {
+                trees.add((PartitionTree) state);
+            }
+
+            this.cutPlaneIndex.put(render, PartitionTree.mergeCutPlanes(trees), render.getOriginX(), render.getOriginY(), render.getOriginZ());
+
+            // The build sorted for the camera at submission (see submitRebuildTasks). A crossing since then happened
+            // before the planes were indexed, so it has to be caught here or the order stays stale until the next one.
+            int ox = render.getOriginX(), oy = render.getOriginY(), oz = render.getOriginZ();
+            for (PartitionTree tree : trees) {
+                if (latestBuild && tree.crossesCutPlane(render.lastCameraX - ox, render.lastCameraY - oy, render.lastCameraZ - oz,
+                        this.cameraPosition.x - ox, this.cameraPosition.y - oy, this.cameraPosition.z - oz)) {
+                    this.treeTriggersThisSecond++;
+                    this.scheduleTreeSort(render);
+                    break;
+                }
+            }
+
+            // any crossing up to now was just handled. Dynamic sections keep the submission camera so that
+            // scheduleTranslucencyUpdates still sees movement made during the build.
+            if (latestBuild) {
+                render.lastCameraX = this.cameraPosition.x;
+                render.lastCameraY = this.cameraPosition.y;
+                render.lastCameraZ = this.cameraPosition.z;
+            }
+        } else {
+            // a rebuild that is no longer tree-sorted must drop its stale planes
+            this.cutPlaneIndex.remove(render);
+        }
     }
 
     // Section MetadataSink: mirrors a section's packed metadata into the graph-search lattice on every
@@ -748,6 +865,10 @@ public abstract class RenderSectionManager {
         while ((result = this.buildResults.poll()) != null) {
             if (result instanceof ChunkJobResult.Success<? extends ChunkTaskOutput> successfulResult) {
                 this.jobMetricsTracker.collectMetrics(successfulResult);
+
+                if (successfulResult.output() instanceof ChunkSortOutput sort && sort.render.isTreeSorted() && successfulResult.executionTimeNanos() >= 0) {
+                    this.treeSortMetrics.collect(successfulResult.executionTimeNanos());
+                }
                 results.add(successfulResult);
             } else if (result instanceof ChunkJobResult.Failure<? extends ChunkTaskOutput> failure) {
                 failure.abort();
@@ -805,7 +926,12 @@ public abstract class RenderSectionManager {
 
                 if (!type.isSort()) {
                     // Prevent further sorts from being performed on this section
-                    section.setNeedsDynamicTranslucencySorting(false);
+                    section.clearTranslucencySortStates();
+
+                    // the meshing task sorts its translucent geometry for this camera
+                    section.lastCameraX = this.cameraPosition.x;
+                    section.lastCameraY = this.cameraPosition.y;
+                    section.lastCameraZ = this.cameraPosition.z;
                 }
             } else {
                 var result = new ChunkJobResult.Success<>(new ChunkBuildOutput(section, RenderSection.EMPTY_DATA, Reference2ReferenceMaps.emptyMap(), frame), -1);
@@ -825,9 +951,9 @@ public abstract class RenderSectionManager {
     protected abstract @Nullable ChunkBuilderTask<ChunkBuildOutput> createRebuildTask(RenderSection render, int frame);
 
     public ChunkBuilderSortTask createSortTask(RenderSection render, int frame) {
-        if(!render.isNeedsDynamicTranslucencySorting())
+        if(render.getTranslucencySortStates().isEmpty())
             return null;
-        return new ChunkBuilderSortTask(render, (float)cameraPosition.x, (float)cameraPosition.y, (float)cameraPosition.z, frame, render.getTranslucencySortStates(), this.renderPassConfiguration);
+        return new ChunkBuilderSortTask(render, cameraPosition.x, cameraPosition.y, cameraPosition.z, frame, render.getTranslucencySortStates(), this.renderPassConfiguration);
     }
 
     public void markGraphDirty() {
@@ -987,7 +1113,7 @@ public abstract class RenderSectionManager {
     private static final float NEARBY_REBUILD_DISTANCE = MathUtil.square(16.0f);
 
     private boolean shouldPrioritizeRebuild(RenderSection section) {
-        return this.lastCameraPosition != null && section.getSquaredDistanceFromBlockCenter(this.lastCameraPosition.x(), this.lastCameraPosition.y(), this.lastCameraPosition.z()) < NEARBY_REBUILD_DISTANCE;
+        return this.cameraBlockPosition != null && section.getSquaredDistanceFromBlockCenter(this.cameraBlockPosition.x(), this.cameraBlockPosition.y(), this.cameraBlockPosition.z()) < NEARBY_REBUILD_DISTANCE;
     }
 
     /**
@@ -1076,46 +1202,6 @@ public abstract class RenderSectionManager {
         return Collections.unmodifiableCollection(this.sectionByPosition.values());
     }
 
-    private Collection<String> getSortingStrings() {
-        List<String> list = new ArrayList<>();
-
-        int[] sectionCounts = new int[TranslucentQuadAnalyzer.Level.VALUES.length];
-
-        for (Iterator<ChunkRenderList> it = this.getCurrentRenderListManager().getRenderLists().iterator(); it.hasNext(); ) {
-            var renderList = it.next();
-            var region = renderList.getRegion();
-            var listIter = renderList.sectionsWithGeometryIterator();
-            if(listIter != null) {
-                while(listIter.hasNext()) {
-                    RenderSection section = region.getSection(listIter.nextByteAsInt());
-                    // Do not count sections without translucent data
-                    if(section == null || section.getTranslucencySortStates().isEmpty()) {
-                        continue;
-                    }
-
-                    sectionCounts[section.getHighestSortingLevel().ordinal()]++;
-                }
-            }
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Sorting: ");
-        TranslucentQuadAnalyzer.Level[] values = TranslucentQuadAnalyzer.Level.VALUES;
-        for (int i = 0; i < values.length; i++) {
-            TranslucentQuadAnalyzer.Level level = values[i];
-            sb.append(level.name());
-            sb.append('=');
-            sb.append(sectionCounts[level.ordinal()]);
-            if((i + 1) < values.length) {
-                sb.append(", ");
-            }
-        }
-
-        list.add(sb.toString());
-
-        return list;
-    }
-
     private Object2LongMap<TerrainRenderPass> computeRenderPassTimingsMap() {
         Object2LongOpenHashMap<TerrainRenderPass> map = new Object2LongOpenHashMap<>();
         for (var entry : renderPassDrawTimers.entrySet()) {
@@ -1160,11 +1246,13 @@ public abstract class RenderSectionManager {
 
         var rebuildLists = this.getCurrentRenderListManager().getRebuildLists();
 
-        list.add(String.format("Chunk Queues: U=%02d (P0=%03d | P1=%03d | P2=%03d)",
+        list.add(String.format("Chunk Queues: U=%02d (P0=%03d | P1=%03d | P2=%03d) S=%03d/%03d",
                 this.buildResults.size(),
                 rebuildLists.getUpdateCount(ChunkUpdateType.IMPORTANT_REBUILD),
                 rebuildLists.getUpdateCount(ChunkUpdateType.REBUILD),
-                rebuildLists.getUpdateCount(ChunkUpdateType.INITIAL_BUILD)
+                rebuildLists.getUpdateCount(ChunkUpdateType.INITIAL_BUILD),
+                rebuildLists.getUpdateCount(ChunkUpdateType.IMPORTANT_SORT),
+                rebuildLists.getUpdateCount(ChunkUpdateType.SORT)
         ));
 
         var debugStats = renderListManager.getDebugStatistics();
@@ -1188,6 +1276,10 @@ public abstract class RenderSectionManager {
 
         if (renderListManager.getRenderLists().getPasses().stream().anyMatch(TerrainRenderPass::isSorted)) {
             list.add(debugStats.getSortingString());
+            list.add(String.format("Tree Sort: %d planes, %d trig/s, %d sorts/s, %s avg",
+                    this.cutPlaneIndex.planeCount(), this.treeTriggersLastSecond,
+                    this.treeSortMetrics.getObservationsInLastTimeInterval(),
+                    TimeUtil.stringifyTime((long) this.treeSortMetrics.getAverageNanos(0), TimeUnit.NANOSECONDS)));
         }
 
         return list;

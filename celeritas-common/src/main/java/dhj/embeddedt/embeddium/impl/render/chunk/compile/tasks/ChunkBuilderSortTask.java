@@ -8,18 +8,18 @@ import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkSortOutput;
 import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import dhj.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import dhj.embeddedt.embeddium.impl.util.task.CancellationToken;
-import dhj.embeddedt.embeddium.impl.render.chunk.sorting.TranslucentQuadAnalyzer;
+import dhj.embeddedt.embeddium.impl.render.chunk.sorting.SortState;
 
 import java.util.Map;
 
 public class ChunkBuilderSortTask extends ChunkBuilderTask<ChunkSortOutput> {
     private final RenderSection render;
-    private final float cameraX, cameraY, cameraZ;
+    private final double cameraX, cameraY, cameraZ;
     private final int frame;
-    private final Map<TerrainRenderPass, TranslucentQuadAnalyzer.SortState> translucentMeshes;
+    private final Map<TerrainRenderPass, SortState.Resortable> translucentMeshes;
     private final RenderPassConfiguration<?> renderPassConfiguration;
 
-    public ChunkBuilderSortTask(RenderSection render, float cameraX, float cameraY, float cameraZ, int frame, Map<TerrainRenderPass, TranslucentQuadAnalyzer.SortState> translucentMeshes, RenderPassConfiguration<?> renderPassConfiguration) {
+    public ChunkBuilderSortTask(RenderSection render, double cameraX, double cameraY, double cameraZ, int frame, Map<TerrainRenderPass, SortState.Resortable> translucentMeshes, RenderPassConfiguration<?> renderPassConfiguration) {
         this.render = render;
         this.cameraX = cameraX;
         this.cameraY = cameraY;
@@ -32,20 +32,11 @@ public class ChunkBuilderSortTask extends ChunkBuilderTask<ChunkSortOutput> {
     @Override
     public ChunkSortOutput execute(ChunkBuildContext context, CancellationToken cancellationSource) {
         var meshes = new Reference2ReferenceOpenHashMap<TerrainRenderPass, ChunkSortOutput.SortedMesh>();
-        for(Map.Entry<TerrainRenderPass, TranslucentQuadAnalyzer.SortState> entry : translucentMeshes.entrySet()) {
+        for(Map.Entry<TerrainRenderPass, SortState.Resortable> entry : translucentMeshes.entrySet()) {
             var sortInfo = entry.getValue();
-
-            // Only passes that need dynamic re-sorting (camera-dependent) should produce a new index
-            // buffer here. Static and none-sorted states were compacted for storage (their centers were
-            // dropped), so centersLength() is 0 and a zero-length index buffer would be allocated, which
-            // later breaks the GL buffer arena (GlBufferSegment.mergeInto throws "len <= 0").
-            if (!sortInfo.requiresDynamicSorting()) {
-                continue;
-            }
-
             var primitiveType = this.renderPassConfiguration.getPrimitiveTypeForPass(entry.getKey());
-            var newIndexBuffer = new NativeBuffer(primitiveType.getIndexBufferSize(sortInfo.centersLength() / 3));
-            primitiveType.generateSortedIndexBuffer(newIndexBuffer.getDirectBuffer(), sortInfo.centersLength() / 3, sortInfo, cameraX - this.render.getOriginX(), cameraY - this.render.getOriginY(), cameraZ - this.render.getOriginZ());
+            var newIndexBuffer = new NativeBuffer(primitiveType.getIndexBufferSize(sortInfo.quadCount()));
+            primitiveType.generateSortedIndexBuffer(newIndexBuffer.getDirectBuffer(), sortInfo.quadCount(), sortInfo, (float) (cameraX - this.render.getOriginX()), (float) (cameraY - this.render.getOriginY()), (float) (cameraZ - this.render.getOriginZ()));
             meshes.put(entry.getKey(), new ChunkSortOutput.SortedMesh(
                     newIndexBuffer
             ));
