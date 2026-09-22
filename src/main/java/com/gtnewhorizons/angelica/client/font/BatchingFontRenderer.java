@@ -551,11 +551,14 @@ public class BatchingFontRenderer {
         } else {
             GLStateManager.glDisable(GL11.GL_TEXTURE_2D);
         }
-        if (isAlphaTestEnabledBefore) {
-            GLStateManager.enableAlphaTest();
-        } else {
-            GLStateManager.disableAlphaTest();
-        }
+        // The alpha test is deliberately left enabled instead of being restored to isAlphaTestEnabledBefore.
+        // Vanilla's FontRenderer.drawString opens with GlStateManager.enableAlpha() and the class contains no
+        // disableAlpha at all (net.minecraft.client.gui.FontRenderer:235 - the only alpha/blend call in it), so
+        // drawing any string leaves the alpha test enabled. Third-party map GUIs depend on that side effect:
+        // Xaero's RadarRenderer#postRender disables the alpha test without restoring it and relies on a later
+        // string draw turning it back on, so restoring the previous value here left its GuiTexturedButton icons
+        // drawing under alphaTest=false + blend=false and wrote their transparent texels as an opaque plate.
+        GLStateManager.enableAlphaTest();
         if (!isBlendEnabledBefore) {
             GLStateManager.disableBlend();
         }
