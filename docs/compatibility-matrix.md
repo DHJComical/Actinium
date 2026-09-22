@@ -18,12 +18,15 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > 即 (0,0,0,1)），每张 64×64 区块贴图只采到一个纹素。修复为 UV 元素统一走
 > `Usage.uvAttributeLocation`（0→2、1→3、2→5、3→6），与顶点着色器声明的槽位同表；无槽单位改为
 > 一次性告警而非静默丢弃。dev 实机确认小地图与世界地图地形恢复细节（用户截图对比）。
-> 遗留：世界地图界面内的图标按钮仍渲染异常。已定位触发开关与机制——小地图的「实体雷达」每帧
-> `disableBlend()` + `disableAlpha()` 预渲染实体图标，Xaero 的按钮图集是"深色图标 + 透明底"，混合关闭时
-> 只能靠 alpha test 丢弃透明像素；而 glsm 的 FFP 决定是否生成 alpha-test discard 时读的是被 Iris 覆盖后的
-> 内部值（`FragmentKey` / `Uniforms`），glsm 为此准备的 `isEffectiveAlphaTestEnabled()` /
-> `getEffectiveAlphaState()` 定义了却无人调用，遂漏掉 discard ⇒ 透明像素被当不透明写入。修复方向已定位、
-> 尚未实机验证，详见 [docs/compat/xaero.md](compat/xaero.md) 的遗留排查小节。
+> 2026-09-22 追加：同一 issue 下世界地图图标按钮的白底也已修复——Xaero 的
+> `RadarRenderer#postRender`（仅「实体雷达」启用时注册，世界地图复用小地图的元素渲染器）关闭 alpha test
+> 且不恢复；而 vanilla `FontRenderer.drawString` 第一行的 `enableAlpha()`
+> （`FontRenderer.java:235`，全类唯一的 alpha/blend 调用，且无任何 `disableAlpha`）从不恢复，原版因此
+> 总能把该泄漏顺手盖回去。Actinium 的 `BatchingFontRenderer` 忠实恢复 alpha test，抹掉了这个副作用，
+> 泄漏遂第一次生效，令 `GuiTexturedButton`（覆写 `drawButton`，不像 vanilla `GuiButton` 那样自己
+> `enableBlend()`）在 `alphaTest=false` + `blend=false` 下把图集透明像素写成不透明白底。修复为让批量
+> 字体渲染收尾保持 alpha test 启用、对齐 vanilla 的净效果。用户实机确认，详见
+> [docs/compat/xaero.md](compat/xaero.md) 的「根因」小节。
 
 > 2026-09-19 追加：CensoredASM / Chibi 5.33（issue #159）共存启动崩溃已修复——其
 > on-demand animated textures 在 `TextureMap.updateAnimations` 与 `BufferBuilder.tex` 上

@@ -1,7 +1,8 @@
 # Xaero 小地图 / 世界地图兼容
 
 最后更新：2026-09-22。分支：`fix/xaero-map-render`。对应
-[issue #175](https://github.com/DHJComical/Actinium/issues/175)（两张地图的地形渲染成纯色方块）。
+[issue #175](https://github.com/DHJComical/Actinium/issues/175)（两张地图的地形渲染成纯色方块，
+以及开启实体雷达时世界地图图标按钮的白底）。
 
 版本：XaeroLib 1.7.3 + Xaero's Minimap 26.5.1 + Xaero's World Map 1.46.0。
 
@@ -68,40 +69,51 @@ Xaero 的格式用到 `index` 2/3 → 返回 `-1` → `setupVertexFormatAttribut
   `VertexShaderGenerator` → `FragmentShaderGenerator` 的 TexEnv 链 → `Uniforms`），判定 pass。
 - [x] 用户实机（dev 运行，Xaero 三件套、无光影）：小地图与世界地图地形恢复细节，纯色方块消失
   （截图对比：关 Actinium 正常 / 修复前纯色 / 修复后细节）。
-- [ ] 遗留：世界地图界面内的 `GuiTexturedButton` 图标按钮仍渲染异常（白底 + 深色墨迹）。已定位到
-  确定的触发开关与状态差异、并给出机制与待办修复，见下节；**修复尚未实机验证，因此未提交**。
+- [x] 用户实机（dev 运行，Xaero 三件套）：开启实体雷达后世界地图界面的图标按钮恢复正常，根因与修复见下节。
 
-## 遗留排查：世界地图图标按钮（2026-09-22）
+## 根因：世界地图图标按钮的白底（2026-09-22）
 
-结论：**不是世界地图本身的问题，而是"实体雷达"渲染留下的状态**；按钮只是第一个受害者。
+症状：小地图开启「实体雷达」后，世界地图界面内的 `GuiTexturedButton` 图标按钮渲染成**白色不透明底**
+（图集透明区的 RGB 为白、alpha 为 0）。关闭实体雷达立即恢复；与是否加载光影包无关，且只有 Actinium
+在场时才出现。
 
-- **触发开关（用户实机确认）**：小地图设置里关闭「实体雷达」后按钮立即恢复正常 ⇒ 病灶在
-  `xaero.hud.minimap.radar.icon.creator.RadarIconCreator` 的每帧图标预渲染。
-- **运行期证据**（同一次会话内"雷达开 → 雷达关"两段对照）：
-  - 雷达开（按钮坏）：地图界面里 `POSITION_TEX` 精灵绘制处于 **`blend=false` 且 `alphaTest=false`**；
-  - 雷达关（按钮正常）：同一图集的同类绘制处于 **`blend=true` / `alphaTest=true`**。
-  - 其余状态在两种情况下均正常：`GL_MODULATE`、仅 unit 0 启用、图集 id/尺寸合理（256×256）、
-    VAO 属性 `stride=20 / UV@12` 与 `POSITION_TEX` 格式一致、绘制时程序非 0、纹理内容未被覆盖。
-- **机制（静态闭环）**：`RadarIconCreator.create` 在渲染实体图标前 `disableBlend()` + `disableAlpha()`
-  （`GlStateManager.func_179084_k` / `func_179118_c`，见该方法 100-104 行），而 Xaero 的按钮图集是
-  "深色图标 + 透明底"，在混合关闭时**只能靠 alpha test 丢弃透明像素**。但 glsm 的 FFP 决定是否生成
-  alpha-test discard 时读的是**被 Iris 覆盖后的内部值**：
-  - `AlphaTestStorage`（`shader/`）在覆盖 alpha test 期间把模组原本请求的值保存为
-    `originalAlphaTestEnable` / `originalAlphaTest`，并通过 `VanillaBooleanLayer` 暴露为"有效值"；
-  - 而 `FragmentKey.packFromState` 用 `getAlphaTest().isEnabled()` / `getAlphaState().getFunction()`，
-    `Uniforms.uploadFragmentUniforms` 用 `getAlphaState().getReference()`（均为内部值）；
-    glsm 为此准备的 `GLStateManager.isEffectiveAlphaTestEnabled()`（1495 行）与
-    `getEffectiveAlphaState(AlphaState)`（1499 行）**定义了却无人调用**。
-  - ⇒ 覆盖窗口内 FFP 不生成 discard ⇒ 透明像素被当不透明写入 ⇒ 白底 + 深色图标。
-- **待办修复（已定位，未提交）**：把上述三处改用有效值访问器；Iris 未覆盖时有效值等于内部值，
-  因此该改动在无光影覆盖时行为不变。
-- **已排除的路径**（不要重复排查）：UV 属性槽（#175 已修）、TexEnv/多纹理与 unit 掩码、跨线程状态
-  （日志中的非渲染线程调用只在启动 splash 期）、纹理矩阵、程序状态、GUI 纹理 mip、纹理内容/绑定、
-  顶点布局与属性偏移。
-- **调试安全约束**（踩过的坑）：诊断代码**不得读取 CPU 侧绘制缓冲**（`BufferBuilder` 的
-  `ByteBuffer`）——streaming 路径的 `firstVertex` 是持久缓冲内偏移，用它索引上传数据会越界并使客户端
-  崩溃。只需跟踪状态时，一律读 glsm 自身跟踪值（零 GL 调用）；必须做 GL 查询时，需避开显示列表编译期
-  （`DisplayListManager.isRecording()`），并对纹理回读先经 glsm 解绑 pack PBO。
+证据链（静态 + 运行期，同一次 dev 会话）：
+
+- **触发者**：`xaero.hud.minimap.radar.render.element.RadarRenderer#postRender` 在元素渲染收尾时调用
+  `GlStateManager.func_179118_c()`（vanilla `disableAlpha()`）**且不恢复**。该渲染器只在「实体雷达」启用
+  时注册，而世界地图复用小地图的元素渲染器（`MinimapElementRendererWrapper` →
+  `MapElementRenderHandler.render`），所以泄漏直接落进世界地图 GUI 的绘制流程。
+- **运行期定位**：在 `Gui.drawTexturedModalRect` 处记录每次 GUI 精灵绘制的 glsm 跟踪值、驱动值与 FFP
+  变体键。世界地图界面内 33855 次绘制**全部**是 `alphaTest=false` + `blend=false`，变体键
+  `fk0=0x2080`（bit2=0 ⇒ 该 fragment 变体在结构上不含 alpha test，不可能 discard）；同一批绘制里
+  unit0 绑定（408）与驱动 `GL_TEXTURE_BINDING_2D` 一致、`glsmProgram=0` 与 `GL_CURRENT_PROGRAM` 一致
+  ⇒ 纹理绑定、程序与顶点布局均无失步，问题纯粹是状态。
+- **谁关的**：记录 GUI 打开期间每次 blend / alpha-test 变更及其调用栈后，第一条异常绘制之前 18 行即
+  `alphaTest=false caller=[RadarRenderer.postRender:226 <- ... <- MapElementRenderHandler.render]`。
+- **为什么原版正常**：vanilla `FontRenderer.drawString` 的**第一行**是 `GlStateManager.enableAlpha()`
+  （`net.minecraft.client.gui.FontRenderer:235`，全类唯一的 alpha/blend 调用，且类中没有任何
+  `disableAlpha`）。原版每次绘制文字都会把 alpha test 打开并**留着**，Xaero 泄漏的 `disableAlpha` 因此
+  总被随后的一段文字顺手修好。
+- **为什么只有 Actinium 坏**：`BatchingFontRenderer.flushBatch` 把 alpha test 保存（451 行）后**忠实
+  恢复**（554-557 行），抹掉了 vanilla 那个副作用，泄漏第一次真正生效。
+- **为什么是白底**：`GuiTexturedButton` 覆写了 `drawButton`，且**不像 vanilla `GuiButton.drawButton`
+  那样调用 `enableBlend()`**，因此它同时依赖 alpha test 与 blend 两个出口；两者都被关闭时，图集透明像素
+  被当不透明写入。
+
+修复：`BatchingFontRenderer.flushBatch` 收尾不再恢复 alpha test，改为保持启用，对齐 vanilla 的净效果
+（改动处有注释记录上述因果）。
+
+**已排除的路径**（不要重复排查）：UV 属性槽（#175 已修）、TexEnv/多纹理与 unit 掩码、跨线程状态、纹理矩阵、
+程序状态、纹理内容/绑定、顶点布局与属性偏移，以及"Iris 覆盖窗口内的有效值"——最后这条在本例中被实测证伪：
+本次运行中 `deferred=true` 出现 0 次，说明没有任何 alpha/blend 变更被 shader override 吞掉，且加载与不加载
+光影包时现象完全一致。
+
+### 调试安全约束（踩过的坑）
+
+诊断代码**不得读取 CPU 侧绘制缓冲**（`BufferBuilder` 的 `ByteBuffer`）——streaming 路径的
+`firstVertex` 是持久缓冲内偏移，用它索引上传数据会越界并使客户端崩溃。只需跟踪状态时，一律读 glsm
+自身跟踪值（零 GL 调用）；必须做 GL 查询时，需避开显示列表编译期（`DisplayListManager.isRecording()`），
+并对纹理回读先经 glsm 解绑 pack PBO。
 
 ## 已知缺口（与本缺陷无关）
 
@@ -121,8 +133,8 @@ Xaero 的格式用到 `index` 2/3 → 返回 `-1` → `setupVertexFormatAttribut
 
 ## 复现配方（dev 运行）
 
-`gradle/scripts/dependencies.gradle` 的本地（未提交）改动把三件套按 issue 版本加入 dev 运行时；
-JourneyMap 同时在场会与其 `world_id`/`world_info` 频道冲突，需降为 compileOnly：
+`gradle/scripts/dependencies.gradle` 已把三件套按 issue 版本加入 dev 运行时；JourneyMap 同时在场会与其
+`world_id`/`world_info` 频道冲突，因此保持 compileOnly：
 
 ```
 modImplementation 'curse.maven:xaerolib-1417462:8849823'         // XaeroLib 1.7.3
