@@ -68,10 +68,40 @@ Xaero 的格式用到 `index` 2/3 → 返回 `-1` → `setupVertexFormatAttribut
   `VertexShaderGenerator` → `FragmentShaderGenerator` 的 TexEnv 链 → `Uniforms`），判定 pass。
 - [x] 用户实机（dev 运行，Xaero 三件套、无光影）：小地图与世界地图地形恢复细节，纯色方块消失
   （截图对比：关 Actinium 正常 / 修复前纯色 / 修复后细节）。
-- [ ] 遗留：世界地图界面内的 `GuiTexturedButton` 图标按钮仍渲染异常（白底 + 深色墨迹，所采纹理
-  与图标不符）。已确认**不是本次修复引入**（issue 截图里 Actinium 开启时按钮已是同样状态，关闭时
-  为干净图标），且**与地图的 TexEnv/多纹理路径无关**（关闭 Xaero 的 Lighting 仍复现）。待运行时
-  状态取证后单独处理。
+- [ ] 遗留：世界地图界面内的 `GuiTexturedButton` 图标按钮仍渲染异常（白底 + 深色墨迹）。已定位到
+  确定的触发开关与状态差异、并给出机制与待办修复，见下节；**修复尚未实机验证，因此未提交**。
+
+## 遗留排查：世界地图图标按钮（2026-09-22）
+
+结论：**不是世界地图本身的问题，而是"实体雷达"渲染留下的状态**；按钮只是第一个受害者。
+
+- **触发开关（用户实机确认）**：小地图设置里关闭「实体雷达」后按钮立即恢复正常 ⇒ 病灶在
+  `xaero.hud.minimap.radar.icon.creator.RadarIconCreator` 的每帧图标预渲染。
+- **运行期证据**（同一次会话内"雷达开 → 雷达关"两段对照）：
+  - 雷达开（按钮坏）：地图界面里 `POSITION_TEX` 精灵绘制处于 **`blend=false` 且 `alphaTest=false`**；
+  - 雷达关（按钮正常）：同一图集的同类绘制处于 **`blend=true` / `alphaTest=true`**。
+  - 其余状态在两种情况下均正常：`GL_MODULATE`、仅 unit 0 启用、图集 id/尺寸合理（256×256）、
+    VAO 属性 `stride=20 / UV@12` 与 `POSITION_TEX` 格式一致、绘制时程序非 0、纹理内容未被覆盖。
+- **机制（静态闭环）**：`RadarIconCreator.create` 在渲染实体图标前 `disableBlend()` + `disableAlpha()`
+  （`GlStateManager.func_179084_k` / `func_179118_c`，见该方法 100-104 行），而 Xaero 的按钮图集是
+  "深色图标 + 透明底"，在混合关闭时**只能靠 alpha test 丢弃透明像素**。但 glsm 的 FFP 决定是否生成
+  alpha-test discard 时读的是**被 Iris 覆盖后的内部值**：
+  - `AlphaTestStorage`（`shader/`）在覆盖 alpha test 期间把模组原本请求的值保存为
+    `originalAlphaTestEnable` / `originalAlphaTest`，并通过 `VanillaBooleanLayer` 暴露为"有效值"；
+  - 而 `FragmentKey.packFromState` 用 `getAlphaTest().isEnabled()` / `getAlphaState().getFunction()`，
+    `Uniforms.uploadFragmentUniforms` 用 `getAlphaState().getReference()`（均为内部值）；
+    glsm 为此准备的 `GLStateManager.isEffectiveAlphaTestEnabled()`（1495 行）与
+    `getEffectiveAlphaState(AlphaState)`（1499 行）**定义了却无人调用**。
+  - ⇒ 覆盖窗口内 FFP 不生成 discard ⇒ 透明像素被当不透明写入 ⇒ 白底 + 深色图标。
+- **待办修复（已定位，未提交）**：把上述三处改用有效值访问器；Iris 未覆盖时有效值等于内部值，
+  因此该改动在无光影覆盖时行为不变。
+- **已排除的路径**（不要重复排查）：UV 属性槽（#175 已修）、TexEnv/多纹理与 unit 掩码、跨线程状态
+  （日志中的非渲染线程调用只在启动 splash 期）、纹理矩阵、程序状态、GUI 纹理 mip、纹理内容/绑定、
+  顶点布局与属性偏移。
+- **调试安全约束**（踩过的坑）：诊断代码**不得读取 CPU 侧绘制缓冲**（`BufferBuilder` 的
+  `ByteBuffer`）——streaming 路径的 `firstVertex` 是持久缓冲内偏移，用它索引上传数据会越界并使客户端
+  崩溃。只需跟踪状态时，一律读 glsm 自身跟踪值（零 GL 调用）；必须做 GL 查询时，需避开显示列表编译期
+  （`DisplayListManager.isRecording()`），并对纹理回读先经 glsm 解绑 pack PBO。
 
 ## 已知缺口（与本缺陷无关）
 
@@ -79,6 +109,15 @@ Xaero 的格式用到 `index` 2/3 → 返回 `-1` → `setupVertexFormatAttribut
   UV `index` 0/1，UV≥2 被静默丢弃。该路径只在 GTNHLib 捕获期（如显示列表编译、DirectTessellator
   使用者）可达，Xaero 的绘制不经过它，因此与 #175 无关；修复需要扩展
   `VertexFlags`/`DefaultVertexFormat` 的格式表，建议另开条目处理。
+- `org.lwjgl.opengl.EXTSeparateShaderObjects.glActiveProgramEXT` 未登记重定向：小地图/世界地图探测旧式
+  能力对象后会走 EXT 分支，`xaero.map.misc.Misc.setShaderProgram(0)` 因此绕过 glsm 直接改真实程序，
+  造成"跟踪程序 vs 真实程序"失步。修复方向：把该激活调用映射为 `GLStateManager.glUseProgram`
+  （`glUseShaderProgramEXT` 保持未映射是无害的，EXT 语义下只有激活调用决定绘制程序）。已定位未提交。
+- `GLStateManager.glPushAttrib()`（无参）只推 `GL_ENABLE_BIT`，而原版 1.12.2 `GlStateManager.pushAttrib()`
+  推的是 `8256 = GL_ENABLE_BIT | GL_CURRENT_BIT` ⇒ 经重定向走该入口时会漏恢复"当前颜色 / 当前纹理坐标"。
+  修复方向：让无参版本推 `8256`。已定位未提交。
+- `GLStateManager.glGetTexImage(int,int,int,int,long)` 的 PBO 偏移读回错误地套用了
+  `suspendPixelPackBuffer()/restorePixelPackBuffer()`（偏移会被当成客户端指针）。已定位未提交。
 
 ## 复现配方（dev 运行）
 

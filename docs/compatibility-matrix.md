@@ -18,8 +18,12 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > 即 (0,0,0,1)），每张 64×64 区块贴图只采到一个纹素。修复为 UV 元素统一走
 > `Usage.uvAttributeLocation`（0→2、1→3、2→5、3→6），与顶点着色器声明的槽位同表；无槽单位改为
 > 一次性告警而非静默丢弃。dev 实机确认小地图与世界地图地形恢复细节（用户截图对比）。
-> 遗留：世界地图界面内的图标按钮仍渲染异常（已确认非本次修复引入，且与地图 TexEnv/多纹理路径
-> 无关——关闭 Xaero 的 Lighting 仍复现，待运行时状态取证后单独处理）。
+> 遗留：世界地图界面内的图标按钮仍渲染异常。已定位触发开关与机制——小地图的「实体雷达」每帧
+> `disableBlend()` + `disableAlpha()` 预渲染实体图标，Xaero 的按钮图集是"深色图标 + 透明底"，混合关闭时
+> 只能靠 alpha test 丢弃透明像素；而 glsm 的 FFP 决定是否生成 alpha-test discard 时读的是被 Iris 覆盖后的
+> 内部值（`FragmentKey` / `Uniforms`），glsm 为此准备的 `isEffectiveAlphaTestEnabled()` /
+> `getEffectiveAlphaState()` 定义了却无人调用，遂漏掉 discard ⇒ 透明像素被当不透明写入。修复方向已定位、
+> 尚未实机验证，详见 [docs/compat/xaero.md](compat/xaero.md) 的遗留排查小节。
 
 > 2026-09-19 追加：CensoredASM / Chibi 5.33（issue #159）共存启动崩溃已修复——其
 > on-demand animated textures 在 `TextureMap.updateAnimations` 与 `BufferBuilder.tex` 上
