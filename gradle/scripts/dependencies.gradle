@@ -69,11 +69,21 @@ dependencies {
 //    modRuntimeOnly 'curse.maven:catalogue-vintage-1465746:7872634'
 //    compileOnly 'maven.modrinth:DistantHorizonsApi:5.1.0'
     modImplementation "maven.modrinth:uCdwusMi:Sa0ttGJr"  // Distant Horizons 3.3.0-1.12.2 (first release with b15b57cf/ae21a1a0: DH binds IIrisAccessor itself and drives its own LOD passes)
-    compileOnly 'curse.maven:xaeros-minimap-263420:6310964'
+    // XaeroLib 1.7.3 + Xaero's Minimap 26.5.1 + Xaero's World Map 1.46.0 (issue #175: both maps
+    // render their 64x64 terrain as flat colour, and the world map's GuiTexturedButton plates come
+    // out opaque while the minimap's entity radar is on). Dev-runtime, not just compiled against:
+    // the defect only reproduces with the three of them present. This replaces the previous
+    // minimap compileOnly entry so a single version of the mod sits on the classpath.
+    modImplementation 'curse.maven:xaerolib-1417462:8849823'
+    modImplementation 'curse.maven:xaeros-minimap-263420:8863814'
+    modImplementation 'curse.maven:xaeros-world-map-317780:8849947'
     compileOnly 'curse.maven:better-hud-286066:3327633'
     compileOnly 'curse.maven:voxelmap-225179:3029445'  // issue #34: VoxelMap minimap compatibility (mixins.actinium.voxelmap.json, conditional on mod presence)
 
-    modImplementation 'curse.maven:journeymap-32274:5172461'  // JourneyMap 1.12.2-5.7.1p3 (StellarCore 1.6.0 references common.feature.PlayerRadarManager; 6.0.3 moved it to common.util and crashes)
+    // JourneyMap 1.12.2-5.7.1p3 (StellarCore 1.6.0 references common.feature.PlayerRadarManager; 6.0.3 moved it to common.util and crashes)
+    // Kept compile-only for the dev runtime: JourneyMap and Xaero's World Map both claim the
+    // world_id / world_info plugin channels, so the two cannot be loaded together.
+    modCompileOnly 'curse.maven:journeymap-32274:5172461'
 
     compileOnly 'curse.maven:scalingguis-319656:5150678'
     compileOnly 'curse.maven:quark-243121:2924091'
