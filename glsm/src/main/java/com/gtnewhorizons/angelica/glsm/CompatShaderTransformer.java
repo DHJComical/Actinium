@@ -1,5 +1,6 @@
 package com.gtnewhorizons.angelica.glsm;
 
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
 import com.gtnewhorizons.angelica.glsm.backend.RenderBackend;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -1160,8 +1161,19 @@ public class CompatShaderTransformer {
             texCoordIndices.add(Integer.parseInt(texCoordMatcher.group(1)));
         }
         for (int i : texCoordIndices) {
-            // PRIMARY_UV=2, SECONDARY_UV=3. Only indices 0 and 1 are supported; higher indices collide at location 3.
-            final int location = i == 0 ? 2 : 3;
+            // Each texcoord index is a legacy texture unit; map it to its own attribute slot
+            // (0→2, 1→3, 2→5, 3→6) so multiple UV sets never collide (issue #175).
+            final int location = Usage.uvAttributeLocation(i);
+            if (location < 0) {
+                // Units beyond 3 have no attribute slot in the fixed-function pipeline, so the data
+                // cannot be sourced at all. Skipping is deliberate and loud: the fragment stage's
+                // actinium_TexCoord<i> input is left without a matching output, so the program fails
+                // to link instead of silently sampling a constant texel (issue #175's failure mode).
+                LOGGER.warn(
+                    "Passthrough vertex shader requested actinium_TexCoord{} but only legacy texture units 0..3 have a UV attribute slot; skipping it, so the program will fail to link rather than sample wrong coordinates",
+                    i);
+                continue;
+            }
             sb.append("layout(location = ").append(location).append(") in vec4 a_TexCoord").append(i).append(";\n");
             varyings.append("out vec4 actinium_TexCoord").append(i).append(";\n");
             assignments.append("  actinium_TexCoord").append(i).append(" = a_TexCoord").append(i).append(";\n");

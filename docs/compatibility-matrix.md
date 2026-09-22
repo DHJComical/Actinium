@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-09-19。
+最后更新：2026-09-22。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -8,6 +8,18 @@
 
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
+
+> 2026-09-22 追加：Xaero's Minimap 26.5.1 / World Map 1.46.0 / XaeroLib 1.7.3（issue #175）地图地形
+> 渲染成 64×64 纯色方块的修复——见下方 [模组与环境](#模组与环境) 的 Xaero 行与
+> [docs/compat/xaero.md](compat/xaero.md)。Xaero 用 `POSITION_TEX_TEX_TEX`（每个顶点 4 组 UV，分别
+> 对应 legacy texture unit 0..3）配合 unit 0/2/3 的固定管线 `GL_COMBINE` 绘制地形，而 Actinium 的
+> BufferBuilder 顶点格式映射把 UV `index`≥2 解析为 `-1`（只有 unit 0/1 有属性槽），unit 2/3 的属性槽
+> 既不 enable 也不下发指针，FFP 顶点着色器遂退回逐次绘制常量 `u_CurrentTexCoord2/3`（Xaero 从不设置，
+> 即 (0,0,0,1)），每张 64×64 区块贴图只采到一个纹素。修复为 UV 元素统一走
+> `Usage.uvAttributeLocation`（0→2、1→3、2→5、3→6），与顶点着色器声明的槽位同表；无槽单位改为
+> 一次性告警而非静默丢弃。dev 实机确认小地图与世界地图地形恢复细节（用户截图对比）。
+> 遗留：世界地图界面内的图标按钮仍渲染异常（已确认非本次修复引入，且与地图 TexEnv/多纹理路径
+> 无关——关闭 Xaero 的 Lighting 仍复现，待运行时状态取证后单独处理）。
 
 > 2026-09-19 追加：CensoredASM / Chibi 5.33（issue #159）共存启动崩溃已修复——其
 > on-demand animated textures 在 `TextureMap.updateAnimations` 与 `BufferBuilder.tex` 上
@@ -169,6 +181,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Obscure Tooltips | 已验证 | 条件 Mixin（`mixins.actinium.obscuretooltips.json`：tooltip 盔甲预览的实体渲染包裹进 GUI entity surface，Iris 盔甲 item ID/glint 钩子在该 surface 内跳过） | 3.10.2（CurseForge 715660:8522661）：tooltip 内渲染盔甲架实体时 Iris 盔甲钩子把世界渲染 GBuffer/item ID 状态带进 GUI pass，可产生全屏黑罩（PR #142）；修复仅在该 surface 激活期间跳过盔甲钩子，世界盔甲渲染不变；dev 实机回归通过（光影下悬停盔甲 tooltip 无黑罩，世界盔甲渲染正常） |
 | CensoredASM / Chibi（LoliASM） | 已验证（dev） | 无侵入（提供 `org.taumc.celeritas.core.CeleritasLoadingPlugin` 探测标记类，触发 LoliASM 自带的 Celeritas 让位路径） | 5.33（CurseForge 460609:8225778，issue #159）：共存启动崩溃已修复——其 on-demand animated textures 与 Actinium 在 `TextureMap.updateAnimations` / `BufferBuilder.tex` 上双重 overwrite，`squashBakedQuads` 亦与 `MixinBakedQuad` 的 `@Shadow` 字段冲突；LoliASM 本就会在探测到 Celeritas 系时关闭两者，Actinium 移除 Celeritas 桥后该探测失效。dev 实机验证：LoliASM 两条让位日志出现、无 Mixin 失败、进世界正常；生产整合包回归待用户确认，详见 [docs/compat/censoredasm.md](compat/censoredasm.md) |
 | NeverEnoughAnimation | 已验证 | 顶点 alpha 覆写扩展点（`ItemVertexAlphaOverrides`：外部缩放激活时，快速物品路径跳过 raw append 与 display list 缓存，改走 `renderQuads`） | 1.0.7（CurseForge 1062347:7289408，issue #145）：GUI 开/关淡入的顶点 alpha 被 display list 缓存烘焙成永久透明（raw append 分支则整条丢弃该缩放），导致箱子／背包 GUI 物品不可见；dev 实机回归通过（物品随 GUI 淡入并最终完全可见，背包与世界物品无回归）。附带归因记录：NEA 的 dev-only `drawScreenDebug` 会在 `BackgroundDrawnEvent` 留下标准物品光照，使 `GuiChest` 面板变暗，属上游调试代码缺陷，详见 [docs/compat/neverenoughanimation.md](compat/neverenoughanimation.md) |
+| Xaero's Minimap / World Map / XaeroLib | 部分 | 无 Mixin（glsm 顶点格式映射修复：UV 元素按 legacy texture unit 分配属性槽） | 26.5.1 / 1.46.0 / 1.7.3（issue #175）：两张地图的地形渲染成 64×64 纯色方块已修复——Xaero 的地形格式是 `POSITION + 每个纹理单元一组 UV`（unit 0..3）并配合 unit 0/2/3 的固定管线 `GL_COMBINE`，而 glsm 的顶点格式映射只认 UV `index` 0/1，unit 2/3 的属性槽从未下发，FFP 退回常量 `u_CurrentTexCoord2/3` 导致每张贴图只采一个纹素；装了世界地图时小地图复用其绘制路径，故两者同因。dev 实机确认地形细节恢复；已知缺口：世界地图界面内的图标按钮仍渲染异常（非本次修复引入、与 TexEnv/多纹理路径无关，待单独处理），详见 [docs/compat/xaero.md](compat/xaero.md) |
 
 ## 验证记录模板
 

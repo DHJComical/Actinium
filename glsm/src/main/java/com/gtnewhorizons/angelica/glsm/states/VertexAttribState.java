@@ -102,6 +102,20 @@ public class VertexAttribState {
     }
 
     /**
+     * Reports whether the attribute at {@code location} is currently enabled on the bound VAO
+     * without requiring {@link #init} to have run (returns {@code false} when no VAO state exists
+     * yet). Used to detect whether a draw supplies per-vertex data for a slot — e.g. the extended
+     * multi-texture UV slots 2/3 (issue #175) — so the FFP vertex shader can source its varying
+     * from the attribute instead of a per-draw constant.
+     */
+    public static boolean isAttribEnabled(int location) {
+        if (current == null || location < 0 || location >= MAX_ATTRIBS) {
+            return false;
+        }
+        return current[location].enabled;
+    }
+
+    /**
      * Computes how many leading bytes of {@code a.clientPointer} a draw over vertices
      * [first, first + count) can actually read. The captured pointer deliberately spans the
      * whole underlying allocation (mods like HBM-CE mutate the Java limit after setting the
