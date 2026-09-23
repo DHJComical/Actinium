@@ -26,6 +26,10 @@ class VertexShaderGeneratorTest {
     private static final int BIT_UNIT3_TEX = 15;
     private static final int BIT_UNIT23_UV_FROM_UNIT0 = 41;
     private static final int BIT_LINE_STIPPLE = 42;
+    private static final int BIT_UNIT2_TEXMAT = 39;
+    private static final int BIT_UNIT3_TEXMAT = 40;
+    private static final int BIT_HAS_VERTEX_TEX2 = 43;
+    private static final int BIT_HAS_VERTEX_TEX3 = 44;
 
     @Test
     void lineStippleEmitsFlatLineStartVaryingAndViewportUniform() {
@@ -55,6 +59,43 @@ class VertexShaderGeneratorTest {
 
         assertTrue(shader.contains("v_TexCoord2 = a_TexCoord0;"), shader);
         assertFalse(shader.contains("u_CurrentTexCoord2"), shader);
+    }
+
+    @Test
+    void units2And3WithPerVertexTexcoordsUseDedicatedAttributes() {
+        final long packed = (1L << BIT_UNIT2_TEX) | (1L << BIT_UNIT3_TEX)
+            | (1L << BIT_HAS_VERTEX_TEX2) | (1L << BIT_HAS_VERTEX_TEX3);
+        String shader = VertexShaderGenerator.generate(VertexKey.fromPacked(packed));
+
+        // Each unit gets its own attribute slot (locations 5 and 6) instead of a per-draw constant.
+        assertTrue(shader.contains("layout(location = 5) in vec4 a_TexCoord2;"), shader);
+        assertTrue(shader.contains("layout(location = 6) in vec4 a_TexCoord3;"), shader);
+        assertTrue(shader.contains("v_TexCoord2 = a_TexCoord2;"), shader);
+        assertTrue(shader.contains("v_TexCoord3 = a_TexCoord3;"), shader);
+        assertFalse(shader.contains("u_CurrentTexCoord2"), shader);
+        assertFalse(shader.contains("u_CurrentTexCoord3"), shader);
+    }
+
+    @Test
+    void unit2PerVertexTexCoordMultipliesTextureMatrix() {
+        final long packed = (1L << BIT_UNIT2_TEX) | (1L << BIT_UNIT2_TEXMAT) | (1L << BIT_HAS_VERTEX_TEX2);
+        String shader = VertexShaderGenerator.generate(VertexKey.fromPacked(packed));
+
+        assertTrue(shader.contains("uniform mat4 u_TextureMatrix2;"), shader);
+        assertTrue(shader.contains("v_TexCoord2 = u_TextureMatrix2 * a_TexCoord2;"), shader);
+    }
+
+    @Test
+    void extendedUnitAttributesAreHomogeneousVec4() {
+        // A 2-float UV attribute must still yield q == 1.0: declaring a vec4 and reading it directly
+        // lets OpenGL fill the missing z/w with 0/1 (the fragment stage divides coord.st / q).
+        final long packed = (1L << BIT_UNIT3_TEX) | (1L << BIT_HAS_VERTEX_TEX3);
+        VertexKey key = VertexKey.fromPacked(packed);
+        String shader = VertexShaderGenerator.generate(key);
+        Transformer transformer = new Transformer(ShaderParser.parseShader(shader).full());
+        Map<String, GLSLParser.Single_declarationContext> inputs = transformer.findQualifiers(GLSLLexer.IN);
+
+        assertEquals("vec4", typeOf(inputs.get("a_TexCoord3")));
     }
 
     @Test

@@ -96,8 +96,8 @@ public class Uniforms {
         // attribute; units 2/3 unless their varying is sourced from unit 0's attribute.
         final VertexKey vk0 = program.getVertexKey();
         final boolean needsCurrentTexCoord0 = !vk0.hasVertexTexCoord() && vk0.unitTexCoordEnabled(0);
-        final boolean needsCurrentTexCoord2 = vk0.unitTexCoordEnabled(2) && !vk0.unit23UvFromUnit0();
-        final boolean needsCurrentTexCoord3 = vk0.unitTexCoordEnabled(3) && !vk0.unit23UvFromUnit0();
+        final boolean needsCurrentTexCoord2 = vk0.unitTexCoordEnabled(2) && !vk0.unit23UvFromUnit0() && !vk0.hasUnitVertexTexCoord(2);
+        final boolean needsCurrentTexCoord3 = vk0.unitTexCoordEnabled(3) && !vk0.unit23UvFromUnit0() && !vk0.hasUnitVertexTexCoord(3);
         if (needsCurrentTexCoord0 || needsCurrentTexCoord2 || needsCurrentTexCoord3) {
             final int texGen = ShaderManager.getTexCoordGeneration();
             if (uploaded.needsTexCoordUpload(texGen)) {

@@ -4,6 +4,8 @@ import com.gtnewhorizons.angelica.glsm.DisplayListManager;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.states.TexGenState;
 import com.gtnewhorizons.angelica.glsm.states.TextureUnitArray;
+import com.gtnewhorizons.angelica.glsm.states.VertexAttribState;
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -48,6 +50,9 @@ public final class VertexKey {
     private static final int BIT_UNIT_TEXMAT_BASE    = BIT_WIDE_LINE + 1;
     private static final int BIT_UNIT23_UV_FROM_UNIT0 = BIT_UNIT_TEXMAT_BASE + MAX_UNITS;
     private static final int BIT_LINE_STIPPLE        = BIT_UNIT23_UV_FROM_UNIT0 + 1;
+    // Per-vertex texcoord availability for the extended multi-texture units 2/3 (issue #175).
+    private static final int BIT_HAS_VERTEX_TEX2     = BIT_LINE_STIPPLE + 1;
+    private static final int BIT_HAS_VERTEX_TEX3     = BIT_HAS_VERTEX_TEX2 + 1;
 
     public static final int TG_NONE                  = 0;
     public static final int TG_OBJ_LINEAR            = 1;
@@ -81,6 +86,21 @@ public final class VertexKey {
     public boolean hasVertexNormal()       { return bit(BIT_HAS_VERTEX_NORMAL); }
     public boolean hasVertexTexCoord()     { return bit(BIT_HAS_VERTEX_TEX); }
     public boolean hasVertexLightmap()    { return bit(BIT_HAS_VERTEX_LIGHTMAP); }
+    /**
+     * Whether the draw supplies a per-vertex texture coordinate for the given texture unit (0..3).
+     * Unit 0 is {@link #hasVertexTexCoord()}, unit 1 (lightmap) is {@link #hasVertexLightmap()};
+     * units 2/3 are the extended multi-texture UV slots (issue #175). When false for units 2/3 the
+     * varying falls back to the per-draw constant {@code u_CurrentTexCoord<i>}.
+     */
+    public boolean hasUnitVertexTexCoord(int unit) {
+        return switch (unit) {
+            case 0 -> hasVertexTexCoord();
+            case 1 -> hasVertexLightmap();
+            case 2 -> bit(BIT_HAS_VERTEX_TEX2);
+            case 3 -> bit(BIT_HAS_VERTEX_TEX3);
+            default -> false;
+        };
+    }
     public boolean unit23UvFromUnit0()     { return bit(BIT_UNIT23_UV_FROM_UNIT0); }
     /** Color material mode (CM_AMBIENT, CM_DIFFUSE, CM_SPECULAR, CM_EMISSION, CM_AMBIENT_AND_DIFFUSE). Only meaningful when colorMaterialEnabled(). */
     public int colorMaterialMode()        { return (int)((packed >> BIT_COLOR_MAT_MODE) & 0x7); }
@@ -208,6 +228,15 @@ public final class VertexKey {
         if (hasNormal) bits |= (1L << BIT_HAS_VERTEX_NORMAL);
         if (hasTexCoord) bits |= (1L << BIT_HAS_VERTEX_TEX);
         if (hasLightmap) bits |= (1L << BIT_HAS_VERTEX_LIGHTMAP);
+
+        // Per-vertex texcoords for the extended units 2/3 (issue #175): present when the draw
+        // enables the matching UV attribute slot (locations 5/6). Tracked per attribute in
+        // VertexAttribState rather than a format flag, since the legacy flags only cover units 0/1.
+        for (int i = 2; i < MAX_UNITS; i++) {
+            if (VertexAttribState.isAttribEnabled(VertexFormatElement.Usage.uvAttributeLocation(i))) {
+                bits |= (1L << (BIT_HAS_VERTEX_TEX2 + (i - 2)));
+            }
+        }
 
         // Immediate-mode draws cannot feed units 2/3 from an attribute; when a multi tex coord
         // for those units was recorded mid-draw, source their varying from unit 0's attribute.
