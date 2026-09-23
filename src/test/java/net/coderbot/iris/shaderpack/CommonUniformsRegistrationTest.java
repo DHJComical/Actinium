@@ -73,7 +73,7 @@ class CommonUniformsRegistrationTest {
             ImmutableList.of(AbsolutePackPath.fromAbsolutePath("/entry.glsl"))
         );
         ShaderPackOptions options = new ShaderPackOptions(graph, Map.of());
-        ShaderProperties properties = new ShaderProperties("", options, List.<StringPair>of());
+        ShaderProperties properties = new ShaderProperties("", options, List.<StringPair>of(), () -> true);
         return new PackDirectives(Set.of(), properties);
     }
 

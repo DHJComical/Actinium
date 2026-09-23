@@ -84,6 +84,6 @@ class ShaderPropertiesTest {
             com.google.common.collect.ImmutableList.of(AbsolutePackPath.fromAbsolutePath("/entry.glsl"))
         );
         ShaderPackOptions options = new ShaderPackOptions(graph, Map.of());
-        return new ShaderProperties(source, options, environmentDefines);
+        return new ShaderProperties(source, options, environmentDefines, () -> true);
     }
 }
