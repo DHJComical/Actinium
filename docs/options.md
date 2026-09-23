@@ -16,6 +16,35 @@
 - 构建期守卫：`MixinConfigurationTest` 要求每个已编译 Mixin 恰好在配置文件中声明一次，
   新增 Mixin 类必须同步 `src/main/resources/mixins.actinium.vintage.json`。
 
+## DEBUG 页开关（`enable_debug_tab`）
+
+视频设置 GUI 的 DEBUG 页默认不显示。`config/actinium-options.json` 顶层字段
+`enable_debug_tab`（默认 `false`，持久化在 `SodiumGameOptions.enableDebugTab`）为 `true`
+时才暴露该页。开关只存在于配置文件，GUI 内没有入口——页面隐藏后无法从自身重新打开；
+配置在启动装载时读取，改动需重启游戏生效。已有配置文件不会自动补写该字段，需要手工加在顶层：
+
+```json
+{
+  "enable_debug_tab": true,
+  "quality": { }
+}
+```
+
+`ActiniumOptionPages.retainEnabledPages(List, SodiumGameOptions)` 在关闭时按
+`StandardOptions.Pages.DEBUG` 把该页从候选页面里剔除，因此该页既不出现在标签栏，也不进入
+搜索索引，也不参与 `ActiniumOptionHost` 的 apply/undo 扫描。判定步骤与页面构建分离，页面构建
+依赖客户端 locale 与 GL 上下文，单测只覆盖判定。
+
+DEBUG 页原先与高级/性能页重复的 5 项（模型渲染器批处理、模型渲染器显示列表、快速光照物品
+渲染、快速光照物品显示列表、渲染通道优化）已移除；这些开关继续在高级页（前四项）与性能页
+（渲染通道优化）调整，对应的 `sodium.options.actinium.shader_debug.*` tooltip 键已删除。
+
+隐藏该页只影响 GUI 呈现，不改变任何开关的生效路径：`ActiniumStartupDebugConfig` 与
+`RedirectorDebugOptions` 在启动期直接解析 JSON 的 `debug` 段（LWJGL/重定向器开关），
+`Actinium.onConstruct` 把 `enable_actinium_perf_debug` 推给 `GLSMPerfDebugHooks`，其余经
+`IrisDebugOptions.Bridge`、`GlStateDiffProbe`、`ActiniumDiagnostics` 热读配置字段。因此
+`enable_debug_tab=false` 时仍可用配置文件开启任一 DEBUG 开关（需要重启的项除外）。
+
 ## 质量页 → DETAILS 分组
 
 | 选项 | 字段 | 实现落点 |

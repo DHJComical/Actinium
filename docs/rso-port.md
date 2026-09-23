@@ -42,8 +42,9 @@
   - `ActiniumOptionHost`：进程级宿主，收集内置页面 + RSO 自身页 + Iris 页 +
     `OptionGUIConstructionEvent` 扩展，按 modId 分组为 `List<RsoModOptions>`，
     并协调 `applyChanges/undoChanges/hasPendingChanges/resetToDefaults` 与 flag 副作用。
-  - `ActiniumOptionPages.builtInPages()`：内置页面（General/Quality/Performance/Advanced/
-    Debug）+ `IrisConfigEntryPoint.createPages()`（shadow distance 滑块 + 光影包外部页）。
+  - `ActiniumOptionPages.builtInPages(SodiumGameOptions)`：内置页面（General/Quality/
+    Performance/Advanced，仅当配置 `enable_debug_tab` 为 true 时追加 Debug）+
+    `IrisConfigEntryPoint.createPages()`（shadow distance 滑块 + 光影包外部页）。
 
 RSO 行渲染不再接触任何 Sodium 配置类；`OptionSearch` 直接遍历
 `OptionGroup.getOptions()` 的 embeddium `Option<?>` 并以其 `OptionIdentifier` 建索引。
