@@ -107,6 +107,61 @@ public class VertexFormatElement {
             this.clearState.accept(index);
         }
 
+        /**
+         * Resolves the generic vertex-attribute location for this usage at the given element
+         * {@code index}. For the UV usages the {@code index} is the legacy texture unit the element
+         * feeds (see {@link #setupBufferState}); the index-less usages ignore it. No two distinct
+         * (usage, index) pairs resolve to the same location, so per-unit UV sets never collide
+         * (locked by VertexAttributeLayoutTest).
+         *
+         * @param index element index (the legacy texture unit for UV usages; ignored elsewhere)
+         * @return the attribute location in {@code [0, 15]}, or {@code -1} for {@link #PADDING}
+         */
+        public int getAttributeLocation(int index) {
+            return switch (this) {
+                // SECONDARY_UV feeds legacy texture units 1..3 (unit 0 is PRIMARY_UV), each with
+                // its own slot. This table is the single source of truth for issue #175: the vanilla
+                // vertex-format path used to resolve units 2/3 to -1 (no slot), so those coordinates
+                // were never written and the FFP shader sampled a per-draw constant instead. Sharing
+                // one table keeps the vertex-format path, the client-array path and both shader
+                // generators from disagreeing about where a texture unit is read from.
+                case SECONDARY_UV -> uvAttributeLocation(requireSecondaryUvUnit(index));
+                // GENERIC binds straight to the caller-chosen slot.
+                case GENERIC -> index;
+                // POSITION/COLOR/NORMAL/PADDING/PRIMARY_UV are index-less; PRIMARY_UV is always
+                // texture unit 0.
+                default -> this.attributeLocation;
+            };
+        }
+
+        /**
+         * Maps a legacy texture unit (0..3) to its dedicated UV attribute location. Units 0/1 are
+         * the primary-UV and lightmap slots (locations 2/3); units 2/3 are the extended
+         * multi-texture UV slots (locations 5/6; location 4 is NORMAL). Shared by the GL texcoord
+         * dispatch, the FFP/compat shader generators and the vertex-format layout so every consumer
+         * agrees on one unit-to-location table.
+         *
+         * @param textureUnit legacy texture unit (0..3)
+         * @return the attribute location in {@code [0, 15]}, or {@code -1} if the unit is unsupported
+         */
+        public static int uvAttributeLocation(int textureUnit) {
+            return switch (textureUnit) {
+                case 0 -> 2;
+                case 1 -> 3;
+                case 2 -> 5;
+                case 3 -> 6;
+                default -> -1;
+            };
+        }
+
+        private static int requireSecondaryUvUnit(int index) {
+            if (index < 1 || index > 3) {
+                throw new IllegalArgumentException(
+                    "SECONDARY_UV feeds legacy texture units 1..3 but got " + index + " (unit 0 is PRIMARY_UV)");
+            }
+            return index;
+        }
+
         interface SetupState {
 
             void setupBufferState(int size, int type, int stride, long pointer, int index);

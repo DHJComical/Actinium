@@ -60,11 +60,20 @@ public final class VertexShaderGenerator {
         if (key.hasVertexColor()) {
             sb.append("layout(location = ").append(VertexFormatElement.Usage.COLOR.getAttributeLocation()).append(") in vec4 a_Color;\n");
         }
+        // Per-unit texture coordinates. Every UV set is a vec4 so a 2-float UV attribute still
+        // yields q == 1.0 (OpenGL fills the missing z/w with 0/1); the fragment stage divides
+        // coord.st / q, so a wrong q would be fatal. Units 2/3 (issue #175) get their own attribute
+        // slot so they are no longer a per-draw constant.
         if (key.hasVertexTexCoord()) {
             sb.append("layout(location = ").append(VertexFormatElement.Usage.PRIMARY_UV.getAttributeLocation()).append(") in vec4 a_TexCoord0;\n");
         }
         if (key.hasVertexLightmap()) {
-            sb.append("layout(location = ").append(VertexFormatElement.Usage.SECONDARY_UV.getAttributeLocation()).append(") in vec2 a_TexCoord1;\n");
+            sb.append("layout(location = ").append(VertexFormatElement.Usage.SECONDARY_UV.getAttributeLocation(1)).append(") in vec4 a_TexCoord1;\n");
+        }
+        for (int i = 2; i < VertexKey.MAX_UNITS; i++) {
+            if (key.hasUnitVertexTexCoord(i)) {
+                sb.append("layout(location = ").append(VertexFormatElement.Usage.SECONDARY_UV.getAttributeLocation(i)).append(") in vec4 a_TexCoord").append(i).append(";\n");
+            }
         }
         if (key.hasVertexNormal()) {
             sb.append("layout(location = ").append(VertexFormatElement.Usage.NORMAL.getAttributeLocation()).append(") in vec3 a_Normal;\n");
@@ -125,7 +134,7 @@ public final class VertexShaderGenerator {
         }
 
         for (int i = 2; i < VertexKey.MAX_UNITS; i++) {
-            if (key.unitTexCoordEnabled(i) && !key.unit23UvFromUnit0()) {
+            if (key.unitTexCoordEnabled(i) && !key.unit23UvFromUnit0() && !key.hasUnitVertexTexCoord(i)) {
                 sb.append("uniform vec4 u_CurrentTexCoord").append(i).append(";\n");
             }
         }
@@ -375,7 +384,7 @@ public final class VertexShaderGenerator {
         }
         if (key.lightmapEnabled()) {
             if (key.hasVertexLightmap()) {
-                sb.append("  v_TexCoord1 = u_LightmapTextureMatrix * vec4(a_TexCoord1, 0.0, 1.0);\n");
+                sb.append("  v_TexCoord1 = u_LightmapTextureMatrix * a_TexCoord1;\n");
             } else {
                 sb.append("  v_TexCoord1 = u_LightmapTextureMatrix * vec4(u_CurrentLightmapCoord, 0.0, 1.0);\n");
             }
@@ -383,7 +392,16 @@ public final class VertexShaderGenerator {
         for (int i = 2; i < VertexKey.MAX_UNITS; i++) {
             if (!key.unitTexCoordEnabled(i)) continue;
             sb.append("  // Texture coordinates - unit ").append(i).append('\n');
-            final String src = key.unit23UvFromUnit0() ? "a_TexCoord0" : "u_CurrentTexCoord" + i;
+            // Source priority: immediate-mode glMultiTexCoord folded into unit 0's attribute, then
+            // the unit's own per-vertex attribute, then the per-draw constant fallback (issue #175).
+            final String src;
+            if (key.unit23UvFromUnit0()) {
+                src = "a_TexCoord0";
+            } else if (key.hasUnitVertexTexCoord(i)) {
+                src = "a_TexCoord" + i;
+            } else {
+                src = "u_CurrentTexCoord" + i;
+            }
             if (!key.unit23UvFromUnit0() && key.unitTexMatEnabled(i)) {
                 sb.append("  v_TexCoord").append(i).append(" = u_TextureMatrix").append(i).append(" * ").append(src).append(";\n");
             } else {
