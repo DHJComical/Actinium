@@ -32,7 +32,6 @@ gradle-app.setting
 /.codex-tmp/
 
 .tmp
-/AGENTS.md
 /actinium-scratchpad/
 /.codex/
 /docs/implementation-differences/
