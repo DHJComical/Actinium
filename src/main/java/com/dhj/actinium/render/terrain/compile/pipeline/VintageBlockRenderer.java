@@ -2,6 +2,7 @@ package com.dhj.actinium.render.terrain.compile.pipeline;
 
 import com.dhj.actinium.api.render.terrain.BlockQuadTransformerHolder;
 import com.dhj.actinium.compat.MissingModelCompat;
+import com.dhj.actinium.compat.componentmodelhider.ComponentModelHiderCompat;
 import net.coderbot.iris.debug.ShaderRegressionDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -173,7 +174,16 @@ public class VintageBlockRenderer {
         for (var dir : EnumFacing.VALUES) {
             var quads = model.getQuads(state, dir, rand);
 
-            if (quads.isEmpty() || !state.shouldSideBeRendered(blockAccess, pos, dir)) {
+            // The vanilla face-culling call stays at this call site on purpose: addon mixins
+            // @Redirect instructions inside renderBlock (see VintageBlockRendererBindingContractTest),
+            // so extracting it into a helper method would move it out of their reach. The Component
+            // Model Hider's neighbour rule is applied afterwards, and only when the vanilla predicate
+            // already culled the face: vanilla learns that rule from the hider's redirects inside
+            // BlockModelRenderer, which this fast mesher does not go through, so a hidden block would
+            // otherwise still occlude and punch a see-through hole into every adjacent block.
+            if (quads.isEmpty()
+                    || (!state.shouldSideBeRendered(blockAccess, pos, dir)
+                            && !ComponentModelHiderCompat.isNeighbourHidden(pos, dir))) {
                 continue;
             }
 

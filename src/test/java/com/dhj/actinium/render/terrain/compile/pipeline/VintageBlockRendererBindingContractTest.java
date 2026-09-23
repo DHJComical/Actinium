@@ -30,6 +30,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>This contract replaces the bridge-era
  * {@code CeleritasCompatBridgeJarTest#legacyRendererRetainsThirdPartyMixinBindingContract}, which
  * guarded the same surface on the removed compatibility bridge.
+ *
+ * <p>The face-culling call site in {@code renderBlock} is locked here as a deliberate invariant
+ * rather than as an observed addon binding: celeritasleafculling's adapted
+ * {@code VintageBlockRendererMixin} binds only the two shadowed fields and the
+ * {@code renderQuadList} call sites, but the class is a third-party mixin target, so an addon that
+ * {@code @Redirect}s {@code IBlockState.shouldSideBeRendered} inside {@code renderBlock} would
+ * silently stop matching if that instruction were moved into a helper method.
  */
 class VintageBlockRendererBindingContractTest {
     private static final String CLASS_NAME =
@@ -37,6 +44,10 @@ class VintageBlockRendererBindingContractTest {
     private static final String BLOCK_STATE_DESCRIPTOR = "Lnet/minecraft/block/state/IBlockState;";
     private static final String BLOCK_ACCESS_DESCRIPTOR =
             "Lcom/dhj/actinium/world/cloned/ActiniumBlockAccess;";
+    private static final String SHOULD_SIDE_BE_RENDERED_DESCRIPTOR =
+            "(Lnet/minecraft/world/IBlockAccess;"
+            + "Lnet/minecraft/util/math/BlockPos;"
+            + "Lnet/minecraft/util/EnumFacing;)Z";
     private static final String RENDER_QUAD_LIST_DESCRIPTOR =
             "(Ldhj/embeddedt/embeddium/impl/render/chunk/compile/buffers/ChunkModelBuilder;"
             + "Ldhj/embeddedt/embeddium/impl/render/chunk/compile/ChunkBuildBuffers;"
@@ -99,6 +110,33 @@ class VintageBlockRendererBindingContractTest {
         assertTrue(callSites >= 2,
                 "renderBlock must keep the per-face and no-face renderQuadList call sites addons "
                         + "@Redirect (found " + callSites + ")");
+    }
+
+    @Test
+    void renderBlockKeepsTheFaceCullingCallSite() throws IOException {
+        ClassNode node = readRendererClass();
+        int callSites = 0;
+
+        for (MethodNode method : node.methods) {
+            if (!method.name.equals("renderBlock")) {
+                continue;
+            }
+            for (var instruction = method.instructions.getFirst(); instruction != null;
+                 instruction = instruction.getNext()) {
+                if (instruction instanceof MethodInsnNode call
+                        && call.owner.equals("net/minecraft/block/state/IBlockState")
+                        && call.name.equals("shouldSideBeRendered")
+                        && call.desc.equals(SHOULD_SIDE_BE_RENDERED_DESCRIPTOR)) {
+                    callSites++;
+                }
+            }
+        }
+
+        assertEquals(1, callSites,
+                "renderBlock must keep its IBlockState.shouldSideBeRendered call at the call site: "
+                        + "addon mixins @Redirect instructions inside renderBlock, so moving the "
+                        + "predicate into a helper method would silently drop their injection "
+                        + "(found " + callSites + ")");
     }
 
     private static ClassNode readRendererClass() throws IOException {
