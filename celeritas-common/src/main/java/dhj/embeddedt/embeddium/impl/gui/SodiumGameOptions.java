@@ -29,6 +29,13 @@ public class SodiumGameOptions implements OptionStorage<SodiumGameOptions> {
     private static final String DEFAULT_FILE_NAME = "actinium-options.json";
     private static final List<String> LEGACY_FILE_NAMES = List.of("embeddium-options.json");
 
+    /**
+     * Whether the video options screen exposes the DEBUG page. It defaults to
+     * disabled and is intentionally reachable only through the config file, so
+     * players cannot re-enable the page from the GUI it hides.
+     */
+    public boolean enableDebugTab = false;
+
     public final QualitySettings quality = new QualitySettings();
     public final AdvancedSettings advanced = new AdvancedSettings();
     public final PerformanceSettings performance = new PerformanceSettings();
