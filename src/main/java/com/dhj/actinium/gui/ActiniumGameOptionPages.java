@@ -98,18 +98,6 @@ public class ActiniumGameOptionPages {
                 .build();
     }
 
-    private static OptionImpl<SodiumGameOptions, Boolean> createRenderPassOptimizationOption(TextComponent tooltip) {
-        return OptionImpl.createBuilder(boolean.class, sodiumOpts)
-                .setId(StandardOptions.Option.RENDER_PASS_OPTIMIZATION.cast())
-                .setName(TextComponent.translatable("embeddium.options.use_render_pass_optimization.name"))
-                .setTooltip(tooltip)
-                .setControl(TickBoxControl::new)
-                .setImpact(OptionImpact.LOW)
-                .setBinding((opts, value) -> opts.performance.useRenderPassOptimization = value, opts -> opts.performance.useRenderPassOptimization)
-                .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
-                .build();
-    }
-
     public static OptionPage general() {
         List<OptionGroup> groups = new ArrayList<>();
         groups.add(OptionGroup.createBuilder()
@@ -484,15 +472,6 @@ public class ActiniumGameOptionPages {
 
     public static OptionPage debug() {
         List<OptionGroup> groups = new ArrayList<>();
-
-        groups.add(OptionGroup.createBuilder()
-                .setId(OptionIdentifier.create(ActiniumRuntime.MODID, "shader_regression_debug"))
-                .add(createModelRendererBatchingOption(TextComponent.translatable("sodium.options.actinium.model_renderer_batching.tooltip")))
-                .add(createModelRendererDisplayListsOption(TextComponent.translatable("sodium.options.actinium.shader_debug.model_renderer_display_lists.tooltip")))
-                .add(createFastLitItemRenderingOption(TextComponent.translatable("sodium.options.actinium.shader_debug.fast_lit_item_rendering.tooltip")))
-                .add(createFastLitItemDisplayListsOption(TextComponent.translatable("sodium.options.actinium.shader_debug.fast_lit_item_display_lists.tooltip")))
-                .add(createRenderPassOptimizationOption(TextComponent.translatable("sodium.options.actinium.shader_debug.render_pass_optimization.tooltip")))
-                .build());
 
         groups.add(OptionGroup.createBuilder()
                 .setId(StandardOptions.Group.ACTINIUM_DEBUG)

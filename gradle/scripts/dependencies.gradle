@@ -224,6 +224,14 @@ dependencies {
     // org.taumc.celeritas.core marker class is what this dev entry exercises.)
     modRuntimeOnly 'curse.maven:chibi-460609:8225778'
 
+    // Component Model Hider 1.0 (mod id component_model_hider, CurseForge project 940949 file
+    // 4885858): the standalone extraction of Multiblocked's block-model hiding API that Modular
+    // Machinery CE drives through MultiblockWorldSavedData. It skips hidden blocks from inside
+    // RenderChunk.rebuildChunk -- a path the Actinium chunk mesher never executes -- so the compat
+    // re-applies the skip and the build gate from ChunkBuilderMeshingTask. Compile-only: the compat
+    // is guarded by Mods.COMPONENT_MODEL_HIDER, which is false whenever the mod is absent.
+    modCompileOnly 'curse.maven:component-model-hider-940949:4885858'
+
     // NeverEnoughAnimation 1.0.7 (issue #145: its GUI open/close fade scales every item vertex
     // alpha through LightUtil/BufferBuilder mixins; Actinium's fast lit item path writes baked quad
     // data outside that pipeline and caches it in GLSM display lists, so the fade of the compile

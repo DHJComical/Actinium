@@ -139,6 +139,21 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > 自己的光影状态，并用 `HandRenderer.DEPTH`（0.125）的投影压缩替代 OptiFine 的
 > `applyHandDepth`。Complementary Reimagined r5.5.1 + Distant Horizons 实测确认。
 
+> 2026-09-22 追加：MMCE 使用的方块隐藏（Component Model Hider 1.0，modid
+> `component_model_hider`）在 Actinium 下整体失效的修复——见下方
+> [模组与环境](#模组与环境) 的 Component Model Hider 行与
+> [docs/compat/component-model-hider.md](compat/component-model-hider.md)。该模组把隐藏实现挂在
+> `RenderChunk.rebuildChunk` 上（`@Redirect` 掉 `BlockRendererDispatcher.renderBlock` 并在其前后
+> 置位 `MultiblockWorldSavedData.isBuildingChunk`），而 Actinium 的区块网格由
+> `ChunkBuilderMeshingTask` 生成、从不调用该方法，于是 `isBuildingChunk` 永不置位、
+> `isModelDisabled` 恒为 false：隐藏方块照旧入网格，其邻面 redirect 与 CCL 钩子也全部空转。
+> 另外 1.12.2 的 `Block.doesSideBlockRendering` 并不存在（该模组的 `BlockVisitor` 在 1.12.2
+> 静默跳过），邻面规则只由 `BlockModelRenderer` 系列 redirect 承担，而 Actinium 快速路径自己
+> 调用 `shouldSideBeRendered`、不经过它——因此修复分两半：网格构建期置位 `isBuildingChunk`，
+> 隐藏位置跳过模型渲染，并由 `VintageBlockRenderer` 补上"邻格隐藏则该面仍绘制"的规则；
+> 隐藏方块仍照原版语义参与 section 可见性（原版 `VisGraph.setOpaqueCube` 本就在 redirect 之外）。
+> TESR 那一半本就幸存（其 `getRenderer` 注入不经门控）。实机验证待做。
+
 ## 光影包
 
 | 光影包                                | 版本            | 状态   | 已验证范围                                                          | 已知缺口      | Actinium 基线 |
@@ -189,6 +204,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | CensoredASM / Chibi（LoliASM） | 已验证（dev） | 无侵入（提供 `org.taumc.celeritas.core.CeleritasLoadingPlugin` 探测标记类，触发 LoliASM 自带的 Celeritas 让位路径） | 5.33（CurseForge 460609:8225778，issue #159）：共存启动崩溃已修复——其 on-demand animated textures 与 Actinium 在 `TextureMap.updateAnimations` / `BufferBuilder.tex` 上双重 overwrite，`squashBakedQuads` 亦与 `MixinBakedQuad` 的 `@Shadow` 字段冲突；LoliASM 本就会在探测到 Celeritas 系时关闭两者，Actinium 移除 Celeritas 桥后该探测失效。dev 实机验证：LoliASM 两条让位日志出现、无 Mixin 失败、进世界正常；生产整合包回归待用户确认，详见 [docs/compat/censoredasm.md](compat/censoredasm.md) |
 | NeverEnoughAnimation | 已验证 | 顶点 alpha 覆写扩展点（`ItemVertexAlphaOverrides`：外部缩放激活时，快速物品路径跳过 raw append 与 display list 缓存，改走 `renderQuads`） | 1.0.7（CurseForge 1062347:7289408，issue #145）：GUI 开/关淡入的顶点 alpha 被 display list 缓存烘焙成永久透明（raw append 分支则整条丢弃该缩放），导致箱子／背包 GUI 物品不可见；dev 实机回归通过（物品随 GUI 淡入并最终完全可见，背包与世界物品无回归）。附带归因记录：NEA 的 dev-only `drawScreenDebug` 会在 `BackgroundDrawnEvent` 留下标准物品光照，使 `GuiChest` 面板变暗，属上游调试代码缺陷，详见 [docs/compat/neverenoughanimation.md](compat/neverenoughanimation.md) |
 | Xaero's Minimap / World Map / XaeroLib | 部分 | 无 Mixin（glsm 顶点格式映射修复：UV 元素按 legacy texture unit 分配属性槽） | 26.5.1 / 1.46.0 / 1.7.3（issue #175）：两张地图的地形渲染成 64×64 纯色方块已修复——Xaero 的地形格式是 `POSITION + 每个纹理单元一组 UV`（unit 0..3）并配合 unit 0/2/3 的固定管线 `GL_COMBINE`，而 glsm 的顶点格式映射只认 UV `index` 0/1，unit 2/3 的属性槽从未下发，FFP 退回常量 `u_CurrentTexCoord2/3` 导致每张贴图只采一个纹素；装了世界地图时小地图复用其绘制路径，故两者同因。dev 实机确认地形细节恢复；已知缺口：世界地图界面内的图标按钮仍渲染异常（非本次修复引入、与 TexEnv/多纹理路径无关，待单独处理），详见 [docs/compat/xaero.md](compat/xaero.md) |
+| Component Model Hider | 代码支持（实机待验） | 兼容门控（`compat/componentmodelhider`：网格构建期置位模组的 `isBuildingChunk`，隐藏位置跳过模型渲染，快速路径自行补上"邻格隐藏则仍绘制该面"规则） | 1.0（CurseForge 940949:4885858，modid `component_model_hider`）：其隐藏机制挂在 `RenderChunk.rebuildChunk` 上，Actinium 的 mesher 从不走该路径，导致 `isBuildingChunk` 永不置位、隐藏方块照旧渲染且仍剔除邻面；详见 [docs/compat/component-model-hider.md](compat/component-model-hider.md) |
 
 ## 验证记录模板
 

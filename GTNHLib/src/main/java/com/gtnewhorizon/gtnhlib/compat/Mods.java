@@ -30,6 +30,7 @@ import com.cleanroommc.discovery.CleanroomModDiscoverer;
 public final class Mods {
     public static final boolean ARCHITECTURECRAFT = isModPresent("architecturecraft");
     public static final boolean CHUNKANIMATOR = isModPresent("chunkanimator");
+    public static final boolean COMPONENT_MODEL_HIDER = isModPresent("component_model_hider");
     public static final boolean DEPTHSUPDATE = isModPresent("depthsupdate");
     public static final boolean DISTANTHORIZONS = isModPresent("distanthorizons");
     public static final boolean FLUIDLOGGED_API = isModPresent("fluidlogged_api");
