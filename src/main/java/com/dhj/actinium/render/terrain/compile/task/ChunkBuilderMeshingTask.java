@@ -10,6 +10,7 @@ import net.minecraft.crash.CrashReport;
 import net.minecraft.crash.CrashReportCategory;
 import net.minecraft.init.Blocks;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.EnumBlockRenderType;
 import net.minecraft.util.ReportedException;
 import net.minecraft.util.math.BlockPos;
@@ -27,7 +28,6 @@ import dhj.embeddedt.embeddium.impl.render.chunk.occlusion.SectionVisibilityBuil
 import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import dhj.embeddedt.embeddium.impl.util.task.CancellationToken;
 import org.joml.Vector3d;
-import dhj.embeddedt.embeddium.api.shader.BlockRenderLayer;
 import dhj.embeddedt.embeddium.api.shader.ShaderProvider;
 import dhj.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import com.dhj.actinium.compat.architecturecraft.ArchitectureCraftCompat;
@@ -84,7 +84,10 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
 
         var dispatcher = Minecraft.getMinecraft().getBlockRendererDispatcher();
         ShaderProvider provider = ShaderProviderHolder.getProvider();
-        Map<net.minecraft.block.Block, BlockRenderLayer> blockTypeIds =
+        // The provider publishes its layer override as the embeddium API enum, while the layer the
+        // renderers below consume is the vanilla enum; naming the map's value type here would force
+        // one of the two to stay fully qualified, so it is left inferred.
+        var blockTypeIds =
                 provider != null && provider.isShadersEnabled() ? provider.getBlockTypeIds() : null;
 
         buildContext.setupTranslation(minX, minY, minZ);
@@ -135,10 +138,10 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                         buildContext.getBlockRenderer().resetSharedState();
 
                         if (!hidden) {
-                            BlockRenderLayer shaderLayerOverride = blockTypeIds != null ? blockTypeIds.get(block) : null;
+                            var shaderLayerOverride = blockTypeIds != null ? blockTypeIds.get(block) : null;
 
                             if (shaderLayerOverride != null) {
-                                net.minecraft.util.BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
+                                BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
                                 ForgeHooksClient.setRenderLayer(layer);
                                 block.canRenderInLayer(blockState, layer);
                                 if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer
@@ -155,7 +158,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                                     }
                                 }
                             } else {
-                                for (net.minecraft.util.BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
+                                for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
                                     if (block.canRenderInLayer(blockState, layer)) {
                                         ForgeHooksClient.setRenderLayer(layer);
                                         if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer
