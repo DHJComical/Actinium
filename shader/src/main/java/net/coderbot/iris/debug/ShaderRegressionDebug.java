@@ -77,7 +77,10 @@ public final class ShaderRegressionDebug {
             return;
         }
 
-        String label = stage + ":" + entity.getClass().getName() + ":" + renderer.getClass().getName() + ":" + previousPhase + ":" + beganEntityPhase;
+        // A call can wrap an entity whose class has no registered renderer: the render manager
+        // then skips the entity itself, but the enclosing render entry point still reaches here.
+        String rendererName = renderer == null ? "<none>" : renderer.getClass().getName();
+        String label = stage + ":" + entity.getClass().getName() + ":" + rendererName + ":" + previousPhase + ":" + beganEntityPhase;
         int count = ENTITY_PHASE_COUNTS.merge(label, 1, Integer::sum);
         if (count > 6) {
             return;
@@ -87,7 +90,7 @@ public final class ShaderRegressionDebug {
                 "entity-phase stage={} entity={} renderer={} count={} previousPhase={} beganEntityPhase={} currentPhase={} renderedEntity={} renderedItem={}",
                 stage,
                 entity.getClass().getName(),
-                renderer.getClass().getName(),
+                rendererName,
                 count,
                 previousPhase,
                 beganEntityPhase,

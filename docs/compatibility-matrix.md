@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-09-19。
+最后更新：2026-09-23。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -8,6 +8,15 @@
 
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
+
+> 2026-09-23 追加：LagGoggles 5.9 + TickCentral 3.2（issue #166）共存启动崩溃已修复——其
+> `RenderManagerTransformer` 把 `RenderManager.renderEntity` 的方法体搬进 `laggoggles_trueRender`、
+> 只在原方法留下转发桩，`RenderManagerIrisMixin` 原有 `@Redirect` 的调用点因此消失，`require = 1`
+> 校验失败让 `RenderManager` 类变换整体失败（下游表现为 ContentTweaker `NoClassDefFoundError` 与
+> 启动崩溃）；修复为把实体上下文 hook 的锚点从调用点移到方法入口（`@WrapMethod` 包裹
+> `renderEntity` / `renderMultipass`），并删除同样依赖调用点的透传 `@Redirect`。字节码锚点契约测试
+> （复刻 TickCentral 搬迁变换）与 `./gradlew check` 通过，实机验证待用户确认，详见
+> [docs/compat/laggoggles.md](compat/laggoggles.md)。
 
 > 2026-09-19 追加：CensoredASM / Chibi 5.33（issue #159）共存启动崩溃已修复——其
 > on-demand animated textures 在 `TextureMap.updateAnimations` 与 `BufferBuilder.tex` 上
@@ -185,6 +194,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | CensoredASM / Chibi（LoliASM） | 已验证（dev） | 无侵入（提供 `org.taumc.celeritas.core.CeleritasLoadingPlugin` 探测标记类，触发 LoliASM 自带的 Celeritas 让位路径） | 5.33（CurseForge 460609:8225778，issue #159）：共存启动崩溃已修复——其 on-demand animated textures 与 Actinium 在 `TextureMap.updateAnimations` / `BufferBuilder.tex` 上双重 overwrite，`squashBakedQuads` 亦与 `MixinBakedQuad` 的 `@Shadow` 字段冲突；LoliASM 本就会在探测到 Celeritas 系时关闭两者，Actinium 移除 Celeritas 桥后该探测失效。dev 实机验证：LoliASM 两条让位日志出现、无 Mixin 失败、进世界正常；生产整合包回归待用户确认，详见 [docs/compat/censoredasm.md](compat/censoredasm.md) |
 | NeverEnoughAnimation | 已验证 | 顶点 alpha 覆写扩展点（`ItemVertexAlphaOverrides`：外部缩放激活时，快速物品路径跳过 raw append 与 display list 缓存，改走 `renderQuads`） | 1.0.7（CurseForge 1062347:7289408，issue #145）：GUI 开/关淡入的顶点 alpha 被 display list 缓存烘焙成永久透明（raw append 分支则整条丢弃该缩放），导致箱子／背包 GUI 物品不可见；dev 实机回归通过（物品随 GUI 淡入并最终完全可见，背包与世界物品无回归）。附带归因记录：NEA 的 dev-only `drawScreenDebug` 会在 `BackgroundDrawnEvent` 留下标准物品光照，使 `GuiChest` 面板变暗，属上游调试代码缺陷，详见 [docs/compat/neverenoughanimation.md](compat/neverenoughanimation.md) |
 | Component Model Hider | 代码支持（实机待验） | 兼容门控（`compat/componentmodelhider`：网格构建期置位模组的 `isBuildingChunk`，隐藏位置跳过模型渲染，快速路径自行补上"邻格隐藏则仍绘制该面"规则） | 1.0（CurseForge 940949:4885858，modid `component_model_hider`）：其隐藏机制挂在 `RenderChunk.rebuildChunk` 上，Actinium 的 mesher 从不走该路径，导致 `isBuildingChunk` 永不置位、隐藏方块照旧渲染且仍剔除邻面；详见 [docs/compat/component-model-hider.md](compat/component-model-hider.md) |
+| LagGoggles（TickCentral） | 部分 | 无侵入（实体上下文 hook 的锚点由 `renderEntity` 内调用点改为方法入口，`@WrapMethod`） | 5.9（CurseForge 283525）+ TickCentral 3.2（issue #166）：共存启动必崩——`com.github.terminatornl.laggoggles.tickcentral.RenderManagerTransformer` 把 `RenderManager.renderEntity` 方法体搬进 `laggoggles_trueRender`、原方法只剩转发桩，Actinium 原有 `@Redirect` 在方法内找不到 `Render.doRender` 调用点，`require = 1` 失败使 `RenderManager` 类变换整体失败（下游 ContentTweaker `NoClassDefFoundError`）；修复后入口方法在两种布局下都命中，`RenderManagerIrisAnchorTest` 复刻该搬迁变换锁定锚点（含变异校验），`./gradlew check` 通过，**实机验证待用户确认**，详见 [docs/compat/laggoggles.md](compat/laggoggles.md) |
 
 ## 验证记录模板
 
