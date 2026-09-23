@@ -9,6 +9,16 @@
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 
+> 2026-09-23 追加：GalaxySpace + AsmodeusCore 1.0.4 夜晚自定义天空显示错误（issue #164）的修复——
+> 见下方 [模组与环境](#模组与环境) 的 GalaxySpace 行与
+> [docs/compat/galaxyspace.md](compat/galaxyspace.md)。根因在 glsm 的颜色缓存语义：GS 的
+> `SkyProviderBase#render` 用 `glColor3f(skyColor - playerY/400)` 画天球，夜晚该值为负，而
+> GL 规范要求 `glColor*` 在 API 边界把分量钳到 [0,1]（原版即得黑色），`changeColor` 却把负值
+> 原样缓存，FFP 的 `sanitizeUniformColor` 遂把合法夜色误判为 `clearCurrentColor` 的 dirty
+> sentinel 而上传不透明白色，夜空整体发白、银河贴图呈灰块。修复为 `changeColor` 入口统一
+> `Color4.clamp01`（sentinel 直写缓存不经过该路径，既有契约测试不变），
+> `./gradlew check` 通过，用户实机确认夜晚天空恢复正常、白天与 JourneyMap/GUI 无回归。
+
 > 2026-09-23 追加：LagGoggles 5.9 + TickCentral 3.2（issue #166）共存启动崩溃已修复——其
 > `RenderManagerTransformer` 把 `RenderManager.renderEntity` 的方法体搬进 `laggoggles_trueRender`、
 > 只在原方法留下转发桩，`RenderManagerIrisMixin` 原有 `@Redirect` 的调用点因此消失，`require = 1`
@@ -215,6 +225,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Xaero's Minimap / World Map / XaeroLib | 部分 | 无 Mixin（glsm 顶点格式映射修复：UV 元素按 legacy texture unit 分配属性槽） | 26.5.1 / 1.46.0 / 1.7.3（issue #175）：两张地图的地形渲染成 64×64 纯色方块已修复——Xaero 的地形格式是 `POSITION + 每个纹理单元一组 UV`（unit 0..3）并配合 unit 0/2/3 的固定管线 `GL_COMBINE`，而 glsm 的顶点格式映射只认 UV `index` 0/1，unit 2/3 的属性槽从未下发，FFP 退回常量 `u_CurrentTexCoord2/3` 导致每张贴图只采一个纹素；装了世界地图时小地图复用其绘制路径，故两者同因。dev 实机确认地形细节恢复；已知缺口：世界地图界面内的图标按钮仍渲染异常（非本次修复引入、与 TexEnv/多纹理路径无关，待单独处理），详见 [docs/compat/xaero.md](compat/xaero.md) |
 | Component Model Hider | 代码支持（实机待验） | 兼容门控（`compat/componentmodelhider`：网格构建期置位模组的 `isBuildingChunk`，隐藏位置跳过模型渲染，快速路径自行补上"邻格隐藏则仍绘制该面"规则） | 1.0（CurseForge 940949:4885858，modid `component_model_hider`）：其隐藏机制挂在 `RenderChunk.rebuildChunk` 上，Actinium 的 mesher 从不走该路径，导致 `isBuildingChunk` 永不置位、隐藏方块照旧渲染且仍剔除邻面；详见 [docs/compat/component-model-hider.md](compat/component-model-hider.md) |
 | LagGoggles（TickCentral） | 部分 | 无侵入（实体上下文 hook 的锚点由 `renderEntity` 内调用点改为方法入口，`@WrapMethod`） | 5.9（CurseForge 283525）+ TickCentral 3.2（issue #166）：共存启动必崩——`com.github.terminatornl.laggoggles.tickcentral.RenderManagerTransformer` 把 `RenderManager.renderEntity` 方法体搬进 `laggoggles_trueRender`、原方法只剩转发桩，Actinium 原有 `@Redirect` 在方法内找不到 `Render.doRender` 调用点，`require = 1` 失败使 `RenderManager` 类变换整体失败（下游 ContentTweaker `NoClassDefFoundError`）；修复后入口方法在两种布局下都命中，`RenderManagerIrisAnchorTest` 复刻该搬迁变换锁定锚点（含变异校验），`./gradlew check` 通过，**实机验证待用户确认**，详见 [docs/compat/laggoggles.md](compat/laggoggles.md) |
+| GalaxySpace（AsmodeusCore 天空） | 已验证 | 无（glsm 核心颜色语义修复，非模组接入） | `dev_1.12.2` 分支 + AsmodeusCore 1.0.4（issue #164）：夜晚 Overworld 自定义 skybox 发白、银河贴图呈灰块已修复——`SkyProviderBase#render` 以 `glColor3f(skyColor - playerY/400)` 画天球，夜晚为负值，GLSM `changeColor` 未按 GL 规范钳到 [0,1]，FFP `sanitizeUniformColor` 把负色误判为 dirty sentinel 洗成白色；修复为入口 `Color4.clamp01`，`./gradlew check` 通过，用户实机确认夜晚天空恢复正常、白天与 JourneyMap 网格/GUI 字体颜色无回归，详见 [docs/compat/galaxyspace.md](compat/galaxyspace.md) |
 
 ## 验证记录模板
 

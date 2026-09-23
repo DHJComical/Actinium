@@ -22,6 +22,26 @@ public class Color4 implements ISettableState<Color4> {
         this.alpha = alpha;
     }
 
+    /**
+     * Clamps one floating-point {@code glColor} component to [0,1], mirroring the GL API-boundary
+     * semantics: per the GL specification values out of range are clamped when {@code glColor*} is
+     * specified, so the current-color cache must never hold a negative (or above-one) component.
+     *
+     * <p>{@code GLStateManager.changeColor} applies this to every incoming {@code glColor*} call so
+     * the FFP uniform upload never sees an out-of-range color that
+     * {@code Uniforms.sanitizeUniformColor} would mistake for the {@code clearCurrentColor} dirty
+     * sentinel — that misreading turned GalaxySpace's legitimately negative night sky color into an
+     * opaque white sky dome (issue #164).</p>
+     *
+     * @param value raw component supplied by the {@code glColor*} caller
+     * @return the component clamped into [0,1]
+     */
+    public static float clamp01(float value) {
+        if (value < 0.0F) return 0.0F;
+        if (value > 1.0F) return 1.0F;
+        return value;
+    }
+
     @Override
     public Color4 set(Color4 state) {
         this.red = state.red;
