@@ -34,5 +34,5 @@ OpenGL 在设置方向光时会用当时的 model-view 矩阵变换灯光方向�
 
 ## 未覆盖场景
 
-Issue #118 也提到 Nothirium 与 Celeritas。本次修复由 Actinium 中针对 Storage Drawers 的条件 Mixin 实现；
-验证仅覆盖 Actinium + Storage Drawers，未单独验证 Nothirium 或 Celeritas 组合。
+Nothirium 不受 Actinium 支持，不属于本次修复范围。Issue #118 也提到 Celeritas；本次仅验证 Actinium 与
+Storage Drawers，未单独验证 Celeritas 组合。
