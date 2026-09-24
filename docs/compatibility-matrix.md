@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-09-23。
+最后更新：2026-09-24。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -8,6 +8,15 @@
 
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
+
+> 2026-09-24 追加：Better Biome Blend Continued 1.2.0 + RLFoliage 2.5.3（issue #162）区块构建线程
+> 崩溃已修复——BBB 在 `BiomeColorHelper#getGrassColorAtPos` 等入口按 chunk 预计算混合颜色，并遍历该
+> chunk 的 3×3 chunk 邻域读取 biome；构建 origin 邻居 chunk 时这一遍历会伸到快照（origin chunk ±1）
+> 之外，而 `WorldSlice#getBiome(BlockPos)` 把相对 chunk 索引直接当数组下标，chunk 618 相对基准
+> 619 的 z 偏移 −1 遂变成 `sections[-4]`（`Index -4 out of bounds for length 64`）。修复为把 biome
+> 查询抽成 `BiomeLookup`：越界坐标夹到快照边缘（最近处的 biome 优于固定 PLAINS 兜底），未持有快照或
+> 缺失数据返回 PLAINS，坐标以 long 做差避免极端坐标回绕。回归测试与红-绿验证通过，实机验证待用户
+> 确认，详见 [docs/compat/betterbiomeblend.md](compat/betterbiomeblend.md)。
 
 > 2026-09-23 追加：LagGoggles 5.9 + TickCentral 3.2（issue #166）共存启动崩溃已修复——其
 > `RenderManagerTransformer` 把 `RenderManager.renderEntity` 的方法体搬进 `laggoggles_trueRender`、
