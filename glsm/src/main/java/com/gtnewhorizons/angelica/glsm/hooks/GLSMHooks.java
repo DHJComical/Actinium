@@ -26,6 +26,19 @@ public final class GLSMHooks {
     public static PerFrameUniformBlock perFrameUniformBlock;
     public static PerFrameUniformBlock perPassUniformBlock;
 
+    /**
+     * Optional host-owned callback fired after a GL_TEXTURE_2D binding cache entry changes on any
+     * active texture unit. The host keeps the vanilla {@code GlStateManager.TEXTURES[].textureName}
+     * mirrors in sync (mods such as Mobends read it reflectively to restore the previous binding;
+     * with GLSM owning the binding updates the vanilla copy would otherwise stay stale at 0 and the
+     * restore would unbind the texture, unveiling entities as white).
+     */
+    public static TextureBindSyncCallback textureBindSyncCallback;
+
+    public interface TextureBindSyncCallback {
+        void onTextureBound(int textureUnit, int textureId);
+    }
+
     /** Escape hatch: -Dactinium.glsmHooksAlwaysActive=true forces the consumer gate on. */
     private static final boolean ALWAYS_ACTIVE = Boolean.getBoolean("actinium.glsmHooksAlwaysActive");
 

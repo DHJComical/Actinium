@@ -2150,6 +2150,14 @@ public class GLStateManager {
                 lockBindCallback = false;
             }
         }
+        // The vanilla GlStateManager.TEXTURES[].textureName mirror is kept in sync on every bind,
+        // not only when the GLSM cache actually changes: mods that read the mirror reflectively
+        // (Mobends' ModelPart skin overlay) do so after every entity frame, and a cache hit (same
+        // texture rebound) must still leave the mirror current or they restore a stale 0.
+        final GLSMHooks.TextureBindSyncCallback sync = GLSMHooks.textureBindSyncCallback;
+        if (sync != null && target == GL11.GL_TEXTURE_2D && !isRecordingDisplayList()) {
+            sync.onTextureBound(activeUnit, texture);
+        }
     }
 
     private static int changeFormatIfDeprecated(int internalformat) {
