@@ -230,26 +230,45 @@ public class Actinium {
     }
 
     /**
-     * Resolves the vanilla {@code GlStateManager.TEXTURES} array once. The field is public but its
-     * element type is inaccessible from this package, so reflection is unavoidable for the field
-     * lookup; the resolved {@link Field} is then turned into a {@link MethodHandle} so the array is
-     * fetched through the handle on every bind (cheap after JIT inlining, no per-call reflective
-     * checks). Fail Fast if neither name resolves — a silent null here would keep the white-skin
-     * defect. {@code findStaticGetter} is not usable here: its type argument must equal the real
-     * (inaccessible) element type and {@code Object[].class} is rejected.
+     * Resolves the vanilla {@code GlStateManager.TEXTURES} array once during construction. Its
+     * element type is inaccessible from this package, so reflection is used only to retrieve the
+     * array; the resulting array is retained and each element is written through the texture-state
+     * accessor. Fail Fast if neither mapped field name resolves. {@code findStaticGetter} is not
+     * usable here: its type argument must equal the real (inaccessible) element type and
+     * {@code Object[].class} is rejected.
      */
     private static Object[] readVanillaTextureStates() {
-        for (String name : new String[] {"TEXTURES", "field_179174_p"}) {
+        NoSuchFieldException missingField = null;
+        for (String name : new String[] {"textureState", "TEXTURES", "field_179174_p", "r"}) {
+            final Field texturesField;
             try {
-                Field texturesField = GlStateManager.class.getDeclaredField(name);
+                texturesField = GlStateManager.class.getDeclaredField(name);
+            } catch (NoSuchFieldException exception) {
+                if (missingField != null) {
+                    exception.addSuppressed(missingField);
+                }
+                missingField = exception;
+                ActiniumRuntime.logger().debug(
+                    "Vanilla GlStateManager field '{}' was not found; trying the next mapped name",
+                    name, exception);
+                continue;
+            }
+            try {
                 texturesField.setAccessible(true);
                 MethodHandle getter = MethodHandles.lookup().unreflectGetter(texturesField);
                 return (Object[]) getter.invoke();
-            } catch (Throwable ignored) {
-                // Try the sibling field name for the other environment.
+            } catch (Throwable exception) {
+                ActiniumRuntime.logger().error("Failed to read vanilla GlStateManager texture states", exception);
+                if (exception instanceof Error error) {
+                    throw error;
+                }
+                throw new IllegalStateException("Failed to read GlStateManager." + name, exception);
             }
         }
-        throw new IllegalStateException("Vanilla GlStateManager.TEXTURES is unavailable");
+        IllegalStateException exception = new IllegalStateException(
+            "Vanilla GlStateManager.TEXTURES is unavailable", missingField);
+        ActiniumRuntime.logger().error("Failed to resolve vanilla GlStateManager texture states", exception);
+        throw exception;
     }
 
     private static String dumpExtraPerfStats() {
@@ -322,4 +341,3 @@ public class Actinium {
         return ActiniumRuntime.options();
     }
 }
-
