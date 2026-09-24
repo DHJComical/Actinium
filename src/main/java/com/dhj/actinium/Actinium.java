@@ -1,6 +1,7 @@
 package com.dhj.actinium;
 
 import com.dhj.actinium.compat.chunkanimator.ChunkAnimatorCompat;
+import com.dhj.actinium.compat.glsm.VanillaTextureMirrorCompat;
 import com.dhj.actinium.compat.MissingModelCompat;
 import com.dhj.actinium.compat.kirino.KirinoCompat;
 import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
@@ -19,6 +20,7 @@ import net.coderbot.iris.debug.IrisDebugOptions;
 import com.gtnewhorizon.gtnhlib.client.renderer.RuntimeOptionsBridge;
 import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
 import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
+import com.gtnewhorizons.angelica.glsm.hooks.GLSMHooks;
 import com.gtnewhorizons.angelica.iris.IrisGLSMBridge;
 import com.mojang.realmsclient.gui.ChatFormatting;
 import net.coderbot.iris.Iris;
@@ -155,6 +157,8 @@ public class Actinium {
         );
         GLSMPerfDebugHooks.setEnabledChangeListener(Actinium::reloadShaderPipelineForPerfDebug);
 
+        GLSMHooks.textureBindSyncCallback = VanillaTextureMirrorCompat.createCallback();
+
         ActiniumDiagnostics.logConstruction();
         initializeDistantHorizonsCompat();
         MinecraftForge.EVENT_BUS.register(this);
@@ -265,4 +269,3 @@ public class Actinium {
         return ActiniumRuntime.options();
     }
 }
-
