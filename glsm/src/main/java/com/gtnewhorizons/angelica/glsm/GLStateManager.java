@@ -1845,6 +1845,17 @@ public class GLStateManager {
 
     private static boolean changeColor(float red, float green, float blue, float alpha) {
         // Helper function for glColor*
+        // Per GL semantics glColor* clamps its components to [0,1] at the API boundary, so clamp
+        // before caching: raw out-of-range values would otherwise leak into the FFP u_CurrentColor
+        // upload, where Uniforms.sanitizeUniformColor treats any negative channel as the
+        // clearCurrentColor dirty sentinel and substitutes opaque white. Mods do pass negative
+        // colors — GalaxySpace computes the night sky dome as skyColor - playerY/400, which is
+        // negative at night and rendered as a white sky instead of black (issue #164).
+        // The dirty sentinel bypasses this path: clearCurrentColor writes ctx().color directly.
+        red = Color4.clamp01(red);
+        green = Color4.clamp01(green);
+        blue = Color4.clamp01(blue);
+        alpha = Color4.clamp01(alpha);
         // Mirrors StellarCore's HudCaching color interceptor: while rendering into the
         // HUD cache framebuffer with blending disabled, translucent colors would write
         // their own alpha into the cache buffer; the cached-HUD blit blends RGB by alpha,
