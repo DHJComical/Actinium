@@ -33,6 +33,7 @@ public final class Mods {
     public static final boolean COMPONENT_MODEL_HIDER = isModPresent("component_model_hider");
     public static final boolean DEPTHSUPDATE = isModPresent("depthsupdate");
     public static final boolean DISTANTHORIZONS = isModPresent("distanthorizons");
+    public static final boolean DRAGONCORE = isModPresent("dragoncore");
     public static final boolean FLUIDLOGGED_API = isModPresent("fluidlogged_api");
     public static final boolean FLUXLOADING = isModPresent("fluxloading");
     public static final boolean HBM = isModPresent("hbm");

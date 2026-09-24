@@ -59,6 +59,32 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
         return actinium$disableBatcher || actinium$neoFontRenderLoaded;
     }
 
+    /**
+     * DragonCore replaces Minecraft.fontRendererObj with its own FontRenderer subclass
+     * (eos.moe.dragoncore.bt) if the server sends a FontConfig pack. That renderer draws custom
+     * glyphs from its own character table (eos.moe.dragoncore.tfa.h) in an overridden
+     * renderStringAtPos, which the batching font renderer would bypass entirely. The batcher must
+     * stand down for such instances, exactly as it does for NeoFontRender, so custom fonts keep
+     * working the same way they do under OptiFine.
+     *
+     * <p>Detection is intentionally class-name/package based with no reference to DragonCore's
+     * classes: the mod may be absent (the package then simply cannot appear), the actual renderer
+     * class is obfuscated and versioned ({@code bt} today), and the package prefix is the only
+     * stable identity we should rely on. {@link Mods#DRAGONCORE} guards the whole check so vanilla
+     * class loading never sees a DragonCore package path.
+     */
+    @Unique
+    private boolean actinium$isFontBatcherDisabledForRenderer() {
+        if (Mods.DRAGONCORE) {
+            Class<?> rendererType = getClass();
+            if (rendererType.getName().startsWith("eos.moe.dragoncore.")
+                && FontRenderer.class.isAssignableFrom(rendererType)) {
+                return true;
+            }
+        }
+        return actinium$isFontBatcherDisabled();
+    }
+
     @Inject(method = "<init>", at = @At("TAIL"))
     private void actinium$injectBatcher(GameSettings settings, ResourceLocation fontLocation, TextureManager texManager,
         boolean unicodeMode, CallbackInfo ci) {
@@ -83,7 +109,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Inject(method = "drawString(Ljava/lang/String;FFIZ)I", at = @At("HEAD"), cancellable = true)
     private void actinium$drawStringBatched(String text, float x, float y, int argb, boolean dropShadow,
         CallbackInfoReturnable<Integer> cir) {
-        if (!actinium$isFontBatcherDisabled() && GLStateManager.getListMode() == 0) {
+        if (!actinium$isFontBatcherDisabledForRenderer() && GLStateManager.getListMode() == 0) {
             cir.setReturnValue(angelica$drawStringBatched(text, (int) x, (int) y, argb, dropShadow));
         }
     }
@@ -91,7 +117,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Inject(method = "renderString", at = @At("HEAD"), cancellable = true)
     private void actinium$renderStringBatched(String text, float x, float y, int argb, boolean dropShadow,
         CallbackInfoReturnable<Integer> cir) {
-        if (!actinium$isFontBatcherDisabled() && GLStateManager.getListMode() == 0) {
+        if (!actinium$isFontBatcherDisabledForRenderer() && GLStateManager.getListMode() == 0) {
             cir.setReturnValue(angelica$drawStringBatched(text, (int) x, (int) y, argb, dropShadow));
         }
     }
@@ -175,7 +201,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
 
     @Inject(method = "getCharWidth", at = @At("HEAD"), cancellable = true)
     private void actinium$getCharWidth(char c, CallbackInfoReturnable<Integer> cir) {
-        if (!actinium$isFontBatcherDisabled()) {
+        if (!actinium$isFontBatcherDisabledForRenderer()) {
             cir.setReturnValue((int) angelica$getBatcher().getCharWidthFine(c));
         }
     }
