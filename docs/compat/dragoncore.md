@@ -32,7 +32,8 @@
 
 ## 修复：按渲染器实例让 batcher 让位
 
-`MixinFontRenderer` 新增实例级检测 `actinium$isFontBatcherDisabledForRenderer()`：
+兼容策略位于 mixin 包外的 `FontBatcherCompat.isBatcherDisabledFor(Class<?>)`，由
+`MixinFontRenderer` 在 `drawString` / `renderString` / `getCharWidth` 注入点调用：
 
 - 用 `Mods.DRAGONCORE` 存在性门控 + **按类名前缀** `eos.moe.dragoncore.*` 匹配（渲染器类是
   混淆且随版本变化的 `bt`，包前缀是唯一稳定身份；不引用任何 DragonCore 类，未安装该模组时
