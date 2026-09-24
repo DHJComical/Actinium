@@ -48,10 +48,11 @@
   在每次真实绑定时被回调，写入 vanilla 镜像。回调挂在 `GLStateManager.glBindTexture` 的
   **每次 GL_TEXTURE_2D 绑定**后（而非仅在 GLSM 缓存变化时——玩家每帧绑定同一张皮肤是缓存
   命中，只在变化时同步会让镜像永远停在 0，这正是早期版本修复失败的原因）。
-- **根项目** `Actinium.registerVanillaTextureMirrorSync()` 注册回调：把
+- **根项目兼容层** `VanillaTextureMirrorCompat` 把
   `GlStateManager.TEXTURES` 数组解析一次（字段元素类型为包私有，`@Accessor` 与
   `findStaticGetter(Object[].class)` 均因类型失配不可用，改为 `Field` 解析 + `MethodHandle`
-  句柄取值，热路径无反射开销），元素经 mixin accessor `AccessorGlStateManagerTextureState`
+  句柄取值，热路径无反射开销）；`Actinium.onConstruct` 注册其创建的回调，元素经 mixin accessor
+  `AccessorGlStateManagerTextureState`
   （`@Mixin(targets = "net/minecraft/client/renderer/GlStateManager$TextureState")`）写入
   `textureName`。
 - 不能调用 vanilla `bindTexture` 本身：其方法体内的绑定调用同样被 `GLSMRedirector` 重定向回

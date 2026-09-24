@@ -1,6 +1,7 @@
 package com.dhj.actinium;
 
 import com.dhj.actinium.compat.chunkanimator.ChunkAnimatorCompat;
+import com.dhj.actinium.compat.glsm.VanillaTextureMirrorCompat;
 import com.dhj.actinium.compat.MissingModelCompat;
 import com.dhj.actinium.compat.kirino.KirinoCompat;
 import com.dhj.actinium.compat.neofontrender.NeoFontRenderCompat;
@@ -10,8 +11,6 @@ import com.dhj.actinium.config.ActiniumConfig;
 import com.dhj.actinium.config.ActiniumRuntimeOptions;
 import com.dhj.actinium.debug.ActiniumDiagnostics;
 import com.dhj.actinium.mixin.vintage.core.terrain.AccessorEntityRenderer;
-import com.dhj.actinium.mixin.vintage.core.terrain.AccessorGlStateManager;
-import com.dhj.actinium.mixin.vintage.core.terrain.AccessorGlStateManagerTextureState;
 import com.dhj.actinium.render.FastLitItemDisplayListCache;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.dhj.actinium.runtime.ActiniumRuntime;
@@ -29,7 +28,6 @@ import net.coderbot.iris.pipeline.AdaptiveShadowBoundsStats;
 import net.coderbot.iris.compat.dh.DHCompat;
 import net.coderbot.iris.rendertarget.IRenderTargetExt;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.resources.IReloadableResourceManager;
 import net.minecraft.launchwrapper.Launch;
@@ -48,10 +46,7 @@ import dhj.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
 import dhj.embeddedt.embeddium.impl.gui.SodiumGameOptions;
 import dhj.embeddedt.embeddium.impl.runtime.EmbeddiumRuntimeOptions;
 import java.io.IOException;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.management.ManagementFactory;
-import java.lang.reflect.Field;
 
 @Mod(modid =
         Actinium.MODID,
@@ -162,7 +157,7 @@ public class Actinium {
         );
         GLSMPerfDebugHooks.setEnabledChangeListener(Actinium::reloadShaderPipelineForPerfDebug);
 
-        registerVanillaTextureMirrorSync();
+        GLSMHooks.textureBindSyncCallback = VanillaTextureMirrorCompat.createCallback();
 
         ActiniumDiagnostics.logConstruction();
         initializeDistantHorizonsCompat();
@@ -202,73 +197,6 @@ public class Actinium {
         if (Iris.enabled && Mods.DISTANTHORIZONS) {
             DHCompat.run();
         }
-    }
-
-    /**
-     * Keeps the vanilla {@code GlStateManager.TEXTURES[].textureName} mirror in sync with GLSM's
-     * authoritative binding cache. GLSMRedirector pirates every {@code GlStateManager.bindTexture}
-     * call, so vanilla's own copy never updates; mods that read it reflectively to restore the
-     * previous binding (Mobends' {@code ModelPart} around its skin overlay pass) then see a stale 0,
-     * bind nothing, and leave entity models unpainted (white skin).
-     *
-     * <p>A mixin accessor cannot reach the {@code TEXTURES} array: its element type is
-     * package-private, so an {@code Object[]} accessor does not match the real field type and a
-     * typed accessor cannot compile here. The array is therefore resolved once through a
-     * {@link MethodHandle} (cheap after JIT inlining; no per-call reflection overhead) and its
-     * elements written through the {@code TextureState} accessor. Calling vanilla {@code bindTexture}
-     * itself is impossible — its body binds through a call site GLSM redirects back into GLSM,
-     * producing unbounded recursion.</p>
-     */
-    private static void registerVanillaTextureMirrorSync() {
-        final Object[] textures = readVanillaTextureStates();
-        GLSMHooks.textureBindSyncCallback = (unit, textureId) -> {
-            if (unit >= 0 && unit < textures.length
-                && textures[unit] instanceof AccessorGlStateManagerTextureState state) {
-                state.celeritas$setTextureName(textureId);
-            }
-        };
-    }
-
-    /**
-     * Resolves the vanilla {@code GlStateManager.TEXTURES} array once during construction. Its
-     * element type is inaccessible from this package, so reflection is used only to retrieve the
-     * array; the resulting array is retained and each element is written through the texture-state
-     * accessor. Fail Fast if neither mapped field name resolves. {@code findStaticGetter} is not
-     * usable here: its type argument must equal the real (inaccessible) element type and
-     * {@code Object[].class} is rejected.
-     */
-    private static Object[] readVanillaTextureStates() {
-        NoSuchFieldException missingField = null;
-        for (String name : new String[] {"textureState", "TEXTURES", "field_179174_p", "r"}) {
-            final Field texturesField;
-            try {
-                texturesField = GlStateManager.class.getDeclaredField(name);
-            } catch (NoSuchFieldException exception) {
-                if (missingField != null) {
-                    exception.addSuppressed(missingField);
-                }
-                missingField = exception;
-                ActiniumRuntime.logger().debug(
-                    "Vanilla GlStateManager field '{}' was not found; trying the next mapped name",
-                    name, exception);
-                continue;
-            }
-            try {
-                texturesField.setAccessible(true);
-                MethodHandle getter = MethodHandles.lookup().unreflectGetter(texturesField);
-                return (Object[]) getter.invoke();
-            } catch (Throwable exception) {
-                ActiniumRuntime.logger().error("Failed to read vanilla GlStateManager texture states", exception);
-                if (exception instanceof Error error) {
-                    throw error;
-                }
-                throw new IllegalStateException("Failed to read GlStateManager." + name, exception);
-            }
-        }
-        IllegalStateException exception = new IllegalStateException(
-            "Vanilla GlStateManager.TEXTURES is unavailable", missingField);
-        ActiniumRuntime.logger().error("Failed to resolve vanilla GlStateManager texture states", exception);
-        throw exception;
     }
 
     private static String dumpExtraPerfStats() {
