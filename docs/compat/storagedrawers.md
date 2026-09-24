@@ -31,8 +31,3 @@ OpenGL 在设置方向光时会用当时的 model-view 矩阵变换灯光方向�
 - `./gradlew check --no-daemon` 通过。
 - 用户实机确认：在无光影的 issue #118 场景中，Basic Drawer 内 Grass 与 Grass Block 的光照恢复正常；
   创造模式背包物品显示正常。
-
-## 未覆盖场景
-
-Nothirium 不受 Actinium 支持，不属于本次修复范围。Issue #118 也提到 Celeritas；本次仅验证 Actinium 与
-Storage Drawers，未单独验证 Celeritas 组合。
