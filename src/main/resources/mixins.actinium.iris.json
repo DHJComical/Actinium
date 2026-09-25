@@ -35,6 +35,7 @@
     "features.iris.RenderDragonIrisMixin",
     "features.iris.RenderEntityItemIrisMixin",
     "features.iris.RenderGlobalIrisMixin",
+    "features.iris.RenderGlobalSelectionOutlineMixin",
     "features.iris.RenderIrisMixin",
     "features.iris.RenderItemAccessor",
     "features.iris.RenderItemIrisMixin",
