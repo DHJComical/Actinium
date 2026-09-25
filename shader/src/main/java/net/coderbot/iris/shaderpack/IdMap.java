@@ -68,14 +68,7 @@ public class IdMap {
 
         Iterable<StringPair> resolvedDefines = environmentDefines;
         if (!this.hasLegacySection) {
-            ArrayList<StringPair> modernDefines = new ArrayList<>();
-            for (StringPair define : environmentDefines) {
-                if (!"MC_VERSION".equals(define.getKey())) {
-                    modernDefines.add(define);
-                }
-            }
-            modernDefines.add(new StringPair("MC_VERSION", "260101"));
-            resolvedDefines = modernDefines;
+            resolvedDefines = McVersionDefines.withMcVersion(environmentDefines, 260101);
         }
 
         blockTagMap = new Int2ObjectOpenHashMap<>();

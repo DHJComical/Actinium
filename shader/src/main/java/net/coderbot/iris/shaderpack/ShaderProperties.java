@@ -1,6 +1,5 @@
 package net.coderbot.iris.shaderpack;
 
-import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import com.gtnewhorizons.angelica.glsm.states.BlendState;
 import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -25,6 +24,7 @@ import net.coderbot.iris.gl.blending.AlphaTestOverride;
 import net.coderbot.iris.gl.blending.BlendModeFunction;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.blending.BufferBlendInformation;
+import net.coderbot.iris.gl.blending.BufferBlendingSupport;
 import net.coderbot.iris.gl.texture.TextureScaleOverride;
 import net.coderbot.iris.helpers.Tri;
 import net.coderbot.iris.pipeline.PatchedShaderPrinter;
@@ -128,7 +128,8 @@ public class ShaderProperties {
 	}
 
 	// TODO: Is there a better solution than having ShaderPack pass a root path to ShaderProperties to be able to read textures?
-	public ShaderProperties(String contents, ShaderPackOptions shaderPackOptions, Iterable<StringPair> environmentDefines) {
+	public ShaderProperties(String contents, ShaderPackOptions shaderPackOptions, Iterable<StringPair> environmentDefines,
+							BufferBlendingSupport bufferBlendingSupport) {
         final String preprocessedContents = PropertiesPreprocessor.preprocessSource(contents, shaderPackOptions, environmentDefines);
 
 		if (PatchedShaderPrinter.prettyPrintShaders) {
@@ -319,45 +320,15 @@ public class ShaderProperties {
 			});
 
 			handlePassDirective("blend.", key, value, pass -> {
-				if (pass.contains(".")) {
+				if (BufferBlendDirective.isPerBufferKey(key)) {
 
-					if (!RenderSystem.supportsBufferBlending()) {
+					if (!bufferBlendingSupport.isSupported()) {
 						Iris.logger.warn("Per-buffer blending directive '{}' ignored - buffer blending requires OpenGL 4.0 or GL_ARB_draw_buffers_blend", key);
 						return;
 					}
 
-					final String[] parts = pass.split("\\.");
-					int index = PackRenderTargetDirectives.LEGACY_RENDER_TARGETS.indexOf(parts[1]);
-
-					if (index == -1 && parts[1].startsWith("colortex")) {
-                        final String id = parts[1].substring("colortex".length());
-
-						try {
-							index = Integer.parseInt(id);
-						} catch (NumberFormatException e) {
-							throw new RuntimeException("Failed to parse buffer blend!", e);
-						}
-					}
-
-					if (index == -1) {
-						throw new RuntimeException("Failed to parse buffer blend! index = " + index);
-					}
-
-					if ("off".equals(value)) {
-						bufferBlendOverrides.computeIfAbsent(parts[0], list -> new ArrayList<>()).add(new BufferBlendInformation(index, null));
-						return;
-					}
-
-                    final String[] modeArray = value.split(" ");
-                    final int[] modes = new int[modeArray.length];
-
-					int i = 0;
-					for (String modeName : modeArray) {
-						modes[i] = BlendModeFunction.fromString(modeName).get().getGlId();
-						i++;
-					}
-
-					bufferBlendOverrides.computeIfAbsent(parts[0], list -> new ArrayList<>()).add(new BufferBlendInformation(index, new BlendState(modes[0], modes[1], modes[2], modes[3])));
+					final BufferBlendDirective directive = BufferBlendDirective.parse(key, value);
+					bufferBlendOverrides.computeIfAbsent(directive.program(), list -> new ArrayList<>()).add(directive.information());
 
 					return;
 				}
@@ -508,6 +479,11 @@ public class ShaderProperties {
 			// TODO: Buffer size directives
 			// TODO: Conditional program enabling directives
 		});
+
+		// Per-buffer blend directives that the pack only enables for Iris-era MC_VERSIONs go after the ones found above.
+		IrisEraBufferBlendAdopter.create(bufferBlendingSupport)
+			.adopt(contents, shaderPackOptions, environmentDefines, bufferBlendOverrides)
+			.forEach(directive -> bufferBlendOverrides.computeIfAbsent(directive.program(), list -> new ArrayList<>()).add(directive.information()));
 
 		// We need to use a non-preprocessed property file here since we don't want any weird preprocessor changes to be applied to the screen/value layout.
 		original.forEach((keyObject, valueObject) -> {
