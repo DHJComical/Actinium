@@ -34,8 +34,7 @@
 | 桥 | 位置 | 职责 |
 |----|------|------|
 | `IrisGLSMBridge` | 根项目 `com.gtnewhorizons.angelica.iris` | Iris 延迟状态机 ↔ GLSM DeferredHandler 接线 |
-| `CeleritasLegacyEventBridge` / `BridgeDispatchGuard` | compatBridge | Celeritas 事件桥 |
-| `PortalViewportProvider` / `OptionGUIConstructionBridge` / `LegacyOptionPageProvider` | 根项目 compat | 各模组专用注入 |
+| `PortalViewportProvider` / `OptionGUIConstructionBridge` | 根项目 compat | 各模组专用注入 |
 
 ## 新增桥的约定
 

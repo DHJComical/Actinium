@@ -40,6 +40,19 @@ public class BlendState implements ISettableState<BlendState> {
         this.dstRgb = dstRgb;
     }
 
+    /** Restores equations and blend color while retaining the active blend function. */
+    public void setExceptFunc(BlendState state) {
+        final int savedSrcRgb = srcRgb;
+        final int savedDstRgb = dstRgb;
+        final int savedSrcAlpha = srcAlpha;
+        final int savedDstAlpha = dstAlpha;
+        set(state);
+        srcRgb = savedSrcRgb;
+        dstRgb = savedDstRgb;
+        srcAlpha = savedSrcAlpha;
+        dstAlpha = savedDstAlpha;
+    }
+
     @Override
     public BlendState set(BlendState state) {
         this.srcRgb = state.srcRgb;

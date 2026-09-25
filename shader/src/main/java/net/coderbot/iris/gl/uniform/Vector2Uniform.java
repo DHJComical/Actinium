@@ -6,13 +6,14 @@ import org.joml.Vector2f;
 import java.util.function.Supplier;
 
 public class Vector2Uniform extends Uniform {
-	private Vector2f cachedValue;
 	private final Supplier<Vector2f> value;
+	// Held by value, so that reused supplier vectors cannot alias the cache
+	private final Vector2f cachedValue;
 
 	Vector2Uniform(int location, Supplier<Vector2f> value) {
 		super(location);
 
-		this.cachedValue = null;
+		this.cachedValue = new Vector2f();
 		this.value = value;
 
 	}
@@ -21,9 +22,9 @@ public class Vector2Uniform extends Uniform {
 	public void update() {
 		Vector2f newValue = value.get();
 
-		if (cachedValue == null || !newValue.equals(cachedValue)) {
-			cachedValue = newValue;
-			RenderSystem.uniform2f(this.location, newValue.x, newValue.y);
+		if (!newValue.equals(cachedValue)) {
+			cachedValue.set(newValue);
+			RenderSystem.uniform2f(this.location, cachedValue.x, cachedValue.y);
 		}
 	}
 }

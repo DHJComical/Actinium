@@ -13,14 +13,23 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.NibbleArray;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.structure.StructureBoundingBox;
-import org.embeddedt.embeddium.impl.util.position.SectionPos;
+import dhj.embeddedt.embeddium.impl.util.position.SectionPos;
+import org.jetbrains.annotations.Nullable;
+import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
 import com.dhj.actinium.compat.fluidlogged.FluidStateStorage;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
+import com.dhj.actinium.world.WorldSlice;
 
+import java.util.Arrays;
 import java.util.Map;
 
 public class ClonedChunkSection {
     private static final ExtendedBlockStorage EMPTY_SECTION = new ExtendedBlockStorage(0, false);
+
+    private static final int SECTION_BLOCK_COUNT = 16 * 16 * 16;
+
+    /** Lazily built and shared; see {@link #getUnpackedFluidData()}. */
+    private static volatile Object[] EMPTY_FLUID_STATES;
 
     private final Short2ObjectMap<TileEntity> blockEntities;
     private final World world;
@@ -29,9 +38,16 @@ public class ClonedChunkSection {
     @Getter
     private final FluidStateStorage fluidData;
 
+    /** Unpacked form of {@link #fluidData}; built on first use and shared by every slice. */
+    private volatile Object[] unpackedFluidData;
+
     private final Biome[] biomeData;
 
-    private byte[][] lightData;
+    // Light arrays are copied eagerly while this section is being cloned on the main thread.
+    // Chunk-builder workers read them while the light engine keeps mutating the live
+    // NibbleArrays, and a torn read bakes transient darkness into the mesh (e.g. water and
+    // fluidlogged quads turning black after a burst of relighting).
+    private final NibbleArray[] lightData = new NibbleArray[EnumSkyBlock.values().length];
 
     private long lastUsedTimestamp = Long.MAX_VALUE;
 
@@ -48,13 +64,15 @@ public class ClonedChunkSection {
             throw new RuntimeException(String.format("Couldn't retrieve chunk at %d, %d", x, z));
         }
 
-        ExtendedBlockStorage section = getChunkSection(chunk, y);
+        ExtendedBlockStorage section = getChunkSection(world, chunk, y);
 
         if (section == Chunk.NULL_BLOCK_STORAGE/*ChunkSection.isEmpty(section)*/) {
             section = EMPTY_SECTION;
         }
 
         this.data = section;
+        this.lightData[EnumSkyBlock.BLOCK.ordinal()] = copyLightArray(section.getBlockLight());
+        this.lightData[EnumSkyBlock.SKY.ordinal()] = copyLightArray(section.getSkyLight());
         if (FluidloggedCompat.IS_LOADED) {
             this.fluidData = new FluidStateStorage(chunk, y << 4);
         } else {
@@ -114,17 +132,22 @@ public class ClonedChunkSection {
     }
 
     public int getLightLevel(int x, int y, int z, EnumSkyBlock type) {
-        NibbleArray lightArray = type == EnumSkyBlock.BLOCK ? this.data.getBlockLight() : this.data.getSkyLight();
+        NibbleArray lightArray = this.lightData[type.ordinal()];
         return lightArray != null ? lightArray.get(x, y, z) : type.defaultLightValue;
     }
 
-    private static ExtendedBlockStorage getChunkSection(Chunk chunk, int y) {
+    private static NibbleArray copyLightArray(@Nullable NibbleArray source) {
+        return source == null ? null : new NibbleArray(source.getData().clone());
+    }
+
+    private static ExtendedBlockStorage getChunkSection(World world, Chunk chunk, int y) {
         ExtendedBlockStorage section = null;
 
         var storageArray = chunk.getBlockStorageArray();
 
-        if (y >= 0 && y < storageArray.length) {
-            section = storageArray[y];
+        int storageIndex = DepthsUpdateCompat.toStorageIndex(world, y);
+        if (storageIndex >= 0 && storageIndex < storageArray.length) {
+            section = storageArray[storageIndex];
         }
 
         return section;
@@ -146,5 +169,52 @@ public class ClonedChunkSection {
      */
     private static short packLocal(int x, int y, int z) {
         return (short) (x << 8 | z << 4 | y);
+    }
+
+    /**
+     * The section's fluid states as a flat 16x16x16 table, unpacked once and then shared by every slice that clones
+     * this section. {@link FluidStateStorage} is already an immutable copy taken while the section was cloned on the
+     * main thread, so the table never changes once built and needs no per-task copy.
+     */
+    public Object[] getUnpackedFluidData() {
+        Object[] unpacked = this.unpackedFluidData;
+
+        if (unpacked == null) {
+            unpacked = this.buildUnpackedFluidData();
+            this.unpackedFluidData = unpacked;
+        }
+
+        return unpacked;
+    }
+
+    private Object[] buildUnpackedFluidData() {
+        if (this.fluidData.isEmpty()) {
+            return emptyFluidStates();
+        }
+
+        Object[] unpacked = new Object[SECTION_BLOCK_COUNT];
+
+        for (int y = 0; y < 16; y++) {
+            for (int z = 0; z < 16; z++) {
+                for (int x = 0; x < 16; x++) {
+                    unpacked[WorldSlice.getLocalBlockIndex(x, y, z)] = this.fluidData.get(x, y, z);
+                }
+            }
+        }
+
+        return unpacked;
+    }
+
+    /** One shared table of empty fluid states, since most sections carry none and every slice needs the same one. */
+    private static Object[] emptyFluidStates() {
+        Object[] states = EMPTY_FLUID_STATES;
+
+        if (states == null) {
+            states = new Object[SECTION_BLOCK_COUNT];
+            Arrays.fill(states, FluidloggedCompat.getEmptyFluidState());
+            EMPTY_FLUID_STATES = states;
+        }
+
+        return states;
     }
 }

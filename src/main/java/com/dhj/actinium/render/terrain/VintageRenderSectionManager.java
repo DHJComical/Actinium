@@ -1,35 +1,37 @@
 package com.dhj.actinium.render.terrain;
 
+import dhj.embeddedt.embeddium.impl.render.chunk.*;
 import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.Chunk;
-import org.embeddedt.embeddium.impl.gl.device.CommandList;
-import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
-import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
-import org.embeddedt.embeddium.impl.render.chunk.*;
-import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildOutput;
-import org.embeddedt.embeddium.impl.render.chunk.compile.tasks.ChunkBuilderTask;
-import org.embeddedt.embeddium.impl.render.chunk.data.BuiltRenderSectionData;
-import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
-import org.embeddedt.embeddium.impl.render.chunk.lists.SectionTicker;
-import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderTextureSlot;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
-import org.embeddedt.embeddium.impl.render.chunk.sprite.GenericSectionSpriteTicker;
-import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
-import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
-import org.embeddedt.embeddium.impl.util.position.SectionPos;
+import dhj.embeddedt.embeddium.impl.gl.device.CommandList;
+import dhj.embeddedt.embeddium.impl.gl.device.RenderDevice;
+import dhj.embeddedt.embeddium.impl.gl.shader.GlProgram;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildOutput;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.tasks.ChunkBuilderTask;
+import dhj.embeddedt.embeddium.impl.render.chunk.data.BuiltRenderSectionData;
+import dhj.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
+import dhj.embeddedt.embeddium.impl.render.chunk.lists.SectionTicker;
+import dhj.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderTextureSlot;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
+import dhj.embeddedt.embeddium.impl.render.chunk.sprite.GenericSectionSpriteTicker;
+import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
+import dhj.embeddedt.embeddium.impl.render.viewport.CameraTransform;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
-import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
-import org.embeddedt.embeddium.api.shader.ShaderProvider;
-import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import dhj.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import dhj.embeddedt.embeddium.api.shader.ShaderProvider;
+import dhj.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
+import com.dhj.actinium.compat.fluxloading.FluxLoadingCompat;
 import com.dhj.actinium.world.WorldSlice;
 import com.dhj.actinium.world.cloned.ChunkRenderContext;
 import com.dhj.actinium.world.cloned.ClonedChunkSectionCache;
@@ -52,12 +54,19 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     }
 
     public static VintageRenderSectionManager create(ChunkVertexType vertexType, WorldClient world, int renderDistance, CommandList commandList) {
-        return new VintageRenderSectionManager(VintageRenderPassConfigurationBuilder.build(vertexType), world, renderDistance, commandList, 0, 16);
+        int minSection = DepthsUpdateCompat.getMinSection(world);
+        int maxSection = DepthsUpdateCompat.getMaxSection(world);
+        return new VintageRenderSectionManager(VintageRenderPassConfigurationBuilder.build(vertexType), world, renderDistance, commandList, minSection, maxSection);
     }
 
     @Override
     protected AsyncOcclusionMode getAsyncOcclusionMode() {
         return ActiniumRuntime.options().performance.asyncOcclusionMode;
+    }
+
+    @Override
+    protected boolean useRasterOcclusionCulling() {
+        return ActiniumRuntime.options().performance.useRasterOcclusionCulling;
     }
 
     @Override
@@ -115,10 +124,11 @@ public class VintageRenderSectionManager extends RenderSectionManager {
             return true;
         }
         var array = chunk.getBlockStorageArray();
-        if (y < 0 || y >= array.length) {
+        int storageIndex = DepthsUpdateCompat.toStorageIndex(this.world, y);
+        if (storageIndex < 0 || storageIndex >= array.length) {
             return true;
         }
-        return array[y] == Chunk.NULL_BLOCK_STORAGE || array[y].isEmpty();
+        return array[storageIndex] == Chunk.NULL_BLOCK_STORAGE || array[storageIndex].isEmpty();
     }
 
     @Override
@@ -129,7 +139,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
             return null;
         }
 
-        return new ChunkBuilderMeshingTask(render, context, frame, this.cameraPosition);
+        return new ChunkBuilderMeshingTask(render, context, frame, this.cameraPosition, this.useRasterOcclusionCulling());
     }
 
     @Override
@@ -147,6 +157,7 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     public void updateChunks(boolean updateImmediately) {
         this.sectionCache.cleanup();
         super.updateChunks(updateImmediately);
+        FluxLoadingCompat.onRenderSectionManagerUpdateChunks();
     }
 
     /**
@@ -185,7 +196,6 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     @Override
     public void renderLayer(ChunkRenderMatrices matrices, TerrainRenderPass pass, CameraTransform occlusionCamera, CameraTransform camera) {
         if (ShaderProviderHolder.isShadowPass()) {
-            finishAllGraphUpdates();
             RenderDebugHooksHolder.logShadowTerrainLayer("before-render-layer", pass.name(), getVisibleChunkCount());
         }
         super.renderLayer(matrices, pass, occlusionCamera, camera);

@@ -273,8 +273,11 @@ public class FinalPassRenderer {
 			FullScreenQuadRenderer.INSTANCE.begin();
             IrisGlDebug.check("final:quad-begin");
 
+			boolean ranCompute = false;
+
 			for (ComputeProgram computeProgram : finalPass.computes) {
 				if (computeProgram != null) {
+					ranCompute = true;
                     computeProgram.use();
                     IrisGlDebug.check("final:compute-use");
                     this.customUniforms.push(computeProgram);
@@ -284,7 +287,9 @@ public class FinalPassRenderer {
 				}
 			}
 
-			RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
+			if (ranCompute) {
+				RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
+			}
             IrisGlDebug.check("final:memory-barrier");
 
 			if (!finalPass.mipmappedBuffers.isEmpty()) {

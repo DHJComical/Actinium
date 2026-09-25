@@ -5,6 +5,7 @@ import com.gtnewhorizons.angelica.glsm.states.ClipPlaneState;
 import com.gtnewhorizons.angelica.glsm.states.Color4;
 import com.gtnewhorizons.angelica.glsm.states.FogState;
 import com.gtnewhorizons.angelica.glsm.states.LightState;
+import com.gtnewhorizons.angelica.glsm.states.LineState;
 import com.gtnewhorizons.angelica.glsm.states.MaterialState;
 import com.gtnewhorizons.angelica.glsm.states.TexGenState;
 import com.gtnewhorizons.angelica.glsm.hooks.GLSMConfig;
@@ -53,9 +54,9 @@ public class Uniforms {
     public void upload(Program program) {
         final ProgramUniformState uploaded = program.getUniformState();
 
-        final int mvGen = GLStateManager.mvGeneration;
-        final int projGen = GLStateManager.projGeneration;
-        final int texMatGen = GLStateManager.texMatrixGeneration;
+        final int mvGen = GLStateManager.getMvGeneration();
+        final int projGen = GLStateManager.getProjGeneration();
+        final int texMatGen = GLStateManager.getTexMatrixGeneration();
         final boolean mvChanged = uploaded.needsModelViewUpload(mvGen);
         final boolean projChanged = uploaded.needsProjectionUpload(projGen);
         final boolean texMatChanged = uploaded.needsTextureMatrixUpload(texMatGen);
@@ -67,7 +68,7 @@ public class Uniforms {
         }
 
         if (program.getVertexKey().lightingEnabled()) {
-            final int litGen = GLStateManager.lightingGeneration;
+            final int litGen = GLStateManager.getLightingGeneration();
             if (uploaded.needsLightingUpload(litGen)) {
                 uploadLighting(program);
                 uploaded.markLightingUploaded(litGen);
@@ -76,7 +77,7 @@ public class Uniforms {
 
         // Current color/normal/texcoord — skip if generation unchanged
         if (!program.getVertexKey().hasVertexColor()) {
-            final int colorGen = GLStateManager.colorGeneration;
+            final int colorGen = GLStateManager.getColorGeneration();
             if (uploaded.needsColorUpload(colorGen)) {
                 uploadCurrentColor(program);
                 uploaded.markColorUploaded(colorGen);
@@ -91,10 +92,16 @@ public class Uniforms {
             }
         }
 
-        if (!program.getVertexKey().hasVertexTexCoord() && program.getVertexKey().textureEnabled()) {
+        // Current texcoord uploads: unit 0 only when the vertex format lacks a texcoord
+        // attribute; units 2/3 unless their varying is sourced from unit 0's attribute.
+        final VertexKey vk0 = program.getVertexKey();
+        final boolean needsCurrentTexCoord0 = !vk0.hasVertexTexCoord() && vk0.unitTexCoordEnabled(0);
+        final boolean needsCurrentTexCoord2 = vk0.unitTexCoordEnabled(2) && !vk0.unit23UvFromUnit0() && !vk0.hasUnitVertexTexCoord(2);
+        final boolean needsCurrentTexCoord3 = vk0.unitTexCoordEnabled(3) && !vk0.unit23UvFromUnit0() && !vk0.hasUnitVertexTexCoord(3);
+        if (needsCurrentTexCoord0 || needsCurrentTexCoord2 || needsCurrentTexCoord3) {
             final int texGen = ShaderManager.getTexCoordGeneration();
             if (uploaded.needsTexCoordUpload(texGen)) {
-                uploadCurrentTexCoord(program);
+                uploadCurrentTexCoords(program, needsCurrentTexCoord0, needsCurrentTexCoord2, needsCurrentTexCoord3);
                 uploaded.markTexCoordUploaded(texGen);
             }
         }
@@ -109,7 +116,7 @@ public class Uniforms {
         }
 
         if (program.getVertexKey().texGenEnabled()) {
-            final int tgGen = GLStateManager.texGenGeneration;
+            final int tgGen = GLStateManager.getTexGenGeneration();
             if (uploaded.needsTexGenUpload(tgGen)) {
                 uploadTexGen(program);
                 uploaded.markTexGenUploaded(tgGen);
@@ -117,22 +124,22 @@ public class Uniforms {
         }
 
         if (program.getVertexKey().clipPlanesEnabled()) {
-            final int cpGen = GLStateManager.clipPlaneGeneration;
+            final int cpGen = GLStateManager.getClipPlaneGeneration();
             if (uploaded.needsClipPlaneUpload(cpGen)) {
                 uploadClipPlanes(program);
                 uploaded.markClipPlaneUploaded(cpGen);
             }
         }
 
-        final int fragGen = GLStateManager.fragmentGeneration;
+        final int fragGen = GLStateManager.getFragmentGeneration();
         if (uploaded.needsFragmentUpload(fragGen)) {
             uploadFragmentUniforms(program);
             uploaded.markFragmentUploaded(fragGen);
         }
 
-        // Wide line emulation uniforms
-        if (program.locLineWidth != -1 && program.locViewportSize != -1) {
-            uploadWideLineUniforms(program, uploaded);
+        // Line emulation uniforms (wide lines and/or stipple)
+        if (program.getVertexKey().wideLineEmulation() || program.getVertexKey().lineStipple()) {
+            uploadLineUniforms(program, uploaded);
         }
     }
 
@@ -194,6 +201,18 @@ public class Uniforms {
                 lmTexMat.get(mat4Buf);
                 RENDER_BACKEND.uniformMatrix4(program.locLightmapTextureMatrix, false, mat4Buf);
             }
+
+            // Texture matrix units 2/3
+            if (program.locTextureMatrix2 != -1) {
+                final Matrix4f texMat = GLStateManager.getTextures().getTextureUnitMatrix(2);
+                texMat.get(mat4Buf);
+                RENDER_BACKEND.uniformMatrix4(program.locTextureMatrix2, false, mat4Buf);
+            }
+            if (program.locTextureMatrix3 != -1) {
+                final Matrix4f texMat = GLStateManager.getTextures().getTextureUnitMatrix(3);
+                texMat.get(mat4Buf);
+                RENDER_BACKEND.uniformMatrix4(program.locTextureMatrix3, false, mat4Buf);
+            }
         }
     }
 
@@ -223,14 +242,14 @@ public class Uniforms {
             RENDER_BACKEND.uniform1f(program.locMaterialShininess, mat.shininess);
         }
 
-        if (vk.light0Enabled()) {
+        if (vk.lightEnabled(0)) {
             final LightState light0 = GLStateManager.getLightDataStates()[0];
             uploadVec4(program.locLight0Ambient, light0.ambient);
             uploadVec4(program.locLight0Diffuse, light0.diffuse);
             uploadVec4(program.locLight0Specular, light0.specular);
             uploadVec4(program.locLight0Position, light0.position);
         }
-        if (vk.light1Enabled()) {
+        if (vk.lightEnabled(1)) {
             final LightState light1 = GLStateManager.getLightDataStates()[1];
             uploadVec4(program.locLight1Ambient, light1.ambient);
             uploadVec4(program.locLight1Diffuse, light1.diffuse);
@@ -263,14 +282,14 @@ public class Uniforms {
         }
 
         // Per-light products
-        if (vk.light0Enabled()) {
+        if (vk.lightEnabled(0)) {
             final LightState light0 = GLStateManager.getLightDataStates()[0];
             uploadVec4(program.locLight0Position, light0.position);
             uploadLightProduct(program.locLightProd0Ambient, light0.ambient, mat.ambient);
             uploadLightProduct(program.locLightProd0Diffuse, light0.diffuse, mat.diffuse);
             uploadLightProduct(program.locLightProd0Specular, light0.specular, mat.specular);
         }
-        if (vk.light1Enabled()) {
+        if (vk.lightEnabled(1)) {
             final LightState light1 = GLStateManager.getLightDataStates()[1];
             uploadVec4(program.locLight1Position, light1.position);
             uploadLightProduct(program.locLightProd1Ambient, light1.ambient, mat.ambient);
@@ -322,10 +341,16 @@ public class Uniforms {
         return color;
     }
 
-    private void uploadCurrentTexCoord(Program program) {
-        if (program.locCurrentTexCoord == -1) return;
-        final var tc = ShaderManager.getCurrentTexCoord();
-        uploadVec4(program.locCurrentTexCoord, tc);
+    private void uploadCurrentTexCoords(Program program, boolean unit0, boolean unit2, boolean unit3) {
+        if (unit0 && program.locCurrentTexCoord != -1) {
+            uploadVec4(program.locCurrentTexCoord, ShaderManager.getCurrentTexCoord(0));
+        }
+        if (unit2 && program.locCurrentTexCoord2 != -1) {
+            uploadVec4(program.locCurrentTexCoord2, ShaderManager.getCurrentTexCoord(2));
+        }
+        if (unit3 && program.locCurrentTexCoord3 != -1) {
+            uploadVec4(program.locCurrentTexCoord3, ShaderManager.getCurrentTexCoord(3));
+        }
     }
 
     private void uploadCurrentLightmapCoord(Program program) {
@@ -419,6 +444,20 @@ public class Uniforms {
             }
         }
 
+        // Damage overlay color
+        if (fk.overlayEnabled() && program.locOverlayColor != -1) {
+            RENDER_BACKEND.uniform4f(program.locOverlayColor,
+                GLStateManager.getOverlayR(), GLStateManager.getOverlayG(),
+                GLStateManager.getOverlayB(), GLStateManager.getOverlayA());
+        }
+
+        // Secondary color for GL_COLOR_SUM
+        if (fk.colorSum() && program.locSecondaryColor != -1) {
+            final var secondary = GLStateManager.getSecondaryColor();
+            RENDER_BACKEND.uniform3f(program.locSecondaryColor,
+                secondary.getRed(), secondary.getGreen(), secondary.getBlue());
+        }
+
         // Fog
         if (fk.fogMode() != FragmentKey.FOG_NONE) {
             uploadFog(program);
@@ -457,17 +496,38 @@ public class Uniforms {
         }
     }
 
-    private void uploadWideLineUniforms(Program program, ProgramUniformState uploaded) {
-        final float lineWidth = GLStateManager.getLineState().getWidth();
-        if (uploaded.needsLineWidthUpload(lineWidth)) {
-            RENDER_BACKEND.uniform1f(program.locLineWidth, lineWidth);
-            uploaded.markLineWidthUploaded(lineWidth);
+    /**
+     * Upload line emulation state: wide-line width + viewport, and stipple pattern.
+     * Wide lines use u_LineWidth + u_ViewportSize (vec2); stipple emulation uses
+     * u_Viewport (vec4, full rect) to compute gl_FragCoord-free screen position.
+     */
+    private void uploadLineUniforms(Program program, ProgramUniformState uploaded) {
+        if (program.locLineWidth != -1) {
+            final float lineWidth = GLStateManager.getLineState().getWidth();
+            if (uploaded.needsLineWidthUpload(lineWidth)) {
+                RENDER_BACKEND.uniform1f(program.locLineWidth, lineWidth);
+                uploaded.markLineWidthUploaded(lineWidth);
+            }
         }
-        final int vw = GLStateManager.getViewportState().width;
-        final int vh = GLStateManager.getViewportState().height;
-        if (uploaded.needsViewportUpload(vw, vh)) {
-            RENDER_BACKEND.uniform2f(program.locViewportSize, vw, vh);
-            uploaded.markViewportUploaded(vw, vh);
+
+        final var viewport = GLStateManager.getViewportState();
+        if (uploaded.needsViewportUpload(viewport.x, viewport.y, viewport.width, viewport.height)) {
+            if (program.locViewportSize != -1) {
+                RENDER_BACKEND.uniform2f(program.locViewportSize, viewport.width, viewport.height);
+            }
+            if (program.locViewport != -1) {
+                RENDER_BACKEND.uniform4f(program.locViewport, viewport.x, viewport.y, viewport.width, viewport.height);
+            }
+            uploaded.markViewportUploaded(viewport.x, viewport.y, viewport.width, viewport.height);
+        }
+
+        if (program.locLineStipple != -1) {
+            final LineState line = GLStateManager.getLineState();
+            final int stipplePacked = (line.getStipplePattern() & 0xFFFF) | (Math.max(line.getStippleFactor(), 1) << 16);
+            if (uploaded.needsLineStippleUpload(stipplePacked)) {
+                RENDER_BACKEND.uniform1i(program.locLineStipple, stipplePacked);
+                uploaded.markLineStippleUploaded(stipplePacked);
+            }
         }
     }
 

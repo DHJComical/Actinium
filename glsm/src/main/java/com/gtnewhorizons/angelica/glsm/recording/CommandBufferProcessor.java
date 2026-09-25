@@ -72,6 +72,7 @@ public final class CommandBufferProcessor {
             case GLCommand.LINE_WIDTH -> out.writeLineWidth(raw.readFloat());
             case GLCommand.POLYGON_OFFSET -> out.writePolygonOffset(raw.readFloat(), raw.readFloat());
             case GLCommand.COLOR -> out.writeColor(raw.readFloat(), raw.readFloat(), raw.readFloat(), raw.readFloat());
+            case GLCommand.SECONDARY_COLOR -> out.writeSecondaryColor(raw.readFloat(), raw.readFloat(), raw.readFloat());
             case GLCommand.CLEAR_COLOR -> out.writeClearColor(raw.readFloat(), raw.readFloat(), raw.readFloat(), raw.readFloat());
 
             // Single double commands
@@ -151,7 +152,6 @@ public final class CommandBufferProcessor {
             case GLCommand.DRAW_RANGE -> out.writeDrawRange(raw.readInt());
             case GLCommand.CALL_LIST -> out.writeCallList(raw.readInt());
             case GLCommand.DRAW_ARRAYS -> out.writeDrawArrays(raw.readInt(), raw.readInt(), raw.readInt());
-            case GLCommand.DRAW_ELEMENTS -> out.writeDrawElements(raw.readInt(), raw.readInt(), raw.readInt(), raw.readLong());
             case GLCommand.BIND_VBO -> out.writeBindVBO(raw.readInt());
             case GLCommand.BIND_VAO -> out.writeBindVAO(raw.readInt());
 

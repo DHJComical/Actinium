@@ -27,9 +27,8 @@ public class BooleanState implements ISettableState<BooleanState> {
     }
 
     /**
-     * Replays the current enabled state onto the active render backend, bypassing the
-     * change-detection short-circuit in {@link #setEnabled}. Used when a backend takes over
-     * an already-initialized state cache (e.g. the SDL GPU backend claiming a new context).
+     * Re-applies the cached enable state to the backend, bypassing {@link #setEnabled}'s change
+     * detection. Used when replaying state onto a fresh GL context or an SDL GPU backend takeover.
      */
     public void applyToBackend() {
         if (ffpStateOnly) return;

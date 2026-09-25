@@ -102,6 +102,11 @@ public class AtlasPBRLoader implements PBRTextureLoader<TextureMap> {
         try  {
             // This is no longer closable. Not sure about this.
             final IResource resource = resourceManager.getResource(pbrImageLocation);
+            if (PBRType.hasDirectionalSiblings(pbrImageLocation, resourceManager)) {
+                // Looks like a cardinal-direction texture set (e.g. "_n"/"_s"/"_e"/"_w" for block faces),
+                // not an actual PBR map. Don't treat it as one.
+                return null;
+            }
             NativeImage nativeImage = NativeImage.read(resource.getInputStream());
             AnimationMetadataSection animationMetadata = (AnimationMetadataSection) resource.getMetadata("animation");
             if (animationMetadata == null) {

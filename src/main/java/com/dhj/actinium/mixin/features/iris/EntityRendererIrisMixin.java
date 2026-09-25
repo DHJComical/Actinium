@@ -1,11 +1,15 @@
 package com.dhj.actinium.mixin.features.iris;
 
 import com.dhj.actinium.render.GuiGlStateBoundary;
+import com.dhj.actinium.render.RenderWorldRecursionGuard;
 import com.dhj.actinium.render.RevoScreenEffectsGradient;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
@@ -63,8 +67,24 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
     private void addRainParticles() {
     }
 
+    // A truly nested renderWorldPass would observe the swapped Minecraft.world and flip the active
+    // pipeline mid-pass; the guard lets the Iris injections below skip nested passes. BPR-style
+    // sequential portal views are served by PipelineManager's per-dimension cache, not this guard.
+    @WrapMethod(method = "renderWorldPass(IFJ)V")
+    private void actinium$guardRenderWorldPassRecursion(int pass, float partialTicks, long finishTimeNano, Operation<Void> original) {
+        RenderWorldRecursionGuard.enter();
+        try {
+            original.call(pass, partialTicks, finishTimeNano);
+        } finally {
+            RenderWorldRecursionGuard.exit();
+        }
+    }
+
     @Inject(method = "renderWorldPass(IFJ)V", at = @At("HEAD"))
     private void actinium$beginWorldPassTiming(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            return;
+        }
         IrisGlDebug.beginWorldPassTiming(pass);
         if (Iris.shouldActivateWireframe() && this.mc.isSingleplayer()) {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_LINE);
@@ -74,6 +94,9 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
 
     @Inject(method = "renderWorldPass(IFJ)V", at = @At("RETURN"))
     private void actinium$finishWorldPassTiming(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            return;
+        }
         if (this.actinium$wireframeActive) {
             GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
             this.actinium$wireframeActive = false;
@@ -86,6 +109,9 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/culling/ClippingHelperImpl;getInstance()Lnet/minecraft/client/renderer/culling/ClippingHelper;", shift = At.Shift.AFTER)
     )
     private void actinium$beginIrisWorld(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            return;
+        }
         if (!Iris.enabled) {
             return;
         }
@@ -117,6 +143,9 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V", shift = At.Shift.AFTER)
     )
     private void actinium$renderIrisShadows(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            return;
+        }
         if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             return;
         }
@@ -138,6 +167,9 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ActiveRenderInfo;updateRenderInfo(Lnet/minecraft/entity/Entity;Z)V", shift = At.Shift.AFTER)
     )
     private void actinium$captureCameraState(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            return;
+        }
         EntityLivingBase viewEntity = (EntityLivingBase) this.mc.getRenderViewEntity();
         if (viewEntity == null) {
             return;
@@ -484,9 +516,13 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         IrisGlDebug.recordWorldPassStage("weather-to-terrain-translucent");
     }
 
+    // GTCEu's GregTechTransformer rewrites renderWorldPass via ASM and replaces the 4th
+    // renderBlockLayer call (TRANSLUCENT) with BloomEffectUtil.renderBloomBlockLayer, so this
+    // ordinal no longer exists under GregTech. Debug-stage marker only; tolerate its absence.
     @Inject(
         method = "renderWorldPass(IFJ)V",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 3)
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderBlockLayer(Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I", shift = At.Shift.AFTER, ordinal = 3),
+        require = 0
     )
     private void actinium$checkAfterTranslucentTerrain(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         IrisGlDebug.markStage("render-world-pass:" + pass + ":after-terrain-translucent");
@@ -525,6 +561,9 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraftforge/client/ForgeHooksClient;dispatchRenderLast(Lnet/minecraft/client/renderer/RenderGlobal;F)V", remap = false)
     )
     private void actinium$finalizeIrisWorld(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            return;
+        }
         if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             return;
         }
@@ -580,6 +619,9 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderSky(FI)V")
     )
     private void actinium$beginSky(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            return;
+        }
         if (!Iris.enabled) {
             return;
         }
@@ -595,6 +637,9 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderSky(FI)V", shift = At.Shift.AFTER)
     )
     private void actinium$endSky(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            return;
+        }
         if (!Iris.enabled) {
             return;
         }
@@ -605,28 +650,37 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         }
     }
 
-    @Redirect(
+    // CubicChunks redirects the same renderDistanceChunks reads for its vertical view distance.
+    // ModifyExpressionValue composes with that @Redirect instead of fighting it: when Actinium
+    // applies first, CubicChunks' value is still clamped by effectiveChunks; when CubicChunks
+    // applies first, no field read remains to wrap and this handler stays inactive (require = 0).
+    @ModifyExpressionValue(
         method = "renderWorldPass(IFJ)V",
-        at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I")
+        at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I"),
+        require = 0
     )
-    private int actinium$alwaysRenderSky(GameSettings settings) {
-        return SkyRenderDistance.effectiveChunks(settings.renderDistanceChunks);
+    private int actinium$alwaysRenderSky(int original) {
+        return SkyRenderDistance.effectiveChunks(original);
     }
 
-    @Redirect(
+    // See actinium$alwaysRenderSky for the CubicChunks coexistence contract.
+    @ModifyExpressionValue(
         method = "setupCameraTransform(FI)V",
-        at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I")
+        at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I"),
+        require = 0
     )
-    private int actinium$alwaysUseSkyRenderDistanceForProjection(GameSettings settings) {
-        return SkyRenderDistance.effectiveChunks(settings.renderDistanceChunks);
+    private int actinium$alwaysUseSkyRenderDistanceForProjection(int original) {
+        return SkyRenderDistance.effectiveChunks(original);
     }
 
-    @Redirect(
+    // See actinium$alwaysRenderSky for the CubicChunks coexistence contract.
+    @ModifyExpressionValue(
         method = "updateFogColor(F)V",
-        at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I")
+        at = @At(value = "FIELD", target = "Lnet/minecraft/client/settings/GameSettings;renderDistanceChunks:I"),
+        require = 0
     )
-    private int actinium$alwaysApplySunsetColors(GameSettings settings) {
-        return SkyRenderDistance.effectiveChunks(settings.renderDistanceChunks);
+    private int actinium$alwaysApplySunsetColors(int original) {
+        return SkyRenderDistance.effectiveChunks(original);
     }
 
     @Redirect(
@@ -634,6 +688,10 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderCloudsCheck(Lnet/minecraft/client/renderer/RenderGlobal;FIDDD)V")
     )
     private void actinium$renderClouds(EntityRenderer renderer, RenderGlobal renderGlobal, float partialTicks, int pass, double x, double y, double z) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            this.renderCloudsCheck(renderGlobal, partialTicks, pass, x, y, z);
+            return;
+        }
         if (!Iris.enabled || !IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
             this.renderCloudsCheck(renderGlobal, partialTicks, pass, x, y, z);
         }
@@ -663,6 +721,10 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;renderRainSnow(F)V")
     )
     private void actinium$renderWeather(EntityRenderer renderer, float partialTicks) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            this.renderRainSnow(partialTicks);
+            return;
+        }
         if (!Iris.enabled) {
             this.renderRainSnow(partialTicks);
             return;
@@ -689,6 +751,10 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;renderWorldBorder(Lnet/minecraft/entity/Entity;F)V")
     )
     private void actinium$renderWorldBorder(RenderGlobal renderGlobal, net.minecraft.entity.Entity entity, float partialTicks) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            renderGlobal.renderWorldBorder(entity, partialTicks);
+            return;
+        }
         if (!Iris.enabled) {
             renderGlobal.renderWorldBorder(entity, partialTicks);
             return;
@@ -709,6 +775,10 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/debug/DebugRenderer;renderDebug(FJ)V")
     )
     private void actinium$renderDebug(DebugRenderer debugRenderer, float partialTicks, long finishTimeNano) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            debugRenderer.renderDebug(partialTicks, finishTimeNano);
+            return;
+        }
         if (!Iris.enabled) {
             debugRenderer.renderDebug(partialTicks, finishTimeNano);
             return;
@@ -745,6 +815,10 @@ public abstract class EntityRendererIrisMixin implements IResourceManagerReloadL
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;drawBlockDamageTexture(Lnet/minecraft/client/renderer/Tessellator;Lnet/minecraft/client/renderer/BufferBuilder;Lnet/minecraft/entity/Entity;F)V")
     )
     private void actinium$renderBlockDamage(RenderGlobal renderGlobal, Tessellator tessellator, net.minecraft.client.renderer.BufferBuilder bufferBuilder, net.minecraft.entity.Entity entity, float partialTicks) {
+        if (RenderWorldRecursionGuard.isNested()) {
+            renderGlobal.drawBlockDamageTexture(tessellator, bufferBuilder, entity, partialTicks);
+            return;
+        }
         if (!Iris.enabled) {
             renderGlobal.drawBlockDamageTexture(tessellator, bufferBuilder, entity, partialTicks);
             return;

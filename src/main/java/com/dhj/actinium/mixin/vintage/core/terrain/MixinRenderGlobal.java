@@ -3,8 +3,8 @@ package com.dhj.actinium.mixin.vintage.core.terrain;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.dhj.actinium.compat.dh.DistantHorizonsCompat;
 import com.dhj.actinium.compat.ichunutil.PortalViewportProvider;
+import com.dhj.actinium.debug.GlStateDiffProbe;
 import net.coderbot.iris.compat.rfp2.Rfp2Compat;
 import com.gtnewhorizons.angelica.glsm.shadow.InternalShadowRenderingState;
 import com.dhj.actinium.shadows.ShadowRenderingState;
@@ -25,16 +25,16 @@ import net.minecraft.client.renderer.culling.ICamera;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.client.settings.GameSettings;
+import net.minecraftforge.client.MinecraftForgeClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
-import net.minecraftforge.fml.common.Loader;
-import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
-import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
-import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
+import dhj.embeddedt.embeddium.impl.gl.device.RenderDevice;
+import dhj.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
+import dhj.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -43,9 +43,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import dhj.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
 import com.dhj.actinium.render.entity.EntityGatherer;
 import com.dhj.actinium.render.terrain.ActiniumWorldRenderer;
+import com.dhj.actinium.render.terrain.TileEntityGlStateGuard;
 
 import java.util.*;
 
@@ -65,6 +66,15 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
 
     @Shadow
     protected abstract boolean isOutlineActive(Entity entityIn, Entity viewer, ICamera camera);
+
+    /**
+     * Vanilla's single-argument overload. It is deliberately left unmodified and invoked from the
+     * overwritten entry point below, so injections anchored inside it stay reachable.
+     */
+    @Shadow
+    private void renderBlockLayer(BlockRenderLayer blockLayerIn) {
+        throw new AssertionError();
+    }
 
     @Shadow
     private WorldClient world;
@@ -124,14 +134,15 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     }
 
     /**
-     * @reason Redirect the chunk layer render passes to our renderer
+     * @reason Redirect the chunk layer render passes to our renderer. The four-argument entry point is
+     * overwritten, while the single-argument overload it normally calls is left vanilla and invoked
+     * below, so injections anchored inside that overload keep firing. Overwriting the overload itself
+     * would break them: Mixin refuses instruction-level injection points in a method that a
+     * higher-priority mixin has already merged.
      * @author JellySquid
      */
     @Overwrite
     public int renderBlockLayer(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn) {
-        boolean renderDistantHorizonsLods = Loader.isModLoaded("distanthorizons")
-                && !ShadowRenderingState.areShadowsCurrentlyBeingRendered();
-
         WorldRenderingPipeline pipeline = null;
         if (Iris.enabled) {
             pipeline = Iris.getPipelineManager().getPipelineNullable();
@@ -146,9 +157,6 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
                     if (!ShadowRenderingState.areShadowsCurrentlyBeingRendered()
                             && IrisApiV0Impl.INSTANCE.isShaderPackInUse()) {
                         this.actinium$beginIrisTranslucents(pipeline, (float) partialTicks);
-                        if (renderDistantHorizonsLods) {
-                            DistantHorizonsCompat.renderDeferredLodsForShaders(this.world, partialTicks);
-                        }
                     }
                     pipeline.setPhase(WorldRenderingPhase.TERRAIN_TRANSLUCENT);
                 }
@@ -162,6 +170,20 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         GlStateManager.bindTexture(this.mc.getTextureMapBlocks().getGlTextureId());
         GlStateManager.enableTexture2D();
 
+        GlStateDiffProbe.Snapshot beforeDhInjection = null;
+        GlStateDiffProbe.Snapshot afterDhInjection = null;
+        if (blockLayerIn == BlockRenderLayer.TRANSLUCENT) {
+            // Run vanilla's overload so third-party injections anchored inside it stay reachable (its
+            // enableLightmap call is one such anchor). Its renderContainer pass draws nothing, since
+            // Celeritas owns chunk rendering and never populates that container.
+            // Distant Horizons anchors its deferred transparent LOD pass inside that overload, so the
+            // state is sampled across it: a difference here belongs to DH, one across the draw below
+            // belongs to Celeritas. Both captures are no-ops while the GL debug option is off.
+            beforeDhInjection = GlStateDiffProbe.capture();
+            this.renderBlockLayer(blockLayerIn);
+            afterDhInjection = GlStateDiffProbe.capture();
+        }
+
         this.mc.entityRenderer.enableLightmap();
 
         double d3 = entityIn.lastTickPosX + (entityIn.posX - entityIn.lastTickPosX) * partialTicks;
@@ -169,10 +191,14 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
         double d5 = entityIn.lastTickPosZ + (entityIn.posZ - entityIn.lastTickPosZ) * partialTicks;
 
         long drawStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
+        GlStateDiffProbe.Snapshot beforeTerrainDraw = GlStateDiffProbe.capture();
         try {
             this.renderer.drawChunkLayer(blockLayerIn, d3, d4, d5);
         } finally {
-            RenderDebugHooksHolder.recordRenderGlobalStageTiming("terrain-" + blockLayerIn.name().toLowerCase(Locale.ROOT), pass, drawStartNanos);
+            String layerName = blockLayerIn.name().toLowerCase(Locale.ROOT);
+            GlStateDiffProbe.diffAndPrint("dh-injection-" + layerName + "-pass" + pass, beforeDhInjection, afterDhInjection);
+            GlStateDiffProbe.diffAndPrint("celeritas-draw-" + layerName + "-pass" + pass, beforeTerrainDraw, GlStateDiffProbe.capture());
+            RenderDebugHooksHolder.recordRenderGlobalStageTiming("terrain-" + layerName, pass, drawStartNanos);
             RenderDevice.exitManagedCode();
         }
 
@@ -220,7 +246,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
      * @author JellySquid
      */
     @Overwrite
-    private void markBlocksForUpdate(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean important) {
+    public void markBlocksForUpdate(int minX, int minY, int minZ, int maxX, int maxY, int maxZ, boolean important) {
         this.renderer.scheduleRebuildForBlockArea(minX, minY, minZ, maxX, maxY, maxZ, important);
     }
 
@@ -249,7 +275,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
 
     @Inject(method = "renderEntities", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderHelper;enableStandardItemLighting()V", shift = At.Shift.AFTER, ordinal = 1), cancellable = true)
     public void sodium$renderTileEntities(Entity entity, ICamera camera, float partialTicks, CallbackInfo ci) {
-        int pass = net.minecraftforge.client.MinecraftForgeClient.getRenderPass();
+        int pass = MinecraftForgeClient.getRenderPass();
         boolean renderShadowBlockEntities = !ShadowRenderingState.areShadowsCurrentlyBeingRendered()
                 || InternalShadowRenderingState.shouldRenderShadowBlockEntities();
 
@@ -275,15 +301,22 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
             synchronized(this.setTileEntities) {
                 if (!this.setTileEntities.isEmpty()) {
                     long setBlockEntityStartNanos = RenderDebugHooksHolder.beginRenderGlobalStageTiming();
-                    TileEntityRendererDispatcher.instance.preDrawBatch();
+                    TileEntityGlStateGuard.push();
                     try {
-                        for (var te : this.setTileEntities) {
-                            if (te.shouldRenderInPass(pass)) {
-                                TileEntityRendererDispatcher.instance.render(te, partialTicks, -1);
+                        TileEntityRendererDispatcher.instance.preDrawBatch();
+                        try {
+                            for (var te : this.setTileEntities) {
+                                if (te.shouldRenderInPass(pass)) {
+                                    TileEntityRendererDispatcher.instance.render(te, partialTicks, -1);
+                                }
                             }
+                        } finally {
+                            // Same leak guard as ActiniumWorldRenderer.renderBlockEntities.
+                            TileEntityGlStateGuard.restoreForBatch();
+                            TileEntityRendererDispatcher.instance.drawBatch(pass);
                         }
                     } finally {
-                        TileEntityRendererDispatcher.instance.drawBatch(pass);
+                        TileEntityGlStateGuard.pop();
                     }
                     RenderDebugHooksHolder.recordRenderGlobalStageTiming("block-entities-set", pass, setBlockEntityStartNanos);
                 }
@@ -328,7 +361,7 @@ public abstract class MixinRenderGlobal implements SimpleWorldRenderer.Provider<
     private void renderEntities(Entity renderViewEntity, ICamera camera, float partialTicks, CallbackInfo ci,
                                 @Local(ordinal = 1) List<Entity> outlineEntityList,
                                 @Local(ordinal = 2) List<Entity> multipassEntityList) {
-        int pass = net.minecraftforge.client.MinecraftForgeClient.getRenderPass();
+        int pass = MinecraftForgeClient.getRenderPass();
         double renderViewX = renderViewEntity.prevPosX + (renderViewEntity.posX - renderViewEntity.prevPosX) * partialTicks;
         double renderViewY = renderViewEntity.prevPosY + (renderViewEntity.posY - renderViewEntity.prevPosY) * partialTicks;
         double renderViewZ = renderViewEntity.prevPosZ + (renderViewEntity.posZ - renderViewEntity.prevPosZ) * partialTicks;

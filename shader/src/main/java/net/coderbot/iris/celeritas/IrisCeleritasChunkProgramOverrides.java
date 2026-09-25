@@ -7,23 +7,27 @@ import net.coderbot.iris.gl.blending.BufferBlendOverride;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import net.coderbot.iris.pipeline.transform.PatchShaderType;
 import net.coderbot.iris.shadows.ShadowRenderingState;
-import org.embeddedt.embeddium.impl.gl.GlObject;
-import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
-import org.embeddedt.embeddium.impl.gl.shader.GlShader;
-import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
-import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
-import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
+import dhj.embeddedt.embeddium.impl.gl.GlObject;
+import dhj.embeddedt.embeddium.impl.gl.shader.GlProgram;
+import dhj.embeddedt.embeddium.impl.gl.shader.GlShader;
+import dhj.embeddedt.embeddium.impl.gl.shader.ShaderType;
+import dhj.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
+import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 public class IrisCeleritasChunkProgramOverrides {
-    private final EnumMap<IrisTerrainPass, GlProgram<IrisCeleritasChunkShaderInterface>> programs = new EnumMap<>(IrisTerrainPass.class);
-    private boolean shadersCreated = false;
+    // Programs embed per-pipeline state (custom uniforms, pass info), so each world pipeline gets
+    // its own cached program set. Portal-style mods (BetterPortals) alternate dimensions within a
+    // frame; rebuilding on every switch would stall the render loop.
+    private final Map<WorldRenderingPipeline, EnumMap<IrisTerrainPass, GlProgram<IrisCeleritasChunkShaderInterface>>> programsPerPipeline = new IdentityHashMap<>();
     private int versionCounterForShaderReload = -1;
 
     @Nullable
@@ -101,21 +105,20 @@ public class IrisCeleritasChunkProgramOverrides {
     }
 
     /**
-     * Create shaders for all Iris terrain passes.
+     * Create shaders for all Iris terrain passes of one pipeline.
      */
-    public void createShaders(CeleritasTerrainPipeline pipeline, RenderPassConfiguration<?> configuration) {
+    private EnumMap<IrisTerrainPass, GlProgram<IrisCeleritasChunkShaderInterface>> createShaders(CeleritasTerrainPipeline pipeline, RenderPassConfiguration<?> configuration) {
+        final EnumMap<IrisTerrainPass, GlProgram<IrisCeleritasChunkShaderInterface>> programs = new EnumMap<>(IrisTerrainPass.class);
         if (pipeline != null) {
             for (IrisTerrainPass pass : IrisTerrainPass.VALUES) {
                 if (pass.isShadow() && !pipeline.hasShadowPass()) {
-                    this.programs.put(pass, null);
+                    programs.put(pass, null);
                     continue;
                 }
-                this.programs.put(pass, createShader(pass, pipeline, configuration));
+                programs.put(pass, createShader(pass, pipeline, configuration));
             }
-        } else {
-            deleteShaders();
         }
-        shadersCreated = true;
+        return programs;
     }
 
     @Nullable
@@ -126,42 +129,37 @@ public class IrisCeleritasChunkProgramOverrides {
             deleteShaders();
         }
 
+        // Drop programs whose dimension pipeline has been evicted or destroyed since the last
+        // lookup; their GL objects would otherwise leak until the next full shader reload.
+        programsPerPipeline.keySet().removeIf(candidate -> !Iris.getPipelineManager().isPipelineCached(candidate));
+
         final WorldRenderingPipeline worldPipeline = Iris.getPipelineManager().getPipelineNullable();
-        CeleritasTerrainPipeline celeritasPipeline = null;
-        if (worldPipeline != null) {
-            celeritasPipeline = worldPipeline.getCeleritasTerrainPipeline();
+        if (worldPipeline == null) {
+            return null;
         }
 
-        if (!shadersCreated) {
-            createShaders(celeritasPipeline, configuration);
-        }
+        final CeleritasTerrainPipeline celeritasPipeline = worldPipeline.getCeleritasTerrainPipeline();
+        final EnumMap<IrisTerrainPass, GlProgram<IrisCeleritasChunkShaderInterface>> programs =
+            programsPerPipeline.computeIfAbsent(worldPipeline, p -> createShaders(celeritasPipeline, configuration));
 
-        if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+        final boolean isShadow = ShadowRenderingState.areShadowsCurrentlyBeingRendered();
+        if (isShadow) {
             if (celeritasPipeline != null && !celeritasPipeline.hasShadowPass()) {
                 throw new IllegalStateException("Shadow program requested, but shader pack has no shadow pass");
             }
-            if (pass.isReverseOrder()) {
-                return programs.get(IrisTerrainPass.SHADOW_TRANSLUCENT);
-            }
-            return programs.get(pass.supportsFragmentDiscard() ? IrisTerrainPass.SHADOW_CUTOUT : IrisTerrainPass.SHADOW);
-        } else {
-            if (pass.supportsFragmentDiscard()) {
-                return programs.get(IrisTerrainPass.GBUFFER_CUTOUT);
-            } else if (pass.isReverseOrder()) {
-                return programs.get(IrisTerrainPass.GBUFFER_TRANSLUCENT);
-            } else {
-                return programs.get(IrisTerrainPass.GBUFFER_SOLID);
-            }
         }
+
+        return programs.get(IrisTerrainPass.fromTerrainPass(pass, isShadow));
     }
 
     public void deleteShaders() {
-        for (GlProgram<?> program : programs.values()) {
-            if (program != null) {
-                program.delete();
+        for (EnumMap<IrisTerrainPass, GlProgram<IrisCeleritasChunkShaderInterface>> programs : programsPerPipeline.values()) {
+            for (GlProgram<?> program : programs.values()) {
+                if (program != null) {
+                    program.delete();
+                }
             }
         }
-        programs.clear();
-        shadersCreated = false;
+        programsPerPipeline.clear();
     }
 }

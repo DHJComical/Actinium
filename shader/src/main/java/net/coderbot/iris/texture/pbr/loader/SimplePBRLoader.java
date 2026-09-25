@@ -30,6 +30,12 @@ public class SimplePBRLoader implements PBRTextureLoader<SimpleTexture> {
 	protected AbstractTexture createPBRTexture(ResourceLocation imageLocation, IResourceManager resourceManager, PBRType pbrType) {
 		ResourceLocation pbrImageLocation = pbrType.appendToFileLocation(imageLocation);
 
+		if (PBRType.hasDirectionalSiblings(pbrImageLocation, resourceManager)) {
+			// Looks like a cardinal-direction texture set (e.g. "_n"/"_s"/"_e"/"_w" for block faces),
+			// not an actual PBR map. Don't treat it as one.
+			return null;
+		}
+
 		SimpleTexture pbrTexture = new SimpleTexture(pbrImageLocation);
 		try {
 			pbrTexture.loadTexture(resourceManager);

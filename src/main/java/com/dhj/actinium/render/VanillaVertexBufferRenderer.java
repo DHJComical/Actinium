@@ -1,6 +1,7 @@
 package com.dhj.actinium.render;
 
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFlags;
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.QuadConverter;
 import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
@@ -8,7 +9,9 @@ import com.gtnewhorizons.angelica.glsm.debug.GLSMDebug;
 import com.gtnewhorizons.angelica.glsm.ffp.ShaderManager;
 import net.minecraft.client.renderer.vertex.VertexFormat;
 import net.minecraft.client.renderer.vertex.VertexFormatElement;
-import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import dhj.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30C;
@@ -16,13 +19,20 @@ import org.lwjgl.opengl.GL30C;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACKEND;
 
 public final class VanillaVertexBufferRenderer {
+    private static final Logger LOGGER = LogManager.getLogger("VanillaVertexBufferRenderer");
     private static final boolean DRAW_STATE_DEBUG = Boolean.getBoolean("actinium.streamingDrawStateDebug");
+    private static final Set<Integer> WARNED_UNSUPPORTED_UNITS = ConcurrentHashMap.newKeySet();
     private static final Map<Integer, Integer> VAOS_BY_VBO = new HashMap<>();
     private static final Map<Integer, Integer> FLAGS_BY_VBO = new HashMap<>();
+    // Birth context handle per VAO: container objects do not survive a display context
+    // migration (issue #150); entries born on another context must be recreated.
+    private static final Map<Integer, Long> VAO_CONTEXTS = new HashMap<>();
 
     private VanillaVertexBufferRenderer() {
     }
@@ -81,15 +91,42 @@ public final class VanillaVertexBufferRenderer {
         Integer vao = VAOS_BY_VBO.remove(vbo);
         FLAGS_BY_VBO.remove(vbo);
         if (vao != null) {
+            VAO_CONTEXTS.remove(vao);
             GLStateManager.glDeleteVertexArrays(vao);
         }
         GLStateManager.glDeleteBuffers(vbo);
+    }
+
+    /**
+     * Drops cached VAO entries born on another GL context: VAOs do not survive a display context
+     * migration (issue #150). The VBOs are shared across contexts and stay valid; mismatched VAOs
+     * are recreated lazily on next use.
+     */
+    public static void recreateVertexArrays() {
+        final long current = RENDER_BACKEND.getContextHandle();
+        VAOS_BY_VBO.entrySet().removeIf(entry -> {
+            final int vao = entry.getValue();
+            final Long birth = VAO_CONTEXTS.get(vao);
+            if (birth == null || birth == current) {
+                return false;
+            }
+            FLAGS_BY_VBO.remove(entry.getKey());
+            VAO_CONTEXTS.remove(vao);
+            return true;
+        });
+    }
+
+    /** True when the VAO was created on the calling thread's current context (or is untracked). */
+    static boolean vaoMatchesCurrentContext(int vao) {
+        final Long birth = VAO_CONTEXTS.get(vao);
+        return birth == null || birth == RENDER_BACKEND.getContextHandle();
     }
 
     public static int createStreamingVertexArray(VertexFormat format, int vbo) {
         int savedVao = GLStateManager.getBoundVAO();
         int savedVbo = GLStateManager.getBoundVBO();
         int vao = GLStateManager.glGenVertexArrays();
+        VAO_CONTEXTS.put(vao, RENDER_BACKEND.getContextHandle());
         GLStateManager.glBindVertexArray(vao);
         GLStateManager.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         setupVertexFormatAttributes(format);
@@ -165,6 +202,7 @@ public final class VanillaVertexBufferRenderer {
             VertexFormatElement element = format.getElement(i);
             int location = attributeLocation(element);
             if (location < 0) {
+                reportUnsupportedElement(element);
                 continue;
             }
 
@@ -179,15 +217,49 @@ public final class VanillaVertexBufferRenderer {
         }
     }
 
-    private static int attributeLocation(VertexFormatElement element) {
+    /**
+     * Resolves the generic vertex-attribute slot a vanilla {@link VertexFormatElement} feeds.
+     *
+     * <p>A UV element's {@code index} is the legacy texture unit it belongs to — vanilla's
+     * {@code WorldVertexBufferUploader} dispatches each UV element through
+     * {@code setClientActiveTexture(TEXTURE0 + index)} — so UV elements must resolve through the
+     * shared unit-to-slot table ({@link Usage#uvAttributeLocation}) rather than being limited to
+     * units 0/1. Dropping units 2/3 here left their attribute slots unset, so the FFP vertex shader
+     * fell back to the per-draw constant {@code u_CurrentTexCoord2/3} and the fixed-function texenv
+     * chain of Xaero's map (which enables texture units 0/2/3 over one multi-UV vertex format)
+     * sampled a single texel per texture — flattening every 64x64 map tile into one colour
+     * (issue #175). Both Xaero's minimap and world map draw their terrain this way.</p>
+     *
+     * @param element format element to place
+     * @return the attribute slot in {@code [0, 15]}, or {@code -1} when the element owns no slot
+     */
+    static int attributeLocation(VertexFormatElement element) {
         return switch (element.getUsage()) {
             case POSITION -> 0;
             case COLOR -> 1;
-            case UV -> element.getIndex() == 0 ? 2 : element.getIndex() == 1 ? 3 : -1;
+            case UV -> Usage.uvAttributeLocation(element.getIndex());
             case NORMAL -> 4;
             case GENERIC -> element.getIndex();
             default -> -1;
         };
+    }
+
+    /**
+     * Reports a format element the FFP pipeline cannot feed. UV elements are the interesting case:
+     * a legacy texture unit without a slot silently loses its texture coordinates, which is how
+     * issue #175 stayed hidden (Xaero's map texenv chain then sampled a constant texel). PADDING
+     * legitimately owns no slot and stays quiet.
+     */
+    private static void reportUnsupportedElement(VertexFormatElement element) {
+        if (element.getUsage() != VertexFormatElement.EnumUsage.UV) {
+            return;
+        }
+        final int textureUnit = element.getIndex();
+        if (WARNED_UNSUPPORTED_UNITS.add(textureUnit)) {
+            LOGGER.warn(
+                "Vertex format feeds legacy texture unit {} but the fixed-function pipeline has no attribute slot for it (supported 0..3); its texture coordinates are dropped",
+                textureUnit);
+        }
     }
 
     private static boolean isNormalized(VertexFormatElement element) {

@@ -69,9 +69,15 @@ class ProgramUniformStateTest {
         state.markLineWidthUploaded(2.0F);
         assertFalse(state.needsLineWidthUpload(2.0F));
 
-        assertTrue(state.needsViewportUpload(1920, 1080));
-        state.markViewportUploaded(1920, 1080);
-        assertFalse(state.needsViewportUpload(1920, 1080));
-        assertTrue(state.needsViewportUpload(2560, 1440));
+        assertTrue(state.needsViewportUpload(0, 0, 1920, 1080));
+        state.markViewportUploaded(0, 0, 1920, 1080);
+        assertFalse(state.needsViewportUpload(0, 0, 1920, 1080));
+        assertTrue(state.needsViewportUpload(0, 0, 2560, 1440));
+        assertTrue(state.needsViewportUpload(100, 50, 1920, 1080));
+
+        assertTrue(state.needsLineStippleUpload(0x0001FFFF));
+        state.markLineStippleUploaded(0x0001FFFF);
+        assertFalse(state.needsLineStippleUpload(0x0001FFFF));
+        assertTrue(state.needsLineStippleUpload(0x00020F0F));
     }
 }

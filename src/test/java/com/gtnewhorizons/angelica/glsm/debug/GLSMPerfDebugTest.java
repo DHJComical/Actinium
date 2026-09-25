@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL11;
 
 import java.nio.ByteBuffer;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -19,6 +20,7 @@ class GLSMPerfDebugTest {
     @AfterEach
     void disableConfiguredDebug() {
         GLSMPerfDebugHooks.setConfiguredEnabled(false);
+        GLSMPerfDebugHooks.setExtraStatsSupplier(null);
     }
 
     @Test
@@ -110,6 +112,81 @@ class GLSMPerfDebugTest {
         GLSMPerfDebug.end(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE, second);
 
         assertEquals(2, GLSMPerfDebug.getSampledCount(GLSMPerfDebug.Stage.STREAM_FENCE_CREATE));
+    }
+
+    @Test
+    void concatenatesMultipleStatsProvidersInRegistrationOrder() {
+        GLSMPerfDebugHooks.addStatsProvider(() -> "alpha=1");
+        GLSMPerfDebugHooks.addStatsProvider(() -> "beta=2");
+
+        assertEquals("alpha=1 beta=2", GLSMPerfDebugHooks.getExtraStats());
+    }
+
+    @Test
+    void skipsEmptyProviderOutputWhenConcatenating() {
+        GLSMPerfDebugHooks.addStatsProvider(() -> "");
+        GLSMPerfDebugHooks.addStatsProvider(() -> "beta=2");
+        GLSMPerfDebugHooks.addStatsProvider(() -> "");
+
+        assertEquals("beta=2", GLSMPerfDebugHooks.getExtraStats());
+    }
+
+    @Test
+    void removedStatsProviderNoLongerContributesToReport() {
+        Supplier<String> removed = () -> "gone=1";
+        GLSMPerfDebugHooks.addStatsProvider(removed);
+        GLSMPerfDebugHooks.addStatsProvider(() -> "kept=2");
+
+        assertTrue(GLSMPerfDebugHooks.removeStatsProvider(removed));
+
+        assertEquals("kept=2", GLSMPerfDebugHooks.getExtraStats());
+    }
+
+    @Test
+    void setExtraStatsSupplierReplacesRegisteredProviders() {
+        GLSMPerfDebugHooks.addStatsProvider(() -> "first=1");
+        GLSMPerfDebugHooks.addStatsProvider(() -> "second=2");
+
+        GLSMPerfDebugHooks.setExtraStatsSupplier(() -> "single=3");
+
+        assertEquals("single=3", GLSMPerfDebugHooks.getExtraStats());
+    }
+
+    @Test
+    void samplesEveryChunkUpdateChunksEvent() {
+        GLSMPerfDebugHooks.setConfiguredEnabled(false);
+        GLSMPerfDebugHooks.setConfiguredEnabled(true);
+
+        long first = GLSMPerfDebug.begin(GLSMPerfDebug.Stage.CHUNK_UPDATE_CHUNKS);
+        GLSMPerfDebug.end(GLSMPerfDebug.Stage.CHUNK_UPDATE_CHUNKS, first);
+        long second = GLSMPerfDebug.begin(GLSMPerfDebug.Stage.CHUNK_UPDATE_CHUNKS);
+        GLSMPerfDebug.end(GLSMPerfDebug.Stage.CHUNK_UPDATE_CHUNKS, second);
+
+        assertEquals(2, GLSMPerfDebug.getSampledCount(GLSMPerfDebug.Stage.CHUNK_UPDATE_CHUNKS));
+    }
+
+    @Test
+    void samplesEveryChunkOcclusionSearchEvent() {
+        GLSMPerfDebugHooks.setConfiguredEnabled(false);
+        GLSMPerfDebugHooks.setConfiguredEnabled(true);
+
+        long first = GLSMPerfDebug.begin(GLSMPerfDebug.Stage.CHUNK_OCCLUSION_SEARCH);
+        GLSMPerfDebug.end(GLSMPerfDebug.Stage.CHUNK_OCCLUSION_SEARCH, first);
+        long second = GLSMPerfDebug.begin(GLSMPerfDebug.Stage.CHUNK_OCCLUSION_SEARCH);
+        GLSMPerfDebug.end(GLSMPerfDebug.Stage.CHUNK_OCCLUSION_SEARCH, second);
+
+        assertEquals(2, GLSMPerfDebug.getSampledCount(GLSMPerfDebug.Stage.CHUNK_OCCLUSION_SEARCH));
+    }
+
+    @Test
+    void samplesChunkUploadAtDefaultCadence() {
+        primeNextSample(GLSMPerfDebug.Stage.CHUNK_UPLOAD);
+
+        long start = GLSMPerfDebug.begin(GLSMPerfDebug.Stage.CHUNK_UPLOAD);
+        assertTrue(start != 0L);
+        GLSMPerfDebug.end(GLSMPerfDebug.Stage.CHUNK_UPLOAD, start);
+
+        assertEquals(1, GLSMPerfDebug.getSampledCount(GLSMPerfDebug.Stage.CHUNK_UPLOAD));
     }
 
     private static void primeNextSample(GLSMPerfDebug.Stage stage) {

@@ -22,6 +22,14 @@ public class CommonTransformer {
 		if (parameters.type == ShaderType.VERTEX) {
 			root.injectVariable("out vec4 iris_FrontColor;");
 			root.rename("gl_FrontColor", "iris_FrontColor");
+			// Legacy packs read gl_Color in the composite vertex stage (e.g. Sildur's
+			// Enhanced Default). The full-screen quad has no color attribute, so map it
+			// to the same white-initialized out variable that gl_FrontColor uses.
+			// Only COMPOSITE: other patches map gl_Color themselves (ATTRIBUTES to the
+			// vertex color / modulator, Celeritas and DH terrain to _vert_color).
+			if (parameters.patch == Patch.COMPOSITE) {
+				root.rename("gl_Color", "iris_FrontColor");
+			}
 			root.prependMain("iris_FrontColor = vec4(1.0);");
 		} else if (parameters.type == ShaderType.FRAGMENT) {
 			root.injectVariable("in vec4 iris_FrontColor;");

@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixins;
 
+import com.dhj.actinium.loading.fml.transformers.GnetumHudCachingCompatTransformer;
 import com.dhj.actinium.loading.fml.transformers.MacDisplayForwardCompatTransformer;
 import com.dhj.actinium.loading.fml.transformers.StellarCoreHudCachingCompatTransformer;
 import net.minecraft.launchwrapper.Launch;
@@ -17,7 +18,9 @@ import java.util.Map;
 public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
     private static final List<String> MIXIN_CONFIGS = List.of(
         "mixins.actinium.vintage.json",
-        "mixins.actinium.iris.json"
+        "mixins.actinium.iris.json",
+        "mixins.actinium.hbm.early.json",
+        "mixins.actinium.kirino.json"
     );
 
     static {
@@ -30,6 +33,7 @@ public class MixinEarly implements IFMLLoadingPlugin, IEarlyMixinLoader {
         return new String[] {
             MacDisplayForwardCompatTransformer.class.getName(),
             StellarCoreHudCachingCompatTransformer.class.getName(),
+            GnetumHudCachingCompatTransformer.class.getName(),
             "com.gtnewhorizons.angelica.loading.fml.transformers.EarlyRedirectorTransformer"
         };
     }

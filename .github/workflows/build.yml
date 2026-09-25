@@ -1,7 +1,12 @@
 name: Build mod jar
 
 on:
-  [workflow_dispatch, push]
+  workflow_dispatch:
+  push:
+  # Pull requests need an explicit trigger: pushes to a fork never reach this
+  # repository, so without it a contribution gets no build at all.
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -13,6 +18,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        # Full history + tags: the build derives the version prefix from the nearest git tag
+        # (git describe), which fails on the default shallow checkout and silently falls back
+        # to gradle.properties mod_version.
+        fetch-depth: 0
     - name: Set up JDK
       uses: actions/setup-java@v5
       with:
@@ -20,7 +30,7 @@ jobs:
         distribution: 'temurin'
     - uses: gradle/actions/setup-gradle@v6
       with:
-        gradle-version: 9.6.1
+        gradle-version: 9.7.1
       name: Set up Gradle
     - name: Add permission
       run: chmod +x ./gradlew

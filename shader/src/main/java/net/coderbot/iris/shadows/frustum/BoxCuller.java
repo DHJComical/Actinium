@@ -57,4 +57,11 @@ public class BoxCuller {
 
 		return maxZ < -this.maxDistance || minZ > this.maxDistance;
 	}
+
+	/** Returns whether every point of a view-relative box remains within this culler's distance bounds. */
+	public boolean isFullyInsideSodium(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+		return minX >= -this.maxDistance && maxX <= this.maxDistance
+				&& minY >= -this.maxDistance && maxY <= this.maxDistance
+				&& minZ >= -this.maxDistance && maxZ <= this.maxDistance;
+	}
 }

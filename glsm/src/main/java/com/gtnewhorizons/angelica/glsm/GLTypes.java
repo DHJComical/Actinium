@@ -4,6 +4,10 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 
+/**
+ * GL pixel/attrib type sizing and naming used by the GLES upload path and the display-list
+ * recording diagnostics.
+ */
 public final class GLTypes {
 
     private GLTypes() {}

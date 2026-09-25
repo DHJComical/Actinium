@@ -1,0 +1,17 @@
+{
+  "package": "com.dhj.actinium.mixin.mod.kirino",
+  "required": true,
+  "refmap": "mixins.actinium-refmap.json",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "plugin": "com.dhj.actinium.mixins.KirinoMixinConfigPlugin",
+  "mixins": [],
+  "server": [],
+  "client": [
+    "MixinKirinoConfigHub"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

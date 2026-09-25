@@ -2,10 +2,13 @@ package net.coderbot.iris.uniforms;
 
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import lombok.Getter;
+import net.coderbot.iris.compat.dh.DHCompat;
+import net.coderbot.iris.debug.IrisDebugOptions;
 import net.coderbot.iris.gl.uniform.UniformHolder;
 import net.coderbot.iris.pipeline.SkyRenderDistance;
 import net.minecraft.client.Minecraft;
-import org.joml.Matrix3f;
+import net.minecraft.client.multiplayer.WorldClient;
+import dhj.embeddedt.embeddium.impl.render.chunk.map.ChunkTrackerHolder;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
@@ -58,8 +61,45 @@ public class CameraUniforms {
 	}
 
 	private static int getRenderDistanceInBlocks() {
-		// TODO: Should we ask the game renderer for this?
-		return SkyRenderDistance.effectiveBlocks(client.gameSettings.renderDistanceChunks);
+		final int renderDistanceChunks = client.gameSettings.renderDistanceChunks;
+
+		if (!usesDistantHorizonsTerrain()) {
+			return SkyRenderDistance.effectiveBlocks(renderDistanceChunks);
+		}
+
+		return SkyRenderDistance.farBlocks(renderDistanceChunks, getUnrenderedOuterRings());
+	}
+
+	/**
+	 * Returns whether Celeritas renders the terrain while Distant Horizons supplies the distant LODs.
+	 *
+	 * <p>That combination is what makes shader packs place the vanilla-to-LOD transition from {@code far}. Without it
+	 * the reported distance keeps the sky rendering floor, which the skybox, cloud, and celestial geometry need at low
+	 * render distances.</p>
+	 */
+	private static boolean usesDistantHorizonsTerrain() {
+		return DHCompat.isDistantHorizonsLoaded() && IrisDebugOptions.enableCeleritas();
+	}
+
+	/**
+	 * Returns how many of the outermost chunk rings inside the configured render distance are loaded but never
+	 * rendered.
+	 *
+	 * <p>Celeritas publishes a chunk as ready only after the chunk rings configured on its neighbor gate are loaded.
+	 * The chunks beyond the configured render distance are not loaded, so that gate can never be satisfied on the
+	 * outermost rings and nothing is rendered there.</p>
+	 */
+	private static int getUnrenderedOuterRings() {
+		if (!usesDistantHorizonsTerrain()) {
+			return 0;
+		}
+
+		WorldClient world = client.world;
+		if (world == null) {
+			return 0;
+		}
+
+		return ChunkTrackerHolder.get(world).getRequiredNeighborRadius();
 	}
 
 	public static Vector3d getUnshiftedCameraPosition() {

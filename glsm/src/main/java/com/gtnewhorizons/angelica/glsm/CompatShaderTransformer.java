@@ -1,5 +1,6 @@
 package com.gtnewhorizons.angelica.glsm;
 
+import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormatElement.Usage;
 import com.gtnewhorizons.angelica.glsm.backend.RenderBackend;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -11,7 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayDeque;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -31,11 +35,12 @@ import static com.gtnewhorizons.angelica.glsm.backend.BackendManager.RENDER_BACK
  *   <li>Matrix builtin replacement (gl_ModelViewMatrix, gl_ProjectionMatrix, etc.)</li>
  *   <li>Vertex attribute replacement (gl_Vertex, gl_Color, gl_MultiTexCoord0/1, gl_Normal)</li>
  *   <li>gl_TexCoord[N] varying array → per-index in/out declarations</li>
- *   <li>Texture function renames (texture2D → texture, etc.)</li>
+ *   <li>Texture function renames (texture2D → texture, etc.), including pre-parse renames for
+ *   the legacy builtins the grammar rejects in call position (textureCube, texture1D, …)</li>
  *   <li>Fragment output handling (gl_FragColor → layout-qualified out declarations)</li>
  *   <li>Fog builtins (gl_Fog, gl_FogFragCoord)</li>
  *   <li>gl_FrontColor → local variable in vertex shaders</li>
- *   <li>shadow2D/shadow2DLod → texture/textureLod with vec4 wrapping</li>
+ *   <li>shadow1D/shadow2D family → texture/textureLod/textureProj with vec4 wrapping</li>
  *   <li>Version upgrade to 330 core minimum</li>
  *   <li>Reserved word pre-parse renaming (texture-as-variable, sample, etc.)</li>
  * </ul>
@@ -65,7 +70,7 @@ public class CompatShaderTransformer {
         "gl_FragColor", "gl_Fog", "gl_FrontColor", "gl_Color",
         "gl_Vertex", "gl_MultiTexCoord", "gl_TexCoord", "gl_Normal", "ftransform",
         "texture2D", "texture3D", "texelFetch2D", "texelFetch3D", "textureSize2D",
-        "shadow2D", "gl_FrontLightModelProduct",
+        "shadow2D", "texture1D", "textureCube", "shadow1D", "gl_FrontLightModelProduct",
         "gl_LightSource", "gl_FrontMaterial"
     );
 
@@ -103,6 +108,14 @@ public class CompatShaderTransformer {
 
     /**
      * Transform a mod shader source for core profile compatibility.
+     *
+     * <p>Deliberate divergence from upstream Angelica: Angelica additionally re-emits the
+     * transformed 330-core GLSL as GLSL ES 320 on GLES contexts ({@code toGLES(...)} via
+     * {@code SpirvShaderTranslator.glslToGlslEs}, shaderc + SPIRV-Cross). That path is not wired
+     * here because the shaderc/spvc natives are compileOnly in glsm and are not shipped; the
+     * {@code GLES_IFDEF} handling below is a different, desktop-side concern (stripping ES
+     * precision guard blocks so ES-style mod shaders parse as desktop GLSL). GLES output
+     * re-emission remains a follow-up for the WP that ships the natives.
      */
     public static String transform(String source, boolean isFragment) {
         final boolean needsTransform = needsTransformation(source);
@@ -151,14 +164,24 @@ public class CompatShaderTransformer {
         final int targetVersion = Math.max(declaredVersion, RENDER_BACKEND != null ? RENDER_BACKEND.getMinGLSLVersion() : 330);
 
         source = stripGlesPrecisionGuards(source);
-        final SeparatedSource separatedSource = separatePreprocessorPreamble(source);
+        final SeparatedSource separatedSource = separatePreprocessorPreamble(source, targetVersion);
         source = MAIN_VOID_PARAMETERS_PATTERN.matcher(separatedSource.shader()).replaceAll("main()");
 
         // Pre-parse reserved word renaming — prevents ANTLR parse failures
         source = GlslTransformUtils.replaceTexture(source);
+        source = GlslTransformUtils.renameParseBreakingTextureFunctions(source);
         source = GlslTransformUtils.renameReservedWords(source, targetVersion);
 
         final ShaderParser.ParsedShader parsedShader = ShaderParser.parseShader(source);
+        if (parsedShader.preParser().getNumberOfSyntaxErrors() > 0
+                || parsedShader.parser().getNumberOfSyntaxErrors() > 0) {
+            // ANTLR recovers from syntax errors silently; transforming the recovered tree emits
+            // broken GLSL that the driver then rejects. Fail fast so transform() falls back to
+            // version fixup instead.
+            throw new IllegalStateException("GLSL parse failed (shader: "
+                    + parsedShader.parser().getNumberOfSyntaxErrors() + " syntax errors, preprocessor: "
+                    + parsedShader.preParser().getNumberOfSyntaxErrors() + ")");
+        }
         final Transformer transformer = new Transformer(parsedShader.full());
 
         injectMatrixUniforms(transformer);
@@ -233,6 +256,10 @@ public class CompatShaderTransformer {
 
         transformer.renameAndWrapShadow("shadow2D", "texture");
         transformer.renameAndWrapShadow("shadow2DLod", "textureLod");
+        transformer.renameAndWrapShadow("shadow1D", "texture");
+        transformer.renameAndWrapShadow("shadow1DProj", "textureProj");
+        transformer.renameAndWrapShadow("shadow2DProj", "textureProj");
+        transformer.renameAndWrapShadow("shadow1DLod", "textureLod");
 
         final String versionDirective = "#version " + targetVersion + " core\n";
         final String preprocessor = separatedSource.preprocessor().trim();
@@ -292,10 +319,26 @@ public class CompatShaderTransformer {
      * Keep a leading directive-only preamble out of the GLSL AST parser. Moving directives after shader tokens, or
      * moving shader tokens out of a conditional block, would change preprocessing semantics and is therefore rejected.
      */
-    private static SeparatedSource separatePreprocessorPreamble(String source) {
+    private static SeparatedSource separatePreprocessorPreamble(String source, int targetVersion) {
+        try {
+            return separatePreprocessorPreambleStrict(source);
+        } catch (IllegalArgumentException e) {
+            // Mid-body conditional blocks that select between GLSL token groups (a common pattern in
+            // multi-backend mod shaders) are resolvable by evaluating the conditionals up front; every
+            // other unsafe layout keeps its original failure.
+            if (!e.getMessage().contains("conditional directive controls GLSL tokens")
+                    && !e.getMessage().contains("directive appears after GLSL tokens")) {
+                throw e;
+            }
+            return separatePreprocessorWithEvaluatedConditionals(source, targetVersion);
+        }
+    }
+
+    private static SeparatedSource separatePreprocessorPreambleStrict(String source) {
         final String[] lines = source.split("\\R", -1);
         final StringBuilder shader = new StringBuilder(source.length());
         final StringBuilder preprocessor = new StringBuilder();
+        final StringBuilder leadingComments = new StringBuilder();
         boolean continuation = false;
         boolean inBlockComment = false;
         boolean shaderStarted = false;
@@ -340,13 +383,28 @@ public class CompatShaderTransformer {
                     if (conditionalDepth != 0) {
                         throw unsafePreprocessorLayout(lineIndex, "conditional directive controls GLSL tokens");
                     }
+                    if (!shaderStarted) {
+                        // Comments and blank lines collected before the first token move in front of
+                        // the body: the GLSL transformer library fails to place injected declarations
+                        // on an AST whose only leading nodes are comments.
+                        preprocessor.append(leadingComments);
+                        leadingComments.setLength(0);
+                    }
                     shaderStarted = true;
                 }
-                shader.append(line);
+                if (shaderStarted) {
+                    shader.append(line);
+                } else {
+                    leadingComments.append(line);
+                }
             }
 
             if (lineIndex < lines.length - 1) {
-                shader.append('\n');
+                if (shaderStarted) {
+                    shader.append('\n');
+                } else {
+                    leadingComments.append('\n');
+                }
             }
         }
 
@@ -357,7 +415,444 @@ public class CompatShaderTransformer {
             throw unsafePreprocessorLayout(lines.length - 1, "unterminated conditional directive");
         }
 
+        preprocessor.append(leadingComments);
+
         return new SeparatedSource(shader.toString(), preprocessor.toString());
+    }
+
+    private static final class ConditionalState {
+        boolean active;
+        boolean taken;
+
+        ConditionalState(boolean active, boolean taken) {
+            this.active = active;
+            this.taken = taken;
+        }
+    }
+
+    /**
+     * Preprocessor separation for shaders whose conditional blocks contain GLSL tokens (e.g. a
+     * {@code #if BP_NATIVE_ES / #else / #endif} pair selecting between a GLES and a desktop body).
+     * The strict scan rejects those because the AST parser cannot represent the untaken branch, so
+     * here the conditionals are evaluated up front against the macros defined so far (plus
+     * {@code __VERSION__}) and only the taken branches reach the output. C preprocessing rules
+     * apply: undefined identifiers are 0 in {@code #if} expressions and a branch whose expression
+     * cannot be evaluated fails the transform (falling back to version fixup, as before).
+     */
+    private static SeparatedSource separatePreprocessorWithEvaluatedConditionals(String source, int targetVersion) {
+        final String[] lines = source.split("\\R", -1);
+        final StringBuilder shader = new StringBuilder(source.length());
+        final StringBuilder preprocessor = new StringBuilder();
+        final StringBuilder leadingComments = new StringBuilder();
+        boolean inBlockComment = false;
+        boolean shaderStarted = false;
+        boolean macroDirectiveSeen = false;
+        final Deque<ConditionalState> conditionals = new ArrayDeque<>();
+        final Map<String, String> macros = new HashMap<>();
+
+        for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            final String line = lines[lineIndex];
+            final LineClassification classification = classifyLine(line, inBlockComment);
+            inBlockComment = classification.inBlockComment();
+
+            if (classification.trailingBackslash()) {
+                throw unsafePreprocessorLayout(lineIndex, "unterminated directive continuation");
+            }
+
+            final boolean live = conditionals.isEmpty() || conditionals.peek().active;
+
+            if (classification.directive()) {
+                final String directiveName = directiveName(line, classification.directiveOffset());
+                switch (directiveName) {
+                    case "if", "ifdef", "ifndef" -> {
+                        if (live) {
+                            final boolean active = evaluateConditionalDirective(
+                                    line, directiveName, classification.directiveOffset(), macros, targetVersion);
+                            conditionals.push(new ConditionalState(active, active));
+                        } else {
+                            conditionals.push(new ConditionalState(false, true));
+                        }
+                    }
+                    case "elif" -> {
+                        final ConditionalState state = requireConditionalState(conditionals, lineIndex);
+                        if (state.taken) {
+                            state.active = false;
+                        } else {
+                            state.active = evaluateConditionalDirective(
+                                    line, directiveName, classification.directiveOffset(), macros, targetVersion);
+                            state.taken = state.active;
+                        }
+                    }
+                    case "else" -> {
+                        final ConditionalState state = requireConditionalState(conditionals, lineIndex);
+                        state.active = !state.taken;
+                        state.taken = true;
+                    }
+                    case "endif" -> conditionals.pop();
+                    case "line" -> throw unsafePreprocessorLayout(
+                            lineIndex, "#line cannot be relocated without changing line semantics");
+                    case "version" -> {
+                        if (!conditionals.isEmpty()) {
+                            throw unsafePreprocessorLayout(lineIndex, "#version appears inside a conditional block");
+                        }
+                        // Emitted by the transformer itself.
+                    }
+                    case "define", "undef" -> {
+                        if (live) {
+                            applyMacroDirective(line, classification.directiveOffset(), directiveName, macros);
+                            if (shaderStarted && !canRelocateLateMacro(
+                                    line, classification.directiveOffset(), directiveName, shader, macroDirectiveSeen)) {
+                                throw unsafePreprocessorLayout(lineIndex, "directive appears after GLSL tokens");
+                            }
+                            preprocessor.append(line).append('\n');
+                            macroDirectiveSeen = true;
+                        }
+                    }
+                    default -> {
+                        if (live) {
+                            if (shaderStarted) {
+                                throw unsafePreprocessorLayout(lineIndex, "directive appears after GLSL tokens");
+                            }
+                            preprocessor.append(line).append('\n');
+                        }
+                    }
+                }
+            } else if (live) {
+                if (classification.shaderToken() && !shaderStarted) {
+                    // Comments and blank lines collected before the first token move in front of
+                    // the body: the GLSL transformer library fails to place injected declarations
+                    // on an AST whose only leading nodes are comments.
+                    preprocessor.append(leadingComments);
+                    leadingComments.setLength(0);
+                    shaderStarted = true;
+                }
+                if (shaderStarted) {
+                    shader.append(line);
+                } else {
+                    leadingComments.append(line);
+                }
+            }
+            // Lines of dead branches are dropped entirely.
+
+            if (lineIndex < lines.length - 1) {
+                if (shaderStarted) {
+                    shader.append('\n');
+                } else {
+                    leadingComments.append('\n');
+                }
+            }
+        }
+
+        if (!conditionals.isEmpty()) {
+            throw unsafePreprocessorLayout(lines.length - 1, "unterminated conditional directive");
+        }
+
+        preprocessor.append(leadingComments);
+
+        return new SeparatedSource(shader.toString(), preprocessor.toString());
+    }
+
+    private static ConditionalState requireConditionalState(Deque<ConditionalState> conditionals, int lineIndex) {
+        final ConditionalState state = conditionals.peek();
+        if (state == null) {
+            throw unsafePreprocessorLayout(lineIndex, "conditional branch has no opening directive");
+        }
+        return state;
+    }
+
+    private static boolean evaluateConditionalDirective(
+            String line,
+            String directiveName,
+            int directiveOffset,
+            Map<String, String> macros,
+            int targetVersion
+    ) {
+        final String expression = switch (directiveName) {
+            case "ifdef" -> "defined(" + macroOperand(line, directiveOffset) + ")";
+            case "ifndef" -> "!defined(" + macroOperand(line, directiveOffset) + ")";
+            default -> line.substring(directiveOffset + 1 + directiveName.length());
+        };
+        return new GlslConditionalExpression(expression, macros, targetVersion).evaluate() != 0;
+    }
+
+    private static String macroOperand(String line, int directiveOffset) {
+        final Matcher matcher = Pattern.compile("[ \\t]*([A-Za-z_][A-Za-z0-9_]*)")
+                .matcher(line.substring(directiveOffset + 1));
+        if (!matcher.lookingAt()) {
+            throw new IllegalArgumentException("Malformed macro operand in directive: " + line.trim());
+        }
+        return matcher.group(1);
+    }
+
+    private static void applyMacroDirective(
+            String line,
+            int directiveOffset,
+            String directiveName,
+            Map<String, String> macros
+    ) {
+        final Matcher matcher = MACRO_NAME_PATTERN.matcher(line.substring(directiveOffset + 1));
+        if (!matcher.lookingAt()) {
+            return;
+        }
+        if ("undef".equals(directiveName)) {
+            macros.remove(matcher.group(1));
+            return;
+        }
+        final String body = line.substring(directiveOffset + 1 + matcher.end());
+        // Value-less macros exist for defined()/ifdef only; function-like macros stay opaque (their
+        // use inside an #if expression will then fail evaluation and fall back, as before).
+        final String trimmed = body.trim();
+        if (trimmed.startsWith("(")) {
+            return;
+        }
+        macros.put(matcher.group(1), trimmed.isEmpty() ? null : trimmed);
+    }
+
+    /**
+     * Integer evaluator for the subset of C preprocessor expression syntax mod shaders use:
+     * {@code defined(X)}, macro references (recursively expanded, undefined = 0),
+     * {@code __VERSION__}, integer literals with suffixes, parentheses, {@code ! - + * / %},
+     * {@code + -}, comparisons and {@code && ||}.
+     */
+    private static final class GlslConditionalExpression {
+        private final String source;
+        private final Map<String, String> macros;
+        private final int targetVersion;
+        private int pos;
+
+        GlslConditionalExpression(String source, Map<String, String> macros, int targetVersion) {
+            this.source = source;
+            this.macros = macros;
+            this.targetVersion = targetVersion;
+        }
+
+        long evaluate() {
+            final long value = parseOr();
+            skipWhitespace();
+            if (pos != source.length()) {
+                throw new IllegalArgumentException("Trailing tokens in #if expression: " + source.substring(pos));
+            }
+            return value;
+        }
+
+        private long parseOr() {
+            long value = parseAnd();
+            while (true) {
+                skipWhitespace();
+                if (match("||")) {
+                    final long right = parseAnd();
+                    value = (value != 0 || right != 0) ? 1 : 0;
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        private long parseAnd() {
+            long value = parseEquality();
+            while (true) {
+                skipWhitespace();
+                if (match("&&")) {
+                    final long right = parseEquality();
+                    value = (value != 0 && right != 0) ? 1 : 0;
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        private long parseEquality() {
+            long value = parseRelational();
+            while (true) {
+                skipWhitespace();
+                if (match("==")) {
+                    value = value == parseRelational() ? 1 : 0;
+                } else if (match("!=")) {
+                    value = value != parseRelational() ? 1 : 0;
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        private long parseRelational() {
+            long value = parseAdditive();
+            while (true) {
+                skipWhitespace();
+                if (match(">=")) {
+                    value = value >= parseAdditive() ? 1 : 0;
+                } else if (match("<=")) {
+                    value = value <= parseAdditive() ? 1 : 0;
+                } else if (match(">")) {
+                    value = value > parseAdditive() ? 1 : 0;
+                } else if (match("<")) {
+                    value = value < parseAdditive() ? 1 : 0;
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        private long parseAdditive() {
+            long value = parseMultiplicative();
+            while (true) {
+                skipWhitespace();
+                if (match("+")) {
+                    value += parseMultiplicative();
+                } else if (match("-")) {
+                    value -= parseMultiplicative();
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        private long parseMultiplicative() {
+            long value = parseUnary();
+            while (true) {
+                skipWhitespace();
+                if (match("*")) {
+                    value *= parseUnary();
+                } else if (match("/")) {
+                    final long divisor = parseUnary();
+                    if (divisor == 0) {
+                        throw new IllegalArgumentException("Division by zero in #if expression");
+                    }
+                    value /= divisor;
+                } else if (match("%")) {
+                    final long divisor = parseUnary();
+                    if (divisor == 0) {
+                        throw new IllegalArgumentException("Modulo by zero in #if expression");
+                    }
+                    value %= divisor;
+                } else {
+                    return value;
+                }
+            }
+        }
+
+        private long parseUnary() {
+            skipWhitespace();
+            if (match("!")) {
+                return parseUnary() == 0 ? 1 : 0;
+            }
+            if (match("-")) {
+                return -parseUnary();
+            }
+            if (match("+")) {
+                return parseUnary();
+            }
+            return parsePrimary();
+        }
+
+        private long parsePrimary() {
+            skipWhitespace();
+            if (match("(")) {
+                final long value = parseOr();
+                skipWhitespace();
+                if (!match(")")) {
+                    throw new IllegalArgumentException("Missing closing parenthesis in #if expression");
+                }
+                return value;
+            }
+            if (tryMatch("defined")) {
+                skipWhitespace();
+                final boolean parenthesized = match("(");
+                final String name = parseIdentifier();
+                if (name.isEmpty()) {
+                    throw new IllegalArgumentException("defined() without identifier in #if expression");
+                }
+                if (parenthesized) {
+                    skipWhitespace();
+                    if (!match(")")) {
+                        throw new IllegalArgumentException("Missing closing parenthesis after defined(" + name + ")");
+                    }
+                }
+                return macros.containsKey(name) ? 1 : 0;
+            }
+            // Integer literals before identifiers: parseIdentifier accepts digits, so a literal
+            // like 130 would otherwise be treated as an (undefined) macro name and evaluate to 0.
+            final String number = parseIntegerLiteral();
+            if (number != null) {
+                return Long.parseLong(number);
+            }
+            final String identifier = parseIdentifier();
+            if (!identifier.isEmpty()) {
+                return expandIdentifier(identifier);
+            }
+            throw new IllegalArgumentException("Unexpected token in #if expression at: " + source.substring(pos));
+        }
+
+        private long expandIdentifier(String name) {
+            if ("__VERSION__".equals(name)) {
+                return targetVersion;
+            }
+            final String body = macros.get(name);
+            if (body == null) {
+                return 0; // C rule: undefined identifiers evaluate to 0 in #if
+            }
+            if (body.isBlank()) {
+                throw new IllegalArgumentException("Value-less macro '" + name + "' used in #if expression");
+            }
+            final GlslConditionalExpression nested = new GlslConditionalExpression(body, macros, targetVersion);
+            return nested.evaluate();
+        }
+
+        private String parseIdentifier() {
+            final int start = pos;
+            while (pos < source.length()
+                    && (Character.isLetterOrDigit(source.charAt(pos)) || source.charAt(pos) == '_')) {
+                pos++;
+            }
+            return source.substring(start, pos);
+        }
+
+        private String parseIntegerLiteral() {
+            final int start = pos;
+            while (pos < source.length()
+                    && (Character.isLetterOrDigit(source.charAt(pos)) || source.charAt(pos) == '\'')) {
+                pos++;
+            }
+            final String token = source.substring(start, pos);
+            if (token.isEmpty() || !Character.isDigit(token.charAt(0))) {
+                pos = start;
+                return null;
+            }
+            // Strip optional integer suffixes (1u, 10l, 0x1Full).
+            final String digits = token.replaceAll("[uUlL]+$", "").replace("'", "");
+            try {
+                Long.parseLong(digits, token.startsWith("0x") || token.startsWith("0X") ? 16
+                        : token.length() > 1 && token.startsWith("0") ? 8 : 10);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Malformed integer literal '" + token + "' in #if expression");
+            }
+            return digits;
+        }
+
+        private boolean match(String token) {
+            if (source.startsWith(token, pos)) {
+                pos += token.length();
+                return true;
+            }
+            return false;
+        }
+
+        private boolean tryMatch(String token) {
+            final int start = pos;
+            if (match(token)
+                    && (pos >= source.length()
+                        || !Character.isLetterOrDigit(source.charAt(pos)) && source.charAt(pos) != '_')) {
+                return true;
+            }
+            pos = start;
+            return false;
+        }
+
+        private void skipWhitespace() {
+            while (pos < source.length() && Character.isWhitespace(source.charAt(pos))) {
+                pos++;
+            }
+        }
     }
 
     private static int updateConditionalDepth(String directiveName, int depth, int lineIndex) {
@@ -666,8 +1161,19 @@ public class CompatShaderTransformer {
             texCoordIndices.add(Integer.parseInt(texCoordMatcher.group(1)));
         }
         for (int i : texCoordIndices) {
-            // PRIMARY_UV=2, SECONDARY_UV=3. Only indices 0 and 1 are supported; higher indices collide at location 3.
-            final int location = i == 0 ? 2 : 3;
+            // Each texcoord index is a legacy texture unit; map it to its own attribute slot
+            // (0→2, 1→3, 2→5, 3→6) so multiple UV sets never collide (issue #175).
+            final int location = Usage.uvAttributeLocation(i);
+            if (location < 0) {
+                // Units beyond 3 have no attribute slot in the fixed-function pipeline, so the data
+                // cannot be sourced at all. Skipping is deliberate and loud: the fragment stage's
+                // actinium_TexCoord<i> input is left without a matching output, so the program fails
+                // to link instead of silently sampling a constant texel (issue #175's failure mode).
+                LOGGER.warn(
+                    "Passthrough vertex shader requested actinium_TexCoord{} but only legacy texture units 0..3 have a UV attribute slot; skipping it, so the program will fail to link rather than sample wrong coordinates",
+                    i);
+                continue;
+            }
             sb.append("layout(location = ").append(location).append(") in vec4 a_TexCoord").append(i).append(";\n");
             varyings.append("out vec4 actinium_TexCoord").append(i).append(";\n");
             assignments.append("  actinium_TexCoord").append(i).append(" = a_TexCoord").append(i).append(";\n");

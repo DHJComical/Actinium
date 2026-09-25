@@ -4,10 +4,15 @@
 
 in vec4 v_Color;
 in vec2 v_TexCoord;
+#ifdef USE_BILINEAR_CORRECTION
+in vec4 v_RdhFactor;
+in vec2 v_QuadCoord;
+#endif
 
+#if defined(USE_FOG) && defined(CHUNK_FADE_IN_DURATION_MS) && CHUNK_FADE_IN_DURATION_MS > 0
 in float v_ChunkAgeMs;
+#endif
 
-in float v_MaterialMipBias;
 #ifdef USE_FRAGMENT_DISCARD
 in float v_MaterialAlphaCutoff;
 #endif
@@ -21,6 +26,7 @@ in float v_FragDistance;
 
 uniform sampler2D u_BlockTex; // The block texture
 
+uniform int u_FogShape;
 uniform vec4 u_FogColor; // The color of the shader fog
 
 #ifdef USE_FOG_SMOOTH
@@ -35,7 +41,7 @@ uniform float u_EnvFogStart;
 uniform float u_EnvFogEnd;
 #endif
 
-#ifdef USE_FOG_EXP2
+#if defined(USE_FOG_EXP) || defined(USE_FOG_EXP2)
 uniform float u_FogDensity; // The density of the shader fog
 #endif
 
@@ -46,7 +52,10 @@ out vec4 fragColor; // The output fragment for the color framebuffer
 #endif
 
 void main() {
-    vec4 diffuseColor = texture(u_BlockTex, v_TexCoord, v_MaterialMipBias);
+    // Two-argument sampling: the GL filter state picks the mip level instead of per-fragment
+    // derivatives, so alpha-test fragments are not discarded at mip level boundaries where the
+    // derivative-based bias would sample an undefined level and return an alpha of ~0.
+    vec4 diffuseColor = texture(u_BlockTex, v_TexCoord);
 
 #ifdef USE_FRAGMENT_DISCARD
     if (diffuseColor.a < v_MaterialAlphaCutoff) {
@@ -55,6 +64,12 @@ void main() {
 #endif
 
     vec4 m_color = v_Color;
+#ifdef USE_BILINEAR_CORRECTION
+    // min(x, y) * (1 - max(x, y)) == min(x, y) - (x * y)
+    float correctionWeight = min(v_QuadCoord.x, v_QuadCoord.y)
+            - (v_QuadCoord.x * v_QuadCoord.y);
+    m_color += v_RdhFactor * correctionWeight;
+#endif
 
 #ifdef USE_VANILLA_COLOR_FORMAT
     // Apply per-vertex color. AO shade is applied ahead of time on the CPU.
@@ -78,12 +93,23 @@ void main() {
                          _linearFogValue(v_SphericalFragDistance, u_EnvFogStart, u_EnvFogEnd));
 
     fragColor = vec4(mix(diffuseColor.rgb, u_FogColor.rgb, fogValue * u_FogColor.a), diffuseColor.a);
-#elif defined(USE_FOG_EXP2)
-    fragColor = _exp2Fog(diffuseColor, v_FragDistance, u_FogColor, u_FogDensity);
+#else // Legacy fog
+    float fragDistance;
+    if (u_FogShape == FOG_SHAPE_PLANAR) {
+        fragDistance = gl_FragCoord.z / gl_FragCoord.w;
+    } else {
+        fragDistance = v_FragDistance;
+    }
+#if defined(USE_FOG_EXP2)
+    fragColor = _exp2Fog(diffuseColor, fragDistance, u_FogColor, u_FogDensity);
+#elif defined(USE_FOG_EXP)
+    fragColor = _expFog(diffuseColor, fragDistance, u_FogColor, u_FogDensity);
 #elif defined(USE_FOG_SMOOTH)
-    fragColor = _linearFog(diffuseColor, v_FragDistance, u_FogColor, u_FogStart, u_FogEnd);
+    fragColor = _linearFog(diffuseColor, fragDistance, u_FogColor, u_FogStart, u_FogEnd);
 #endif
-#else
+#endif
+
+#else // No fog
     fragColor = diffuseColor;
 #endif
 }

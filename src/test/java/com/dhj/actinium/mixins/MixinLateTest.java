@@ -9,34 +9,55 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class MixinLateTest {
     @Test
     void selectsExactConfigsForLoadedMods() {
-        assertEquals(Set.of(), Set.copyOf(MixinLate.configsFor(modId -> false)));
+        assertEquals(Set.of(), Set.copyOf(MixinLate.configsFor(modId -> false, className -> false)));
 
+        // The lumenized config is gated on the embedded bloom class, not on a mod id:
+        // it loads when the class is present even with no matching mod, and stays off
+        // when only the mod id matches but the class is absent.
         assertEquals(
             Set.of("mixins.actinium.lumenized.json"),
-            Set.copyOf(MixinLate.configsFor("lumenized"::equals))
+            Set.copyOf(MixinLate.configsFor(modId -> false, "gregtech.client.utils.BloomEffectUtil"::equals))
+        );
+
+        assertEquals(
+            Set.of(),
+            Set.copyOf(MixinLate.configsFor("lumenized"::equals, className -> false))
         );
 
         assertEquals(
             Set.of("mixins.actinium.betterfoliage.json"),
-            Set.copyOf(MixinLate.configsFor("betterfoliage"::equals))
+            Set.copyOf(MixinLate.configsFor("betterfoliage"::equals, className -> false))
         );
 
         assertEquals(
             Set.of("mixins.actinium.ccl.json"),
-            Set.copyOf(MixinLate.configsFor("codechickenlib"::equals))
+            Set.copyOf(MixinLate.configsFor("codechickenlib"::equals, className -> false))
+        );
+
+        assertEquals(
+            Set.of("mixins.actinium.cofhcore.json"),
+            Set.copyOf(MixinLate.configsFor("cofhcore"::equals, className -> false))
         );
 
         assertEquals(
             Set.of(
-                "mixins.actinium.dh.json",
                 "mixins.actinium.gibbed.json",
                 "mixins.actinium.ichunutil.json",
                 "mixins.actinium.lumenized.json",
                 "mixins.actinium.revoui.json",
                 "mixins.actinium.betterfoliage.json",
-                "mixins.actinium.ccl.json"
+                "mixins.actinium.ccl.json",
+                "mixins.actinium.voxelmap.json",
+                "mixins.actinium.extrautils2.json",
+                "mixins.actinium.cofhcore.json",
+                "mixins.actinium.oldresearch.json",
+                "mixins.actinium.botania.json",
+                "mixins.actinium.hbm.json",
+                "mixins.actinium.scannable.json",
+                "mixins.actinium.littletiles.json",
+                "mixins.actinium.obscuretooltips.json"
             ),
-            Set.copyOf(MixinLate.configsFor(modId -> true))
+            Set.copyOf(MixinLate.configsFor(modId -> true, className -> true))
         );
     }
 }

@@ -1,6 +1,8 @@
 package com.dhj.actinium.mixin.features.iris;
 
+import com.dhj.actinium.render.EndPortalRenderPolicy;
 import com.dhj.actinium.render.EndPortalRenderer;
+import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.coderbot.iris.debug.IrisGlDebug;
 import net.minecraft.client.renderer.tileentity.TileEntityEndPortalRenderer;
 import net.minecraft.tileentity.TileEntityEndPortal;
@@ -33,6 +35,12 @@ public abstract class TileEntityEndPortalRendererIrisMixin {
             float alpha,
             CallbackInfo ci
     ) {
+        if (!EndPortalRenderPolicy.shouldUseReplacementRenderer(te, IrisApiV0Impl.INSTANCE.isShaderPackInUse())) {
+            // Synthetic render call without a world (e.g. BetterPortals' starfield overlay)
+            // while no shader pack is active: keep the legacy vanilla path so its blend
+            // state hooks apply through the glsm fixed-function simulation.
+            return;
+        }
         ci.cancel();
 
         if (IrisGlDebug.shouldLogPortalRenderEvents() && actinium$portalLogCount++ < 8) {

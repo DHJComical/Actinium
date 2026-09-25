@@ -6,23 +6,23 @@ import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebugHooks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
-import org.embeddedt.embeddium.api.options.OptionIdentifier;
-import org.embeddedt.embeddium.api.options.control.ControlValueFormatter;
-import org.embeddedt.embeddium.api.options.control.CyclingControl;
-import org.embeddedt.embeddium.api.options.control.SliderControl;
-import org.embeddedt.embeddium.api.options.control.TickBoxControl;
-import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
-import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
+import dhj.embeddedt.embeddium.api.options.OptionIdentifier;
+import dhj.embeddedt.embeddium.api.options.control.ControlValueFormatter;
+import dhj.embeddedt.embeddium.api.options.control.CyclingControl;
+import dhj.embeddedt.embeddium.api.options.control.SliderControl;
+import dhj.embeddedt.embeddium.api.options.control.TickBoxControl;
+import dhj.embeddedt.embeddium.impl.gui.SodiumGameOptions;
+import dhj.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.lwjgl.opengl.Display;
-import org.embeddedt.embeddium.impl.render.chunk.MultiDrawMode;
+import dhj.embeddedt.embeddium.impl.render.chunk.MultiDrawMode;
 import com.dhj.actinium.runtime.ActiniumRuntime;
-import org.embeddedt.embeddium.api.options.structure.OptionFlag;
-import org.embeddedt.embeddium.api.options.structure.OptionGroup;
-import org.embeddedt.embeddium.api.options.structure.OptionImpact;
-import org.embeddedt.embeddium.api.options.structure.OptionImpl;
-import org.embeddedt.embeddium.api.options.structure.OptionPage;
-import org.embeddedt.embeddium.api.options.structure.OptionStorage;
-import org.embeddedt.embeddium.api.options.structure.StandardOptions;
+import dhj.embeddedt.embeddium.api.options.structure.OptionFlag;
+import dhj.embeddedt.embeddium.api.options.structure.OptionGroup;
+import dhj.embeddedt.embeddium.api.options.structure.OptionImpact;
+import dhj.embeddedt.embeddium.api.options.structure.OptionImpl;
+import dhj.embeddedt.embeddium.api.options.structure.OptionPage;
+import dhj.embeddedt.embeddium.api.options.structure.OptionStorage;
+import dhj.embeddedt.embeddium.api.options.structure.StandardOptions;
 import com.dhj.actinium.compat.modernui.MuiGuiScaleHook;
 import com.dhj.actinium.render.FastLitItemDisplayListCache;
 import com.mitchej123.lwjgl.GLExtension;
@@ -95,18 +95,6 @@ public class ActiniumGameOptionPages {
                 .setControl(TickBoxControl::new)
                 .setImpact(OptionImpact.MEDIUM)
                 .setBinding(ActiniumGameOptionPages::setFastLitItemDisplayLists, opts -> opts.advanced.useFastLitItemDisplayLists)
-                .build();
-    }
-
-    private static OptionImpl<SodiumGameOptions, Boolean> createRenderPassOptimizationOption(TextComponent tooltip) {
-        return OptionImpl.createBuilder(boolean.class, sodiumOpts)
-                .setId(StandardOptions.Option.RENDER_PASS_OPTIMIZATION.cast())
-                .setName(TextComponent.translatable("embeddium.options.use_render_pass_optimization.name"))
-                .setTooltip(tooltip)
-                .setControl(TickBoxControl::new)
-                .setImpact(OptionImpact.LOW)
-                .setBinding((opts, value) -> opts.performance.useRenderPassOptimization = value, opts -> opts.performance.useRenderPassOptimization)
-                .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                 .build();
     }
 
@@ -288,6 +276,45 @@ public class ActiniumGameOptionPages {
                         .setImpact(OptionImpact.LOW)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(OptionIdentifier.create(ActiniumRuntime.MODID, "biome_color_noise", boolean.class))
+                        .setName(TextComponent.translatable("sodium.options.actinium.biome_color_noise.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.biome_color_noise.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.LOW)
+                        .setBinding((opts, value) -> opts.quality.useBiomeColorNoise = value, opts -> opts.quality.useBiomeColorNoise)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build())
+                .add(OptionImpl.createBuilder(int.class, sodiumOpts)
+                        .setId(OptionIdentifier.create(ActiniumRuntime.MODID, "biome_color_noise_grass", int.class))
+                        .setName(TextComponent.translatable("sodium.options.actinium.biome_color_noise.grass.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.biome_color_noise.grass.tooltip"))
+                        .setControl(option -> new SliderControl(option, 0, 50, 1, ControlValueFormatter.percentage()))
+                        .setBinding((opts, value) -> opts.quality.biomeColorNoiseGrassIntensity = value / 100.0F,
+                                opts -> Math.round(opts.quality.biomeColorNoiseGrassIntensity * 100))
+                        .setImpact(OptionImpact.LOW)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build())
+                .add(OptionImpl.createBuilder(int.class, sodiumOpts)
+                        .setId(OptionIdentifier.create(ActiniumRuntime.MODID, "biome_color_noise_foliage", int.class))
+                        .setName(TextComponent.translatable("sodium.options.actinium.biome_color_noise.foliage.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.biome_color_noise.foliage.tooltip"))
+                        .setControl(option -> new SliderControl(option, 0, 50, 1, ControlValueFormatter.percentage()))
+                        .setBinding((opts, value) -> opts.quality.biomeColorNoiseFoliageIntensity = value / 100.0F,
+                                opts -> Math.round(opts.quality.biomeColorNoiseFoliageIntensity * 100))
+                        .setImpact(OptionImpact.LOW)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build())
+                .add(OptionImpl.createBuilder(int.class, sodiumOpts)
+                        .setId(OptionIdentifier.create(ActiniumRuntime.MODID, "biome_color_noise_water", int.class))
+                        .setName(TextComponent.translatable("sodium.options.actinium.biome_color_noise.water.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.biome_color_noise.water.tooltip"))
+                        .setControl(option -> new SliderControl(option, 0, 50, 1, ControlValueFormatter.percentage()))
+                        .setBinding((opts, value) -> opts.quality.biomeColorNoiseWaterIntensity = value / 100.0F,
+                                opts -> Math.round(opts.quality.biomeColorNoiseWaterIntensity * 100))
+                        .setImpact(OptionImpact.LOW)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
+                        .build())
                 .add(OptionImpl.createBuilder(int.class, sodiumOpts)
                         .setId(StandardOptions.Option.CHUNK_FADE_IN_DURATION.cast())
                         .setName(TextComponent.translatable("celeritas.options.chunk_fade_in_duration.name"))
@@ -311,6 +338,14 @@ public class ActiniumGameOptionPages {
                         .setTooltip(TextComponent.translatable("sodium.options.vignette.tooltip"))
                         .setControl(TickBoxControl::new)
                         .setBinding((opts, value) -> opts.quality.enableVignette = value, opts -> opts.quality.enableVignette)
+                        .setImpact(OptionImpact.LOW)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.DYNAMIC_FOV.cast())
+                        .setName(TextComponent.translatable("sodium.options.dynamic_fov.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.dynamic_fov.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setBinding((opts, value) -> opts.quality.dynamicFov = value, opts -> opts.quality.dynamicFov)
                         .setImpact(OptionImpact.LOW)
                         .build())
                 .build());
@@ -439,15 +474,6 @@ public class ActiniumGameOptionPages {
         List<OptionGroup> groups = new ArrayList<>();
 
         groups.add(OptionGroup.createBuilder()
-                .setId(OptionIdentifier.create(ActiniumRuntime.MODID, "shader_regression_debug"))
-                .add(createModelRendererBatchingOption(TextComponent.translatable("sodium.options.actinium.model_renderer_batching.tooltip")))
-                .add(createModelRendererDisplayListsOption(TextComponent.translatable("sodium.options.actinium.shader_debug.model_renderer_display_lists.tooltip")))
-                .add(createFastLitItemRenderingOption(TextComponent.translatable("sodium.options.actinium.shader_debug.fast_lit_item_rendering.tooltip")))
-                .add(createFastLitItemDisplayListsOption(TextComponent.translatable("sodium.options.actinium.shader_debug.fast_lit_item_display_lists.tooltip")))
-                .add(createRenderPassOptimizationOption(TextComponent.translatable("sodium.options.actinium.shader_debug.render_pass_optimization.tooltip")))
-                .build());
-
-        groups.add(OptionGroup.createBuilder()
                 .setId(StandardOptions.Group.ACTINIUM_DEBUG)
                 .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
                         .setId(StandardOptions.Option.ACTINIUM_PRODUCTION_DIAGNOSTICS.cast())
@@ -464,6 +490,15 @@ public class ActiniumGameOptionPages {
                         .setControl(TickBoxControl::new)
                         .setImpact(OptionImpact.HIGH)
                         .setBinding((opts, value) -> opts.debug.enableActiniumGlDebug = value, opts -> opts.debug.enableActiniumGlDebug)
+                        .build())
+                .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
+                        .setId(StandardOptions.Option.ACTINIUM_LWJGL_DEBUG.cast())
+                        .setName(TextComponent.translatable("sodium.options.actinium.lwjgl_debug.name"))
+                        .setTooltip(TextComponent.translatable("sodium.options.actinium.lwjgl_debug.tooltip"))
+                        .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.HIGH)
+                        .setBinding((opts, value) -> opts.debug.enableLwjglDebug = value, opts -> opts.debug.enableLwjglDebug)
+                        .setFlags(OptionFlag.REQUIRES_GAME_RESTART)
                         .build())
                 .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
                         .setId(StandardOptions.Option.ACTINIUM_PBR_DEBUG.cast())

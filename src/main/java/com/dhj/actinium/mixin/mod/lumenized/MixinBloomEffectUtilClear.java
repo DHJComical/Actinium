@@ -25,9 +25,16 @@ public abstract class MixinBloomEffectUtilClear {
     private static int actinium$mainDepthBuffer;
     private static int actinium$mainDepthType;
 
+    // GregTech CEu 2.8 splits the pass into the renderBloomBlockLayer wrapper and
+    // renderBloomInternal (which holds the framebuffer calls); Lumenized keeps everything
+    // inline in renderBloomBlockLayer. Target both and tolerate whichever is empty.
     @Inject(
-        method = "renderBloomBlockLayer(Lnet/minecraft/client/renderer/RenderGlobal;"
-            + "Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I",
+        method = {
+            "renderBloomBlockLayer(Lnet/minecraft/client/renderer/RenderGlobal;"
+                + "Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I",
+            "renderBloomInternal(Lnet/minecraft/client/renderer/RenderGlobal;"
+                + "Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I"
+        },
         at = @At(
             value = "INVOKE",
             target = "Lnet/minecraft/client/shader/Framebuffer;bindFramebuffer(Z)V",
@@ -35,7 +42,8 @@ public abstract class MixinBloomEffectUtilClear {
             shift = At.Shift.AFTER,
             remap = true
         ),
-        remap = false
+        remap = false,
+        require = 0
     )
     private static void actinium$captureMainDepthBuffer(
         RenderGlobal renderGlobal,
@@ -60,8 +68,12 @@ public abstract class MixinBloomEffectUtilClear {
     }
 
     @Inject(
-        method = "renderBloomBlockLayer(Lnet/minecraft/client/renderer/RenderGlobal;"
-            + "Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I",
+        method = {
+            "renderBloomBlockLayer(Lnet/minecraft/client/renderer/RenderGlobal;"
+                + "Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I",
+            "renderBloomInternal(Lnet/minecraft/client/renderer/RenderGlobal;"
+                + "Lnet/minecraft/util/BlockRenderLayer;DILnet/minecraft/entity/Entity;)I"
+        },
         at = @At(
             value = "INVOKE",
             target = "Lnet/minecraft/client/shader/Framebuffer;bindFramebuffer(Z)V",
@@ -69,7 +81,8 @@ public abstract class MixinBloomEffectUtilClear {
             shift = At.Shift.AFTER,
             remap = true
         ),
-        remap = false
+        remap = false,
+        require = 0
     )
     private static void actinium$clearBloomFbo(
         RenderGlobal renderGlobal,

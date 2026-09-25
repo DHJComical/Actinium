@@ -10,6 +10,11 @@ ivec2 _vert_tex_light_coord;
 // The color of the vertex
 vec4 _vert_color;
 
+#ifdef USE_BILINEAR_CORRECTION
+// The packed correction used to approximate bilinear ambient occlusion.
+vec4 _vert_rdh_factor;
+#endif
+
 // The index of the draw command which this vertex belongs to
 uint _draw_id;
 
@@ -30,8 +35,11 @@ vec3 _get_draw_translation(uint pos) {
 #ifdef USE_VERTEX_COMPRESSION
 in uvec4 a_PosId;
 in vec4 a_Color;
-in vec2 a_TexCoord;
-in ivec2 a_LightCoord;
+in uvec2 a_TexCoord;
+in uint a_LightCoord;
+#ifdef USE_BILINEAR_CORRECTION
+in vec4 a_RdhFactor;
+#endif
 
 #if !defined(VERT_POS_SCALE)
 #error "VERT_POS_SCALE not defined"
@@ -42,13 +50,21 @@ in ivec2 a_LightCoord;
 #endif
 
 void _vert_init() {
-    _vert_position = (vec3(a_PosId.xyz) * VERT_POS_SCALE + VERT_POS_OFFSET);
-    _vert_tex_diffuse_coord = (a_TexCoord * VERT_TEX_SCALE);
-    _vert_tex_light_coord = a_LightCoord;
-    _vert_color = a_Color;
+    uint packed_draw_params = (a_LightCoord & 0xFFFFu);
 
-    _draw_id = (a_PosId.w >> 8u) & 0xFFu;
-    _material_params = (a_PosId.w >> 0u) & 0xFFu;
+    uvec3 position = (a_PosId.xyz << 5u) | ((uvec3(a_PosId.w) >> uvec3(0u, 5u, 10u)) & uvec3(0x1Fu));
+    uvec2 tex_coord = (a_TexCoord << 2u) | ((uvec2(packed_draw_params) >> uvec2(4u, 6u)) & uvec2(0x3u));
+
+    _vert_position = (vec3(position) * VERT_POS_SCALE + VERT_POS_OFFSET);
+    _vert_tex_diffuse_coord = (vec2(tex_coord) * VERT_TEX_SCALE);
+    _vert_color = a_Color;
+#ifdef USE_BILINEAR_CORRECTION
+    _vert_rdh_factor = a_RdhFactor;
+#endif
+
+    _material_params = (packed_draw_params) & 0xFu;
+    _draw_id = (packed_draw_params >> 8) & 0xFFu;
+    _vert_tex_light_coord = ivec2((uvec2((a_LightCoord >> 16) & 0xFFFFu) >> uvec2(0, 8)) & uvec2(0xFFu));
 }
 
 #else
@@ -57,11 +73,17 @@ in vec3 a_PosId;
 in vec4 a_Color;
 in vec2 a_TexCoord;
 in uint a_LightCoord;
+#ifdef USE_BILINEAR_CORRECTION
+in vec4 a_RdhFactor;
+#endif
 
 void _vert_init() {
     _vert_position = a_PosId;
     _vert_tex_diffuse_coord = a_TexCoord;
     _vert_color = a_Color;
+#ifdef USE_BILINEAR_CORRECTION
+    _vert_rdh_factor = a_RdhFactor;
+#endif
 
     uint packed_draw_params = (a_LightCoord & 0xFFFFu);
     // Vertex Material

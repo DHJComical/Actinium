@@ -3,7 +3,6 @@ package com.dhj.actinium.render.terrain.compile.task;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceMap;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.chunk.VisGraph;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
@@ -12,28 +11,29 @@ import net.minecraft.crash.CrashReportCategory;
 import net.minecraft.init.Blocks;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumBlockRenderType;
-import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ReportedException;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 import net.minecraftforge.client.ForgeHooksClient;
-import org.embeddedt.embeddium.impl.asm.ProxyClassGenerator;
-import org.embeddedt.embeddium.impl.render.chunk.RenderSection;
-import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
-import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildContext;
-import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildOutput;
-import org.embeddedt.embeddium.impl.render.chunk.compile.tasks.ChunkBuilderTask;
-import org.embeddedt.embeddium.impl.render.chunk.data.BuiltSectionMeshParts;
-import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
-import org.embeddedt.embeddium.impl.render.chunk.occlusion.GraphDirection;
-import org.embeddedt.embeddium.impl.render.chunk.occlusion.VisibilityEncoding;
-import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
-import org.embeddedt.embeddium.impl.util.task.CancellationToken;
+import dhj.embeddedt.embeddium.impl.asm.ProxyClassGenerator;
+import dhj.embeddedt.embeddium.impl.render.chunk.RenderSection;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildContext;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildOutput;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.tasks.ChunkBuilderTask;
+import dhj.embeddedt.embeddium.impl.render.chunk.data.BuiltSectionMeshParts;
+import dhj.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
+import dhj.embeddedt.embeddium.impl.render.chunk.occlusion.SectionVisibilityBuilder;
+import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
+import dhj.embeddedt.embeddium.impl.util.task.CancellationToken;
 import org.joml.Vector3d;
-import org.embeddedt.embeddium.api.shader.BlockRenderLayer;
-import org.embeddedt.embeddium.api.shader.ShaderProvider;
-import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import dhj.embeddedt.embeddium.api.shader.BlockRenderLayer;
+import dhj.embeddedt.embeddium.api.shader.ShaderProvider;
+import dhj.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import com.dhj.actinium.compat.architecturecraft.ArchitectureCraftCompat;
+import com.dhj.actinium.compat.componentmodelhider.ComponentModelHiderCompat;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
+import com.dhj.actinium.compat.snowrealmagic.SnowRealMagicCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.WorldSlice;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
@@ -48,19 +48,21 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
     private final int buildTime;
     private final Vector3d camera;
     private final ChunkRenderContext renderContext;
+    private final boolean rasterOcclusion;
 
-    public ChunkBuilderMeshingTask(RenderSection render, ChunkRenderContext context, int time, Vector3d camera) {
+    public ChunkBuilderMeshingTask(RenderSection render, ChunkRenderContext context, int time, Vector3d camera, boolean rasterOcclusion) {
         this.render = render;
         this.buildTime = time;
         this.camera = camera;
         this.renderContext = context;
+        this.rasterOcclusion = rasterOcclusion;
     }
 
     @Override
     public ChunkBuildOutput execute(ChunkBuildContext context, CancellationToken cancellationToken) {
         VintageChunkBuildContext buildContext = (VintageChunkBuildContext)context;
         MinecraftBuiltRenderSectionData<TextureAtlasSprite, TileEntity> renderData = new MinecraftBuiltRenderSectionData<>();
-        VisGraph occluder = new VisGraph();
+        SectionVisibilityBuilder occluder = new SectionVisibilityBuilder();
 
         ChunkBuildBuffers buffers = buildContext.buffers;
         buffers.init(renderData, this.render.getSectionIndex());
@@ -87,6 +89,11 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
 
         buildContext.setupTranslation(minX, minY, minZ);
 
+        // The Component Model Hider skips hidden blocks from inside the vanilla chunk rebuild, which
+        // this mesher replaces. Arm its culling hooks for the whole build and skip the hidden blocks
+        // below (see ComponentModelHiderCompat).
+        ComponentModelHiderCompat.beginBuild();
+
         try {
             for (int y = minY; y < maxY; y++) {
                 if (cancellationToken.isCancelled()) {
@@ -104,6 +111,16 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                             continue;
                         }
 
+                        // A hidden block emits no geometry in vanilla either: the hider's redirect
+                        // replaces the renderBlock call and nothing else. The occlusion marking below
+                        // deliberately still covers it, because vanilla's VisGraph#setOpaqueCube call
+                        // sat outside the redirected call and kept a hidden block occluding.
+                        boolean hidden = ComponentModelHiderCompat.isHidden(blockPos);
+
+                        if (this.rasterOcclusion) {
+                            occluder.markRenderable(x, y, z);
+                        }
+
                         if (block.hasTileEntity(blockState)) {
                             TileEntity tileEntity = slice.getTileEntity(blockPos);
                             if (tileEntity != null) {
@@ -117,36 +134,42 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
 
                         buildContext.getBlockRenderer().resetSharedState();
 
-                        BlockRenderLayer shaderLayerOverride = blockTypeIds != null ? blockTypeIds.get(block) : null;
+                        if (!hidden) {
+                            BlockRenderLayer shaderLayerOverride = blockTypeIds != null ? blockTypeIds.get(block) : null;
 
-                        if (shaderLayerOverride != null) {
-                            net.minecraft.util.BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
-                            ForgeHooksClient.setRenderLayer(layer);
-                            block.canRenderInLayer(blockState, layer);
-                            if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer) {
-                                buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer, false);
-                            } else {
-                                var buffer = buildContext.getBufferForLayer(layer);
-                                buildContext.beginVanillaBlockRender(buffer, blockPos, blockState);
-                                try {
-                                    dispatcher.renderBlock(blockState, blockPos, slice, buffer);
-                                } finally {
-                                    buildContext.endVanillaRender(buffer);
+                            if (shaderLayerOverride != null) {
+                                net.minecraft.util.BlockRenderLayer layer = shaderLayerOverride.toVanillaLayer();
+                                ForgeHooksClient.setRenderLayer(layer);
+                                block.canRenderInLayer(blockState, layer);
+                                if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer
+                                        && !SnowRealMagicCompat.shouldForceVanillaRender(block)
+                                        && !ArchitectureCraftCompat.shouldForceVanillaRender(block)) {
+                                    buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer, false);
+                                } else {
+                                    var buffer = buildContext.getBufferForLayer(layer);
+                                    buildContext.beginVanillaBlockRender(buffer, blockPos, blockState);
+                                    try {
+                                        dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                    } finally {
+                                        buildContext.endVanillaRender(buffer);
+                                    }
                                 }
-                            }
-                        } else {
-                            for (net.minecraft.util.BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
-                                if (block.canRenderInLayer(blockState, layer)) {
-                                    ForgeHooksClient.setRenderLayer(layer);
-                                    if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer) {
-                                        buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer);
-                                    } else {
-                                        var buffer = buildContext.getBufferForLayer(layer);
-                                        buildContext.beginVanillaBlockRender(buffer, blockPos, blockState);
-                                        try {
-                                            dispatcher.renderBlock(blockState, blockPos, slice, buffer);
-                                        } finally {
-                                            buildContext.endVanillaRender(buffer);
+                            } else {
+                                for (net.minecraft.util.BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
+                                    if (block.canRenderInLayer(blockState, layer)) {
+                                        ForgeHooksClient.setRenderLayer(layer);
+                                        if (blockState.getRenderType() == EnumBlockRenderType.MODEL && ActiniumRuntime.options().performance.useFastBlockRenderer
+                                                && !SnowRealMagicCompat.shouldForceVanillaRender(block)
+                                                && !ArchitectureCraftCompat.shouldForceVanillaRender(block)) {
+                                            buildContext.getBlockRenderer().renderBlock(blockState, blockPos, slice, layer);
+                                        } else {
+                                            var buffer = buildContext.getBufferForLayer(layer);
+                                            buildContext.beginVanillaBlockRender(buffer, blockPos, blockState);
+                                            try {
+                                                dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                            } finally {
+                                                buildContext.endVanillaRender(buffer);
+                                            }
                                         }
                                     }
                                 }
@@ -158,7 +181,7 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                         }
 
                         if (blockState.isOpaqueCube()) {
-                            occluder.setOpaqueCube(blockPos);
+                            occluder.markOpaque(x, y, z);
                         }
                     }
                 }
@@ -169,6 +192,8 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
         } catch (Throwable ex) {
             // Create a new crash report for other exceptions (e.g. thrown in getQuads)
             throw fillCrashInfo(CrashReport.makeCrashReport(ex, "Encountered exception while building chunk meshes"), slice, blockPos);
+        } finally {
+            ComponentModelHiderCompat.endBuild();
         }
 
         buildContext.convertVanillaDataToCeleritasData(buffers);
@@ -179,7 +204,10 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
             renderData.hasBlockGeometry = true;
         }
 
-        encodeVisibilityData(occluder, renderData);
+        if (this.rasterOcclusion) {
+            renderData.occluderBoxes = occluder.computeOccluderBoxes();
+        }
+        renderData.visibilityData = occluder.computeVisibilityEncoding();
 
         return new ChunkBuildOutput(this.render, renderData, meshes, this.buildTime);
     }
@@ -194,30 +222,8 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
         CrashReportCategory.addBlockInfo(crashReportSection, pos, state);
 
         crashReportSection.addCrashSection("Chunk section", this.render);
-        /*
-        if (this.renderContext != null) {
-            crashReportSection.addCrashSection("Render context volume", this.renderContext.getVolume());
-        }
-
-         */
 
         return new ReportedException(report);
-    }
-
-    private static final EnumFacing[] FACINGS = new EnumFacing[GraphDirection.COUNT];
-
-    static {
-        FACINGS[GraphDirection.UP] = EnumFacing.UP;
-        FACINGS[GraphDirection.DOWN] = EnumFacing.DOWN;
-        FACINGS[GraphDirection.WEST] = EnumFacing.WEST;
-        FACINGS[GraphDirection.EAST] = EnumFacing.EAST;
-        FACINGS[GraphDirection.NORTH] = EnumFacing.NORTH;
-        FACINGS[GraphDirection.SOUTH] = EnumFacing.SOUTH;
-    }
-
-    private static void encodeVisibilityData(VisGraph occluder, MinecraftBuiltRenderSectionData<TextureAtlasSprite, TileEntity> renderData) {
-        var data = occluder.computeVisibility();
-        renderData.visibilityData = VisibilityEncoding.encode((from, to) -> data.isVisible(FACINGS[from], FACINGS[to]));
     }
 
 }

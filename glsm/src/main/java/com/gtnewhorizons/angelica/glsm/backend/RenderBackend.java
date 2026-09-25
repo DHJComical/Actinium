@@ -35,30 +35,38 @@ public abstract class RenderBackend {
     /** Higher priority backends are preferred. */
     public int getPriority() { return 0; }
 
+    /**
+     * Window-level file drag & drop support (issue #122): the shader pack selection screen
+     * enables watching while open, then drains paths via {@link #pollDroppedFiles()} each frame.
+     * Backends without a window event system simply keep the no-op defaults.
+     */
     public boolean supportsFileDrop() { return false; }
 
+    /** Starts queueing dropped file paths. Must be idempotent. */
     public void startFileDrop() {}
 
+    /** Stops queueing dropped file paths and releases any native callback. Must be idempotent. */
     public void stopFileDrop() {}
 
+    /** Returns the file paths dropped on the window since the last call, on the calling (main) thread. */
     public List<String> pollDroppedFiles() { return Collections.emptyList(); }
 
     public boolean isIndirectRequired() { return false; }
-    public boolean supportsGeometryShaders() { return true; }
     public boolean isSDLGPU() { return false; }
-
-    public boolean framebufferCompletenessIsMeaningful() { return true; }
     public void onPersistentBufferWrite(int glId, long offset, long size) {}
+    public boolean supportsGpuDrivenCulling() { return RenderSystem.supportsCompute(); }
+    public void beginComputeDispatchBatch() {}
+    public void endComputeDispatchBatch() {}
+    public abstract int getMinGLSLVersion();
 
+    /** False on backends where EXT_texture_filter_anisotropic is unavailable (e.g. some GLES stacks). */
     public boolean isAnisotropicSupported() { return true; }
 
-    public boolean supportsGpuDrivenCulling() { return RenderSystem.supportsCompute(); }
+    /** False on backends without geometry shader support (e.g. GLES). */
+    public boolean supportsGeometryShaders() { return true; }
 
-    public void beginComputeDispatchBatch() {}
-
-    public void endComputeDispatchBatch() {}
-
-    public abstract int getMinGLSLVersion();
+    /** False on backends where framebuffer completeness checks are unreliable (e.g. some GLES stacks). */
+    public boolean framebufferCompletenessIsMeaningful() { return true; }
 
     public abstract void flush();
     public abstract void finish();
@@ -135,12 +143,16 @@ public abstract class RenderBackend {
 
     public long lastFrameGateEndNanos() { return frameGateEndNanos; }
 
+    /**
+     * Called by the frame loop before the first GL work of a frame. Consumes the splash state
+     * seed: after the splash screen finishes, the game loop inherits a context whose driver
+     * state predates GLSM caching, so the full cached state is replayed once.
+     */
     public void onFrameBegin() {
         if (GLStateManager.takeStateSeedPending()) {
             GLStateManager.replayStateToBackend();
         }
     }
-
     public void onFrameEnd() {}
 
     /** Fired by lwjgl3ify Display before a mutation that recreates the swapchain. */
@@ -205,7 +217,14 @@ public abstract class RenderBackend {
     public void multiDrawElementsIndirectCount(int mode, int type, long indirect, long drawcount, int maxdrawcount, int stride) { throw new UnsupportedOperationException(getName() + ": indirect draw-count buffers unsupported"); }
     public abstract void copyBufferSubData(int readTarget, int writeTarget, long readOffset, long writeOffset, long size);
     public abstract void drawElementsInstanced(int mode, int count, int type, long indices, int primcount);
-    public abstract void drawArraysInstanced(int mode, int first, int count, int primcount);
+    public void drawArraysInstanced(int mode, int first, int count, int primcount) {
+        throw new UnsupportedOperationException("drawArraysInstanced is only supported by the LWJGL3 backend");
+    }
+    /**
+     * Sets the provoking vertex convention for flat varyings (used by line-stipple
+     * emulation: v_LineStart must come from each segment's first vertex).
+     * No-op on backends without GL 3.2.
+     */
     public void provokingVertex(int provokeMode) {}
     public abstract void drawElementsBaseVertex(int mode, int count, int type, long indices, int baseVertex);
     public abstract void multiDrawElementsBaseVertex(int mode, long pCount, int type, long pIndices, int drawcount, long pBaseVertex);
@@ -348,10 +367,18 @@ public abstract class RenderBackend {
     public abstract void uniform2(int location, FloatBuffer value);
     public abstract void uniform3(int location, FloatBuffer value);
     public abstract void uniform4(int location, FloatBuffer value);
-    public abstract void uniform1iv(int location, IntBuffer value);
-    public abstract void uniform2iv(int location, IntBuffer value);
-    public abstract void uniform3iv(int location, IntBuffer value);
-    public abstract void uniform4iv(int location, IntBuffer value);
+    public void uniform1iv(int location, IntBuffer value) {
+        throw new UnsupportedOperationException("uniform1iv is only supported by the LWJGL3 backend");
+    }
+    public void uniform2iv(int location, IntBuffer value) {
+        throw new UnsupportedOperationException("uniform2iv is only supported by the LWJGL3 backend");
+    }
+    public void uniform3iv(int location, IntBuffer value) {
+        throw new UnsupportedOperationException("uniform3iv is only supported by the LWJGL3 backend");
+    }
+    public void uniform4iv(int location, IntBuffer value) {
+        throw new UnsupportedOperationException("uniform4iv is only supported by the LWJGL3 backend");
+    }
     public abstract void uniformMatrix3(int location, boolean transpose, FloatBuffer value);
     public abstract void uniformMatrix4(int location, boolean transpose, FloatBuffer value);
     public void uniformMatrix2(int location, boolean transpose, FloatBuffer matrices) {}
@@ -371,7 +398,6 @@ public abstract class RenderBackend {
     public abstract int getUniformBlockIndex(int program, CharSequence name);
     public abstract void uniformBlockBinding(int program, int blockIndex, int binding);
     public abstract int getIndexedBufferBinding(int target, int index);
-    public abstract int getIntegerIndexed(int pname, int index);
     public abstract void bufferData(int target, long size, int usage);
     public abstract void bufferData(int target, ByteBuffer data, int usage);
     public abstract void bufferData(int target, FloatBuffer data, int usage);
@@ -397,20 +423,31 @@ public abstract class RenderBackend {
     public abstract void getBufferSubData(int target, long offset, DoubleBuffer data);
     public abstract int getBufferParameteri(int target, int pname);
     public abstract boolean isBuffer(int buffer);
-    public abstract ByteBuffer mapBufferRange(int target, long offset, long length, int access);
-    public abstract void flushMappedBufferRange(int target, long offset, long length);
-    public long mapBufferRangeAddress(int target, long offset, long length, int access) {
-        final ByteBuffer buf = mapBufferRange(target, offset, length, access);
-        return buf == null ? 0L : MemoryUtilities.memAddress0(buf);
-    }
-
     public abstract boolean isTexture(int texture);
     public abstract boolean isFramebuffer(int framebuffer);
     public abstract boolean isRenderbuffer(int renderbuffer);
     public abstract boolean isSampler(int sampler);
     public abstract boolean isQuery(int query);
+    public abstract ByteBuffer mapBufferRange(int target, long offset, long length, int access);
+    public abstract void flushMappedBufferRange(int target, long offset, long length);
+    /**
+     * Maps a buffer range and returns its base address, or {@code 0L} when the driver failed the mapping.
+     * Callers copying through raw addresses must treat {@code 0L} as "mapping unavailable" — feeding a null
+     * mapping into {@code memAddress0} crashes the JVM with an access violation instead of raising an exception.
+     */
+    public long mapBufferRangeAddress(int target, long offset, long length, int access) {
+        final ByteBuffer buf = mapBufferRange(target, offset, length, access);
+        return buf == null ? 0L : MemoryUtilities.memAddress0(buf);
+    }
 
     public abstract int genVertexArrays();
+
+    /**
+     * Opaque handle of the GL context current on the calling thread, used to detect display
+     * context migrations (issue #150). Constant 0 on backends without a queryable handle
+     * (the test stub), which never report a migration.
+     */
+    public abstract long getContextHandle();
     public abstract void deleteVertexArrays(int array);
     public abstract void bindVertexArray(int array);
     public abstract boolean isVertexArray(int array);
@@ -464,6 +501,7 @@ public abstract class RenderBackend {
     public abstract int getInteger(int pname);
     public abstract void getInteger(int pname, IntBuffer params);
     public void getInteger(int pname, int[] params) { if (params.length > 0) params[0] = getInteger(pname); }
+    public abstract int getIntegerIndexed(int pname, int index);
     public abstract float getFloat(int pname);
     public abstract void getFloat(int pname, FloatBuffer params);
     public double getDouble(int pname) { return getFloat(pname); }
@@ -487,7 +525,6 @@ public abstract class RenderBackend {
     public void endQuery(int target) { throw new UnsupportedOperationException("occlusion queries unsupported"); }
     public void getQueryObjectui(int id, int pname, IntBuffer params) { throw new UnsupportedOperationException("occlusion queries unsupported"); }
     public int getQueryObjecti(int id, int pname) { throw new UnsupportedOperationException("occlusion queries unsupported"); }
-
     public void queryCounter(int id, int target) { throw new UnsupportedOperationException("timer queries unsupported"); }
     public long getQueryObjectui64(int id, int pname) { throw new UnsupportedOperationException("timer queries unsupported"); }
 
@@ -526,10 +563,12 @@ public abstract class RenderBackend {
     // Debug message insertion
     public void debugMessageInsert(int source, int type, int id, int severity, CharSequence message) {}
 
+    // Debug message filtering
     public void debugMessageControl(int source, int type, int severity, IntBuffer ids, boolean enabled) {}
 
     public void debugMessageCallback(GLDebugMessageListener listener, long userParam) {}
 
+    // Debug log retrieval; returns the number of messages written
     public int getDebugMessageLog(int count, IntBuffer sources, IntBuffer types, IntBuffer ids, IntBuffer severities, IntBuffer lengths, ByteBuffer messageLog) { return 0; }
 
 }

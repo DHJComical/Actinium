@@ -36,11 +36,6 @@ public final class CommandBuffer {
         writePointer += 4;
     }
 
-    private void writeLong(long value) {
-        memPutLong(writePointer, value);
-        writePointer += 8;
-    }
-
     private void writeFloat(float value) {
         memPutFloat(writePointer, value);
         writePointer += 4;
@@ -338,6 +333,14 @@ public final class CommandBuffer {
         writeFloat(a);
     }
 
+    public void writeSecondaryColor(float r, float g, float b) {
+        ensureCapacity(16);
+        writeInt(GLCommand.SECONDARY_COLOR);
+        writeFloat(r);
+        writeFloat(g);
+        writeFloat(b);
+    }
+
     public void writeClearColor(float r, float g, float b, float a) {
         ensureCapacity(20);
         writeInt(GLCommand.CLEAR_COLOR);
@@ -608,15 +611,6 @@ public final class CommandBuffer {
         writeInt(count);
     }
 
-    public void writeDrawElements(int mode, int indices_count, int type, long indices_buffer_offset) {
-        ensureCapacity(24);
-        writeInt(GLCommand.DRAW_ELEMENTS);
-        writeInt(mode);
-        writeInt(indices_count);
-        writeInt(type);
-        writeLong(indices_buffer_offset);
-    }
-
     public void writeBindVBO(int vbo) {
         ensureCapacity(8);
         writeInt(GLCommand.BIND_VBO);
@@ -696,12 +690,6 @@ public final class CommandBuffer {
     public int readInt() {
         final int value = memGetInt(readPointer);
         readPointer += 4;
-        return value;
-    }
-
-    public long readLong() {
-        final long value = memGetLong(readPointer);
-        readPointer += 8;
         return value;
     }
 

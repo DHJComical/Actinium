@@ -2,8 +2,8 @@ package com.dhj.actinium.mixin.vintage.core.frustum;
 
 import net.minecraft.client.renderer.culling.ClippingHelper;
 import net.minecraft.client.renderer.culling.Frustum;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
-import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
 import org.spongepowered.asm.mixin.*;
 import com.dhj.actinium.render.frustum.IClippingHelper;
 import com.dhj.actinium.render.terrain.CameraHelper;
@@ -27,8 +27,9 @@ public class MixinFrustum implements ViewportProvider {
 
     @Override
     public Viewport sodium$createViewport() {
-        var frustum = ((IClippingHelper)clippingHelper).celeritas$getJomlFrustum();
-        return new Viewport(frustum::testAab, new org.joml.Vector3d(this.x, this.y, this.z).add(CameraHelper.getThirdPersonOffset()));
+        var helper = (IClippingHelper) clippingHelper;
+        var frustum = helper.celeritas$getJomlFrustum();
+        return new Viewport(frustum::testAab, new org.joml.Vector3d(this.x, this.y, this.z).add(CameraHelper.getThirdPersonOffset()), helper.celeritas$getVpMatrix());
     }
 }
 

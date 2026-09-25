@@ -1,14 +1,10 @@
 package com.dhj.actinium.mixin.features.iris;
 
-import com.google.common.base.Splitter;
-import com.google.common.collect.Iterables;
+import com.dhj.actinium.gui.ShaderPackTranslationLookup;
 import net.coderbot.iris.Iris;
-import net.coderbot.iris.shaderpack.LanguageMap;
 import net.coderbot.iris.shaderpack.ShaderPack;
-import net.minecraft.client.resources.IResourceManager;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.Locale;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import org.apache.commons.io.IOUtils;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -17,15 +13,16 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
+/**
+ * Wires shader pack lang directory translations into the vanilla I18n lookup chain so the
+ * shader pack option GUI (option names, values, comments and sub-screen titles) follows the
+ * game language. The lookup logic lives in {@link ShaderPackTranslationLookup}; this class
+ * only injects and collects the language order.
+ */
 @Mixin(Locale.class)
 public class LocaleIrisMixin {
     @Shadow
@@ -34,14 +31,13 @@ public class LocaleIrisMixin {
     @Shadow
     private boolean unicode;
 
+    /**
+     * Fallback code of the language chain: en_us is the vanilla fallback language, so packs
+     * without a lang file for the current game language degrade to English instead of raw
+     * keys or numeric values.
+     */
     @Unique
-    private static final List<String> actinium$languageCodes = new ArrayList<>();
-
-    @Unique
-    private static final Splitter actinium$LANG_SPLITTER = Splitter.on('=').limit(2);
-
-    @Unique
-    private static final Pattern actinium$LANG_FORMAT_PATTERN = Pattern.compile("%(\\d+\\$)?[\\d\\.]*[df]");
+    private static final String actinium$FALLBACK_LANGUAGE_CODE = "en_us";
 
     @Inject(method = "translateKeyPrivate(Ljava/lang/String;)Ljava/lang/String;", at = @At("HEAD"), cancellable = true)
     private void actinium$overrideShaderpackLanguageEntry(String key, CallbackInfoReturnable<String> cir) {
@@ -58,12 +54,6 @@ public class LocaleIrisMixin {
         }
     }
 
-    @Inject(method = "loadLocaleDataFiles(Lnet/minecraft/client/resources/IResourceManager;Ljava/util/List;)V", at = @At("HEAD"))
-    private void actinium$trackLanguageCodes(IResourceManager resourceManager, List<String> languageList, CallbackInfo ci) {
-        actinium$languageCodes.clear();
-        new LinkedList<>(languageList).descendingIterator().forEachRemaining(actinium$languageCodes::add);
-    }
-
     @Inject(method = "checkUnicode()V", at = @At("HEAD"), cancellable = true)
     private void actinium$disableShaderpackUnicodeOverride(CallbackInfo ci) {
         this.unicode = false;
@@ -73,58 +63,30 @@ public class LocaleIrisMixin {
     @Unique
     private String actinium$lookupShaderpackEntry(String key) {
         ShaderPack pack = Iris.getCurrentPack().orElse(null);
-        if (pack == null || this.properties.containsKey(key)) {
+        if (pack == null) {
             return null;
         }
 
-        LanguageMap languageMap = pack.getLanguageMap();
-        for (String code : actinium$languageCodes) {
-            Map<String, String> translations = languageMap.getTranslations(code);
-            if (translations == null) {
-                translations = languageMap.getTranslations(actinium$normalizeShaderpackLanguageCode(code));
-            }
-            if (translations == null) {
-                continue;
-            }
-
-            String translation = translations.get(key);
-            if (translation != null) {
-                return translation;
-            }
-        }
-
-        Map<String, String> fallback = languageMap.getTranslations("en_US");
-        return fallback == null ? null : fallback.get(key);
+        return ShaderPackTranslationLookup.lookup(
+            pack.getLanguageMap(),
+            this.properties,
+            key,
+            actinium$preferredLanguageCodes());
     }
 
+    /**
+     * Collects the language lookup order: current game language first, en_us fallback, matching
+     * the vanilla Locale load order. Motivation: the order must be read live (gameSettings.language
+     * changes whenever the language settings screen is used); caching a snapshot from the resource
+     * reload callback breaks the whole chain when the snapshot goes stale or out of sync.
+     */
     @Unique
-    private static String actinium$normalizeShaderpackLanguageCode(String code) {
-        int separator = code.indexOf('_');
-        if (separator < 0 || separator == code.length() - 1) {
-            return code;
+    private static List<String> actinium$preferredLanguageCodes() {
+        List<String> codes = new ArrayList<>(2);
+        codes.add(Minecraft.getMinecraft().gameSettings.language);
+        if (!codes.contains(actinium$FALLBACK_LANGUAGE_CODE)) {
+            codes.add(actinium$FALLBACK_LANGUAGE_CODE);
         }
-
-        return code.substring(0, separator).toLowerCase(java.util.Locale.ROOT) + "_" + code.substring(separator + 1).toUpperCase(java.util.Locale.ROOT);
-    }
-
-    @Unique
-    private static void actinium$loadLanguageData(Map<String, String> translations, InputStream inputStream) throws IOException {
-        InputStream vanillaStream = FMLCommonHandler.instance().loadLanguage(translations, inputStream);
-        if (vanillaStream == null) {
-            return;
-        }
-
-        try {
-            for (String line : IOUtils.readLines(vanillaStream, StandardCharsets.UTF_8)) {
-                if (!line.isEmpty() && line.charAt(0) != '#') {
-                    String[] parts = Iterables.toArray(actinium$LANG_SPLITTER.split(line), String.class);
-                    if (parts != null && parts.length == 2) {
-                        translations.put(parts[0], actinium$LANG_FORMAT_PATTERN.matcher(parts[1]).replaceAll("%$1s"));
-                    }
-                }
-            }
-        } finally {
-            IOUtils.closeQuietly(vanillaStream);
-        }
+        return codes;
     }
 }

@@ -1,6 +1,7 @@
 package com.dhj.actinium.render;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import com.gtnewhorizons.angelica.glsm.states.BlendState;
 import net.coderbot.iris.apiimpl.IrisApiV0Impl;
 import net.minecraft.client.Minecraft;
@@ -14,9 +15,12 @@ import net.minecraft.util.ResourceLocation;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.joml.Matrix4f;
+import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 
+import java.nio.FloatBuffer;
 import java.util.List;
 
 /**
@@ -59,6 +63,11 @@ public final class EndPortalRenderer {
         float vanillaAnimationTime = (float) (Minecraft.getSystemTime() % 800000L) / 800000.0F;
         List<EndPortalLayers.Layer> layers = EndPortalLayers.create(vanillaLayerCount, vanillaAnimationTime);
         boolean shaderPackInUse = IrisApiV0Impl.INSTANCE.isShaderPackInUse();
+        // Synthetic overlay calls (world-less dummy block entity, e.g. BetterPortals' starfield
+        // overlay) fire their fade hook from shouldRenderFace during face evaluation; snapshot
+        // the pre-hook blend state so the hook cannot leak past this render call.
+        boolean syntheticOverlay = shaderPackInUse && portal.getWorld() == null;
+        BlendState preHookBlend = syntheticOverlay ? GLStateManager.getBlendState().copy() : null;
         EndPortalProjection projection;
         List<EndPortalMesh.FaceQuad> faces;
         List<EndPortalMesh.Triangle> shaderTriangles;
@@ -73,6 +82,21 @@ public final class EndPortalRenderer {
         } catch (IllegalArgumentException exception) {
             LOGGER.error("Invalid active matrix while building end portal geometry at {}", portal.getPos(), exception);
             return;
+        }
+
+        // The overlay fade hook (CONSTANT_ALPHA blend factors + constant alpha = opacity) is
+        // reproduced by folding its opacity into the first (sky) layer's vertex alpha, which is
+        // the exact SRC_ALPHA equivalent, and by keeping the per-layer path so the additive
+        // layers stay at full strength. The blend color is set through a raw GL14.glBlendColor
+        // call that bypasses glsm tracking, so it must be read back from the real GL state.
+        float layerZeroAlpha = 1.0F;
+        boolean fadeHook = false;
+        if (syntheticOverlay) {
+            BlendState hookBlend = GLStateManager.getBlendState();
+            if (EndPortalRenderPolicy.isLegacyFadeHookBlend(hookBlend.getSrcRgb(), hookBlend.getDstRgb())) {
+                fadeHook = true;
+                layerZeroAlpha = readBlendColorAlpha();
+            }
         }
 
         int activeTexture = GLStateManager.getActiveTextureUnit();
@@ -93,7 +117,7 @@ public final class EndPortalRenderer {
             GLStateManager.disableLighting();
 
             boolean precomposed = false;
-            if (EndPortalCompositeLogic.shouldPrecompose(shaderPackInUse, layers.size())) {
+            if (!fadeHook && EndPortalCompositeLogic.shouldPrecompose(shaderPackInUse, layers.size())) {
                 int compositeTexture = EndPortalCompositeRenderer.texture(layers);
                 if (compositeTexture != 0) {
                     GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, compositeTexture);
@@ -107,21 +131,22 @@ public final class EndPortalRenderer {
                 EndPortalLayers.Layer skyLayer = layers.getFirst();
                 bindTexture(skyLayer.texture());
                 applyBlend(skyLayer.blend());
-                drawLayers(x, y, z, layers, 0, 1, shaderPackInUse, faces, shaderTriangles, projection);
+                drawLayers(x, y, z, layers, 0, 1, layerZeroAlpha, shaderPackInUse, faces, shaderTriangles, projection);
 
                 if (layers.size() > 1) {
                     EndPortalLayers.Layer portalLayer = layers.get(1);
                     bindTexture(portalLayer.texture());
                     applyBlend(portalLayer.blend());
-                    drawLayers(x, y, z, layers, 1, layers.size(), shaderPackInUse, faces, shaderTriangles, projection);
+                    drawLayers(x, y, z, layers, 1, layers.size(), 1.0F, shaderPackInUse, faces, shaderTriangles, projection);
                 }
             }
         } finally {
+            BlendState blendToRestore = preHookBlend != null ? preHookBlend : previousBlend;
             GLStateManager.glBlendFuncSeparate(
-                previousBlend.getSrcRgb(),
-                previousBlend.getDstRgb(),
-                previousBlend.getSrcAlpha(),
-                previousBlend.getDstAlpha()
+                blendToRestore.getSrcRgb(),
+                blendToRestore.getDstRgb(),
+                blendToRestore.getSrcAlpha(),
+                blendToRestore.getDstAlpha()
             );
             if (blendEnabled) {
                 GLStateManager.enableBlend();
@@ -152,6 +177,16 @@ public final class EndPortalRenderer {
         Minecraft.getMinecraft().getTextureManager().bindTexture(location);
     }
 
+    /**
+     * Reads the constant blend color alpha from the real GL state. The overlay fade hook sets it
+     * through a raw GL14.glBlendColor call, so the glsm-tracked blend color never observes it.
+     */
+    private static float readBlendColorAlpha() {
+        FloatBuffer blendColor = BufferUtils.createFloatBuffer(4);
+        BackendManager.RENDER_BACKEND.getFloat(GL14.GL_BLEND_COLOR, blendColor);
+        return blendColor.get(3);
+    }
+
     private static void applyBlend(EndPortalLayers.Blend blend) {
         switch (blend) {
             case ALPHA -> {
@@ -172,6 +207,7 @@ public final class EndPortalRenderer {
         List<EndPortalLayers.Layer> layers,
         int fromIndex,
         int toIndex,
+        float layerAlpha,
         boolean shaderPackInUse,
         List<EndPortalMesh.FaceQuad> faces,
         List<EndPortalMesh.Triangle> shaderTriangles,
@@ -193,7 +229,7 @@ public final class EndPortalRenderer {
                     z,
                     (face, vertexX, vertexY, vertexZ, u, v, red, green, blue, alpha, lightU, lightV, normalX, normalY, normalZ) ->
                         buffer.pos(vertexX, vertexY, vertexZ)
-                            .color(red, green, blue, alpha)
+                            .color(red, green, blue, alpha * layerAlpha)
                             .tex(u, v)
                             .lightmap(lightU, lightV)
                             .normal(normalX, normalY, normalZ)

@@ -1,5 +1,6 @@
 package com.dhj.actinium.mixin.vintage.fontrenderer;
 
+import com.dhj.actinium.compat.fontrenderer.FontBatcherCompat;
 import com.gtnewhorizon.gtnhlib.util.font.IFontParameters;
 import com.gtnewhorizons.angelica.client.font.BatchingFontRenderer;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
@@ -9,7 +10,6 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fml.common.Loader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Final;
@@ -40,26 +40,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
 
     @Unique private BatchingFontRenderer actinium$batcher;
     @Unique private TextureManager actinium$textureManager;
-    @Unique private static final boolean actinium$disableBatcher = Boolean.getBoolean("actinium.disableFontBatcher");
-    @Unique private static Boolean actinium$neoFontRenderLoaded;
     @Unique private static final Logger actinium$LOGGER = LogManager.getLogger("Actinium");
-
-    @Unique
-    private static boolean actinium$isFontBatcherDisabled() {
-        if (actinium$disableBatcher) {
-            return true;
-        }
-        // Recheck while absent: the splash FontRenderer can run before NFR finishes loading.
-        if (actinium$neoFontRenderLoaded == null || !actinium$neoFontRenderLoaded) {
-            var indexedMods = Loader.instance().getIndexedModList();
-            actinium$neoFontRenderLoaded = indexedMods != null && indexedMods.containsKey("neofontrender");
-            if (Boolean.getBoolean("actinium.fontDebug")) {
-                actinium$LOGGER.info("font-batcher-check neofontrender={} renderer={}",
-                    actinium$neoFontRenderLoaded, FontRenderer.class.getName());
-            }
-        }
-        return actinium$neoFontRenderLoaded;
-    }
 
     @Inject(method = "<init>", at = @At("TAIL"))
     private void actinium$injectBatcher(GameSettings settings, ResourceLocation fontLocation, TextureManager texManager,
@@ -85,7 +66,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Inject(method = "drawString(Ljava/lang/String;FFIZ)I", at = @At("HEAD"), cancellable = true)
     private void actinium$drawStringBatched(String text, float x, float y, int argb, boolean dropShadow,
         CallbackInfoReturnable<Integer> cir) {
-        if (!actinium$isFontBatcherDisabled() && GLStateManager.getListMode() == 0) {
+        if (!FontBatcherCompat.isBatcherDisabledFor(getClass()) && GLStateManager.getListMode() == 0) {
             cir.setReturnValue(angelica$drawStringBatched(text, (int) x, (int) y, argb, dropShadow));
         }
     }
@@ -93,7 +74,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
     @Inject(method = "renderString", at = @At("HEAD"), cancellable = true)
     private void actinium$renderStringBatched(String text, float x, float y, int argb, boolean dropShadow,
         CallbackInfoReturnable<Integer> cir) {
-        if (!actinium$isFontBatcherDisabled() && GLStateManager.getListMode() == 0) {
+        if (!FontBatcherCompat.isBatcherDisabledFor(getClass()) && GLStateManager.getListMode() == 0) {
             cir.setReturnValue(angelica$drawStringBatched(text, (int) x, (int) y, argb, dropShadow));
         }
     }
@@ -108,6 +89,22 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
         }
         if ((argb & 0xfc000000) == 0) {
             argb |= 0xff000000;
+        }
+        if (argb == 0xFF000000) {
+            // Splash font renderers (Modern Splash's SplashFontRenderer) pass color 0 to draw
+            // with the fixed-pipeline current color, which they set to their configured font
+            // color beforehand. Vanilla 1.12.2 renderString forces black for color 0; honor the
+            // intended behavior for splash fonts by sampling the GLSM current color instead.
+            // Sampled before the GLStateManager.glColor4f reset below.
+            int currentArgb = BatchingFontRenderer.readCurrentGlColorAsArgb();
+            boolean splash = angelica$getBatcher().isSplash();
+            if (splash) {
+                argb = currentArgb;
+            }
+            if (Boolean.getBoolean("actinium.fontDebug")) {
+                actinium$LOGGER.info("font-draw-zero text='{}' splash={} glColor=0x{} argbOut=0x{}",
+                    text, splash, Integer.toHexString(currentArgb), Integer.toHexString(argb));
+            }
         }
 
         this.red = (argb >> 16 & 255) / 255.0F;
@@ -161,7 +158,7 @@ public abstract class MixinFontRenderer implements FontRendererAccessor, IFontPa
 
     @Inject(method = "getCharWidth", at = @At("HEAD"), cancellable = true)
     private void actinium$getCharWidth(char c, CallbackInfoReturnable<Integer> cir) {
-        if (!actinium$isFontBatcherDisabled()) {
+        if (!FontBatcherCompat.isBatcherDisabledFor(getClass())) {
             cir.setReturnValue((int) angelica$getBatcher().getCharWidthFine(c));
         }
     }

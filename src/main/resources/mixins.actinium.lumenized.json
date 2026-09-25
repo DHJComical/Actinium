@@ -10,6 +10,7 @@
   "client": [
     "MixinRenderUtilDepth",
     "MixinBloomEffectUtilClear",
+    "MixinBloomEffectUtilStateGuard",
     "MixinShadersDepthTest",
     "MixinDepthTextureUtil"
   ],

@@ -17,6 +17,14 @@ tasks.named('generateMetadataFileForMavenJavaPublication') {
     dependsOn tasks.named('remapJar')
 }
 
+// The published jar path (build/libs/<archivesName>-<version>.jar with an empty classifier) is
+// written by both 'jar' (raw namespace output) and 'shadowRemapJar' (the production shadow-layout
+// jar, which wins by running later). Publish tasks consume that file, and Gradle 9 fails the build
+// on its implicit-dependency validation unless the producing task is declared here.
+tasks.matching { it.name.startsWith('publishMavenJavaPublicationTo') }.configureEach {
+    dependsOn tasks.named('shadowRemapJar')
+}
+
 if (propertyBool('publish_to_maven')) {
     assertProperty 'maven_name'
     assertProperty 'maven_url'

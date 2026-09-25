@@ -9,7 +9,7 @@ import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
-import org.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
+import dhj.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
 import com.dhj.actinium.render.VanillaBufferBuilderRenderer;
 
 import java.nio.ByteBuffer;
@@ -471,8 +471,10 @@ public final class DeferredDrawBatcher {
         boolean tex0Enabled = unpackTex0Enabled(key);
         boolean tex1Enabled = unpackTex1Enabled(key);
 
-        GLStateManager.getTextures().getTextureUnitStates(0).setEnabled(tex0Enabled);
-        GLStateManager.getTextures().getTextureUnitStates(1).setEnabled(tex1Enabled);
+        // Route through GLStateManager so texture-unit enable changes post TEXTURE_UNIT_STATE;
+        // bypassing the event silently desyncs Iris pipeline input tracking (issue #41).
+        GLStateManager.setTexture2DEnabled(0, tex0Enabled);
+        GLStateManager.setTexture2DEnabled(1, tex1Enabled);
         GLStateManager.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
         GLStateManager.glBlendFunc(srcRgb, dstRgb);
         if (blendEnabled) {

@@ -30,19 +30,29 @@ public class PropertiesPreprocessor {
 		final Map<String, String> stringValues = getStringValues(shaderPackOptions);
 
 		try (Preprocessor pp = new Preprocessor()) {
+			// jcpp lexes macro values inside addMacro through an internal lexer source that has
+			// no listener attached, so lexer warnings (e.g. "Decimal constant starts with 0, but
+			// not octal") throw LexerException from addMacro itself; the preprocessor listener is
+			// never consulted there. A single bad define must not fail the whole pack load
+			// (production: ACTINIUM_VERSION=000058359 from version alpha-0.0.5-da83c59), so the
+			// offending macro is skipped with a warning and processing continues.
 			for (String value : booleanValues) {
 				pp.addMacro(value);
 			}
 
 			for (StringPair envDefine : environmentDefines) {
-				pp.addMacro(envDefine.getKey(), envDefine.getValue());
+				try {
+					pp.addMacro(envDefine.getKey(), envDefine.getValue());
+				} catch (LexerException e) {
+					Iris.logger.warn("Skipping environment define {}={}: {}", envDefine.getKey(), envDefine.getValue(), e.getMessage());
+				}
 			}
 
 			stringValues.forEach((name, value) -> {
 				try {
 					pp.addMacro(name, value);
 				} catch (LexerException e) {
-					e.printStackTrace();
+					Iris.logger.warn("Skipping string option macro {}={}: {}", name, value, e.getMessage());
 				}
 			});
 
@@ -61,12 +71,14 @@ public class PropertiesPreprocessor {
 
 		final Preprocessor preprocessor = new Preprocessor();
 
-		try {
-			for (StringPair envDefine : environmentDefines) {
+		// See the comment in the other preprocessSource overload: addMacro throws on lexer
+		// warnings regardless of any listener, so skip the offending macro instead of failing.
+		for (StringPair envDefine : environmentDefines) {
+			try {
 				preprocessor.addMacro(envDefine.getKey(), envDefine.getValue());
+			} catch (LexerException e) {
+				Iris.logger.warn("Skipping environment define {}={}: {}", envDefine.getKey(), envDefine.getValue(), e.getMessage());
 			}
-		} catch (LexerException e) {
-			e.printStackTrace();
 		}
 
 		return process(preprocessor, source);

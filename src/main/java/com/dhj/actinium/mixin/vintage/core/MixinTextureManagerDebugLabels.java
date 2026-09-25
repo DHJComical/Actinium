@@ -16,7 +16,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class MixinTextureManagerDebugLabels {
     @Inject(method = "loadTexture", at = @At("RETURN"))
     private void celeritas$nameTextureObject(ResourceLocation resource, ITextureObject texture, CallbackInfoReturnable<Boolean> cir) {
-        if (texture == null || texture == TextureUtil.MISSING_TEXTURE || GLStateManager.isRecordingDisplayList()) {
+        // loadTexture can run on context-less threads (e.g. CQR reloads its custom textures on the
+        // integrated server thread); getGlTextureId() would force an upload and glGenTextures there,
+        // which aborts the JVM under LWJGL3. The texture uploads lazily on the render thread later.
+        if (texture == null || texture == TextureUtil.MISSING_TEXTURE || GLStateManager.isRecordingDisplayList()
+                || !GLStateManager.hasContext()) {
             return;
         }
 

@@ -2,6 +2,7 @@ package net.coderbot.iris.gui.screen;
 
 import com.gtnewhorizons.angelica.AngelicaMod;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
+import com.gtnewhorizons.angelica.glsm.backend.BackendManager;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.gui.GuiUtil;
 import net.coderbot.iris.gui.NavigationController;
@@ -25,12 +26,18 @@ import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -101,6 +108,8 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
             dirty = false;
             this.initGui();
         }
+
+        handleDroppedFiles();
 
         if (this.mc.world == null) {
             super.drawDefaultBackground();
@@ -181,6 +190,9 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
     @Override
     public void initGui() {
         super.initGui();
+
+        BackendManager.RENDER_BACKEND.startFileDrop();
+
         final int bottomCenter = this.width / 2 - 50;
         final int topCenter = this.width / 2 - 76;
         final boolean inWorld = this.mc.world != null;
@@ -386,6 +398,103 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
         this.notificationDialogTimer = 100;
     }
 
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+
+        if (this.notificationDialogTimer > 0) {
+            this.notificationDialogTimer--;
+        } else if (this.notificationDialog != null) {
+            this.notificationDialog = null;
+        }
+    }
+
+    private void handleDroppedFiles() {
+        final List<String> dropped = BackendManager.RENDER_BACKEND.pollDroppedFiles();
+        if (dropped.isEmpty()) {
+            return;
+        }
+
+        final List<Path> paths = dropped.stream().map(Paths::get).collect(Collectors.toList());
+        if (this.optionMenuOpen) {
+            onOptionMenuFilesDrop(paths);
+        } else {
+            onPackListFilesDrop(paths);
+        }
+    }
+
+    public void onPackListFilesDrop(List<Path> paths) {
+        final List<Path> packs = paths.stream().filter(Iris::isValidShaderpack).collect(Collectors.toList());
+
+        for (Path pack : packs) {
+            final String fileName = pack.getFileName().toString();
+            try {
+                Iris.getShaderpacksDirectoryManager().copyPackIntoDirectory(fileName, pack);
+            } catch (FileAlreadyExistsException e) {
+                displayNotification(I18n.format("options.iris.shaderPackSelection.copyErrorAlreadyExists", fileName));
+                this.shaderPackList.refresh();
+                return;
+            } catch (IOException e) {
+                Iris.logger.warn("Error copying dragged shader pack", e);
+                displayNotification(I18n.format("options.iris.shaderPackSelection.copyError", fileName));
+                this.shaderPackList.refresh();
+                return;
+            }
+        }
+
+        // After copying, refresh the list so the new packs show up
+        this.shaderPackList.refresh();
+
+        if (packs.isEmpty()) {
+            if (paths.size() == 1) {
+                displayNotification(I18n.format("options.iris.shaderPackSelection.failedAddSingle", paths.get(0).getFileName().toString()));
+            } else {
+                displayNotification(I18n.format("options.iris.shaderPackSelection.failedAdd"));
+            }
+        } else if (packs.size() == 1) {
+            final String packName = packs.get(0).getFileName().toString();
+            displayNotification(I18n.format("options.iris.shaderPackSelection.addedPack", packName));
+            // Select the freshly-added pack, since the user probably wants to use it
+            this.shaderPackList.select(packName);
+        } else {
+            displayNotification(I18n.format("options.iris.shaderPackSelection.addedPacks", packs.size()));
+        }
+    }
+
+    public void onOptionMenuFilesDrop(List<Path> paths) {
+        // Only one settings file should be imported at a time
+        if (paths.size() != 1) {
+            displayNotification(I18n.format("options.iris.shaderPackOptions.tooManyFiles"));
+            return;
+        }
+        importPackOptions(paths.get(0));
+    }
+
+    public void importPackOptions(Path settingFile) {
+        try (InputStream in = Files.newInputStream(settingFile)) {
+            final Properties properties = new Properties();
+            properties.load(in);
+
+            Iris.queueShaderPackOptionsFromProperties(properties);
+
+            displayNotification(I18n.format("options.iris.shaderPackOptions.importedSettings", settingFile.getFileName().toString()));
+
+            if (this.navigation != null) {
+                this.navigation.refresh();
+            }
+        } catch (Exception e) {
+            Iris.logger.error("Error importing shader settings file \"" + settingFile + "\"", e);
+            displayNotification(I18n.format("options.iris.shaderPackOptions.failedImport", settingFile.getFileName().toString()));
+        }
+    }
+
+    @Override
+    public void onGuiClosed() {
+        BackendManager.RENDER_BACKEND.stopFileDrop();
+
+        super.onGuiClosed();
+    }
+
     public void onClose() {
         if (!dropChanges) {
             applyChanges();
@@ -404,7 +513,18 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
     public void applyChanges() {
         final ShaderPackEntry entry = this.shaderPackList.getSelected();
 
-        if (entry == null) return;
+        final boolean enabled = this.shaderPackList.getTopButtonRow().shadersEnabled;
+
+        if (entry == null) {
+            // No pack entry is selected (e.g. the configured pack vanished from the
+            // shaderpacks folder). Enabling is already blocked in the UI because there
+            // is no pack to load, but turning shaders off must still reach the config
+            // instead of being silently dropped.
+            if (!enabled && Iris.getIrisConfig().areShadersEnabled()) {
+                IrisApi.getInstance().getConfig().setShadersEnabledAndApply(false);
+            }
+            return;
+        }
 
         this.shaderPackList.setApplied(entry);
 
@@ -416,15 +536,12 @@ public class ShaderPackScreen extends GuiScreen implements HudHideable {
             Iris.clearShaderPackOptionQueue();
         }
 
-        final boolean enabled = this.shaderPackList.getTopButtonRow().shadersEnabled;
-
         final String previousPackName = Iris.getIrisConfig().getShaderPackName().orElse(null);
         final boolean previousShadersEnabled = Iris.getIrisConfig().areShadersEnabled();
 
-        // Only reload if the pack would be different from before, or shaders were toggled, or options were changed, or if we're about to reset options.
-        // Also reload if shaders are enabled but the pack isn't loaded yet, which happens when opening
-        // this screen from the main menu (pack loading is deferred until the render system is ready).
-        if (!name.equals(previousPackName) || enabled != previousShadersEnabled || !Iris.getShaderPackOptionQueue().isEmpty() || Iris.shouldResetShaderPackOptionsOnNextReload() || (enabled && Iris.getCurrentPack().isEmpty())) {
+        if (ShaderPackApplyLogic.shouldReloadOnApply(name, previousPackName, enabled, previousShadersEnabled,
+                Iris.getShaderPackOptionQueue().isEmpty(), Iris.shouldResetShaderPackOptionsOnNextReload(),
+                Iris.getCurrentPack().isPresent(), Iris.isFallback())) {
             Iris.getIrisConfig().setShaderPackName(name);
             IrisApi.getInstance().getConfig().setShadersEnabledAndApply(enabled);
         }

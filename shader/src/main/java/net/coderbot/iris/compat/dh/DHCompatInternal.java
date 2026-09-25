@@ -199,6 +199,13 @@ public class DHCompatInternal {
             shadowProgram.free();
             shadowProgram = null;
         }
+        if (genericShader != null) {
+            genericShader.free();
+        }
+        if (depthTexNoTranslucent != null) {
+            depthTexNoTranslucent.destroy();
+            depthTexNoTranslucent = null;
+        }
         shouldOverrideShadow = false;
         shouldOverride = false;
         dhTerrainFramebuffer = null;
@@ -212,6 +219,7 @@ public class DHCompatInternal {
         OverrideInjector.INSTANCE.unbind(IDhApiFramebuffer.class, dhShadowFramebufferWrapper);
         dhTerrainFramebufferWrapper = null;
         dhShadowFramebufferWrapper = null;
+        genericShader = null;
     }
 
     public void setModelPos(DhApiVec3f modelPos) {
@@ -255,6 +263,22 @@ public class DHCompatInternal {
 
     public int getStoredDepthTex() {
         return storedDepthTex;
+    }
+
+    /**
+     * The Minecraft depth-buffer version this instance last rebuilt its depth copy for;
+     * compared against the live framebuffer version to spot missed resize refreshes.
+     */
+    public int getCachedDepthBufferVersion() {
+        return cachedVersion;
+    }
+
+    /**
+     * Whether the next translucent pass must reseed its depth copy from the DH terrain
+     * framebuffer instead of incrementally copying the stored DH depth texture.
+     */
+    public boolean isTranslucentDepthDirty() {
+        return translucentDepthDirty;
     }
 
     public void copyTranslucents(int width, int height) {

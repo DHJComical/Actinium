@@ -17,14 +17,14 @@ import net.coderbot.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import com.gtnewhorizon.gtnhlib.client.renderer.postprocessing.PostProcessingBridge;
-import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
-import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
-import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix3f;
-import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix4f;
-import org.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderTextureSlot;
-import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
+import dhj.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
+import dhj.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
+import dhj.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix3f;
+import dhj.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix4f;
+import dhj.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderTextureSlot;
+import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
@@ -106,7 +106,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
 
         if (!depthStateOverridden) {
             previousDepthTestEnabled = GLStateManager.glIsEnabled(GL11.GL_DEPTH_TEST);
-            previousDepthMaskEnabled = GLStateManager.getDepthState().isEnabled();
+            previousDepthMaskEnabled = GLStateManager.getDepthState().isMaskEnabled();
             previousDepthFunc = GLStateManager.getDepthState().getFunc();
             depthStateOverridden = true;
         }
@@ -114,7 +114,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         // Hand and fullscreen passes can leave depth disabled or mask writes off before terrain draws.
         GLStateManager.enableDepthTest();
         GLStateManager.glDepthFunc(GL11.GL_LEQUAL);
-        GLStateManager.glDepthMask(true);
+        GLStateManager.glDepthMask(shouldWriteDepth(pass, ShadowRenderingState.areShadowsCurrentlyBeingRendered()));
 
         if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
             GLStateManager.disableCull();
@@ -156,6 +156,16 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
 
         customUniforms.push(this);
         IrisGlDebug.logCeleritasTerrainState(pass.name(), this.handle, alphaTestOverride != null, alphaReference);
+    }
+
+    public static boolean shouldWriteDepth(TerrainRenderPass pass, boolean shadowPass) {
+        // The main translucent pass must never write depth: under shaders, block entities render
+        // after translucent terrain, so glass windows (EnderIO fluid tanks, issue #58) writing
+        // depth would occlude the TESR fluid behind them. The pass's writesDepth flag carries the
+        // shaderless (fixed-function) policy, where vanilla keeps the mask on and TESRs draw first;
+        // the Iris path therefore applies the per-semantic override itself instead of deferring to
+        // the flag. Water keeps writing depth so stacked water sorts correctly (#79).
+        return shadowPass || (pass.writesDepth() && pass.semantic() != TerrainRenderPass.Semantic.TRANSLUCENT);
     }
 
     @Override
@@ -253,20 +263,7 @@ public class IrisCeleritasChunkShaderInterface implements ChunkShaderInterface {
         }
 
         final boolean isShadow = ShadowRenderingState.areShadowsCurrentlyBeingRendered();
-        final IrisTerrainPass irisPass;
-        if (isShadow) {
-            if (pass.isReverseOrder()) {
-                irisPass = IrisTerrainPass.SHADOW_TRANSLUCENT;
-            } else {
-                irisPass = pass.supportsFragmentDiscard() ? IrisTerrainPass.SHADOW_CUTOUT : IrisTerrainPass.SHADOW;
-            }
-        } else if (pass.isReverseOrder()) {
-            irisPass = IrisTerrainPass.GBUFFER_TRANSLUCENT;
-        } else if (pass.supportsFragmentDiscard()) {
-            irisPass = IrisTerrainPass.GBUFFER_CUTOUT;
-        } else {
-            irisPass = IrisTerrainPass.GBUFFER_SOLID;
-        }
+        final IrisTerrainPass irisPass = IrisTerrainPass.fromTerrainPass(pass, isShadow);
 
         final GlFramebuffer framebuffer = pipeline.getPassInfo(irisPass).framebuffer();
         if (framebuffer != null) {

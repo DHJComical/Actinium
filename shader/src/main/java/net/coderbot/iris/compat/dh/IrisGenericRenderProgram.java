@@ -140,7 +140,6 @@ public class IrisGenericRenderProgram implements IDhApiGenericObjectShaderProgra
 
         this.va = GLStateManager.glGenVertexArrays();
         GLStateManager.glBindVertexArray(va);
-        GLStateManager.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, 0, 0);
         GLStateManager.glEnableVertexAttribArray(0);
 
         projectionUniform = tryGetUniformLocation2("iris_ProjectionMatrix");
@@ -284,6 +283,7 @@ public class IrisGenericRenderProgram implements IDhApiGenericObjectShaderProgra
 
     public void free() {
         GLStateManager.glDeleteProgram(id);
+        GLStateManager.glDeleteVertexArrays(va);
     }
 
     public void fillIndirectUniformData(DhApiRenderParam dhApiRenderParam, DhApiRenderableBoxGroupShading dhApiRenderableBoxGroupShading, IDhApiRenderableBoxGroup boxGroup, DhApiVec3d camPos) {

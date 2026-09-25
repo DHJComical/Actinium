@@ -1,5 +1,6 @@
 package com.dhj.actinium.compat.fluidlogged;
 
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import git.jbredwards.fluidlogged_api.api.block.IFluidloggable;
 import git.jbredwards.fluidlogged_api.api.util.FluidState;
 import net.minecraft.block.state.IBlockState;
@@ -7,7 +8,6 @@ import net.minecraft.client.renderer.BlockRendererDispatcher;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.client.ForgeHooksClient;
-import net.minecraftforge.fml.common.Loader;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
 import com.dhj.actinium.render.terrain.compile.VintageChunkBuildContext;
 
@@ -16,7 +16,7 @@ public class FluidloggedCompat {
      * The mod ID of Fluidlogged API.
      */
     public static final String MODID = "fluidlogged_api";
-    public static final boolean IS_LOADED = Loader.isModLoaded(MODID);
+    public static final boolean IS_LOADED = Mods.FLUIDLOGGED_API;
 
     public static FluidState getEmptyFluidState() {
         return FluidState.EMPTY;

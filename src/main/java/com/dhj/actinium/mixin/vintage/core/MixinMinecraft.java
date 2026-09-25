@@ -12,7 +12,7 @@ import com.gtnewhorizons.angelica.glsm.streaming.TessellatorStreamingDrawer;
 import com.mitchej123.lwjgl.LWJGLServiceProvider;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.common.Loader;
-import org.embeddedt.embeddium.impl.render.frame.RenderAheadManager;
+import dhj.embeddedt.embeddium.impl.render.frame.RenderAheadManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -125,4 +125,3 @@ public class MixinMinecraft {
         return LWJGLServiceProvider.LWJGL.isOpenGLVersionSupported(3, 2);
     }
 }
-

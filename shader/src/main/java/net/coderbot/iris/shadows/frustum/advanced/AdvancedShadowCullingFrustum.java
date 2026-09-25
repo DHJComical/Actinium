@@ -6,10 +6,10 @@ import net.coderbot.iris.shadows.frustum.BoxCuller;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.fml.common.Optional;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
-import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
+import dhj.embeddedt.embeddium.impl.render.viewport.frustum.ShadowSearchFrustum;
 import org.joml.Math;
-import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
@@ -36,7 +36,7 @@ import org.joml.Vector4f;
  * cost of slightly more computations.</p>
  */
 @Optional.Interface(modid = "distanthorizons", iface = "com.seibel.distanthorizons.api.interfaces.override.rendering.IDhApiShadowCullingFrustum")
-public class AdvancedShadowCullingFrustum extends Frustum implements ViewportProvider, org.embeddedt.embeddium.impl.render.viewport.frustum.Frustum, IDhApiShadowCullingFrustum {
+public class AdvancedShadowCullingFrustum extends Frustum implements ViewportProvider, dhj.embeddedt.embeddium.impl.render.viewport.frustum.Frustum, IDhApiShadowCullingFrustum, ShadowSearchFrustum {
 	private static final int MAX_CLIPPING_PLANES = 13;
 
 	/**
@@ -284,9 +284,74 @@ public class AdvancedShadowCullingFrustum extends Frustum implements ViewportPro
 		return checkCornerVisibility(minX, minY, minZ, maxX, maxY, maxZ);
 	}
 
+	/** Classifies a box against the generated clipping planes using its far and near corners. */
+	protected int intersectCorners(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+		boolean fullyInside = true;
+
+		for (int i = 0; i < planeCount; ++i) {
+			final Vector4f plane = this.planes[i];
+			final float px = plane.x();
+			final float py = plane.y();
+			final float pz = plane.z();
+			final float pw = plane.w();
+
+			final float farX = px < 0 ? minX : maxX;
+			final float farY = py < 0 ? minY : maxY;
+			final float farZ = pz < 0 ? minZ : maxZ;
+			if (Math.fma(px, farX, Math.fma(py, farY, pz * farZ)) < -pw) {
+				return OUTSIDE;
+			}
+
+			final float nearX = px < 0 ? maxX : minX;
+			final float nearY = py < 0 ? maxY : minY;
+			final float nearZ = pz < 0 ? maxZ : minZ;
+			if (Math.fma(px, nearX, Math.fma(py, nearY, pz * nearZ)) < -pw) {
+				fullyInside = false;
+			}
+		}
+
+		return fullyInside ? FULLY_INSIDE : PARTIALLY_INSIDE;
+	}
+
+	/** Combines clipping-plane classification with the optional view-relative distance culler. */
+	@Override
+	public int intersectAab(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+		if (boxCuller != null && boxCuller.isCulledViewRelative(minX, minY, minZ, maxX, maxY, maxZ)) {
+			return OUTSIDE;
+		}
+
+		int result = intersectCorners(minX, minY, minZ, maxX, maxY, maxZ);
+		if (result == FULLY_INSIDE && boxCuller != null
+				&& !boxCuller.isFullyInsideSodium(minX, minY, minZ, maxX, maxY, maxZ)) {
+			return PARTIALLY_INSIDE;
+		}
+
+		return result;
+	}
+
 	@Override
 	public Viewport sodium$createViewport() {
 		return new Viewport(this, position.set(x, y, z));
+	}
+
+	@Override
+	public boolean supportsOcclusionSearch() {
+		return true;
+	}
+
+	@Override
+	public float shadowLightX() {
+		return this.shadowLightVectorFromOrigin.x();
+	}
+
+	@Override
+	public float shadowLightY() {
+		return this.shadowLightVectorFromOrigin.y();
+	}
+
+	@Override
+	public float shadowLightZ() {
+		return this.shadowLightVectorFromOrigin.z();
 	}
 
 	protected boolean isVisible(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {

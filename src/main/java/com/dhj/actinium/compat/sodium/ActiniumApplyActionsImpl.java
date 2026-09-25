@@ -1,6 +1,7 @@
 package com.dhj.actinium.compat.sodium;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.util.text.TextComponentTranslation;
 
 /** Performs Config flag actions against the active Minecraft 1.12.2 client. */
@@ -32,6 +33,11 @@ public final class ActiniumApplyActionsImpl implements ActiniumApplyActions {
     @Override
     public void reloadAssets() {
         this.client.getTextureMapBlocks().setMipmapLevels(this.client.gameSettings.mipmapLevels);
+        // Keep the atlas filter state in sync with the new mip level count, matching vanilla
+        // GameSettings#setOptionFloatValue for MIPMAP_LEVELS. Without this the texture keeps the
+        // previous mipmap filter while the rebuilt atlas has a different number of mip levels.
+        this.client.getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
+        this.client.getTextureMapBlocks().setBlurMipmapDirect(false, this.client.gameSettings.mipmapLevels > 0);
         this.client.refreshResources();
     }
 

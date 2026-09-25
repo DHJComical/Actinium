@@ -15,8 +15,7 @@ import net.coderbot.iris.gl.texture.InternalTextureFormat;
 import net.coderbot.iris.gl.texture.PixelType;
 import net.coderbot.iris.gl.uniform.UniformUpdateFrequency;
 import net.coderbot.iris.uniforms.SystemTimeUniforms;
-import net.minecraft.client.Minecraft;
-import org.embeddedt.embeddium.impl.render.shader.ShaderLoader;
+import dhj.embeddedt.embeddium.impl.render.shader.ShaderLoader;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 

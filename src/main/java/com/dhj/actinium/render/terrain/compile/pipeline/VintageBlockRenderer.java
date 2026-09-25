@@ -1,6 +1,8 @@
 package com.dhj.actinium.render.terrain.compile.pipeline;
 
 import com.dhj.actinium.api.render.terrain.BlockQuadTransformerHolder;
+import com.dhj.actinium.compat.MissingModelCompat;
+import com.dhj.actinium.compat.componentmodelhider.ComponentModelHiderCompat;
 import net.coderbot.iris.debug.ShaderRegressionDebug;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -19,28 +21,29 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.WorldType;
 import net.minecraftforge.client.model.pipeline.VertexBufferConsumer;
 import net.minecraftforge.registries.IRegistryDelegate;
-import org.embeddedt.embeddium.api.util.ColorARGB;
-import org.embeddedt.embeddium.impl.model.light.LightMode;
-import org.embeddedt.embeddium.impl.model.light.LightPipeline;
-import org.embeddedt.embeddium.impl.model.light.LightPipelineProvider;
-import org.embeddedt.embeddium.impl.model.light.data.QuadLightData;
-import org.embeddedt.embeddium.impl.model.light.debug.AODebug;
-import org.embeddedt.embeddium.impl.model.quad.BakedQuadView;
-import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
-import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadOrientation;
-import org.embeddedt.embeddium.impl.render.chunk.ChunkColorWriter;
-import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
-import org.embeddedt.embeddium.impl.render.chunk.compile.buffers.ChunkModelBuilder;
-import org.embeddedt.embeddium.impl.render.chunk.compile.pipeline.BakedQuadGroupAnalyzer;
-import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
-import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
-import org.embeddedt.embeddium.impl.util.ModelQuadUtil;
-import org.embeddedt.embeddium.api.shader.vertex.BlockRenderContext;
-import org.embeddedt.embeddium.api.shader.vertex.ContextAwareChunkVertexEncoder;
-import org.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
-import org.embeddedt.embeddium.api.shader.ShaderProvider;
-import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import dhj.embeddedt.embeddium.api.util.ColorARGB;
+import dhj.embeddedt.embeddium.impl.model.light.LightMode;
+import dhj.embeddedt.embeddium.impl.model.light.LightPipeline;
+import dhj.embeddedt.embeddium.impl.model.light.LightPipelineProvider;
+import dhj.embeddedt.embeddium.impl.model.light.data.QuadLightData;
+import dhj.embeddedt.embeddium.impl.model.light.debug.AODebug;
+import dhj.embeddedt.embeddium.impl.model.quad.BakedQuadView;
+import dhj.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
+import dhj.embeddedt.embeddium.impl.model.quad.properties.ModelQuadOrientation;
+import dhj.embeddedt.embeddium.impl.render.chunk.ChunkColorWriter;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.buffers.ChunkModelBuilder;
+import dhj.embeddedt.embeddium.impl.render.chunk.compile.pipeline.BakedQuadGroupAnalyzer;
+import dhj.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
+import dhj.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
+import dhj.embeddedt.embeddium.impl.util.ModelQuadUtil;
+import dhj.embeddedt.embeddium.api.shader.vertex.BlockRenderContext;
+import dhj.embeddedt.embeddium.api.shader.vertex.ContextAwareChunkVertexEncoder;
+import dhj.embeddedt.embeddium.api.shader.vertex.ExtendedDataHelper;
+import dhj.embeddedt.embeddium.api.shader.ShaderProvider;
+import dhj.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import net.coderbot.iris.block_rendering.BlockMaterialMapping;
 import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
@@ -56,6 +59,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+
+import static net.minecraft.block.material.Material.LAVA;
+import static net.minecraft.block.material.Material.WATER;
 
 public class VintageBlockRenderer {
     private final BlockModelShapes shapes;
@@ -95,6 +101,18 @@ public class VintageBlockRenderer {
     public void resetSharedState() {
     }
 
+    /**
+     * Resolves the terrain material for one block render pass. Translucent water and lava are
+     * routed to the dedicated fluid material so they keep depth writes without forcing ordinary
+     * translucent terrain into the fluid pass (#79).
+     */
+    protected Material resolveRenderMaterial(ChunkBuildBuffers buffers, IBlockState state, BlockRenderLayer layer) {
+        boolean isFluid = state.getMaterial() == WATER || state.getMaterial() == LAVA;
+        return isFluid && layer == BlockRenderLayer.TRANSLUCENT
+                ? buffers.getRenderPassConfiguration().defaultFluidMaterial()
+                : buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+    }
+
     public void renderBlock(IBlockState state, BlockPos pos, ActiniumBlockAccess blockAccess, BlockRenderLayer layer) {
         this.renderBlock(state, pos, blockAccess, layer, true);
     }
@@ -111,6 +129,12 @@ public class VintageBlockRenderer {
             state = state.getActualState(blockAccess, pos);
         }
         var model = this.shapes.getModelForState(state);
+        if (MissingModelCompat.isMissingModel(model)) {
+            // Missing models have no renderable quads; Forge's fancy variant lazily renders a
+            // "missing" label through the font renderer, which requires a GL context and crashes
+            // when chunk meshes are built on worker threads.
+            return;
+        }
         this.currentBlockAccess = blockAccess;
         this.currentMetadata = state.getBlock().getMetaFromState(state);
         this.currentShaderMetadata = applyShaderStateBits(state, pos, blockAccess, this.currentMetadata);
@@ -120,7 +144,7 @@ public class VintageBlockRenderer {
         this.currentRenderLayer = layer;
 
         var buffers = this.context.buffers;
-        var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(layer);
+        var material = resolveRenderMaterial(buffers, state, layer);
         var buffer = buffers.get(material);
 
         long rand = MathHelper.getPositionRandom(pos);
@@ -150,7 +174,16 @@ public class VintageBlockRenderer {
         for (var dir : EnumFacing.VALUES) {
             var quads = model.getQuads(state, dir, rand);
 
-            if (quads.isEmpty() || !state.shouldSideBeRendered(blockAccess, pos, dir)) {
+            // The vanilla face-culling call stays at this call site on purpose: addon mixins
+            // @Redirect instructions inside renderBlock (see VintageBlockRendererBindingContractTest),
+            // so extracting it into a helper method would move it out of their reach. The Component
+            // Model Hider's neighbour rule is applied afterwards, and only when the vanilla predicate
+            // already culled the face: vanilla learns that rule from the hider's redirects inside
+            // BlockModelRenderer, which this fast mesher does not go through, so a hidden block would
+            // otherwise still occlude and punch a see-through hole into every adjacent block.
+            if (quads.isEmpty()
+                    || (!state.shouldSideBeRendered(blockAccess, pos, dir)
+                            && !ComponentModelHiderCompat.isNeighbourHidden(pos, dir))) {
                 continue;
             }
 
@@ -228,7 +261,9 @@ public class VintageBlockRenderer {
 
             ModelQuadOrientation orientation = ModelQuadOrientation.NORMAL;
 
-            var quadMaterial = BakedQuadGroupAnalyzer.chooseOptimalMaterial(this.currentQuadRenderingFlags, material, config, BakedQuadView.of(quad));
+            var quadMaterial = isCurrentFluid()
+                    ? material
+                    : BakedQuadGroupAnalyzer.chooseOptimalMaterial(this.currentQuadRenderingFlags, material, config, BakedQuadView.of(quad));
             ChunkModelBuilder buffer = (quadMaterial == material) ? defaultBuffer : buffers.get(quadMaterial);
             this.prepareEncoder(buffer, pos);
 
@@ -255,8 +290,7 @@ public class VintageBlockRenderer {
 
         Block block = this.currentState.getBlock();
         byte lightValue = (byte) this.currentState.getLightValue(this.currentBlockAccess, pos);
-        boolean isFluid = this.currentState.getMaterial() == net.minecraft.block.material.Material.WATER
-                || this.currentState.getMaterial() == net.minecraft.block.material.Material.LAVA;
+        boolean isFluid = isCurrentFluid();
         int blockId = Block.getIdFromBlock(block);
         short renderType = isFluid
                 ? ExtendedDataHelper.FLUID_RENDER_TYPE
@@ -286,11 +320,15 @@ public class VintageBlockRenderer {
         this.usedContextEncoders.add(encoder);
     }
 
+    private boolean isCurrentFluid() {
+        return this.currentState.getMaterial() == WATER || this.currentState.getMaterial() == LAVA;
+    }
+
     private int applyShaderStateBits(IBlockState state, BlockPos pos, ActiniumBlockAccess blockAccess, int metadata) {
         if (BlockRenderingSettings.INSTANCE.hasSnowyEntries()
                 && BlockRenderingSettings.INSTANCE.getSnowyBlocks().contains(state.getBlock())
                 && isSnowCovered(blockAccess, pos)) {
-            return metadata | net.coderbot.iris.block_rendering.BlockMaterialMapping.SNOWY_META_BIT;
+            return metadata | BlockMaterialMapping.SNOWY_META_BIT;
         }
 
         return metadata;

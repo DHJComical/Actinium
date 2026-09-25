@@ -55,7 +55,6 @@ public class AngelicaRedirectorTransformer implements IClassTransformer {
             || transformedName.startsWith("net.minecraft.client.shader.")
             || transformedName.startsWith("net.minecraft.client.gui.FontRenderer")
             || transformedName.startsWith("net.minecraftforge.client.")
-            || transformedName.startsWith("org.taumc.celeritas.")
             || transformedName.startsWith("com.dhj.actinium."))) {
             System.out.println("[ActiniumRedirector] late transformed " + transformedName);
         }

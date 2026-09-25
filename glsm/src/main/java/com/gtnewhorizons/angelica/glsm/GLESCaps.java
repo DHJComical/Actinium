@@ -7,6 +7,10 @@ import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL31;
 import org.lwjgl.opengl.GL32;
 
+/**
+ * Gates GL capability bits that do not exist (or raise GL_INVALID_ENUM) on an OpenGL ES context.
+ * Desktop contexts are never filtered; clip planes on GLES require GL_EXT_clip_cull_distance.
+ */
 public final class GLESCaps {
 
     private GLESCaps() {}

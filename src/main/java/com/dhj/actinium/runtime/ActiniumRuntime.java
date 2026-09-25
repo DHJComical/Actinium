@@ -2,7 +2,7 @@ package com.dhj.actinium.runtime;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.embeddedt.embeddium.impl.gui.SodiumGameOptions;
+import dhj.embeddedt.embeddium.impl.gui.SodiumGameOptions;
 
 public final class ActiniumRuntime {
     public static final String MODID = "actinium";

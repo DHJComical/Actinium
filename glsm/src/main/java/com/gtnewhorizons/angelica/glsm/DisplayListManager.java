@@ -15,6 +15,9 @@ import com.gtnewhorizons.angelica.glsm.recording.DisplayListVBO;
 import com.gtnewhorizons.angelica.glsm.recording.DisplayListVBOBuilder;
 import com.gtnewhorizons.angelica.glsm.recording.GLCommand;
 import com.gtnewhorizons.angelica.glsm.recording.commands.DisplayListCommand;
+import com.gtnewhorizons.angelica.glsm.recording.commands.IndexedDrawBatch;
+import com.gtnewhorizons.angelica.glsm.recording.commands.IndexedDrawBatchBuilder;
+import com.gtnewhorizons.angelica.glsm.recording.commands.IndexedDrawCapture;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import lombok.Getter;
@@ -261,6 +264,12 @@ public class DisplayListManager {
         if (ImmediateModeRecorder.isDrawing()) {
             ImmediateModeRecorder.setColor(r, g, b, a);
         }
+    }
+
+    public static void recordSecondaryColor(float r, float g, float b) {
+        if (currentRecorder == null) return;
+        drawBarrier();
+        currentRecorder.recordSecondaryColor(r, g, b);
     }
 
     public static void recordColorMask(boolean r, boolean g, boolean b, boolean a) {
@@ -584,8 +593,17 @@ public class DisplayListManager {
         if (currentRecorder != null) currentRecorder.recordDrawArrays(mode, start, count);
     }
 
-    public static void recordDrawElements(int mode, int indices_count, int type, long indices_buffer_offset) {
-        if (currentRecorder != null) currentRecorder.recordDrawElements(mode, indices_count, type, indices_buffer_offset);
+    /**
+     * Record a baked indexed draw. The capture already owns the vertex/index data read
+     * back at record time; only its placeholder enters the command stream, so replay
+     * never touches the source VBO/EBO/VAO again. Acts as a draw barrier and flushes
+     * any pending transform so the draw replays at the right matrix state.
+     */
+    public static void recordIndexedDrawCapture(IndexedDrawCapture capture) {
+        if (currentRecorder == null) return;
+        drawBarrier();
+        matrixBarrier();
+        currentRecorder.recordIndexedDrawCapture(capture);
     }
 
     public static void recordBindVBO(int vbo) { if (currentRecorder != null) currentRecorder.recordBindVBO(vbo); }
@@ -829,10 +847,26 @@ public class DisplayListManager {
             final CommandBuffer finalBuffer = new CommandBuffer();
             CommandBufferBuilder.buildFromRawBuffer(rawCommandBuffer, accumulatedDraws, finalBuffer);
 
-            // Free the recorder (and its buffer) after optimization
+            // Build the shared VAO/VBO/EBO triples for baked indexed draws. This binds
+            // VAOs, so pause recording to keep the GL setup out of the compiled list.
+            final IndexedDrawBatchBuilder indexedBuilder = currentRecorder.getIndexedDraws();
+            final List<IndexedDrawBatch> indexedBatches;
+            if (indexedBuilder.isEmpty()) {
+                indexedBatches = Collections.emptyList();
+            } else {
+                final CommandRecorder paused = pauseRecording();
+                try {
+                    indexedBatches = indexedBuilder.build();
+                } finally {
+                    resumeRecording(paused);
+                }
+            }
+
+            // Free the recorder (and its buffer) after optimization; also releases the
+            // captures' CPU-side vertex/index buffers (already uploaded by build()).
             currentRecorder.free();
 
-            compiled = new CompiledDisplayList(finalBuffer.toBuffer(), finalBuffer.getComplexObjects(), compiledBuffers);
+            compiled = new CompiledDisplayList(finalBuffer.toBuffer(), finalBuffer.getComplexObjects(), compiledBuffers, indexedBatches);
         } else {
             // Free the recorder even if empty
             if (currentRecorder != null) {
@@ -841,8 +875,12 @@ public class DisplayListManager {
             // Empty display list - per OpenGL spec, still valid after glNewList/glEndList
             compiled = CompiledDisplayList.EMPTY;
         }
-        // Store the compiled list (even if empty - an empty list is still a valid list)
-        displayListCache.put(glListId, compiled);
+        // Store the compiled list (even if empty - an empty list is still a valid list).
+        // Re-recording an existing id replaces it; free the previous list's GPU resources.
+        final CompiledDisplayList previous = displayListCache.put(glListId, compiled);
+        if (previous != null && previous != CompiledDisplayList.EMPTY && previous != compiled) {
+            previous.delete();
+        }
 
         // Log compilation details if enabled (before context restoration changes glListId)
         if (LOG_DISPLAY_LIST_COMPILATION) {

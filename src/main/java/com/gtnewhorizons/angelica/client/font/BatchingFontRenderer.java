@@ -17,7 +17,7 @@ import net.minecraft.client.renderer.texture.SimpleTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.ResourceLocation;
-import org.embeddedt.embeddium.impl.render.shader.ShaderLoader;
+import dhj.embeddedt.embeddium.impl.render.shader.ShaderLoader;
 import org.joml.Matrix4f;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -69,6 +69,14 @@ public class BatchingFontRenderer {
 
     final boolean isSGA;
     final boolean isSplash;
+
+    /**
+     * @return {@code true} when this batcher accelerates a splash-screen font renderer
+     *         (Forge/Cleanroom SplashProgress or Modern Splash's SplashFontRenderer)
+     */
+    public boolean isSplash() {
+        return this.isSplash;
+    }
 
     /** For use with modded books. Affects calculations and forces some defaults. */
     @Setter
@@ -238,6 +246,36 @@ public class BatchingFontRenderer {
 
         memFree(data);
 
+    }
+
+    /**
+     * Converts normalized GL color components to an ARGB int.
+     *
+     * @return the packed ARGB value, e.g. (1.0F, 1.0F, 1.0F, 1.0F) becomes {@code 0xFFFFFFFF}
+     */
+    public static int floatsToArgb(float r, float g, float b, float a) {
+        return (Math.round(a * 255.0F) & 0xFF) << 24
+            | (Math.round(r * 255.0F) & 0xFF) << 16
+            | (Math.round(g * 255.0F) & 0xFF) << 8
+            | (Math.round(b * 255.0F) & 0xFF);
+    }
+
+    /**
+     * Reads the current GL color as an ARGB int.
+     *
+     * <p>Splash font renderers (e.g. Modern Splash's SplashFontRenderer) draw text with an
+     * explicit color of 0 while relying on the fixed-pipeline current color, which they set to
+     * their configured font color before drawing. Vanilla 1.12.2 {@code renderString} would
+     * force black for color 0, so the current color is sampled here instead.</p>
+     *
+     * <p>The value comes from the GLSM color state rather than a {@code GL_CURRENT_COLOR} query:
+     * the splash renderer's {@code glColor*} calls are redirected into the GLSM state cache (the
+     * GL context is a core profile where the fixed-pipeline current color is not a real queryable
+     * state).</p>
+     */
+    public static int readCurrentGlColorAsArgb() {
+        Color4 color = GLStateManager.getColor();
+        return floatsToArgb(color.getRed(), color.getGreen(), color.getBlue(), color.getAlpha());
     }
 
     private void ensureCapacity() {
@@ -513,11 +551,14 @@ public class BatchingFontRenderer {
         } else {
             GLStateManager.glDisable(GL11.GL_TEXTURE_2D);
         }
-        if (isAlphaTestEnabledBefore) {
-            GLStateManager.enableAlphaTest();
-        } else {
-            GLStateManager.disableAlphaTest();
-        }
+        // The alpha test is deliberately left enabled instead of being restored to isAlphaTestEnabledBefore.
+        // Vanilla's FontRenderer.drawString opens with GlStateManager.enableAlpha() and the class contains no
+        // disableAlpha at all (net.minecraft.client.gui.FontRenderer:235 - the only alpha/blend call in it), so
+        // drawing any string leaves the alpha test enabled. Third-party map GUIs depend on that side effect:
+        // Xaero's RadarRenderer#postRender disables the alpha test without restoring it and relies on a later
+        // string draw turning it back on, so restoring the previous value here left its GuiTexturedButton icons
+        // drawing under alphaTest=false + blend=false and wrote their transparent texels as an opaque plate.
+        GLStateManager.enableAlphaTest();
         if (!isBlendEnabledBefore) {
             GLStateManager.disableBlend();
         }

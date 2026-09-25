@@ -10,6 +10,7 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.EnumSkyBlock;
+import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldType;
 import net.minecraft.world.biome.Biome;
@@ -19,11 +20,13 @@ import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.structure.StructureBoundingBox;
 import net.minecraftforge.client.model.pipeline.LightUtil;
 import net.minecraftforge.fml.common.Optional;
-import org.embeddedt.embeddium.impl.util.position.SectionPos;
+import dhj.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
+import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
 import com.dhj.actinium.compat.fluidlogged.FluidloggedCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import com.dhj.actinium.world.biome.BiomeColorCache;
+import com.dhj.actinium.world.biome.BiomeColorNoise;
 import com.dhj.actinium.world.cloned.ActiniumBlockAccess;
 import com.dhj.actinium.world.cloned.ChunkRenderContext;
 import com.dhj.actinium.world.cloned.ClonedChunkSection;
@@ -82,8 +85,10 @@ public class WorldSlice implements ActiniumBlockAccess {
     // Local Section->FluidState table.
     private final Object[][] fluidStatesArrays;
 
-    // Local section copies. Read-only.
-    private ClonedChunkSection[] sections;
+    // Local section copies. Read-only. The array itself belongs to this slice and is reused across
+    // chunk build tasks: copyData refills it from the task-owned snapshot array, and reset clears
+    // the element references so no ClonedChunkSection outlives its task inside this pooled object.
+    private final ClonedChunkSection[] sections = new ClonedChunkSection[SECTION_TABLE_ARRAY_SIZE];
 
     // Biome caches for each chunk section
     private final Biome[][] biomeCaches;
@@ -97,7 +102,12 @@ public class WorldSlice implements ActiniumBlockAccess {
     // The chunk origin of this slice
     private SectionPos origin;
 
-    // The volume that this slice contains
+    // Bounding box reused for every snapshot volume. copyData rewrites all six coordinates in full
+    // before publishing it, so coordinates of a previous task are never observable.
+    private final StructureBoundingBox volumeBox = new StructureBoundingBox(0, 0, 0, 0, 0, 0);
+
+    // The volume that this slice contains; only non-null between copyData and reset.
+    @Nullable
     private StructureBoundingBox volume;
 
     // A fallback BlockPos object to use when retrieving data from the level directly
@@ -105,7 +115,8 @@ public class WorldSlice implements ActiniumBlockAccess {
 
     public static ChunkRenderContext prepare(World world, SectionPos origin, ClonedChunkSectionCache sectionCache) {
         Chunk chunk = world.getChunk(origin.x(), origin.z());
-        ExtendedBlockStorage section = chunk.getBlockStorageArray()[origin.y()];
+        int storageIndex = DepthsUpdateCompat.toStorageIndex(world, origin.y());
+        ExtendedBlockStorage section = storageIndex >= 0 ? chunk.getBlockStorageArray()[storageIndex] : null;
 
         // If the chunk section is absent or empty, simply terminate now. There will never be anything in this chunk
         // section to render, so we need to signal that a chunk render task shouldn't created. This saves a considerable
@@ -114,13 +125,8 @@ public class WorldSlice implements ActiniumBlockAccess {
             return null;
         }
 
-        StructureBoundingBox volume = new StructureBoundingBox(origin.minX() - NEIGHBOR_BLOCK_RADIUS,
-                origin.minY() - NEIGHBOR_BLOCK_RADIUS,
-                origin.minZ() - NEIGHBOR_BLOCK_RADIUS,
-                origin.maxX() + NEIGHBOR_BLOCK_RADIUS,
-                origin.maxY() + NEIGHBOR_BLOCK_RADIUS,
-                origin.maxZ() + NEIGHBOR_BLOCK_RADIUS);
-
+        // The snapshot volume is derived from the origin by the consuming slice, so the context
+        // only carries the section coordinates and the cloned sections acquired here.
         // The min/max bounds of the chunks copied by this slice
         final int minChunkX = origin.x() - NEIGHBOR_CHUNK_RADIUS;
         final int minChunkY = origin.y() - NEIGHBOR_CHUNK_RADIUS;
@@ -141,7 +147,7 @@ public class WorldSlice implements ActiniumBlockAccess {
             }
         }
 
-        return new ChunkRenderContext(origin, sections, volume);
+        return new ChunkRenderContext(origin, sections);
     }
 
     private boolean hasSkyLight() {
@@ -156,10 +162,11 @@ public class WorldSlice implements ActiniumBlockAccess {
         this.worldType = world.getWorldType();
         this.defaultSkyLightValue = this.hasSkyLight() ? EnumSkyBlock.SKY.defaultLightValue : 0;
 
-        this.sections = new ClonedChunkSection[SECTION_TABLE_ARRAY_SIZE];
         this.blockStatesArrays = new IBlockState[SECTION_TABLE_ARRAY_SIZE][];
         this.biomeCaches = new Biome[SECTION_TABLE_ARRAY_SIZE][16 * 16];
         this.biomeColorCache = new BiomeColorCache(this, ActiniumRuntime.options().quality.legacyBiomeBlendRadius);
+        // Only the outer table: each entry is aliased to the cloned section's shared unpacked fluid data, so no
+        // per-slice copy of 4096 fluid states is needed.
         if(!FluidloggedCompat.IS_LOADED) this.fluidStatesArrays = null;
         else this.fluidStatesArrays = new Object[SECTION_TABLE_ARRAY_SIZE][];
 
@@ -171,22 +178,29 @@ public class WorldSlice implements ActiniumBlockAccess {
                     this.blockStatesArrays[i] = new IBlockState[SECTION_BLOCK_COUNT];
                     Arrays.fill(this.blockStatesArrays[i], EMPTY_BLOCK_STATE);
 
-                    if (FluidloggedCompat.IS_LOADED) {
-                        this.fluidStatesArrays[i] = new Object[SECTION_BLOCK_COUNT];
-                        Arrays.fill(this.fluidStatesArrays[i], FluidloggedCompat.getEmptyFluidState());
-                    }
+
                 }
             }
         }
     }
 
     public void copyData(ChunkRenderContext context) {
-        this.origin = context.getOrigin();
-        this.sections = context.getSections();
-        this.volume = context.getVolume();
+        SectionPos origin = context.getOrigin();
+        this.origin = origin;
 
+        // The snapshot array travels with the pending build task, so its entries are copied into
+        // this slice's persistent array instead of being aliased; the task keeps its own container.
+        System.arraycopy(context.getSections(), 0, this.sections, 0, SECTION_TABLE_ARRAY_SIZE);
 
-        this.biomeColorCache.update(context.getOrigin());
+        this.volumeBox.minX = origin.minX() - NEIGHBOR_BLOCK_RADIUS;
+        this.volumeBox.minY = origin.minY() - NEIGHBOR_BLOCK_RADIUS;
+        this.volumeBox.minZ = origin.minZ() - NEIGHBOR_BLOCK_RADIUS;
+        this.volumeBox.maxX = origin.maxX() + NEIGHBOR_BLOCK_RADIUS;
+        this.volumeBox.maxY = origin.maxY() + NEIGHBOR_BLOCK_RADIUS;
+        this.volumeBox.maxZ = origin.maxZ() + NEIGHBOR_BLOCK_RADIUS;
+        this.volume = this.volumeBox;
+
+        this.biomeColorCache.update(origin);
 
         this.baseX = (this.origin.x() - NEIGHBOR_CHUNK_RADIUS) << 4;
         this.baseY = (this.origin.y() - NEIGHBOR_CHUNK_RADIUS) << 4;
@@ -201,10 +215,10 @@ public class WorldSlice implements ActiniumBlockAccess {
 
                     this.biomeCaches[idx] = section.getBiomeData();
 
-                    this.unpackBlockData(this.blockStatesArrays[idx], section, context.getVolume());
+                    this.unpackBlockData(this.blockStatesArrays[idx], section, this.volumeBox);
 
                     if (FluidloggedCompat.IS_LOADED) {
-                        this.unpackFluidData(this.fluidStatesArrays[idx], section, context.getVolume());
+                        this.fluidStatesArrays[idx] = section.getUnpackedFluidData();
                     }
                 }
             }
@@ -212,7 +226,15 @@ public class WorldSlice implements ActiniumBlockAccess {
     }
 
     public void reset() {
-        this.sections = new ClonedChunkSection[SECTION_TABLE_ARRAY_SIZE];
+        Arrays.fill(this.sections, null);
+
+        this.volumeBox.minX = 0;
+        this.volumeBox.minY = 0;
+        this.volumeBox.minZ = 0;
+        this.volumeBox.maxX = 0;
+        this.volumeBox.maxY = 0;
+        this.volumeBox.maxZ = 0;
+
         this.origin = null;
         this.volume = null;
     }
@@ -225,20 +247,6 @@ public class WorldSlice implements ActiniumBlockAccess {
         }
     }
 
-    private void unpackFluidData(Object[] states, ClonedChunkSection section, StructureBoundingBox box) {
-        var storage = section.getFluidData();
-        if (storage.isEmpty()) {
-            Arrays.fill(states, FluidloggedCompat.getEmptyFluidState());
-            return;
-        }
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    states[getLocalBlockIndex(x, y, z)] = storage.get(x, y, z);
-                }
-            }
-        }
-    }
 
     private static void copyBlocks(IBlockState[] blocks, ClonedChunkSection section, int minBlockY, int maxBlockY, int minBlockZ, int maxBlockZ, int minBlockX, int maxBlockX) {
         for (int y = minBlockY; y <= maxBlockY; y++) {
@@ -283,7 +291,21 @@ public class WorldSlice implements ActiniumBlockAccess {
         copyBlocks(states, section, minBlockY, maxBlockY, minBlockZ, maxBlockZ, minBlockX, maxBlockX);
     }
 
-    private static boolean blockBoxContains(StructureBoundingBox box, int x, int y, int z) {
+    /**
+     * Whether the given block coordinate lies inside the given snapshot volume.
+     *
+     * <p>A {@code null} volume is legal: the slice is a reused snapshot object that only covers
+     * anything between {@link #copyData(ChunkRenderContext)} and {@link #reset()}. Renderers
+     * outside the chunk build pipeline may retain the {@link IBlockAccess} instance handed to
+     * {@code BlockRendererDispatcher} and query it later on the main thread (MalisisCore's
+     * {@code AnimatedRenderer} does exactly this from {@code RenderWorldLastEvent}, see issue
+     * #57); after the slice has been reset it covers nothing, so every coordinate is out of
+     * bounds and the callers' fallback paths apply instead of dereferencing a null box.</p>
+     */
+    static boolean blockBoxContains(@Nullable StructureBoundingBox box, int x, int y, int z) {
+        if (box == null) {
+            return false;
+        }
         return x >= box.minX &&
                 x <= box.maxX &&
                 y >= box.minY &&
@@ -425,7 +447,9 @@ public class WorldSlice implements ActiniumBlockAccess {
     @Override
     public int getBlockTint(BlockPos pos, BiomeColorHelper.ColorResolver resolver) {
         if(!blockBoxContains(this.volume, pos.getX(), pos.getY(), pos.getZ())) {
-            return resolver.getColorAtPos(Biomes.PLAINS, pos);
+            // Same noise treatment as the cached path so out-of-volume queries stay consistent.
+            return BiomeColorNoise.applyForResolver(resolver, pos.getX(), pos.getY(), pos.getZ(),
+                    resolver.getColorAtPos(Biomes.PLAINS, pos));
         }
 
         return this.biomeColorCache.getColor(resolver, pos.getX(), pos.getY(), pos.getZ());

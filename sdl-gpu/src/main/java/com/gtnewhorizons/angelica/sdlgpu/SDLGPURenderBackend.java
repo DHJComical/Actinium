@@ -495,6 +495,11 @@ public class SDLGPURenderBackend extends RenderBackend {
         return Thread.currentThread() == GLStateManager.getMainThread();
     }
 
+    /** SDL GPU has no GL context handle that GLSM can query for display-context migrations. */
+    @Override public long getContextHandle() {
+        return 0L;
+    }
+
     @Override public int getPriority() {
         return 150;
     }

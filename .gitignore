@@ -32,7 +32,14 @@ gradle-app.setting
 /.codex-tmp/
 
 .tmp
-/AGENTS.md
 /actinium-scratchpad/
 /.codex/
 /docs/implementation-differences/
+
+# Dev-run artifacts
+/assets/
+*.log
+
+# Mesa EGL/GLES DLLs for the (deferred) JMH GL benchmark harness; not committed.
+celeritas-common/jmh-natives/
+/.tools/

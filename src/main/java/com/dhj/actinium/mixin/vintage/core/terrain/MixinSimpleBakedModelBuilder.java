@@ -1,8 +1,8 @@
 package com.dhj.actinium.mixin.vintage.core.terrain;
 
 import net.minecraft.client.renderer.block.model.SimpleBakedModel;
-import org.embeddedt.embeddium.impl.model.quad.BakedQuadView;
-import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFlags;
+import dhj.embeddedt.embeddium.impl.model.quad.BakedQuadView;
+import dhj.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFlags;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;

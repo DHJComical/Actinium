@@ -1,5 +1,6 @@
 package net.coderbot.iris.pipeline;
 
+import dhj.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
 import net.coderbot.iris.debug.IrisDebugOptions;
 import com.google.common.collect.ImmutableList;
 import com.gtnewhorizons.angelica.compat.mojang.Camera;
@@ -51,8 +52,8 @@ import net.minecraft.profiler.Profiler;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
-import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
-import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
+import dhj.embeddedt.embeddium.impl.gl.device.RenderDevice;
+import dhj.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3d;
@@ -370,7 +371,7 @@ public class ShadowRenderer {
 				boxCuller = getOrCreateAdvancedBoxCuller(distance);
 			}
 
-			cullingInfo = (hasSafeZone ? "Safe Zone" : "Advanced") + " Frustum Culling enabled";
+			cullingInfo = hasSafeZone ? "Safe Zone Frustum Culling enabled" : "Advanced Occlusion Culling enabled";
 
 			final Vector4f shadowLightPosition = celestialUniforms.getShadowLightPositionInWorldSpace();
 			shadowLightVectorCache.set(shadowLightPosition.x(), shadowLightPosition.y(), shadowLightPosition.z());
@@ -384,10 +385,10 @@ public class ShadowRenderer {
 					RenderingState.INSTANCE.getModelViewMatrix(), projView,
 					shadowLightVectorCache, boxCuller, distanceCuller);
 				return holder.setInfo(safeZoneFrustum, distanceInfo, cullingInfo);
-			} else {
-				cachedAdvancedFrustum.init(RenderingState.INSTANCE.getModelViewMatrix(), projView, shadowLightVectorCache, boxCuller);
-				return holder.setInfo(cachedAdvancedFrustum, distanceInfo, cullingInfo);
-			}
+		} else {
+			cachedAdvancedFrustum.init(RenderingState.INSTANCE.getModelViewMatrix(), projView, shadowLightVectorCache, boxCuller);
+			return holder.setInfo(cachedAdvancedFrustum, distanceInfo, cullingInfo);
+		}
 		}
 
 		return holder;
@@ -826,9 +827,10 @@ public class ShadowRenderer {
 			WorldRendererCompat renderer = WorldRendererCompatBridge.instance();
 			var terrainViewport = ((ViewportProvider)terrainFrustumHolder.getFrustum()).sodium$createViewport();
 			renderer.markSectionGraphDirty();
-			renderer.setupTerrain(
+			renderer.setupShadowTerrain(
+				renderer.getLastViewport(),
 				terrainViewport,
-				new org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer.CameraState(
+				new SimpleWorldRenderer.CameraState(
 					entityX,
 					entityY,
 					entityZ,
@@ -837,7 +839,6 @@ public class ShadowRenderer {
 					halfPlaneLength
 				),
 				this.celeritasShadowFrame++,
-				false,
 				false
 			);
 			renderer.setCurrentViewport(terrainViewport);

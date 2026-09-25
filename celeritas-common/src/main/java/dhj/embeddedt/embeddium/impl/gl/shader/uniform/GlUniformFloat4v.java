@@ -1,0 +1,33 @@
+package dhj.embeddedt.embeddium.impl.gl.shader.uniform;
+
+import static com.mitchej123.lwjgl.LWJGLServiceProvider.LWJGL;
+
+import org.lwjgl.BufferUtils;
+
+import java.nio.FloatBuffer;
+
+
+public class GlUniformFloat4v extends GlUniform<float[]> {
+    private final FloatBuffer scratchBuffer = BufferUtils.createFloatBuffer(4);
+
+    public GlUniformFloat4v(int index) {
+        super(index);
+    }
+
+    @Override
+    public void set(float[] value) {
+        if (value.length != 4) {
+            throw new IllegalArgumentException("value.length != 4");
+        }
+
+        LWJGL.glUniform4fv(this.index, value);
+    }
+
+    public void set(float x, float y, float z, float w) {
+        this.scratchBuffer.clear();
+        this.scratchBuffer.put(x).put(y).put(z).put(w);
+        this.scratchBuffer.flip();
+        LWJGL.glUniform4fv(this.index, this.scratchBuffer);
+    }
+}
+

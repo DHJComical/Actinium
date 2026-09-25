@@ -2,8 +2,8 @@ package com.dhj.actinium.render.terrain.fog;
 
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.states.FogState;
-import org.embeddedt.embeddium.impl.render.chunk.fog.FogService;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
+import dhj.embeddedt.embeddium.impl.render.chunk.fog.FogService;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkFogMode;
 import org.joml.Vector3d;
 
 public class GLStateManagerFogService implements FogService {
@@ -26,7 +26,9 @@ public class GLStateManagerFogService implements FogService {
 
     @Override
     public int getFogShapeIndex() {
-        return 0;
+        // Vanilla fog distances on 1.12.2 are measured against the eye plane (depth along the view axis),
+        // which matches the planar shape rather than the spherical distance the shader defaults to.
+        return FogService.FOG_SHAPE_PLANAR;
     }
 
     @Override

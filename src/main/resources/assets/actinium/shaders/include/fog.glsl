@@ -1,5 +1,6 @@
 const int FOG_SHAPE_SPHERICAL = 0;
 const int FOG_SHAPE_CYLINDRICAL = 1;
+const int FOG_SHAPE_PLANAR = 2;
 
 vec4 _linearFog(vec4 fragColor, float fragDistance, vec4 fogColor, float fogStart, float fogEnd) {
 #ifdef USE_FOG
@@ -33,6 +34,18 @@ vec4 _exp2Fog(vec4 fragColor, float fragDistance, vec4 fogColor, float fogDensit
 #ifdef USE_FOG
     float dist = fragDistance * fogDensity;
     float factor = clamp(1.0 / exp2(dist * dist), 0.0, 1.0);
+    vec3 blended = mix(fogColor.rgb, fragColor.rgb, factor * fogColor.a);
+
+    return vec4(blended, fragColor.a); // alpha value of fragment cannot be modified
+#else
+    return fragColor;
+#endif
+}
+
+vec4 _expFog(vec4 fragColor, float fragDistance, vec4 fogColor, float fogDensity) {
+#ifdef USE_FOG
+    float dist = fragDistance * fogDensity;
+    float factor = clamp(1.0 / exp(dist), 0.0, 1.0);
     vec3 blended = mix(fogColor.rgb, fragColor.rgb, factor * fogColor.a);
 
     return vec4(blended, fragColor.a); // alpha value of fragment cannot be modified

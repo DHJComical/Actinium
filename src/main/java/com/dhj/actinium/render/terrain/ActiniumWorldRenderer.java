@@ -4,7 +4,6 @@ import net.coderbot.iris.celeritas.WorldRendererCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.DestroyBlockProgress;
-import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.entity.Entity;
 import net.minecraft.tileentity.TileEntity;
@@ -13,22 +12,23 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.client.MinecraftForgeClient;
 import com.gtnewhorizons.angelica.rendering.RenderingState;
 import com.dhj.actinium.compat.ichunutil.PortalChunkRenderMatrices;
-import org.embeddedt.embeddium.impl.gl.device.CommandList;
-import org.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
-import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
-import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderList;
-import org.embeddedt.embeddium.impl.render.chunk.lists.SortedRenderLists;
-import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
-import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
-import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
-import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
-import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
-import org.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
-import org.embeddedt.embeddium.api.shader.ShaderProvider;
-import org.embeddedt.embeddium.api.shader.ShaderProviderHolder;
+import dhj.embeddedt.embeddium.impl.gl.device.CommandList;
+import dhj.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
+import dhj.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
+import dhj.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderList;
+import dhj.embeddedt.embeddium.impl.render.chunk.lists.SortedRenderLists;
+import dhj.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
+import dhj.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkMeshFormats;
+import dhj.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
+import dhj.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
+import dhj.embeddedt.embeddium.impl.render.viewport.CameraTransform;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.api.debug.RenderDebugHooksHolder;
+import dhj.embeddedt.embeddium.api.shader.ShaderProvider;
+import dhj.embeddedt.embeddium.api.shader.ShaderProviderHolder;
 import net.coderbot.iris.pipeline.ShadowRenderer;
+import com.dhj.actinium.compat.depthsupdate.DepthsUpdateCompat;
 import com.dhj.actinium.runtime.ActiniumRuntime;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
@@ -62,7 +62,7 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
 
     @Override
     public int getMinimumBuildHeight() {
-        return 0;
+        return DepthsUpdateCompat.getMinBuildHeight(this.world);
     }
 
     @Override
@@ -143,9 +143,14 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         this.currentViewport = viewport;
     }
 
+    @Override
+    public Viewport getLastViewport() {
+        return super.getLastViewport();
+    }
+
     /**
      * Captures the iChun recursive terrain matrices while leaving ordinary and shadow rendering unchanged.
-     */
+     */
 
     @Override
     public void markSectionGraphDirty() {
@@ -159,16 +164,17 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
     @Override
     public void setupTerrain(Viewport viewport, CameraState cameraState, int frame, boolean spectator, boolean updateChunksImmediately) {
         super.setupTerrain(viewport, cameraState, frame, spectator, updateChunksImmediately);
+    }
 
-        if (this.renderSectionManager.isInShadowPass() && ShaderProviderHolder.isActive()) {
-            this.renderSectionManager.finishAllGraphUpdates();
-            collectTileEntitiesForShadow();
-            RenderDebugHooksHolder.logShadowTerrainLayer(
-                "culling",
-                "fogOcclusion=false,occlusionCulling=false",
-                this.renderSectionManager.getVisibleChunkCount()
-            );
-        }
+    @Override
+    public void setupShadowTerrain(Viewport playerViewport, Viewport shadowViewport, CameraState cameraState, int frame, boolean spectator) {
+        super.setupShadowTerrain(playerViewport, shadowViewport, cameraState, frame, spectator);
+        collectTileEntitiesForShadow();
+        RenderDebugHooksHolder.logShadowTerrainLayer(
+            "culling",
+            "fogOcclusion=false,occlusionCulling=false",
+            this.renderSectionManager.getVisibleChunkCount()
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -258,11 +264,21 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
     @Override
     public int renderBlockEntities(TileEntityRenderContext tileEntityRenderContext) {
         int pass = MinecraftForgeClient.getRenderPass();
-        TileEntityRendererDispatcher.instance.preDrawBatch();
+        // TESRs (e.g. HBM-CE machines) are not disciplined about GL state; guard the batch so
+        // leaked depth/blend/texture state cannot reach the translucent pass or the HUD.
+        TileEntityGlStateGuard.push();
         try {
-            return super.renderBlockEntities(tileEntityRenderContext);
+            TileEntityRendererDispatcher.instance.preDrawBatch();
+            try {
+                return super.renderBlockEntities(tileEntityRenderContext);
+            } finally {
+                // TESRs leak GL state during the render loop; flush the FastTESR batch with
+                // the clean entry state (see TileEntityGlStateGuard.restoreForBatch).
+                TileEntityGlStateGuard.restoreForBatch();
+                TileEntityRendererDispatcher.instance.drawBatch(pass);
+            }
         } finally {
-            TileEntityRendererDispatcher.instance.drawBatch(pass);
+            TileEntityGlStateGuard.pop();
         }
     }
 
@@ -309,4 +325,3 @@ public class ActiniumWorldRenderer extends SimpleWorldRenderer<WorldClient, Vint
         return ChunkMeshFormats.COMPACT;
     }
 }
-

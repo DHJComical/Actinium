@@ -5,12 +5,12 @@ import com.seibel.distanthorizons.api.objects.math.DhApiMat4f;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.fml.common.Optional;
-import org.embeddedt.embeddium.impl.render.viewport.Viewport;
-import org.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
+import dhj.embeddedt.embeddium.impl.render.viewport.Viewport;
+import dhj.embeddedt.embeddium.impl.render.viewport.ViewportProvider;
 import org.joml.Vector3d;
 
 @Optional.Interface(modid = "distanthorizons", iface = "com.seibel.distanthorizons.api.interfaces.override.rendering.IDhApiShadowCullingFrustum")
-public class NonCullingFrustum extends Frustum implements ViewportProvider, org.embeddedt.embeddium.impl.render.viewport.frustum.Frustum, IDhApiShadowCullingFrustum {
+public class NonCullingFrustum extends Frustum implements ViewportProvider, dhj.embeddedt.embeddium.impl.render.viewport.frustum.Frustum, IDhApiShadowCullingFrustum {
 	private final Vector3d position = new Vector3d();
 	private double x;
 	private double y;
@@ -32,6 +32,12 @@ public class NonCullingFrustum extends Frustum implements ViewportProvider, org.
 	@Override
 	public boolean testAab(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
 		return true;
+	}
+
+	/** Reports every camera-relative box as fully inside because this frustum never culls. */
+	@Override
+	public int intersectAab(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
+		return FULLY_INSIDE;
 	}
 
 	@Override

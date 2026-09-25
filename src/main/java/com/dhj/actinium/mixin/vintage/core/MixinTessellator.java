@@ -3,7 +3,7 @@ package com.dhj.actinium.mixin.vintage.core;
 import com.gtnewhorizon.gtnhlib.client.renderer.ITessellatorInstance;
 import com.gtnewhorizon.gtnhlib.client.renderer.TessellatorManager;
 import com.gtnewhorizons.angelica.client.rendering.DeferredDrawBatcher;
-import org.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
+import dhj.embeddedt.embeddium.api.shader.buffer.BufferBuilderExtension;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.Tessellator;
 import org.spongepowered.asm.mixin.Final;

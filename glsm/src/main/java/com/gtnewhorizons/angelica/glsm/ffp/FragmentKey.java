@@ -12,7 +12,7 @@ import org.lwjgl.opengl.GL13;
  * Packed-long fragment shader permutation key for FFP emulation.
  *
  * Layout:
- *   long[0]: global bits (10) + unit 0 (47 bits at offset 10)
+ *   long[0]: global bits (13) + unit 0 (47 bits at offset 13)
  *   long[1..3]: unit 1..3 (47 bits each, low-aligned)
  * Only max(1, nrEnabledUnits) longs are significant.
  *
@@ -67,12 +67,15 @@ public final class FragmentKey {
     public static final int FOG_EXP    = 2;
     public static final int FOG_EXP2   = 3;
 
-    private static final int GLOBAL_BITS = 10;
+    private static final int GLOBAL_BITS = 13;
     private static final int BIT_FOG_MODE          = 0;  // 2 bits
     private static final int BIT_ALPHA_TEST        = 2;  // 1 bit
     private static final int BIT_ALPHA_FUNC        = 3;  // 3 bits
     private static final int BIT_SEPARATE_SPECULAR = 6;  // 1 bit
     private static final int BIT_NR_ENABLED_UNITS  = 7;  // 3 bits
+    private static final int BIT_OVERLAY_ENABLED   = 10; // 1 bit
+    private static final int BIT_LINE_STIPPLE      = 11; // 1 bit
+    private static final int BIT_COLOR_SUM         = 12; // 1 bit
 
     private static final int U_ENABLED         = 0;
     private static final int U_MODE            = 1;   // 3 bits
@@ -123,17 +126,29 @@ public final class FragmentKey {
             global |= ((long) (encodeAlphaFunc(GLStateManager.getAlphaState().getFunction()) & 0x7)) << BIT_ALPHA_FUNC;
         }
 
-        // Separate specular
+        // Damage overlay
+        if (GLStateManager.getOverlayA() != 0.0f) {
+            global |= (1L << BIT_OVERLAY_ENABLED);
+        }
+
+        if (GLStateManager.lineStippleActive) {
+            global |= (1L << BIT_LINE_STIPPLE);
+        }
+
+        // Separate specular / color sum
         if (GLStateManager.getLightingState().isEnabled()
             && GLStateManager.getLightModel().colorControl == GL12.GL_SEPARATE_SPECULAR_COLOR) {
             global |= (1L << BIT_SEPARATE_SPECULAR);
+        } else if (GLStateManager.getColorSumState().isEnabled()) {
+            global |= (1L << BIT_COLOR_SUM);
         }
 
         // Per-unit state
         int highestEnabled = -1;
         long unit0Bits = 0;
         for (int i = 0; i < MAX_UNITS; i++) {
-            final boolean texEnabled = GLStateManager.getTextures().getTextureUnitStates(i).isEnabled();
+            // Per Mesa - an enabled unit with no complete texture bound counts as disabled.
+            final boolean texEnabled = GLStateManager.getTextures().getTextureUnitStates(i).isEnabled() && GLStateManager.getTextures().getTextureUnitBindings(i).getBinding() != 0;
             if (texEnabled) highestEnabled = i;
 
             final long unitBits = packUnit(i, texEnabled);
@@ -230,7 +245,10 @@ public final class FragmentKey {
     public boolean alphaTestEnabled() { return ((packed[0] >> BIT_ALPHA_TEST) & 1) != 0; }
     public int alphaTestFunc()        { return (int) ((packed[0] >> BIT_ALPHA_FUNC) & 0x7); }
     public boolean separateSpecular() { return ((packed[0] >> BIT_SEPARATE_SPECULAR) & 1) != 0; }
+    public boolean colorSum()         { return ((packed[0] >> BIT_COLOR_SUM) & 1) != 0; }
+    public boolean lineStipple()      { return ((packed[0] >> BIT_LINE_STIPPLE) & 1) != 0; }
     public int nrEnabledUnits()       { return (int) ((packed[0] >> BIT_NR_ENABLED_UNITS) & 0x7); }
+    public boolean overlayEnabled()   { return ((packed[0] >> BIT_OVERLAY_ENABLED) & 1) != 0; }
 
     private long unitBits(int i) {
         return (i == 0) ? (packed[0] >>> GLOBAL_BITS) : packed[i];
@@ -254,6 +272,28 @@ public final class FragmentKey {
             if (unitEnabled(i)) return true;
         }
         return false;
+    }
+
+    /** Per-unit enable bits as a 4-bit mask (bit i = unit i enabled). */
+    public int enabledUnitMask() {
+        int mask = 0;
+        final int n = Math.min(nrEnabledUnits(), MAX_UNITS);
+        for (int i = 0; i < n; i++) {
+            if (unitEnabled(i)) mask |= (1 << i);
+        }
+        return mask;
+    }
+
+    /** Per-unit enable bits from a packed scratch as a 4-bit mask (bit i = unit i enabled). */
+    public static int unitMaskFromPacked(long[] packed, int len) {
+        int mask = 0;
+        if (len < 1) return 0;
+        if (((packed[0] >>> GLOBAL_BITS) & 1L) != 0) mask |= 1;
+        final int n = Math.min(len, MAX_UNITS);
+        for (int i = 1; i < n; i++) {
+            if ((packed[i] & 1L) != 0) mask |= (1 << i);
+        }
+        return mask;
     }
 
     public boolean lightmapEnabled() {
@@ -346,10 +386,10 @@ public final class FragmentKey {
             default -> "?";
         };
         final StringBuilder sb = new StringBuilder();
-        sb.append(String.format("FFPFragmentKey[fog=%s alpha=%b(%s) specSep=%b units=%d",
+        sb.append(String.format("FFPFragmentKey[fog=%s alpha=%b(%s) specSep=%b colorSum=%b overlay=%b stipple=%b units=%d",
             fogName, alphaTestEnabled(),
             alphaTestEnabled() ? String.format("0x%04X", decodeAlphaFunc(alphaTestFunc())) : "-",
-            separateSpecular(), nrEnabledUnits()));
+            separateSpecular(), colorSum(), overlayEnabled(), lineStipple(), nrEnabledUnits()));
         for (int i = 0; i < nrEnabledUnits(); i++) {
             if (!unitEnabled(i)) {
                 sb.append(String.format(" u%d=OFF", i));

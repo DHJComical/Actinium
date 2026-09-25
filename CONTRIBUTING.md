@@ -35,7 +35,7 @@ Actinium 是一个面向 Minecraft 1.12.2 / Cleanroom Loader 的渲染与光影�
 .\gradlew.bat check --no-daemon
 ```
 
-可安装的产物是 `build/libs/Actinium-<version>.jar`；随主模组一起构建的兼容桥是 `celeritas-compat-bridge-<version>.jar`。
+可安装的产物是 `build/libs/Actinium-<version>.jar`。
 
 ## 开发规范
 

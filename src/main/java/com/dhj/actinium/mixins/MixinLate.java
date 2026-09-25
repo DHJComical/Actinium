@@ -1,9 +1,6 @@
 package com.dhj.actinium.mixins;
 
-import com.dhj.actinium.compat.MixinReEntranceLockFix;
-import net.minecraft.client.renderer.EntityRenderer;
-import net.minecraftforge.fml.common.Loader;
-import zone.rong.mixinbooter.Context;
+import com.gtnewhorizon.gtnhlib.compat.Mods;
 import zone.rong.mixinbooter.ILateMixinLoader;
 
 import java.io.IOException;
@@ -27,41 +24,54 @@ public class MixinLate implements ILateMixinLoader {
 
     @Override
     public List<String> getMixinConfigs() {
-        return configsFor(Loader::isModLoaded);
+        return configsFor(Mods::isModPresent);
     }
 
-    @Override
-    public void onMixinConfigQueued(Context context) {
-        if (!"mixins.actinium.dh.json".equals(context.mixinConfig())) {
-            return;
-        }
-
-        MixinReEntranceLockFix.clearLeakedLock();
-        MixinReEntranceLockFix.clearInvalidVanillaClasses();
-        try {
-            MixinReEntranceLockFix.preloadClasses(EntityRenderer.class);
-        } finally {
-            MixinReEntranceLockFix.clearLeakedLock();
-            MixinReEntranceLockFix.clearInvalidVanillaClasses();
-        }
-    }
-
-    /** Returns the conditional configs whose declared mod ids are all loaded. */
+    /**
+     * Returns the conditional configs whose gating expression matches the runtime.
+     * The value syntax is {@code modA,modB|modC}: comma-separated requirements form an
+     * AND group, {@code |} separates alternative groups, and a config loads when any
+     * group matches. A requirement is a mod id, or {@code class:<binary name>} to probe
+     * for a class instead (for compat layers gated on embedded third-party code rather
+     * than a mod container).
+     */
     static List<String> configsFor(Predicate<String> loadedMods) {
+        return configsFor(loadedMods, MixinLate::classPresent);
+    }
+
+    static List<String> configsFor(Predicate<String> loadedMods, Predicate<String> classPresent) {
         List<String> mixins = new ArrayList<>();
         CONDITIONAL_CONFIGS.forEach((config, modList) -> {
-            boolean allLoaded = true;
-            for (String modId : ((String) modList).split(",")) {
-                if (!loadedMods.test(modId.trim())) {
-                    allLoaded = false;
+            for (String alternative : ((String) modList).split("\\|")) {
+                boolean allPresent = true;
+                for (String requirement : alternative.split(",")) {
+                    if (!requirementMet(requirement.trim(), loadedMods, classPresent)) {
+                        allPresent = false;
+                        break;
+                    }
+                }
+                if (allPresent) {
+                    mixins.add((String) config);
                     break;
                 }
             }
-            if (allLoaded) {
-                mixins.add((String) config);
-            }
         });
         return mixins;
+    }
+
+    private static final String CLASS_PREFIX = "class:";
+
+    private static boolean requirementMet(String requirement, Predicate<String> loadedMods, Predicate<String> classPresent) {
+        if (requirement.startsWith(CLASS_PREFIX)) {
+            return classPresent.test(requirement.substring(CLASS_PREFIX.length()));
+        }
+        return loadedMods.test(requirement);
+    }
+
+    /** Resource-probes the class without initializing it. */
+    private static boolean classPresent(String className) {
+        String resource = className.replace('.', '/') + ".class";
+        return MixinLate.class.getClassLoader().getResource(resource) != null;
     }
 
     private static Properties loadConditions() {

@@ -1,0 +1,17 @@
+{
+  "package": "com.dhj.actinium.mixin.mod.scannable",
+  "required": true,
+  "refmap": "mixins.actinium-refmap.json",
+  "target": "@env(DEFAULT)",
+  "minVersion": "0.8.5",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [],
+  "server": [],
+  "client": [
+    "MixinProxyOptiFine",
+    "MixinScannerRenderer"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

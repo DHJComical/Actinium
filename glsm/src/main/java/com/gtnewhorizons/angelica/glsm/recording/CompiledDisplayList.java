@@ -2,12 +2,15 @@ package com.gtnewhorizons.angelica.glsm.recording;
 
 import com.gtnewhorizons.angelica.glsm.DisplayListManager;
 import com.gtnewhorizons.angelica.glsm.recording.commands.DisplayListCommand;
+import com.gtnewhorizons.angelica.glsm.recording.commands.IndexedDrawBatch;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
 
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memAddress;
 import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memFree;
@@ -17,25 +20,29 @@ import static com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities.memGetInt;
  * Represents a compiled display list.
  *
  * <p>Contains commands serialized to a direct ByteBuffer for off-heap storage,
- * with complex objects (TexImage2DCmd, TexSubImage2DCmd) stored separately.
+ * with complex objects (TexImage2DCmd, TexSubImage2DCmd, BatchedIndexedDrawCmd) stored separately.
  *
  * <p>The ownedVbos array contains VBOs that are referenced by DrawRange commands.
+ * The indexedBatches list holds the shared VAO/VBO/EBO triples that baked indexed
+ * draws (BatchedIndexedDrawCmd placeholders) replay against.
  */
 public final class CompiledDisplayList {
     /**
      * Empty display list singleton. Per OpenGL spec, an empty list is still valid.
      * This instance does nothing when rendered and is never deleted (shared singleton).
      */
-    public static final CompiledDisplayList EMPTY = new CompiledDisplayList(null, null, null);
+    public static final CompiledDisplayList EMPTY = new CompiledDisplayList(null, null, null, Collections.emptyList());
 
     private final ByteBuffer commandBuffer;     // Off-heap command storage, must be freed
     private final Object[] complexObjects;      // Complex commands (TexImage2D, etc.)
     private final DisplayListVBO ownedVbos;     // GPU resources referenced by index
+    private final List<IndexedDrawBatch> indexedBatches; // Shared VAO/VBO/EBO triples per layout group
 
-    public CompiledDisplayList(ByteBuffer commandBuffer, Object[] complexObjects, DisplayListVBO ownedVbos) {
+    public CompiledDisplayList(ByteBuffer commandBuffer, Object[] complexObjects, DisplayListVBO ownedVbos, List<IndexedDrawBatch> indexedBatches) {
         this.commandBuffer = commandBuffer;
         this.complexObjects = complexObjects;
         this.ownedVbos = ownedVbos;
+        this.indexedBatches = indexedBatches;
     }
 
     /**
@@ -65,6 +72,13 @@ public final class CompiledDisplayList {
             ownedVbos.delete();
         }
 
+        // Release shared (VAO, VBO, EBO) triples from IndexedDrawBatchBuilder.
+        if (indexedBatches != null) {
+            for (IndexedDrawBatch batch : indexedBatches) {
+                batch.delete();
+            }
+        }
+
         // Free the command buffer (off-heap memory)
         if (commandBuffer != null) {
             memFree(commandBuffer);
@@ -87,6 +101,10 @@ public final class CompiledDisplayList {
 
     public DisplayListVBO getOwnedVbos() {
         return ownedVbos;
+    }
+
+    public List<IndexedDrawBatch> getIndexedBatches() {
+        return indexedBatches;
     }
 
     // === Test inspection methods ===
