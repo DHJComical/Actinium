@@ -143,7 +143,8 @@ dependencies {
 //    modImplementation "curse.maven:conquest-reforged-250077:2565963"
 
     modCompileOnly "curse.maven:rebooter-1625784:8518809"
-    modCompileOnly "curse.maven:forgelin-continuous-456403:8248535"
+    modImplementation "curse.maven:forgelin-continuous-456403:8248535"
+    modImplementation 'curse.maven:better-foliage-228529:3393955'
     modCompileOnly "curse.maven:rlfoliage-970462:7645701"
 
     modImplementation "curse.maven:cofh-core-69162:2920433"
