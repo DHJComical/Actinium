@@ -35,6 +35,7 @@
     "core.terrain.AccessorGlStateManager",
     "core.terrain.AccessorGlStateManagerBooleanState",
     "core.terrain.AccessorGlStateManagerFogState",
+    "core.terrain.AccessorGlStateManagerTextureState",
     "core.terrain.MixinBakedQuad",
     "core.terrain.MixinBakedQuadFactory",
     "core.terrain.MixinBiomeColorHelper",

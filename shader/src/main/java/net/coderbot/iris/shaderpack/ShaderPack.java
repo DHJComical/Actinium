@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.stream.JsonReader;
+import com.gtnewhorizons.angelica.glsm.RenderSystem;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -229,7 +230,7 @@ public class ShaderPack {
 			.collect(java.util.stream.Collectors.joining(", ")));
 
 		this.shaderProperties = Optional.ofNullable(readProperties(root, "shaders.properties"))
-				.map(source -> new ShaderProperties(source, shaderPackOptions, finalEnvironmentDefines))
+				.map(source -> new ShaderProperties(source, shaderPackOptions, finalEnvironmentDefines, RenderSystem::supportsBufferBlending))
 				.orElseGet(ShaderProperties::empty);
 
 		// Build the set of active feature flags from required and optional flags

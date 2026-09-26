@@ -25,8 +25,24 @@ class MixinLateTest {
         );
 
         assertEquals(
-            Set.of("mixins.actinium.betterfoliage.json"),
+            Set.of(),
             Set.copyOf(MixinLate.configsFor("betterfoliage"::equals, className -> false))
+        );
+
+        assertEquals(
+            Set.of("mixins.actinium.betterfoliage.json"),
+            Set.copyOf(MixinLate.configsFor(
+                "betterfoliage"::equals,
+                "mods.betterfoliage.client.Hooks"::equals
+            ))
+        );
+
+        assertEquals(
+            Set.of("mixins.actinium.rlfoliage.json"),
+            Set.copyOf(MixinLate.configsFor(
+                "betterfoliage"::equals,
+                "betterfoliage.render.feature.RenderingHandler"::equals
+            ))
         );
 
         assertEquals(
@@ -46,6 +62,7 @@ class MixinLateTest {
                 "mixins.actinium.lumenized.json",
                 "mixins.actinium.revoui.json",
                 "mixins.actinium.betterfoliage.json",
+                "mixins.actinium.rlfoliage.json",
                 "mixins.actinium.ccl.json",
                 "mixins.actinium.voxelmap.json",
                 "mixins.actinium.extrautils2.json",
@@ -53,6 +70,7 @@ class MixinLateTest {
                 "mixins.actinium.oldresearch.json",
                 "mixins.actinium.botania.json",
                 "mixins.actinium.hbm.json",
+                "mixins.actinium.storagedrawers.json",
                 "mixins.actinium.scannable.json",
                 "mixins.actinium.littletiles.json",
                 "mixins.actinium.obscuretooltips.json"

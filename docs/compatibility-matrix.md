@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-09-24。
+最后更新：2026-09-25。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -17,6 +17,21 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 > 查询抽成 `BiomeLookup`：越界坐标夹到快照边缘（最近处的 biome 优于固定 PLAINS 兜底），未持有快照或
 > 缺失数据返回 PLAINS，坐标以 long 做差避免极端坐标回绕。回归测试与红-绿验证通过，实机验证待用户
 > 确认，详见 [docs/compat/betterbiomeblend.md](compat/betterbiomeblend.md)。
+> 
+> 2026-09-25 追加：ReplayMod 1.12.2-2.6.13 使用 BSL_v10.1p1 导出视频时崩溃已修复并由用户实机确认——
+> ReplayMod 在视频捕获时取消 `RenderGlobal.drawSelectionBox`，旧 outline HEAD/RETURN 注入因此漏掉清理；
+> PBO 捕获调用的 `glReadPixels(..., long)` 也缺 GLSM 路由。修复细节及 Cleanroom 实测环境见下方
+> [ReplayMod 行](#模组与环境)和 [docs/compat/replaymod.md](compat/replaymod.md)。
+
+> 2026-09-23 追加：GalaxySpace + AsmodeusCore 1.0.4 夜晚自定义天空显示错误（issue #164）的修复——
+> 见下方 [模组与环境](#模组与环境) 的 GalaxySpace 行与
+> [docs/compat/galaxyspace.md](compat/galaxyspace.md)。根因在 glsm 的颜色缓存语义：GS 的
+> `SkyProviderBase#render` 用 `glColor3f(skyColor - playerY/400)` 画天球，夜晚该值为负，而
+> GL 规范要求 `glColor*` 在 API 边界把分量钳到 [0,1]（原版即得黑色），`changeColor` 却把负值
+> 原样缓存，FFP 的 `sanitizeUniformColor` 遂把合法夜色误判为 `clearCurrentColor` 的 dirty
+> sentinel 而上传不透明白色，夜空整体发白、银河贴图呈灰块。修复为 `changeColor` 入口统一
+> `Color4.clamp01`（sentinel 直写缓存不经过该路径，既有契约测试不变），
+> `./gradlew check` 通过，用户实机确认夜晚天空恢复正常、白天与 JourneyMap/GUI 无回归。
 
 > 2026-09-23 追加：LagGoggles 5.9 + TickCentral 3.2（issue #166）共存启动崩溃已修复——其
 > `RenderManagerTransformer` 把 `RenderManager.renderEntity` 的方法体搬进 `laggoggles_trueRender`、
@@ -190,6 +205,7 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | 组件               | 状态   | 接入方式                               | 备注               |
 |------------------|------|------------------------------------|------------------|
 | Cleanroom Loader | 必需   | Forge/Cleanroom 启动与 MixinBootstrap | 当前目标运行环境         |
+| ReplayMod        | 已验证（视频渲染） | 高优先级 selection-box outline scope + GLSM PBO offset readback | 1.12.2-2.6.13 在 BSL_v10.1p1 视频导出时的 G-buffer 状态崩溃及 PBO `glReadPixels(..., long)` 缺失重载已修复；Cleanroom 0.6.13-alpha 整合包实测确认，详见 [docs/compat/replaymod.md](compat/replaymod.md) |
 | Celeritas        | 内嵌   | Gradle 子项目、最终 Jar 合并               | Actinium 的区块渲染器  |
 | GLSM             | 内嵌   | Gradle 子项目、service provider        | 管理 GL 状态和固定管线兼容  |
 | GTNHLib          | 内嵌   | Gradle 子项目、bridge API              | 提供底层渲染与内存工具      |
@@ -224,6 +240,9 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | Xaero's Minimap / World Map / XaeroLib | 部分 | 无 Mixin（glsm 顶点格式映射修复：UV 元素按 legacy texture unit 分配属性槽） | 26.5.1 / 1.46.0 / 1.7.3（issue #175）：两张地图的地形渲染成 64×64 纯色方块已修复——Xaero 的地形格式是 `POSITION + 每个纹理单元一组 UV`（unit 0..3）并配合 unit 0/2/3 的固定管线 `GL_COMBINE`，而 glsm 的顶点格式映射只认 UV `index` 0/1，unit 2/3 的属性槽从未下发，FFP 退回常量 `u_CurrentTexCoord2/3` 导致每张贴图只采一个纹素；装了世界地图时小地图复用其绘制路径，故两者同因。dev 实机确认地形细节恢复；已知缺口：世界地图界面内的图标按钮仍渲染异常（非本次修复引入、与 TexEnv/多纹理路径无关，待单独处理），详见 [docs/compat/xaero.md](compat/xaero.md) |
 | Component Model Hider | 代码支持（实机待验） | 兼容门控（`compat/componentmodelhider`：网格构建期置位模组的 `isBuildingChunk`，隐藏位置跳过模型渲染，快速路径自行补上"邻格隐藏则仍绘制该面"规则） | 1.0（CurseForge 940949:4885858，modid `component_model_hider`）：其隐藏机制挂在 `RenderChunk.rebuildChunk` 上，Actinium 的 mesher 从不走该路径，导致 `isBuildingChunk` 永不置位、隐藏方块照旧渲染且仍剔除邻面；详见 [docs/compat/component-model-hider.md](compat/component-model-hider.md) |
 | LagGoggles（TickCentral） | 部分 | 无侵入（实体上下文 hook 的锚点由 `renderEntity` 内调用点改为方法入口，`@WrapMethod`） | 5.9（CurseForge 283525）+ TickCentral 3.2（issue #166）：共存启动必崩——`com.github.terminatornl.laggoggles.tickcentral.RenderManagerTransformer` 把 `RenderManager.renderEntity` 方法体搬进 `laggoggles_trueRender`、原方法只剩转发桩，Actinium 原有 `@Redirect` 在方法内找不到 `Render.doRender` 调用点，`require = 1` 失败使 `RenderManager` 类变换整体失败（下游 ContentTweaker `NoClassDefFoundError`）；修复后入口方法在两种布局下都命中，`RenderManagerIrisAnchorTest` 复刻该搬迁变换锁定锚点（含变异校验），`./gradlew check` 通过，**实机验证待用户确认**，详见 [docs/compat/laggoggles.md](compat/laggoggles.md) |
+| DragonCore 自定义字体 | 部分 | 无侵入（字体批处理器按渲染器类名让位，`Mods.DRAGONCORE` 门控） | 2.0.1（元素之诗整合包）：服务器 FontConfig 下发的自定义字体无法渲染已修复——DragonCore 用 `bt`（extends `FontRenderer`）替换 `fontRendererObj` 并在覆写的 `renderStringAtPos` 中绘制自字形，而 Actinium 批处理路径绕过该方法；检测 `eos.moe.dragoncore.` 包前缀后 batcher 让位（同 NeoFontRender 逻辑），详见 [docs/compat/dragoncore.md](compat/dragoncore.md) |
+| Mobends / DragonCore | 已验证 | 无侵入（glsm 纹理绑定回调 + 根项目回写 vanilla `GlStateManager.TEXTURES[].textureName` 镜像） | 1.0 / 2.0.1（元素之诗整合包，无光影）：所有玩家皮肤纯白已修复——Mobends `ModelPart` 皮肤覆盖层反射读 vanilla 纹理镜像做恢复绑定，而 GLSMRedirector 使 vanilla `bindTexture` 方法体从不执行、镜像恒 0，恢复时 `bindTexture(0)` 解绑 unit0 导致后续 display list 回放无纹理；修复在每次 GL_TEXTURE_2D 绑定后（含缓存命中）同步镜像，详见 [docs/compat/mobends.md](compat/mobends.md) |
+| GalaxySpace（AsmodeusCore 天空） | 已验证 | 无（glsm 核心颜色语义修复，非模组接入） | `dev_1.12.2` 分支 + AsmodeusCore 1.0.4（issue #164）：夜晚 Overworld 自定义 skybox 发白、银河贴图呈灰块已修复——`SkyProviderBase#render` 以 `glColor3f(skyColor - playerY/400)` 画天球，夜晚为负值，GLSM `changeColor` 未按 GL 规范钳到 [0,1]，FFP `sanitizeUniformColor` 把负色误判为 dirty sentinel 洗成白色；修复为入口 `Color4.clamp01`，`./gradlew check` 通过，用户实机确认夜晚天空恢复正常、白天与 JourneyMap 网格/GUI 字体颜色无回归，详见 [docs/compat/galaxyspace.md](compat/galaxyspace.md) |
 
 ## 验证记录模板
 

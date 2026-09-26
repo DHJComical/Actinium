@@ -26,6 +26,27 @@ public final class GLSMHooks {
     public static PerFrameUniformBlock perFrameUniformBlock;
     public static PerFrameUniformBlock perPassUniformBlock;
 
+    /**
+     * Optional host callback notified after each executed {@code GL_TEXTURE_2D} bind request,
+     * including cache hits. The host keeps vanilla's {@code GlStateManager.TEXTURES[].textureName}
+     * mirror in sync for mods that read it reflectively to restore a prior binding.
+     */
+    public static volatile TextureBindSyncCallback textureBindSyncCallback;
+
+    /** Receives texture binds so the host can synchronize state outside GLSM. */
+    public interface TextureBindSyncCallback {
+        /** Reports the active texture unit and the texture id passed to the executed bind request. */
+        void onTextureBound(int textureUnit, int textureId);
+    }
+
+    /** Dispatches a texture bind to the host callback when one has been registered. */
+    public static void notifyTextureBindSync(int textureUnit, int textureId) {
+        final TextureBindSyncCallback callback = textureBindSyncCallback;
+        if (callback != null) {
+            callback.onTextureBound(textureUnit, textureId);
+        }
+    }
+
     /** Escape hatch: -Dactinium.glsmHooksAlwaysActive=true forces the consumer gate on. */
     private static final boolean ALWAYS_ACTIVE = Boolean.getBoolean("actinium.glsmHooksAlwaysActive");
 

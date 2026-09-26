@@ -47,6 +47,7 @@ class MixinConfigurationTest {
         "mixins.actinium.lumenized.json",
         "mixins.actinium.revoui.json",
         "mixins.actinium.betterfoliage.json",
+        "mixins.actinium.rlfoliage.json",
         "mixins.actinium.ccl.json",
         "mixins.actinium.voxelmap.json",
         "mixins.actinium.extrautils2.json",
@@ -56,6 +57,7 @@ class MixinConfigurationTest {
         "mixins.actinium.hbm.json",
         "mixins.actinium.hbm.early.json",
         "mixins.actinium.kirino.json",
+        "mixins.actinium.storagedrawers.json",
         "mixins.actinium.scannable.json",
         "mixins.actinium.littletiles.json",
         "mixins.actinium.obscuretooltips.json"
