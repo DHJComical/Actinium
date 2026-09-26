@@ -70,6 +70,7 @@ class MixinLateTest {
                 "mixins.actinium.oldresearch.json",
                 "mixins.actinium.botania.json",
                 "mixins.actinium.hbm.json",
+                "mixins.actinium.storagedrawers.json",
                 "mixins.actinium.scannable.json",
                 "mixins.actinium.littletiles.json",
                 "mixins.actinium.obscuretooltips.json"
