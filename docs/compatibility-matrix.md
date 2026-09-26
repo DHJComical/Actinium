@@ -9,6 +9,15 @@
 本轮验证环境：Actinium `30c7ffb`、Java 25.0.3、Cleanroom 0.5.12-alpha、Distant Horizons 3.1.2-b、
 Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 
+> 2026-09-24 追加：Better Biome Blend Continued 1.2.0 + RLFoliage 2.5.3（issue #162）区块构建线程
+> 崩溃已修复——BBB 在 `BiomeColorHelper#getGrassColorAtPos` 等入口按 chunk 预计算混合颜色，并遍历该
+> chunk 的 3×3 chunk 邻域读取 biome；构建 origin 邻居 chunk 时这一遍历会伸到快照（origin chunk ±1）
+> 之外，而 `WorldSlice#getBiome(BlockPos)` 把相对 chunk 索引直接当数组下标，chunk 618 相对基准
+> 619 的 z 偏移 −1 遂变成 `sections[-4]`（`Index -4 out of bounds for length 64`）。修复为把 biome
+> 查询抽成 `BiomeLookup`：越界坐标夹到快照边缘（最近处的 biome 优于固定 PLAINS 兜底），未持有快照或
+> 缺失数据返回 PLAINS，坐标以 long 做差避免极端坐标回绕。回归测试与红-绿验证通过，实机验证待用户
+> 确认，详见 [docs/compat/betterbiomeblend.md](compat/betterbiomeblend.md)。
+> 
 > 2026-09-25 追加：ReplayMod 1.12.2-2.6.13 使用 BSL_v10.1p1 导出视频时崩溃已修复并由用户实机确认——
 > ReplayMod 在视频捕获时取消 `RenderGlobal.drawSelectionBox`，旧 outline HEAD/RETURN 注入因此漏掉清理；
 > PBO 捕获调用的 `glReadPixels(..., long)` 也缺 GLSM 路由。修复细节及 Cleanroom 实测环境见下方
