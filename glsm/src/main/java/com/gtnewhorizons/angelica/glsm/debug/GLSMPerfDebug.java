@@ -59,7 +59,9 @@ public final class GLSMPerfDebug {
         STREAM_TESSELLATOR("source.streamTessellator"),
         DIRECT_LIVE_IMMEDIATE("source.directLiveImmediate"),
         DIRECT_COMPILE_EXECUTE("source.directCompileExecute"),
-        DIRECT_EXTERNAL("source.directExternal");
+        DIRECT_EXTERNAL("source.directExternal"),
+        MIPMAP_GENERATED("mipmap.generated"),
+        MIPMAP_REUSED("mipmap.reused");
 
         private final String label;
 

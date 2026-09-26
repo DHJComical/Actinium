@@ -6,6 +6,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.Ints;
 import com.gtnewhorizons.angelica.glsm.GLStateManager;
 import com.gtnewhorizons.angelica.glsm.RenderSystem;
+import com.gtnewhorizons.angelica.glsm.debug.GLSMPerfDebug;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import lombok.Getter;
 import net.coderbot.iris.features.FeatureFlags;
@@ -289,6 +290,7 @@ public class CompositeRenderer {
 	}
 
 	public void renderAll() {
+        final CompositeMipmapCache mipmapCache = new CompositeMipmapCache();
         IrisGlDebug.check("composite:start");
         GLStateManager.disableBlend();
         GLStateManager.disableAlphaTest();
@@ -308,6 +310,7 @@ public class CompositeRenderer {
 			}
 
 			if (ranCompute) {
+				mipmapCache.invalidateAll();
 				RenderSystem.memoryBarrier(GL42.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL42.GL_TEXTURE_FETCH_BARRIER_BIT | GL43.GL_SHADER_STORAGE_BARRIER_BIT);
                 IrisGlDebug.check("composite:compute-barrier");
 			}
@@ -323,7 +326,7 @@ public class CompositeRenderer {
 				GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
 
 				for (int index : renderPass.mipmappedBuffers) {
-					setupMipmapping(CompositeRenderer.this.renderTargets.get(index), renderPass.stageReadsFromAlt.contains(index));
+					setupMipmapping(CompositeRenderer.this.renderTargets.get(index), renderPass.stageReadsFromAlt.contains(index), mipmapCache);
 				}
 			}
 
@@ -360,6 +363,14 @@ public class CompositeRenderer {
             IrisGlDebug.logCurrentFramebufferSamples("composite:" + renderPass.sourceName, renderPass.drawBuffers.length);
             IrisGlDebug.restoreFramebufferSamplePhase(previousSamplePhase);
 			restoreBlendOverrides(renderPass);
+			if (renderPass.program.getActiveImages() > 0) {
+				mipmapCache.invalidateAll();
+			} else {
+				for (int index : renderPass.drawBuffers) {
+					RenderTarget target = this.renderTargets.get(index);
+					mipmapCache.invalidateDrawTarget(target.getMainTexture(), target.getAltTexture(), renderPass.stageReadsFromAlt.contains(index));
+				}
+			}
 		}
 
 		FullScreenQuadRenderer.end();
@@ -385,21 +396,18 @@ public class CompositeRenderer {
 		GLStateManager.glActiveTexture(GL13.GL_TEXTURE0);
 	}
 
-	private static void setupMipmapping(RenderTarget target, boolean readFromAlt) {
+	private static void setupMipmapping(RenderTarget target, boolean readFromAlt, CompositeMipmapCache cache) {
 		int texture = readFromAlt ? target.getAltTexture() : target.getMainTexture();
-
-		// TODO: Only generate the mipmap if a valid mipmap hasn't been generated or if we've written to the buffer
-		// (since the last mipmap was generated)
-		//
-		// NB: We leave mipmapping enabled even if the buffer is written to again, this appears to match the
-		// behavior of ShadersMod/OptiFine, however I'm not sure if it's desired behavior. It's possible that a
-		// program could use mipmapped sampling with a stale mipmap, which probably isn't great. However, the
-		// sampling mode is always reset between frames, so this only persists after the first program to use
-		// mipmapping on this buffer.
-		//
-		// Also note that this only applies to one of the two buffers in a render target buffer pair - making it
-		// unlikely that this issue occurs in practice with most shader packs.
-		RenderSystem.generateMipmaps(texture, GL11.GL_TEXTURE_2D);
+		// A later write invalidates this texture's generated levels; the filter remains enabled as before.
+		if (cache.needsGeneration(texture)) {
+			RenderSystem.generateMipmaps(texture, GL11.GL_TEXTURE_2D);
+			cache.markGenerated(texture);
+			if (GLSMPerfDebug.isEnabled()) {
+				GLSMPerfDebug.count(GLSMPerfDebug.Source.MIPMAP_GENERATED);
+			}
+		} else if (GLSMPerfDebug.isEnabled()) {
+			GLSMPerfDebug.count(GLSMPerfDebug.Source.MIPMAP_REUSED);
+		}
 
 		int filter = GL11.GL_LINEAR_MIPMAP_LINEAR;
 		if (target.getInternalFormat().getPixelFormat().isInteger()) {

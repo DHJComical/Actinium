@@ -1,6 +1,6 @@
 # 光影路径性能优化分析
 
-最后更新：2026-07-31。
+最后更新：2026-09-26。
 
 ## 目的与范围
 
@@ -269,6 +269,30 @@ Actinium 现在以单个 400 条目的 access-order LRU 缓存 graphics 与 comp
 可在游戏日志中观察 `[ShaderTransformCache]`：每次
 `graphics` / `compute` 的 `hit`、`miss`、`raceReuse` 和 `cleared` 都会记录 cache size，实际变换还会记录
 `transformMs`。同一 shader pack 连续 reload 时，命中数上升且 miss 的总变换时间下降即为该优化生效的直接证据。
+
+---
+
+### 2.4 Composite mipmap 重复生成
+
+**现状：已接入单次 composite 调用内的复用，并完成运行期命中与画面验证。**
+`CompositeRenderer` 原先对每个声明了 `colortex*MipmapEnabled` 的 pass 都执行
+`generateMipmaps`，即使前一 pass 已为同一 GL 纹理生成 mipmap，且期间没有写入。
+现在它在单次 `renderAll()` 内按纹理 ID 记录已生成结果；普通 pass 根据 framebuffer 实际附着的
+main/alt 纹理失效对应记录，compute 或 fragment image 写入则保守清空。每次请求仍设置原有
+`GL_TEXTURE_MIN_FILTER`，且记录不跨阶段、resize 或帧复用。shadow composite 和 final pass
+维持各自的生成路径。
+
+游戏内开启「渲染计时 DEBUG」后，`GLSM perf:` 每秒汇总 `mipmap.generated[count=...]` 与
+`mipmap.reused[count=...]`。这些是 composite 的生成调用和跳过次数，不包含其它阶段的 mipmap
+生成，也不能直接换算为 GPU 时间或 FPS。
+
+**2026-09-26 dev 验证：** BSL v10.0 默认关闭 `AUTO_EXPOSURE` 时，第一次运行生成 `4,047` 次、
+复用 `0` 次；该包的 `composite5` 只有在 `AUTO_EXPOSURE` 开启时才请求第二次 `colortex0`
+mipmap。开启并重载后，稳定窗口（15:23:00–15:23:16）生成 `4,674` 次、复用 `1,558` 次，
+占该窗口 mipmap 请求约 `25%`，约每帧跳过一次；用户确认画面无异常。第一次运行还切换了
+Bliss 2.1.2、iterationRP 0.8.7 和 iterationT 3.2.0，三包均未命中复用。
+开关 `AUTO_EXPOSURE` 改变了光影工作量，两个窗口不能作为同配置的 GPU/FPS A/B；性能收益
+仍待固定设置、关闭诊断计数的同场景对比。
 
 ---
 
@@ -595,6 +619,7 @@ if (fo && lu == 0) {
 | **P1** | CustomUniforms.optimise() 验证 | 减少无用 uniform 上传 | `CustomUniforms.java` | 已在 pipeline 构建末尾执行 |
 | **P1** | Adaptive PCF early-bounds check | 阴影片元剔除 | `Shadows.glsl` (Eclipse) | 已接入；BSL 10.0 实测命中 10.38% 越界调用；需关闭 Debug 的同场景 A/B 量化 |
 | **P1** | FormatAnalyzer 顶点格式精简 | 扩展格式由 48 字节按需收缩，最低 28 字节 | `TerrainVertexFormatRequirements.java` | 已实机验证 40/44/48 字节布局；需同场景 A/B 量化 |
+| **P1** | Composite mipmap 复用 | 避免同一纹理无写入时重复生成 mipmap | `CompositeRenderer.java` | BSL 10.0 开启自动曝光后实测跳过约一次/帧，GPU/FPS 收益待 A/B |
 | **P2** | GTAO fast_acos 参考实现 | 低成本屏幕空间 AO | `PhotonGTAO.glsl` | 参考储备 |
 | **P2** | LPV shared memory compute | 间接光照质量 | `shadowcomp.csh` | 参考储备 |
 | **P2** | 体积云层级裁剪 | 云雾 pass GPU 时间 | `volumetricClouds.glsl` | 参考储备 |

@@ -1,6 +1,6 @@
 # Actinium 架构说明
 
-最后更新：2026-09-06。
+最后更新：2026-09-26。
 
 ## 概述
 
@@ -216,7 +216,9 @@ GTNHLib ← glsm ← celeritas-common ← shader ← 根项目 src/main（compil
   Celeritas 通道）—— `ShaderTransformer`、`AttributeTransformer`、`CeleritasTransformer`、
   `CommonTransformer`、`EntityPatcher`。
 - **`postprocess/`**：后处理合成（composite/final pass）—— `CompositeRenderer`、
-  `FinalPassRenderer`、`FullScreenQuadRenderer`、`CenterDepthSampler`。
+  `FinalPassRenderer`、`FullScreenQuadRenderer`、`CenterDepthSampler`。`CompositeRenderer` 在单次
+  `renderAll()` 中按 GL texture ID 复用未被写入的 mipmap；compute、image 和 FBO 写入使缓存失效，
+  不跨阶段或帧保留生成状态。
 - **`rendertarget/`**（10 类）：render target 管理与帧缓冲（`RenderTargets`、`ColorTexture`、
   `DepthTexture`、`NoiseTexture`）。
 - **`shadows/` + `shadow/`**：阴影 pass —— frustum 裁剪、阴影 target、合成
