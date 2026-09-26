@@ -1,6 +1,6 @@
 # Actinium 兼容性矩阵
 
-最后更新：2026-09-25。
+最后更新：2026-09-26。
 
 状态定义：`已验证` 表示在记录的版本和场景中通过；`部分` 表示能运行但存在已知缺口；
 `无法启用` 表示光影包不能成功开启；`未验证` 不代表不兼容。更新记录时必须填写 Actinium commit、
@@ -190,6 +190,12 @@ Windows 10、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 610.74）。
 | iterationRP                        | 0.7.7 / 0.8.7 | 已验证  | 开启、世界渲染、Distant Horizons LOD、地形、实体、方块实体、水、天空、天气、阴影、手部、GUI、重载   | -         | `28d976d`   |
 | Photon                             | v1.3b         | 部分    | 开启、世界渲染、地形、水（2026-08-31 水面修复后）、GUI                                     | 阴影/实体/维度切换/重载等场景待补充验证；选项菜单部分元素缺失（GTAO 等 profile 项告警，与水面无关） | `fix/photon-water-surface` |
 | SEUS PTGI HRR                      | Test 2.1      | 无法启用 | -                                                              | 光影包不能成功开启 | `f261611`   |
+
+> 2026-09-26 追加：BSL v10.0 在 `AUTO_EXPOSURE=true` 下验证 composite mipmap 复用（Actinium
+> `a2e69146`）。稳定运行窗口（15:23:00–15:23:16）生成 4,674 次、复用跳过 1,558 次，
+> 约每帧跳过一次；用户确认画面无异常。测试环境为 MC 1.12.2、Cleanroom 0.6.12-alpha、
+> Java 25.0.3、渲染距离 12、Windows、NVIDIA GeForce RTX 5070 Laptop GPU（驱动 617.14），
+> DH 3.3.0 已加载。本轮未做同设置关闭 DEBUG 的 GPU/FPS A/B，不据此声称帧率提升。
 
 ## 模组与环境
 
